@@ -61,20 +61,20 @@ public sealed class FilterableEvent<T>
         // 记录发布统计
         _statistics?.RecordPublish(typeof(T).Name);
 
-        // 应用过滤器
-        lock (_lock)
-        {
-            // 事件被过滤，不触发监听器
-            if (_filters.Any(filter => filter.ShouldFilter(data)))
-                return;
-        }
-
-        // 获取当前监听器快照（在锁外调用）
+        // 在单个锁中快照过滤器和监听器
         Action<T>? handlers;
+        IEventFilter<T>[] filtersSnapshot;
+
         lock (_lock)
         {
+            filtersSnapshot = _filters.Count > 0 ? _filters.ToArray() : Array.Empty<IEventFilter<T>>();
             handlers = _onEvent;
         }
+
+        // 在锁外执行过滤逻辑
+        // 事件被过滤，不触发监听器
+        if (filtersSnapshot.Any(filter => filter.ShouldFilter(data)))
+            return;
 
         if (handlers == null)
             return;

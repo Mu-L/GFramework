@@ -37,6 +37,8 @@ public sealed class EnhancedEventBus : IEventBus
     /// <typeparam name="T">事件类型</typeparam>
     public void Send<T>() where T : new()
     {
+        _statistics?.RecordPublish(typeof(T).Name);
+
         _mEvents
             .GetOrAddEvent<Event<T>>()
             .Trigger(new T());
@@ -49,6 +51,8 @@ public sealed class EnhancedEventBus : IEventBus
     /// <param name="e">事件实例</param>
     public void Send<T>(T e)
     {
+        _statistics?.RecordPublish(typeof(T).Name);
+
         _mEvents
             .GetOrAddEvent<Event<T>>()
             .Trigger(e);
@@ -62,6 +66,8 @@ public sealed class EnhancedEventBus : IEventBus
     /// <param name="propagation">事件传播方式</param>
     public void Send<T>(T e, EventPropagation propagation)
     {
+        _statistics?.RecordPublish(typeof(T).Name);
+
         _mPriorityEvents
             .GetOrAddEvent<PriorityEvent<T>>()
             .Trigger(e, propagation);
@@ -75,6 +81,32 @@ public sealed class EnhancedEventBus : IEventBus
     /// <returns>反注册接口，用于取消订阅</returns>
     public IUnRegister Register<T>(Action<T> onEvent)
     {
+        if (_statistics != null)
+        {
+            // 包装回调以添加统计
+            Action<T> wrappedHandler = data =>
+            {
+                try
+                {
+                    onEvent(data);
+                    _statistics.RecordHandle();
+                }
+                catch
+                {
+                    _statistics.RecordFailure();
+                    throw;
+                }
+            };
+
+            var unregister = _mEvents.GetOrAddEvent<Event<T>>().Register(wrappedHandler);
+            UpdateEventListenerCount<T>();
+            return new DefaultUnRegister(() =>
+            {
+                unregister.UnRegister();
+                UpdateEventListenerCount<T>();
+            });
+        }
+
         return _mEvents.GetOrAddEvent<Event<T>>().Register(onEvent);
     }
 
@@ -87,6 +119,32 @@ public sealed class EnhancedEventBus : IEventBus
     /// <returns>反注册接口，用于取消订阅</returns>
     public IUnRegister Register<T>(Action<T> onEvent, int priority)
     {
+        if (_statistics != null)
+        {
+            // 包装回调以添加统计
+            Action<T> wrappedHandler = data =>
+            {
+                try
+                {
+                    onEvent(data);
+                    _statistics.RecordHandle();
+                }
+                catch
+                {
+                    _statistics.RecordFailure();
+                    throw;
+                }
+            };
+
+            var unregister = _mPriorityEvents.GetOrAddEvent<PriorityEvent<T>>().Register(wrappedHandler, priority);
+            UpdatePriorityEventListenerCount<T>();
+            return new DefaultUnRegister(() =>
+            {
+                unregister.UnRegister();
+                UpdatePriorityEventListenerCount<T>();
+            });
+        }
+
         return _mPriorityEvents.GetOrAddEvent<PriorityEvent<T>>().Register(onEvent, priority);
     }
 
@@ -98,6 +156,7 @@ public sealed class EnhancedEventBus : IEventBus
     public void UnRegister<T>(Action<T> onEvent)
     {
         _mEvents.GetEvent<Event<T>>().UnRegister(onEvent);
+        UpdateEventListenerCount<T>();
     }
 
     /// <summary>
@@ -108,6 +167,32 @@ public sealed class EnhancedEventBus : IEventBus
     /// <returns>反注册接口，用于取消订阅</returns>
     public IUnRegister RegisterWithContext<T>(Action<EventContext<T>> onEvent)
     {
+        if (_statistics != null)
+        {
+            // 包装回调以添加统计
+            Action<EventContext<T>> wrappedHandler = context =>
+            {
+                try
+                {
+                    onEvent(context);
+                    _statistics.RecordHandle();
+                }
+                catch
+                {
+                    _statistics.RecordFailure();
+                    throw;
+                }
+            };
+
+            var unregister = _mPriorityEvents.GetOrAddEvent<PriorityEvent<T>>().RegisterWithContext(wrappedHandler);
+            UpdatePriorityEventListenerCount<T>();
+            return new DefaultUnRegister(() =>
+            {
+                unregister.UnRegister();
+                UpdatePriorityEventListenerCount<T>();
+            });
+        }
+
         return _mPriorityEvents.GetOrAddEvent<PriorityEvent<T>>().RegisterWithContext(onEvent);
     }
 
@@ -120,6 +205,33 @@ public sealed class EnhancedEventBus : IEventBus
     /// <returns>反注册接口，用于取消订阅</returns>
     public IUnRegister RegisterWithContext<T>(Action<EventContext<T>> onEvent, int priority)
     {
+        if (_statistics != null)
+        {
+            // 包装回调以添加统计
+            Action<EventContext<T>> wrappedHandler = context =>
+            {
+                try
+                {
+                    onEvent(context);
+                    _statistics.RecordHandle();
+                }
+                catch
+                {
+                    _statistics.RecordFailure();
+                    throw;
+                }
+            };
+
+            var unregister = _mPriorityEvents.GetOrAddEvent<PriorityEvent<T>>()
+                .RegisterWithContext(wrappedHandler, priority);
+            UpdatePriorityEventListenerCount<T>();
+            return new DefaultUnRegister(() =>
+            {
+                unregister.UnRegister();
+                UpdatePriorityEventListenerCount<T>();
+            });
+        }
+
         return _mPriorityEvents.GetOrAddEvent<PriorityEvent<T>>().RegisterWithContext(onEvent, priority);
     }
 
@@ -235,6 +347,42 @@ public sealed class EnhancedEventBus : IEventBus
         {
             var evt = (WeakEvent<T>)obj;
             evt.Cleanup();
+        }
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    /// <summary>
+    ///     更新普通事件的监听器数量统计
+    /// </summary>
+    private void UpdateEventListenerCount<T>()
+    {
+        if (_statistics == null)
+            return;
+
+        var evt = _mEvents.GetEvent<Event<T>>();
+        if (evt != null)
+        {
+            var count = evt.GetListenerCount();
+            _statistics.UpdateListenerCount(typeof(T).Name, count);
+        }
+    }
+
+    /// <summary>
+    ///     更新优先级事件的监听器数量统计
+    /// </summary>
+    private void UpdatePriorityEventListenerCount<T>()
+    {
+        if (_statistics == null)
+            return;
+
+        var evt = _mPriorityEvents.GetEvent<PriorityEvent<T>>();
+        if (evt != null)
+        {
+            var count = evt.GetListenerCount();
+            _statistics.UpdateListenerCount(typeof(T).Name, count);
         }
     }
 

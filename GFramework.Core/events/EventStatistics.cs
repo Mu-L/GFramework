@@ -12,8 +12,6 @@ public sealed class EventStatistics : IEventStatistics
     private readonly Dictionary<string, int> _listenerCountByType = new();
     private readonly object _lock = new();
     private readonly Dictionary<string, long> _publishCountByType = new();
-    private int _activeEventTypes;
-    private int _activeListeners;
     private long _totalFailed;
     private long _totalHandled;
     private long _totalPublished;
@@ -30,15 +28,25 @@ public sealed class EventStatistics : IEventStatistics
     /// <inheritdoc />
     public int ActiveEventTypes
     {
-        get => Interlocked.CompareExchange(ref _activeEventTypes, 0, 0);
-        set => Interlocked.Exchange(ref _activeEventTypes, value);
+        get
+        {
+            lock (_lock)
+            {
+                return _publishCountByType.Count;
+            }
+        }
     }
 
     /// <inheritdoc />
     public int ActiveListeners
     {
-        get => Interlocked.CompareExchange(ref _activeListeners, 0, 0);
-        set => Interlocked.Exchange(ref _activeListeners, value);
+        get
+        {
+            lock (_lock)
+            {
+                return _listenerCountByType.Values.Sum();
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -65,8 +73,6 @@ public sealed class EventStatistics : IEventStatistics
         Interlocked.Exchange(ref _totalPublished, 0);
         Interlocked.Exchange(ref _totalHandled, 0);
         Interlocked.Exchange(ref _totalFailed, 0);
-        Interlocked.Exchange(ref _activeEventTypes, 0);
-        Interlocked.Exchange(ref _activeListeners, 0);
 
         lock (_lock)
         {
