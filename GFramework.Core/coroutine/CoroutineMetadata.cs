@@ -8,9 +8,24 @@ namespace GFramework.Core.coroutine;
 internal class CoroutineMetadata
 {
     /// <summary>
+    ///     协程的分组标识符，用于批量管理协程
+    /// </summary>
+    public string? Group;
+
+    /// <summary>
+    ///     协程的优先级
+    /// </summary>
+    public CoroutinePriority Priority;
+
+    /// <summary>
     ///     协程在调度器中的槽位索引
     /// </summary>
     public int SlotIndex;
+
+    /// <summary>
+    ///     协程开始执行的时间戳（毫秒）
+    /// </summary>
+    public double StartTime;
 
     /// <summary>
     ///     协程当前的执行状态
