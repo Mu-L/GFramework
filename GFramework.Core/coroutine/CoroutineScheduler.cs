@@ -1,4 +1,4 @@
-﻿using GFramework.Core.Abstractions.coroutine;
+using GFramework.Core.Abstractions.coroutine;
 using GFramework.Core.Abstractions.logging;
 using GFramework.Core.coroutine.instructions;
 using GFramework.Core.logging;
@@ -12,17 +12,22 @@ namespace GFramework.Core.coroutine;
 /// <param name="timeSource">时间源接口，提供时间相关数据</param>
 /// <param name="instanceId">实例ID，默认为1</param>
 /// <param name="initialCapacity">初始容量，默认为256</param>
+/// <param name="enableStatistics">是否启用统计功能，默认为false</param>
 public sealed class CoroutineScheduler(
     ITimeSource timeSource,
     byte instanceId = 1,
-    int initialCapacity = 256)
+    int initialCapacity = 256,
+    bool enableStatistics = false)
 {
+    private readonly Dictionary<string, HashSet<CoroutineHandle>> _grouped = new();
     private readonly ILogger _logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(CoroutineScheduler));
     private readonly Dictionary<CoroutineHandle, CoroutineMetadata> _metadata = new();
+    private readonly CoroutineStatistics? _statistics = enableStatistics ? new CoroutineStatistics() : null;
     private readonly Dictionary<string, HashSet<CoroutineHandle>> _tagged = new();
     private readonly ITimeSource _timeSource = timeSource ?? throw new ArgumentNullException(nameof(timeSource));
     private readonly Dictionary<CoroutineHandle, HashSet<CoroutineHandle>> _waiting = new();
     private int _nextSlot;
+    private int _pausedCount;
 
     private CoroutineSlot?[] _slots = new CoroutineSlot?[initialCapacity];
 
@@ -35,6 +40,11 @@ public sealed class CoroutineScheduler(
     ///     获取活跃协程数量
     /// </summary>
     public int ActiveCoroutineCount { get; private set; }
+
+    /// <summary>
+    ///     获取协程统计信息（如果启用）
+    /// </summary>
+    public ICoroutineStatistics? Statistics => _statistics;
 
     /// <summary>
     ///     协程异常处理回调，当协程执行过程中发生异常时触发
@@ -61,10 +71,14 @@ public sealed class CoroutineScheduler(
     /// </summary>
     /// <param name="coroutine">要运行的协程枚举器</param>
     /// <param name="tag">协程标签，可选</param>
+    /// <param name="priority">协程优先级，默认为Normal</param>
+    /// <param name="group">协程分组，可选</param>
     /// <returns>协程句柄</returns>
     public CoroutineHandle Run(
         IEnumerator<IYieldInstruction>? coroutine,
-        string? tag = null)
+        string? tag = null,
+        CoroutinePriority priority = CoroutinePriority.Normal,
+        string? group = null)
     {
         if (coroutine == null)
             return default;
@@ -79,7 +93,8 @@ public sealed class CoroutineScheduler(
         {
             Enumerator = coroutine,
             State = CoroutineState.Running,
-            Handle = handle
+            Handle = handle,
+            Priority = priority
         };
 
         _slots[slotIndex] = slot;
@@ -87,11 +102,19 @@ public sealed class CoroutineScheduler(
         {
             SlotIndex = slotIndex,
             State = CoroutineState.Running,
-            Tag = tag
+            Tag = tag,
+            Priority = priority,
+            Group = group,
+            StartTime = _timeSource.CurrentTime * 1000 // 转换为毫秒
         };
 
         if (!string.IsNullOrEmpty(tag))
             AddTag(tag, handle);
+
+        if (!string.IsNullOrEmpty(group))
+            AddGroup(group, handle);
+
+        _statistics?.RecordStart(priority, tag);
 
         Prewarm(slotIndex);
         ActiveCoroutineCount++;
@@ -107,8 +130,34 @@ public sealed class CoroutineScheduler(
         _timeSource.Update();
         var delta = _timeSource.DeltaTime;
 
-        // 遍历所有槽位并更新协程状态
+        // 更新统计信息
+        if (_statistics != null)
+        {
+            _statistics.ActiveCount = ActiveCoroutineCount;
+            _statistics.PausedCount = _pausedCount;
+        }
+
+        // 按优先级排序槽位索引（高优先级优先执行）
+        var sortedIndices = new List<int>(_nextSlot);
         for (var i = 0; i < _nextSlot; i++)
+        {
+            var slot = _slots[i];
+            if (slot is { State: CoroutineState.Running })
+                sortedIndices.Add(i);
+        }
+
+        // 按优先级降序排序
+        sortedIndices.Sort((a, b) =>
+        {
+            var slotA = _slots[a];
+            var slotB = _slots[b];
+            if (slotA == null || slotB == null)
+                return 0;
+            return slotB.Priority.CompareTo(slotA.Priority);
+        });
+
+        // 遍历所有槽位并更新协程状态
+        foreach (var i in sortedIndices)
         {
             var slot = _slots[i];
             if (slot is not { State: CoroutineState.Running })
@@ -216,6 +265,7 @@ public sealed class CoroutineScheduler(
 
         slot.State = CoroutineState.Paused;
         meta.State = CoroutineState.Paused;
+        _pausedCount++;
         return true;
     }
 
@@ -235,6 +285,7 @@ public sealed class CoroutineScheduler(
 
         slot.State = CoroutineState.Running;
         meta.State = CoroutineState.Running;
+        _pausedCount--;
         return true;
     }
 
@@ -250,6 +301,60 @@ public sealed class CoroutineScheduler(
 
         Complete(meta.SlotIndex);
         return true;
+    }
+
+    #endregion
+
+    #region Group Management
+
+    /// <summary>
+    ///     暂停指定分组的所有协程
+    /// </summary>
+    /// <param name="group">分组名称</param>
+    /// <returns>被暂停的协程数量</returns>
+    public int PauseGroup(string group)
+    {
+        if (!_grouped.TryGetValue(group, out var handles))
+            return 0;
+
+        return handles.Count(Pause);
+    }
+
+    /// <summary>
+    ///     恢复指定分组的所有协程
+    /// </summary>
+    /// <param name="group">分组名称</param>
+    /// <returns>被恢复的协程数量</returns>
+    public int ResumeGroup(string group)
+    {
+        if (!_grouped.TryGetValue(group, out var handles))
+            return 0;
+
+        return handles.Count(Resume);
+    }
+
+    /// <summary>
+    ///     终止指定分组的所有协程
+    /// </summary>
+    /// <param name="group">分组名称</param>
+    /// <returns>被终止的协程数量</returns>
+    public int KillGroup(string group)
+    {
+        if (!_grouped.TryGetValue(group, out var handles))
+            return 0;
+
+        var copy = handles.ToArray();
+        return copy.Count(Kill);
+    }
+
+    /// <summary>
+    ///     获取指定分组的协程数量
+    /// </summary>
+    /// <param name="group">分组名称</param>
+    /// <returns>协程数量</returns>
+    public int GetGroupCount(string group)
+    {
+        return _grouped.TryGetValue(group, out var handles) ? handles.Count : 0;
     }
 
     #endregion
@@ -289,6 +394,7 @@ public sealed class CoroutineScheduler(
     {
         if (!_tagged.TryGetValue(tag, out var handles))
             return 0;
+
         var copy = handles.ToArray();
         return copy.Count(Kill);
     }
@@ -303,10 +409,12 @@ public sealed class CoroutineScheduler(
         Array.Clear(_slots);
         _metadata.Clear();
         _tagged.Clear();
+        _grouped.Clear();
         _waiting.Clear();
 
         _nextSlot = 0;
         ActiveCoroutineCount = 0;
+        _pausedCount = 0;
 
         return count;
     }
@@ -352,18 +460,26 @@ public sealed class CoroutineScheduler(
         if (!handle.IsValid)
             return;
 
+        // 记录统计信息
+        if (_metadata.TryGetValue(handle, out var meta))
+        {
+            var executionTime = _timeSource.CurrentTime * 1000 - meta.StartTime;
+            _statistics?.RecordComplete(executionTime, meta.Priority, meta.Tag);
+        }
+
         _slots[slotIndex] = null;
         ActiveCoroutineCount--;
 
         RemoveTag(handle);
+        RemoveGroup(handle);
         _metadata.Remove(handle);
 
         // 唤醒等待者
         if (!_waiting.TryGetValue(handle, out var waiters)) return;
         foreach (var waiter in waiters)
         {
-            if (!_metadata.TryGetValue(waiter, out var meta)) continue;
-            var s = _slots[meta.SlotIndex];
+            if (!_metadata.TryGetValue(waiter, out var waiterMeta)) continue;
+            var s = _slots[waiterMeta.SlotIndex];
             if (s == null) continue;
             switch (s.Waiting)
             {
@@ -371,10 +487,13 @@ public sealed class CoroutineScheduler(
                 case WaitForCoroutine wfc:
                     wfc.Complete();
                     break;
+                default:
+                    // 其他类型的等待指令不需要特殊处理
+                    break;
             }
 
             s.State = CoroutineState.Running;
-            meta.State = CoroutineState.Running;
+            waiterMeta.State = CoroutineState.Running;
         }
 
         _waiting.Remove(handle);
@@ -389,6 +508,12 @@ public sealed class CoroutineScheduler(
     {
         var slot = _slots[slotIndex];
         var handle = slot?.Handle ?? default;
+
+        // 记录统计信息
+        if (handle.IsValid && _metadata.TryGetValue(handle, out var meta))
+        {
+            _statistics?.RecordFailure(meta.Priority, meta.Tag);
+        }
 
         // 将异常回调派发到线程池，避免阻塞调度器主循环
         var handler = OnCoroutineException;
@@ -457,6 +582,42 @@ public sealed class CoroutineScheduler(
         }
 
         meta.Tag = null;
+    }
+
+    /// <summary>
+    ///     为协程添加分组
+    /// </summary>
+    /// <param name="group">分组名称</param>
+    /// <param name="handle">协程句柄</param>
+    private void AddGroup(string group, CoroutineHandle handle)
+    {
+        if (!_grouped.TryGetValue(group, out var set))
+        {
+            set = new HashSet<CoroutineHandle>();
+            _grouped[group] = set;
+        }
+
+        set.Add(handle);
+        _metadata[handle].Group = group;
+    }
+
+    /// <summary>
+    ///     移除协程分组
+    /// </summary>
+    /// <param name="handle">协程句柄</param>
+    private void RemoveGroup(CoroutineHandle handle)
+    {
+        if (!_metadata.TryGetValue(handle, out var meta) || meta.Group == null)
+            return;
+
+        if (_grouped.TryGetValue(meta.Group, out var set))
+        {
+            set.Remove(handle);
+            if (set.Count == 0)
+                _grouped.Remove(meta.Group);
+        }
+
+        meta.Group = null;
     }
 
     #endregion

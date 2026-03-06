@@ -18,6 +18,16 @@ internal sealed class CoroutineSlot
     public CoroutineHandle Handle;
 
     /// <summary>
+    ///     协程是否已经开始执行
+    /// </summary>
+    public bool HasStarted;
+
+    /// <summary>
+    ///     协程的优先级
+    /// </summary>
+    public CoroutinePriority Priority;
+
+    /// <summary>
     ///     协程当前状态
     /// </summary>
     public CoroutineState State;
