@@ -4,7 +4,7 @@ namespace GFramework.Core.Abstractions.coroutine;
 ///     协程优先级枚举
 ///     定义协程的执行优先级，高优先级的协程会优先执行
 /// </summary>
-public enum CoroutinePriority : byte
+public enum CoroutinePriority
 {
     /// <summary>
     ///     最低优先级
