@@ -232,7 +232,7 @@ public partial class GameFlowController : IController
 如果类需要更多框架功能（如生命周期管理），应继承 `ContextAwareBase`：
 
 ```csharp
-// 推荐：需要生命���期管理时继承基类
+// 推荐：需要生命周期管理时继承基类
 public class PlayerModel : AbstractModel
 {
     // AbstractModel 已经继承了 ContextAwareBase
@@ -375,4 +375,3 @@ public partial class MyClass { } // ✅ 正确
 - [架构上下文](../core/context)
 - [IContextAware 接口](../core/rule)
 - [日志生成器](./logging-generator)
-- [规则验证生成器](./rule-generator)
