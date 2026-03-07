@@ -157,4 +157,4 @@ public partial class MyClass
 
 - [Source Generators 概述](./index)
 - [枚举扩展生成器](./enum-generator)
-- [规则生成器](./rule-generator)
+- [ContextAware 生成器](./context-aware-generator)
