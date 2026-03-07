@@ -155,7 +155,7 @@ partial class PlayerController : global::GFramework.Core.Abstractions.rule.ICont
 
 ```csharp
 [Test]
-public void TestPlayerController()
+public async Task TestPlayerController()
 {
     // 创建测试架构
     var testArchitecture = new TestArchitecture();
