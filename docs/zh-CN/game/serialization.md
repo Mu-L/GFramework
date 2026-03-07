@@ -31,10 +31,10 @@ JSON）进行存储或传输，并能够将字符串数据还原为对象。
 public interface ISerializer : IUtility
 {
     // 将对象序列化为字符串
-    string Serialize<T>(T value);
+    string Serialize&lt;T&gt;(T value);
 
     // 将字符串反序列化为对象
-    T Deserialize<T>(string data);
+    T Deserialize&lt;T&gt;(string data);
 }
 ```
 
@@ -60,8 +60,8 @@ public interface IRuntimeTypeSerializer : ISerializer
 ```csharp
 public sealed class JsonSerializer : IRuntimeTypeSerializer
 {
-    string Serialize<T>(T value);
-    T Deserialize<T>(string data);
+    string Serialize&lt;T&gt;(T value);
+    T Deserialize&lt;T&gt;(string data);
     string Serialize(object obj, Type type);
     object Deserialize(string data, Type type);
 }

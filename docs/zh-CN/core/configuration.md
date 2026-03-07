@@ -16,15 +16,15 @@ Configuration 包提供了线程安全的配置管理系统，支持类型安全
 
 ```csharp
 // 配置访问
-T? GetConfig<T>(string key);                    // 获取配置值
-T GetConfig<T>(string key, T defaultValue);     // 获取配置值（带默认值）
-void SetConfig<T>(string key, T value);         // 设置配置值
+T? GetConfig&lt;T&gt;(string key);                    // 获取配置值
+T GetConfig&lt;T&gt;(string key, T defaultValue);     // 获取配置值（带默认值）
+void SetConfig&lt;T&gt;(string key, T value);         // 设置配置值
 bool HasConfig(string key);                     // 检查配置是否存在
 bool RemoveConfig(string key);                  // 移除配置
 void Clear();                                   // 清空所有配置
 
 // 配置监听
-IUnRegister WatchConfig<T>(string key, Action<T> onChange);  // 监听配置变化
+IUnRegister WatchConfig&lt;T&gt;(string key, Action&lt;T&gt; onChange);  // 监听配置变化
 
 // 持久化
 void LoadFromJson(string json);                 // 从 JSON 加载

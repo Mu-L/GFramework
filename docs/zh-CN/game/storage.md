@@ -37,13 +37,13 @@ public interface IStorage : IUtility
     Task<bool> ExistsAsync(string key);
 
     // 读取数据
-    T Read<T>(string key);
-    T Read<T>(string key, T defaultValue);
-    Task<T> ReadAsync<T>(string key);
+    T Read&lt;T&gt;(string key);
+    T Read&lt;T&gt;(string key, T defaultValue);
+    Task&lt;T&gt; ReadAsync&lt;T&gt;(string key);
 
     // 写入数据
-    void Write<T>(string key, T value);
-    Task WriteAsync<T>(string key, T value);
+    void Write&lt;T&gt;(string key, T value);
+    Task WriteAsync&lt;T&gt;(string key, T value);
 
     // 删除数据
     void Delete(string key);
@@ -410,7 +410,7 @@ public class CachedStorage : IStorage
         _innerStorage = innerStorage;
     }
 
-    public T Read<T>(string key)
+    public T Read&lt;T&gt;(string key)
     {
         // 先从缓存读取
         if (_cache.TryGetValue(key, out var cached))
@@ -419,12 +419,12 @@ public class CachedStorage : IStorage
         }
 
         // 从存储读取并缓存
-        var value = _innerStorage.Read<T>(key);
+        var value = _innerStorage.Read&lt;T&gt;(key);
         _cache[key] = value;
         return value;
     }
 
-    public void Write<T>(string key, T value)
+    public void Write&lt;T&gt;(string key, T value)
     {
         // 写入存储
         _innerStorage.Write(key, value);
@@ -592,18 +592,18 @@ public class EncryptedStorage : IStorage
     private readonly IStorage _innerStorage;
     private readonly IEncryption _encryption;
 
-    public void Write<T>(string key, T value)
+    public void Write&lt;T&gt;(string key, T value)
     {
         var json = JsonSerializer.Serialize(value);
         var encrypted = _encryption.Encrypt(json);
         _innerStorage.Write(key, encrypted);
     }
 
-    public T Read<T>(string key)
+    public T Read&lt;T&gt;(string key)
     {
         var encrypted = _innerStorage.Read<byte[]>(key);
         var json = _encryption.Decrypt(encrypted);
-        return JsonSerializer.Deserialize<T>(json);
+        return JsonSerializer.Deserialize&lt;T&gt;(json);
     }
 }
 ```
@@ -620,7 +620,7 @@ public class QuotaStorage : IStorage
     private readonly long _maxSize;
     private long _currentSize;
 
-    public void Write<T>(string key, T value)
+    public void Write&lt;T&gt;(string key, T value)
     {
         var data = Serialize(value);
         var size = data.Length;
@@ -646,7 +646,7 @@ public class CompressedSerializer : ISerializer
 {
     private readonly ISerializer _innerSerializer;
 
-    public string Serialize<T>(T value)
+    public string Serialize&lt;T&gt;(T value)
     {
         var json = _innerSerializer.Serialize(value);
         var bytes = Encoding.UTF8.GetBytes(json);
@@ -654,12 +654,12 @@ public class CompressedSerializer : ISerializer
         return Convert.ToBase64String(compressed);
     }
 
-    public T Deserialize<T>(string data)
+    public T Deserialize&lt;T&gt;(string data)
     {
         var compressed = Convert.FromBase64String(data);
         var bytes = Decompress(compressed);
         var json = Encoding.UTF8.GetString(bytes);
-        return _innerSerializer.Deserialize<T>(json);
+        return _innerSerializer.Deserialize&lt;T&gt;(json);
     }
 
     private byte[] Compress(byte[] data)
@@ -694,7 +694,7 @@ public class LoggingStorage : IStorage
     private readonly IStorage _innerStorage;
     private readonly ILogger _logger;
 
-    public void Write<T>(string key, T value)
+    public void Write&lt;T&gt;(string key, T value)
     {
         var stopwatch = Stopwatch.StartNew();
         try
@@ -709,12 +709,12 @@ public class LoggingStorage : IStorage
         }
     }
 
-    public T Read<T>(string key)
+    public T Read&lt;T&gt;(string key)
     {
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            var value = _innerStorage.Read<T>(key);
+            var value = _innerStorage.Read&lt;T&gt;(key);
             _logger.Info($"读取成功: {key}, 耗时: {stopwatch.ElapsedMilliseconds}ms");
             return value;
         }
@@ -730,6 +730,6 @@ public class LoggingStorage : IStorage
 ## 相关文档
 
 - [数据与存档系统](/zh-CN/game/data) - 数据持久化
-- [序列化系统](/zh-CN/core/serializer) - 数据序列化
+- [序列化系统](/zh-CN/game/serialization) - 数据序列化
 - [Godot 集成](/zh-CN/godot/index) - Godot 中的存储
 - [存档系统教程](/zh-CN/tutorials/save-system) - 完整示例

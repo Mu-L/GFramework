@@ -681,4 +681,4 @@ GD.Print($"使用池: {stopwatch.ElapsedMilliseconds}ms");
 - [对象池系统](/zh-CN/core/pool) - 核心对象池实现
 - [Godot 架构集成](/zh-CN/godot/architecture) - Godot 架构基础
 - [Godot 场景系统](/zh-CN/godot/scene) - Godot 场景管理
-- [性能优化](/zh-CN/best-practices/performance) - 性能优化最佳实践
+- [性能优化](/zh-CN/core/pool) - 性能优化最佳实践

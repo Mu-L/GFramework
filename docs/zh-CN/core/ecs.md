@@ -79,7 +79,7 @@ public struct Velocity(float x, float y)
 
 ### System（系统）
 
-系统包含游戏逻辑，负责处理具有特定组件组合的实体。在 GFramework 中，系统通过继承 `ArchSystemAdapter<T>` 来实现。
+系统包含游戏逻辑，负责处理具有特定组件组合的实体。在 GFramework 中，系统通过继承 `ArchSystemAdapter&lt;T&gt;` 来实现。
 
 ```csharp
 using Arch.Core;
@@ -133,7 +133,7 @@ public class MySystem : ArchSystemAdapter<float>
 GFramework 通过以下组件桥接 Arch.Core 到框架生命周期：
 
 - **ArchEcsModule**：ECS 模块，管理 World 和系统生命周期
-- **ArchSystemAdapter<T>**：系统适配器，桥接 Arch 系统到 GFramework
+- **ArchSystemAdapter&lt;T&gt;**：系统适配器，桥接 Arch 系统到 GFramework
 
 ## 基本用法
 
@@ -338,7 +338,7 @@ public class QueryExampleSystem : ArchSystemAdapter<float>
 
 ### 系统生命周期钩子
 
-`ArchSystemAdapter<T>` 提供了多个生命周期钩子：
+`ArchSystemAdapter&lt;T&gt;` 提供了多个生命周期钩子：
 
 ```csharp
 public class LifecycleExampleSystem : ArchSystemAdapter<float>
@@ -856,7 +856,7 @@ public class LifecycleManagementSystem : ArchSystemAdapter<float>
 
 ### Q: 如何在 ECS 系统中访问其他服务？
 
-A: `ArchSystemAdapter<T>` 继承自 `AbstractSystem`，可以使用所有 GFramework 的扩展方法：
+A: `ArchSystemAdapter&lt;T&gt;` 继承自 `AbstractSystem`，可以使用所有 GFramework 的扩展方法：
 
 ```csharp
 public class ServiceAccessSystem : ArchSystemAdapter<float>
