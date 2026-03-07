@@ -783,14 +783,25 @@ public class iOSOptimizer
 {
     public static void ApplyOptimizations()
     {
-        // 使用 Metal 渲染
-        SystemInfo.graphicsDeviceType = GraphicsDeviceType.Metal;
+        // 注意：图形 API 和多线程渲染需要在 Player Settings 中配置
+        // 在 Unity Editor 中：Edit > Project Settings > Player > Other Settings
+        // - Graphics APIs: 选择 Metal
+        // - Multithreaded Rendering: 启用
 
-        // 优化纹理格式
+        // 运行时可以调整的设置：
+
+        // 优化纹理质量（0 = 最高质量）
         QualitySettings.masterTextureLimit = 0;
 
-        // 启用多线程渲染
-        PlayerSettings.MTRendering = true;
+        // 设置目标帧率
+        Application.targetFrameRate = 60;
+
+        // 启用 VSync（0 = 关闭，1 = 每帧同步，2 = 每两帧同步）
+        QualitySettings.vSyncCount = 1;
+
+        // 优化阴影质量
+        QualitySettings.shadowDistance = 50f;
+        QualitySettings.shadowResolution = ShadowResolution.Medium;
     }
 }
 ```
@@ -802,17 +813,58 @@ public class AndroidOptimizer
 {
     public static void ApplyOptimizations()
     {
-        // 使用 Vulkan 或 OpenGL ES 3
-        SystemInfo.graphicsDeviceType = GraphicsDeviceType.Vulkan;
+        // 注意：图形 API 和多线程渲染需要在 Player Settings 中配置
+        // 在 Unity Editor 中：Edit > Project Settings > Player > Other Settings
+        // - Graphics APIs: 选择 Vulkan 或 OpenGL ES 3.0
+        // - Multithreaded Rendering: 启用
 
-        // 优化纹理格式
+        // 运行时可以调整的设置：
+
+        // 优化纹理质量
         QualitySettings.masterTextureLimit = 0;
 
-        // 启用多线程渲染
-        PlayerSettings.MTRendering = true;
+        // 设置目标帧率
+        Application.targetFrameRate = 60;
 
-        // 优化 GC
-        GarbageCollector.GCMode = GarbageCollector.Mode.Disabled;
+        // 根据设备性能调整质量等级
+        var devicePerformance = GetDevicePerformance();
+        QualitySettings.SetQualityLevel(devicePerformance switch
+        {
+            DevicePerformance.Low => 0,
+            DevicePerformance.Medium => 1,
+            DevicePerformance.High => 2,
+            _ => 1
+        });
+
+        // GC 优化建议：
+        // 警告：完全禁用 GC (GarbageCollector.Mode.Disabled) 在内存受限设备上有风险
+        // 仅在以下情况考虑使用：
+        // 1. 高端设备（4GB+ RAM）
+        // 2. 配合自定义内存管理策略
+        // 3. 经过充分测试
+
+        // 推荐的 GC 优化方式：
+        // 1. 使用增量 GC 减少卡顿
+        GarbageCollector.GCMode = GarbageCollector.Mode.Enabled;
+
+        // 2. 调整 GC 增量时间片（微秒）
+        GarbageCollector.incrementalTimeSliceNanoseconds = 2000000; // 2ms
+
+        // 3. 定期在合适的时机手动触发 GC（如加载界面）
+        // GC.Collect();
+    }
+
+    private static DevicePerformance GetDevicePerformance()
+    {
+        var memory = SystemInfo.systemMemorySize;
+        var processorCount = SystemInfo.processorCount;
+
+        if (memory < 2048 || processorCount < 4)
+            return DevicePerformance.Low;
+        else if (memory < 4096 || processorCount < 6)
+            return DevicePerformance.Medium;
+        else
+            return DevicePerformance.High;
     }
 }
 ```
