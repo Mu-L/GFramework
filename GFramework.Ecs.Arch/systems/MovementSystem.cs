@@ -1,7 +1,7 @@
 using Arch.Core;
-using GFramework.Core.ecs.components;
+using GFramework.Ecs.Arch.components;
 
-namespace GFramework.Core.ecs.systems;
+namespace GFramework.Ecs.Arch.systems;
 
 /// <summary>
 /// 移动系统 - 继承 ArchSystemAdapter

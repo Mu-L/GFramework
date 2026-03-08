@@ -1,13 +1,12 @@
 using Arch.Core;
-using GFramework.Core.Abstractions.architecture;
 using GFramework.Core.Abstractions.ioc;
 
-namespace GFramework.Core.ecs;
+namespace GFramework.Ecs.Arch;
 
 /// <summary>
 ///     Arch ECS 模块 - 核心适配器，桥接 Arch 到框架生命周期
 /// </summary>
-public sealed class ArchEcsModule : IServiceModule
+public sealed class ArchEcsModule : IArchEcsModule
 {
     private readonly List<ArchSystemAdapter<float>> _systems = [];
     private IIocContainer? _container;

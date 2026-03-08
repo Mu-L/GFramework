@@ -3,18 +3,28 @@ using GFramework.Core.extensions;
 using GFramework.Core.system;
 using ArchSys = Arch.System;
 
-namespace GFramework.Core.ecs;
+namespace GFramework.Ecs.Arch;
 
 /// <summary>
 ///     Arch 系统适配器 - 桥接 Arch.System.ISystem&lt;T&gt; 到框架上下文
 /// </summary>
 /// <typeparam name="T">系统数据类型（通常是 float 表示 deltaTime）</typeparam>
-public abstract class ArchSystemAdapter<T> : AbstractSystem, ArchSys.ISystem<T>
+public abstract class ArchSystemAdapter<T> : AbstractSystem, IArchSystemAdapter<T>, ArchSys.ISystem<T>
 {
     /// <summary>
     ///     获取或设置 Arch ECS 世界的实例
     /// </summary>
     public World World { get; private set; } = null!;
+
+    /// <summary>
+    ///     显式实现 Arch.System.ISystem&lt;T&gt; 的主更新方法
+    ///     调用受保护的虚方法 OnUpdate 以强制子类实现核心更新逻辑
+    /// </summary>
+    /// <param name="t">系统数据参数（通常是 deltaTime）</param>
+    public void Update(in T t)
+    {
+        OnUpdate(in t);
+    }
 
     // ===== Arch 显式接口实现 =====
 
@@ -35,16 +45,6 @@ public abstract class ArchSystemAdapter<T> : AbstractSystem, ArchSys.ISystem<T>
     void ArchSys.ISystem<T>.BeforeUpdate(in T t)
     {
         OnBeforeUpdate(in t);
-    }
-
-    /// <summary>
-    ///     显式实现 Arch.System.ISystem&lt;T&gt; 的主更新方法
-    ///     调用受保护的虚方法 OnUpdate 以强制子类实现核心更新逻辑
-    /// </summary>
-    /// <param name="t">系统数据参数（通常是 deltaTime）</param>
-    public void Update(in T t)
-    {
-        OnUpdate(in t);
     }
 
     /// <summary>

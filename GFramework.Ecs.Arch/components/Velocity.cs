@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace GFramework.Core.ecs.components;
+namespace GFramework.Ecs.Arch.components;
 
 /// <summary>
 ///     速度结构体，用于表示二维空间中实体的瞬时速度向量

@@ -15,7 +15,6 @@ using GFramework.Core.events;
 using GFramework.Core.ioc;
 using GFramework.Core.query;
 using Mediator;
-using NUnit.Framework;
 using ICommand = GFramework.Core.Abstractions.command.ICommand;
 
 namespace GFramework.Core.Tests.architecture;
@@ -268,27 +267,6 @@ public class ArchitectureServicesTests
     public void ModuleManager_Should_Not_Be_Null()
     {
         Assert.That(_services!.ModuleManager, Is.Not.Null);
-    }
-
-    /// <summary>
-    ///     测试EnableEcs配置开关
-    /// </summary>
-    [Test]
-    public void EnableEcs_Should_Control_Ecs_Module_Registration()
-    {
-        var propertiesWithEcs = new ArchitectureProperties { EnableEcs = true };
-        var propertiesWithoutEcs = new ArchitectureProperties { EnableEcs = false };
-
-        var servicesWithEcs = new ArchitectureServices();
-        servicesWithEcs.ModuleManager.RegisterBuiltInModules(servicesWithEcs.Container, propertiesWithEcs);
-
-        var servicesWithoutEcs = new ArchitectureServices();
-        servicesWithoutEcs.ModuleManager.RegisterBuiltInModules(servicesWithoutEcs.Container, propertiesWithoutEcs);
-
-        var modulesWithEcs = servicesWithEcs.ModuleManager.GetModules();
-        var modulesWithoutEcs = servicesWithoutEcs.ModuleManager.GetModules();
-
-        Assert.That(modulesWithEcs.Count, Is.GreaterThan(modulesWithoutEcs.Count));
     }
 }
 

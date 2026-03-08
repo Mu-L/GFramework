@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace GFramework.Core.ecs.components;
+namespace GFramework.Ecs.Arch.components;
 
 /// <summary>
 /// 位置组件，用于表示实体在二维空间中的坐标位置。

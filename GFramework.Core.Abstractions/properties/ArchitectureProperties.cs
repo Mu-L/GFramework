@@ -17,10 +17,4 @@ public sealed class ArchitectureProperties
     ///     默认值为 false，表示不启用严格验证。
     /// </summary>
     public bool StrictPhaseValidation { get; set; }
-
-    /// <summary>
-    ///     启用 ECS（Entity Component System）功能的开关。
-    ///     当设置为 true 时，架构将启用 ECS 相关功能。
-    /// </summary>
-    public bool EnableEcs { get; set; }
 }
