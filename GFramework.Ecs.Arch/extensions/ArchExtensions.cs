@@ -1,5 +1,4 @@
 using GFramework.Core.Abstractions.architecture;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Ecs.Arch.extensions;
 
@@ -9,26 +8,24 @@ namespace GFramework.Ecs.Arch.extensions;
 public static class ArchExtensions
 {
     /// <summary>
-    ///     配置 Arch ECS 选项
+    ///     添加 Arch ECS 支持到架构中
     /// </summary>
-    public static IServiceCollection ConfigureArch(
-        this IServiceCollection services,
-        Action<ArchOptions> configure)
-    {
-        var options = new ArchOptions();
-        configure(options);
-        services.AddSingleton(options);
-        return services;
-    }
-
-    /// <summary>
-    ///     显式启用 Arch ECS 模块（备选方案）
-    /// </summary>
-    public static TArchitecture UseArch<TArchitecture>(this TArchitecture architecture)
+    /// <typeparam name="TArchitecture">架构类型</typeparam>
+    /// <param name="architecture">架构实例</param>
+    /// <param name="configure">可选的配置委托</param>
+    /// <returns>架构实例，支持链式调用</returns>
+    public static TArchitecture UseArch<TArchitecture>(
+        this TArchitecture architecture,
+        Action<ArchOptions>? configure = null)
         where TArchitecture : IArchitecture
     {
-        // 此方法为显式注册提供支持
-        // 实际注册由 ModuleInitializer 自动完成
+        // 配置选项
+        var options = new ArchOptions();
+        configure?.Invoke(options);
+
+        // 注册模块
+        ArchitectureModuleRegistry.Register(() => new ArchEcsModule(enabled: true));
+
         return architecture;
     }
 }

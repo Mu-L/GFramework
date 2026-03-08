@@ -4,7 +4,7 @@ GFramework 的 Arch ECS 集成包，提供开箱即用的 ECS（Entity Component
 
 ## 特性
 
-- 🚀 **自动集成** - 引入 NuGet 包即可自动启用，无需手动配置
+- 🎯 **显式集成** - 符合 .NET 生态习惯的显式注册方式
 - 🔌 **零依赖** - 不使用时，Core 包无 Arch 依赖
 - 🎯 **类型安全** - 完整的类型系统和编译时检查
 - ⚡ **高性能** - 基于 Arch ECS 的高性能实现
@@ -18,7 +18,29 @@ GFramework 的 Arch ECS 集成包，提供开箱即用的 ECS（Entity Component
 dotnet add package GeWuYou.GFramework.Ecs.Arch
 ```
 
-### 2. 创建组件
+### 2. 注册 ECS 模块
+
+```csharp
+// 在架构初始化时添加 Arch ECS 支持
+var architecture = new GameArchitecture(config)
+    .UseArch();  // 添加 ECS 支持
+
+architecture.Initialize();
+```
+
+### 3. 带配置的注册
+
+```csharp
+var architecture = new GameArchitecture(config)
+    .UseArch(options =>
+    {
+        options.WorldCapacity = 2000;
+        options.EnableStatistics = true;
+        options.Priority = 50;
+    });
+
+architecture.Initialize();
+```
 
 ```csharp
 using System.Runtime.InteropServices;
@@ -38,7 +60,7 @@ public struct Velocity(float x, float y)
 }
 ```
 
-### 3. 创建系统
+### 5. 创建系统
 
 ```csharp
 using Arch.Core;
@@ -65,7 +87,7 @@ public sealed class MovementSystem : ArchSystemAdapter<float>
 }
 ```
 
-### 4. 注册系统
+### 6. 注册系统
 
 ```csharp
 public class MyArchitecture : Architecture
@@ -77,7 +99,7 @@ public class MyArchitecture : Architecture
 }
 ```
 
-### 5. 创建实体
+### 7. 创建实体
 
 ```csharp
 var world = this.GetService<World>();
@@ -87,7 +109,7 @@ var entity = world.Create(
 );
 ```
 
-### 6. 更新系统
+### 8. 更新系统
 
 ```csharp
 var ecsModule = this.GetService<IArchEcsModule>();
@@ -96,49 +118,49 @@ ecsModule.Update(deltaTime);
 
 ## 配置选项
 
-可以通过配置文件或代码配置 Arch ECS：
-
 ### 代码配置
 
 ```csharp
-services.ConfigureArch(options =>
-{
-    options.WorldCapacity = 2000;
-    options.EnableStatistics = true;
-    options.Priority = 50;
-});
+var architecture = new GameArchitecture(config)
+    .UseArch(options =>
+    {
+        options.WorldCapacity = 2000;
+        options.EnableStatistics = true;
+        options.Priority = 50;
+    });
 ```
 
-### 配置文件
+### 配置说明
 
-```json
-{
-  "GFramework": {
-    "Modules": {
-      "Arch": {
-        "Enabled": true,
-        "Priority": 50,
-        "WorldCapacity": 1000,
-        "EnableStatistics": false
-      }
-    }
-  }
-}
-```
+- `WorldCapacity` - World 初始容量（默认：1000）
+- `EnableStatistics` - 是否启用统计信息（默认：false）
+- `Priority` - 模块优先级（默认：50）
 
 ## 架构说明
 
-### 模块自动注册
+### 显式注册模式
 
-本包使用 `ModuleInitializer` 特性实现自动注册，无需手动配置：
+本包采用 .NET 生态标准的显式注册模式，基于架构实例：
 
+**优点：**
+
+- ✅ 符合 .NET 生态习惯
+- ✅ 显式、可控
+- ✅ 易于测试和调试
+- ✅ 支持配置
+- ✅ 支持链式调用
+- ✅ 避免"魔法"行为
+
+**使用方式：**
 ```csharp
-[ModuleInitializer]
-public static void Initialize()
-{
-    ArchitectureModuleRegistry.Register(() => new ArchEcsModule(enabled: true));
-}
+// 在架构初始化时添加
+var architecture = new GameArchitecture(config)
+    .UseArch();  // 显式注册
+
+architecture.Initialize();
 ```
+
+详见：[INTEGRATION_PATTERN.md](INTEGRATION_PATTERN.md)
 
 ### 系统适配器
 
