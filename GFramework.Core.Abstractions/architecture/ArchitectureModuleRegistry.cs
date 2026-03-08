@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace GFramework.Core.Abstractions.architecture;
 
 /// <summary>
@@ -5,15 +7,20 @@ namespace GFramework.Core.Abstractions.architecture;
 /// </summary>
 public static class ArchitectureModuleRegistry
 {
-    private static readonly List<Func<IServiceModule>> _factories = [];
+    private static readonly ConcurrentDictionary<string, Func<IServiceModule>> _factories = new();
 
     /// <summary>
-    ///     注册模块工厂
+    ///     注册模块工厂（幂等操作，相同模块名只会注册一次）
     /// </summary>
     /// <param name="factory">模块工厂函数</param>
     public static void Register(Func<IServiceModule> factory)
     {
-        _factories.Add(factory);
+        // 创建临时实例以获取模块名（用于幂等性检查）
+        var tempModule = factory();
+        var moduleName = tempModule.ModuleName;
+
+        // 幂等注册：相同模块名只注册一次
+        _factories.TryAdd(moduleName, factory);
     }
 
     /// <summary>
@@ -22,7 +29,7 @@ public static class ArchitectureModuleRegistry
     /// <returns>模块实例集合</returns>
     public static IEnumerable<IServiceModule> CreateModules()
     {
-        return _factories.Select(f => f());
+        return _factories.Values.Select(f => f());
     }
 
     /// <summary>

@@ -641,8 +641,8 @@ public abstract class Architecture(
         _logger = LoggerFactoryResolver.Provider.CreateLogger(GetType().Name);
         Environment.Initialize();
 
-        // 注册内置服务模块（根据配置）
-        Services.ModuleManager.RegisterBuiltInModules(Container, Configuration.ArchitectureProperties);
+        // 注册内置服务模块
+        Services.ModuleManager.RegisterBuiltInModules(Container);
 
         // 将 Environment 注册到容器（如果尚未注册）
         if (!Container.Contains<IEnvironment>())

@@ -4,7 +4,6 @@ using GFramework.Core.Abstractions.environment;
 using GFramework.Core.Abstractions.events;
 using GFramework.Core.Abstractions.ioc;
 using GFramework.Core.Abstractions.model;
-using GFramework.Core.Abstractions.properties;
 using GFramework.Core.Abstractions.query;
 using GFramework.Core.Abstractions.system;
 using GFramework.Core.Abstractions.utility;
@@ -47,8 +46,7 @@ public class ArchitectureServicesTests
 
     private void RegisterBuiltInServices()
     {
-        var properties = new ArchitectureProperties();
-        _services!.ModuleManager.RegisterBuiltInModules(_services.Container, properties);
+        _services!.ModuleManager.RegisterBuiltInModules(_services.Container);
     }
 
     /// <summary>
@@ -215,13 +213,11 @@ public class ArchitectureServicesTests
     [Test]
     public void Multiple_Instances_Should_Have_Independent_EventBus()
     {
-        var properties = new ArchitectureProperties();
-
         var services1 = new ArchitectureServices();
-        services1.ModuleManager.RegisterBuiltInModules(services1.Container, properties);
+        services1.ModuleManager.RegisterBuiltInModules(services1.Container);
 
         var services2 = new ArchitectureServices();
-        services2.ModuleManager.RegisterBuiltInModules(services2.Container, properties);
+        services2.ModuleManager.RegisterBuiltInModules(services2.Container);
 
         Assert.That(services1.EventBus, Is.Not.SameAs(services2.EventBus));
     }
@@ -232,13 +228,11 @@ public class ArchitectureServicesTests
     [Test]
     public void Multiple_Instances_Should_Have_Independent_CommandBus()
     {
-        var properties = new ArchitectureProperties();
-
         var services1 = new ArchitectureServices();
-        services1.ModuleManager.RegisterBuiltInModules(services1.Container, properties);
+        services1.ModuleManager.RegisterBuiltInModules(services1.Container);
 
         var services2 = new ArchitectureServices();
-        services2.ModuleManager.RegisterBuiltInModules(services2.Container, properties);
+        services2.ModuleManager.RegisterBuiltInModules(services2.Container);
 
         Assert.That(services1.CommandExecutor, Is.Not.SameAs(services2.CommandExecutor));
     }
@@ -249,13 +243,11 @@ public class ArchitectureServicesTests
     [Test]
     public void Multiple_Instances_Should_Have_Independent_QueryBus()
     {
-        var properties = new ArchitectureProperties();
-
         var services1 = new ArchitectureServices();
-        services1.ModuleManager.RegisterBuiltInModules(services1.Container, properties);
+        services1.ModuleManager.RegisterBuiltInModules(services1.Container);
 
         var services2 = new ArchitectureServices();
-        services2.ModuleManager.RegisterBuiltInModules(services2.Container, properties);
+        services2.ModuleManager.RegisterBuiltInModules(services2.Container);
 
         Assert.That(services1.QueryExecutor, Is.Not.SameAs(services2.QueryExecutor));
     }

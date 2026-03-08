@@ -23,8 +23,8 @@ public static class ArchExtensions
         var options = new ArchOptions();
         configure?.Invoke(options);
 
-        // 注册模块
-        ArchitectureModuleRegistry.Register(() => new ArchEcsModule(enabled: true));
+        // 注册模块（传递配置选项）
+        ArchitectureModuleRegistry.Register(() => new ArchEcsModule(options, enabled: true));
 
         return architecture;
     }

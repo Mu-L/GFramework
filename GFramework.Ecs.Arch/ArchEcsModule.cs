@@ -8,6 +8,7 @@ namespace GFramework.Ecs.Arch;
 /// </summary>
 public sealed class ArchEcsModule : IArchEcsModule
 {
+    private readonly ArchOptions _options;
     private IIocContainer? _container;
     private bool _isInitialized;
     private IReadOnlyList<ArchSystemAdapter<float>> _systems = [];
@@ -16,9 +17,11 @@ public sealed class ArchEcsModule : IArchEcsModule
     /// <summary>
     ///     构造函数
     /// </summary>
+    /// <param name="options">配置选项</param>
     /// <param name="enabled">是否启用模块</param>
-    public ArchEcsModule(bool enabled = true)
+    public ArchEcsModule(ArchOptions? options = null, bool enabled = true)
     {
+        _options = options ?? new ArchOptions();
         IsEnabled = enabled;
     }
 
@@ -30,7 +33,7 @@ public sealed class ArchEcsModule : IArchEcsModule
     /// <summary>
     ///     模块优先级
     /// </summary>
-    public int Priority => 50;
+    public int Priority => _options.Priority;
 
     /// <summary>
     ///     是否启用
@@ -49,8 +52,8 @@ public sealed class ArchEcsModule : IArchEcsModule
         // 注册模块自身
         container.RegisterPlurality(this);
 
-        // 创建并注册 World
-        _world = World.Create();
+        // 创建并注册 World（使用配置的容量）
+        _world = World.Create(_options.WorldCapacity);
         container.Register(_world);
     }
 

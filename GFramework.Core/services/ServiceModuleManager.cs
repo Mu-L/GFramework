@@ -2,7 +2,6 @@ using GFramework.Core.Abstractions.architecture;
 using GFramework.Core.Abstractions.ioc;
 using GFramework.Core.Abstractions.lifecycle;
 using GFramework.Core.Abstractions.logging;
-using GFramework.Core.Abstractions.properties;
 using GFramework.Core.logging;
 using GFramework.Core.services.modules;
 
@@ -44,11 +43,10 @@ public sealed class ServiceModuleManager : IServiceModuleManager
     /// <summary>
     ///     注册内置服务模块，并根据优先级排序后完成服务注册。
     ///     内置模块包括事件总线、命令执行器、查询执行器等核心模块。
-    ///     同时注册通过 ModuleInitializer 自动注册的外部模块。
+    ///     同时注册通过 ArchitectureModuleRegistry 自动注册的外部模块。
     /// </summary>
     /// <param name="container">IoC容器实例，用于模块服务注册。</param>
-    /// <param name="properties">架构属性配置。</param>
-    public void RegisterBuiltInModules(IIocContainer container, ArchitectureProperties properties)
+    public void RegisterBuiltInModules(IIocContainer container)
     {
         if (_builtInModulesRegistered)
         {
@@ -62,7 +60,7 @@ public sealed class ServiceModuleManager : IServiceModuleManager
         RegisterModule(new QueryExecutorModule());
         RegisterModule(new AsyncQueryExecutorModule());
 
-        // 注册外部模块（通过 ModuleInitializer 自动注册）
+        // 注册外部模块（通过 ArchitectureModuleRegistry 自动注册）
         foreach (var module in ArchitectureModuleRegistry.CreateModules())
         {
             RegisterModule(module);
