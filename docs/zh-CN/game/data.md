@@ -110,7 +110,7 @@ public partial class SaveController : IController
 {
     public async Task SaveGame(int slot)
     {
-        var saveRepo = Context.GetUtility<ISaveRepository<SaveData>>();
+        var saveRepo = this.GetUtility<ISaveRepository<SaveData>>();
 
         // 创建存档数据
         var saveData = new SaveData
@@ -131,7 +131,7 @@ public partial class SaveController : IController
 
     public async Task LoadGame(int slot)
     {
-        var saveRepo = Context.GetUtility<ISaveRepository<SaveData>>();
+        var saveRepo = this.GetUtility<ISaveRepository<SaveData>>();
 
         // 检查存档是否存在
         if (!await saveRepo.ExistsAsync(slot))
@@ -147,7 +147,7 @@ public partial class SaveController : IController
 
     public async Task DeleteSave(int slot)
     {
-        var saveRepo = Context.GetUtility<ISaveRepository<SaveData>>();
+        var saveRepo = this.GetUtility<ISaveRepository<SaveData>>();
 
         // 删除存档
         await saveRepo.DeleteAsync(slot);
@@ -190,7 +190,7 @@ public class GameArchitecture : Architecture
 ```csharp
 public async Task ShowSaveList()
 {
-    var saveRepo = Context.GetUtility<ISaveRepository<SaveData>>();
+    var saveRepo = this.GetUtility<ISaveRepository<SaveData>>();
 
     // 获取所有存档槽位
     var slots = await saveRepo.ListSlotsAsync();
@@ -249,7 +249,7 @@ public partial class AutoSaveController : IController
 
     private async Task SaveGame(int slot)
     {
-        var saveRepo = Context.GetUtility<ISaveRepository<SaveData>>();
+        var saveRepo = this.GetUtility<ISaveRepository<SaveData>>();
         var saveData = CreateSaveData();
         await saveRepo.SaveAsync(slot, saveData);
     }
@@ -302,7 +302,7 @@ public class SaveDataMigrator
 // 加载时自动迁移
 public async Task<SaveDataV2> LoadWithMigration(int slot)
 {
-    var saveRepo = Context.GetUtility<ISaveRepository<SaveDataV2>>();
+    var saveRepo = this.GetUtility<ISaveRepository<SaveDataV2>>();
     var data = await saveRepo.LoadAsync(slot);
 
     if (data.Version < 2)
@@ -332,7 +332,7 @@ public partial class SettingsController : IController
 {
     public async Task SaveSettings()
     {
-        var dataRepo = Context.GetUtility<IDataRepository>();
+        var dataRepo = this.GetUtility<IDataRepository>();
 
         var settings = new GameSettings
         {
@@ -350,7 +350,7 @@ public partial class SettingsController : IController
 
     public async Task<GameSettings> LoadSettings()
     {
-        var dataRepo = Context.GetUtility<IDataRepository>();
+        var dataRepo = this.GetUtility<IDataRepository>();
         var location = new DataLocation("settings", "game_settings.json");
 
         // 检查是否存在
@@ -370,7 +370,7 @@ public partial class SettingsController : IController
 ```csharp
 public async Task SaveAllGameData()
 {
-    var dataRepo = Context.GetUtility<IDataRepository>();
+    var dataRepo = this.GetUtility<IDataRepository>();
 
     var dataList = new List<(IDataLocation, IData)>
     {
@@ -390,7 +390,7 @@ public async Task SaveAllGameData()
 ```csharp
 public async Task BackupSave(int slot)
 {
-    var saveRepo = Context.GetUtility<ISaveRepository<SaveData>>();
+    var saveRepo = this.GetUtility<ISaveRepository<SaveData>>();
 
     if (!await saveRepo.ExistsAsync(slot))
     {
@@ -411,7 +411,7 @@ public async Task BackupSave(int slot)
 public async Task RestoreBackup(int slot)
 {
     int backupSlot = slot + 100;
-    var saveRepo = Context.GetUtility<ISaveRepository<SaveData>>();
+    var saveRepo = this.GetUtility<ISaveRepository<SaveData>>();
 
     if (!await saveRepo.ExistsAsync(backupSlot))
     {

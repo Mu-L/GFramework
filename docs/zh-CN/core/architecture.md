@@ -184,17 +184,17 @@ public partial class GameController : IController
 {
     public void Start()
     {
-        // 获取 Model（通过 Context 属性访问架构）
-        var playerModel = Context.GetModel<PlayerModel>();
+        // 获取 Model（使用扩展方法访问架构（[ContextAware] 实现 IContextAware 接口））
+        var playerModel = this.GetModel<PlayerModel>();
 
         // 发送命令
-        Context.SendCommand(new StartGameCommand());
+        this.SendCommand(new StartGameCommand());
 
         // 发送查询
-        var score = Context.SendQuery(new GetScoreQuery());
+        var score = this.SendQuery(new GetScoreQuery());
 
         // 注册事件
-        Context.RegisterEvent<PlayerDiedEvent>(OnPlayerDied);
+        this.RegisterEvent<PlayerDiedEvent>(OnPlayerDied);
     }
 
     private void OnPlayerDied(PlayerDiedEvent e)

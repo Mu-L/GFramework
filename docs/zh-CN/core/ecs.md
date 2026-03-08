@@ -243,7 +243,7 @@ public partial class GameController : IController
     public void Start()
     {
         // 获取 World
-        _world = Context.GetService<World>();
+        _world = this.GetService<World>();
 
         // 创建玩家实体
         var player = _world.Create(

@@ -289,10 +289,10 @@ public partial class PlayerController : Node, IController
 
     public void Initialize()
     {
-        _playerModel = Context.GetModel&lt;PlayerModel&gt;();
+        _playerModel = this.GetModel&lt;PlayerModel&gt;();
 
         // 使用 UnRegisterList 管理订阅
-        Context.RegisterEvent&lt;PlayerDamagedEvent&gt;(OnPlayerDamaged)
+        this.RegisterEvent&lt;PlayerDamagedEvent&gt;(OnPlayerDamaged)
             .AddTo(_unRegisterList);
 
         _playerModel.Health.Register(OnHealthChanged)
@@ -316,9 +316,9 @@ public partial class PlayerController : Node, IController
     public void Initialize()
     {
         // 订阅事件但从不取消订阅
-        Context.RegisterEvent&lt;PlayerDamagedEvent&gt;(OnPlayerDamaged);
+        this.RegisterEvent&lt;PlayerDamagedEvent&gt;(OnPlayerDamaged);
 
-        var playerModel = Context.GetModel&lt;PlayerModel&gt;();
+        var playerModel = this.GetModel&lt;PlayerModel&gt;();
         playerModel.Health.Register(OnHealthChanged);
 
         // 当对象被销毁时，这些订阅仍然存在，导致内存泄漏

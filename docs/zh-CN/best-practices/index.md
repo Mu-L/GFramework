@@ -41,7 +41,7 @@ public partial class PlayerController : IController
     // Controller：连接 UI 和逻辑
     public void Initialize()
     {
-        var player = Context.GetModel<PlayerModel>();
+        var player = this.GetModel<PlayerModel>();
         player.Health.RegisterWithInitValue(OnHealthChanged);
     }
 
@@ -191,10 +191,10 @@ public partial class MyController : IController
 
     public void Initialize()
     {
-        var model = Context.GetModel<PlayerModel>();
+        var model = this.GetModel<PlayerModel>();
 
         // 注册事件并添加到注销列表
-        Context.RegisterEvent<PlayerDiedEvent>(OnPlayerDied)
+        this.RegisterEvent<PlayerDiedEvent>(OnPlayerDied)
             .AddToUnregisterList(_unregisterList);
 
         // 注册属性监听并添加到注销列表
@@ -243,7 +243,7 @@ public class GameManager
 // ❌ 低效：每次都查询
 public void Update()
 {
-    var model = Context.GetModel<PlayerModel>();
+    var model = this.GetModel<PlayerModel>();
     model.Health.Value -= 1;
 }
 
@@ -252,7 +252,7 @@ private PlayerModel _playerModel;
 
 public void Initialize()
 {
-    _playerModel = Context.GetModel<PlayerModel>();
+    _playerModel = this.GetModel<PlayerModel>();
 }
 
 public void Update()
@@ -267,7 +267,7 @@ public void Update()
 // ❌ 低效：每帧创建新事件
 public void Update()
 {
-    Context.SendEvent(new UpdateEvent()); // 频繁分配内存
+    this.SendEvent(new UpdateEvent()); // 频繁分配内存
 }
 
 // ✅ 高效：复用事件或使用对象池
@@ -275,7 +275,7 @@ private UpdateEvent _updateEvent = new UpdateEvent();
 
 public void Update()
 {
-    Context.SendEvent(_updateEvent);
+    this.SendEvent(_updateEvent);
 }
 ```
 
@@ -445,7 +445,7 @@ public class CombatSystem : AbstractSystem
 // ❌ 错误：可能导致内存泄漏
 public void Initialize()
 {
-    Context.RegisterEvent<Event1>(OnEvent1); // 未注销
+    this.RegisterEvent<Event1>(OnEvent1); // 未注销
 }
 
 // ✅ 正确
@@ -453,7 +453,7 @@ private IUnRegisterList _unregisterList = new UnRegisterList();
 
 public void Initialize()
 {
-    Context.RegisterEvent<Event1>(OnEvent1)
+    this.RegisterEvent<Event1>(OnEvent1)
         .AddToUnregisterList(_unregisterList);
 }
 

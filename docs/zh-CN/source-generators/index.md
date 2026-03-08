@@ -172,11 +172,11 @@ public partial class PlayerController : IController
 {
     public void Initialize()
     {
-        // Context 属性自动生成，提供架构上下文访问
-        var playerModel = Context.GetModel<PlayerModel>();
-        var combatSystem = Context.GetSystem<CombatSystem>();
+        // 使用扩展方法访问架构（[ContextAware] 实现 IContextAware 接口）
+        var playerModel = this.GetModel<PlayerModel>();
+        var combatSystem = this.GetSystem<CombatSystem>();
 
-        Context.SendEvent(new PlayerInitializedEvent());
+        this.SendEvent(new PlayerInitializedEvent());
     }
 }
 ```
@@ -284,10 +284,10 @@ public partial class AdvancedController : IController
     {
         Logger.Info("Processing request");
 
-        var model = Context.GetModel<PlayerModel>();
+        var model = this.GetModel<PlayerModel>();
         Logger.Info($"Player health: {model.Health}");
 
-        Context.SendCommand(new ProcessCommand());
+        this.SendCommand(new ProcessCommand());
         Logger.Debug("Command sent");
     }
 }
@@ -490,7 +490,7 @@ public partial class EfficientController : IController
     public void Process()
     {
         Logger.Info("Processing");      // 0 分配
-        var model = Context.GetModel<PlayerModel>(); // 0 分配
+        var model = this.GetModel<PlayerModel>(); // 0 分配
     }
 }
 
@@ -524,8 +524,8 @@ public partial class GameController : Node, IController
     public override void _Ready()
     {
         // 初始化模型和系统引用
-        _playerModel = Context.GetModel<PlayerModel>();
-        _combatSystem = Context.GetSystem<CombatSystem>();
+        _playerModel = this.GetModel<PlayerModel>();
+        _combatSystem = this.GetSystem<CombatSystem>();
 
         // 监听事件
         this.RegisterEvent<PlayerInputEvent>(OnPlayerInput)
@@ -555,7 +555,7 @@ public partial class GameController : Node, IController
         {
             Logger.Info("Player attacks");
             _combatSystem.ProcessAttack();
-            Context.SendEvent(new AttackEvent());
+            this.SendEvent(new AttackEvent());
         }
         else
         {
@@ -569,7 +569,7 @@ public partial class GameController : Node, IController
         {
             Logger.Info("Player defends");
             _playerModel.IsDefending.Value = true;
-            Context.SendEvent(new DefendEvent());
+            this.SendEvent(new DefendEvent());
         }
         else
         {
@@ -612,7 +612,7 @@ public partial class CharacterController : Node, IController
 
     public override void _Ready()
     {
-        _characterModel = Context.GetModel<CharacterModel>();
+        _characterModel = this.GetModel<CharacterModel>();
 
         // 监听状态变化
         _characterModel.State.Register(OnStateChanged);
@@ -658,7 +658,7 @@ public partial class CharacterController : Node, IController
         Logger.Info("Character died");
         DisableInput();
         PlayDeathAnimation();
-        Context.SendEvent(new CharacterDeathEvent());
+        this.SendEvent(new CharacterDeathEvent());
     }
 }
 ```
@@ -792,14 +792,14 @@ public partial class RobustComponent : IComponent
     {
         try
         {
-            var model = Context.GetModel<RiskyModel>();
+            var model = this.GetModel<RiskyModel>();
             model.PerformRiskyOperation();
             Logger.Info("Operation completed successfully");
         }
         catch (Exception ex)
         {
             Logger.Error($"Operation failed: {ex.Message}");
-            Context.SendEvent(new OperationFailedEvent { Error = ex.Message });
+            this.SendEvent(new OperationFailedEvent { Error = ex.Message });
         }
     }
 }

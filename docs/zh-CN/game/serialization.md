@@ -108,7 +108,7 @@ public partial class SaveController : IController
 {
     public void SavePlayer()
     {
-        var serializer = Context.GetUtility<ISerializer>();
+        var serializer = this.GetUtility<ISerializer>();
 
         var player = new PlayerData
         {
@@ -132,7 +132,7 @@ public partial class SaveController : IController
 ```csharp
 public void LoadPlayer()
 {
-    var serializer = Context.GetUtility<ISerializer>();
+    var serializer = this.GetUtility<ISerializer>();
 
     string json = "{\"Name\":\"Player1\",\"Level\":10,\"Experience\":1000}";
 
@@ -150,7 +150,7 @@ public void LoadPlayer()
 ```csharp
 public void SerializeRuntimeType()
 {
-    var serializer = Context.GetUtility<IRuntimeTypeSerializer>();
+    var serializer = this.GetUtility<IRuntimeTypeSerializer>();
 
     object data = new PlayerData { Name = "Player1", Level = 10 };
     Type dataType = data.GetType();
@@ -182,8 +182,8 @@ public partial class DataManager : IController
 {
     public async Task SaveData()
     {
-        var serializer = Context.GetUtility<ISerializer>();
-        var storage = Context.GetUtility<IStorage>();
+        var serializer = this.GetUtility<ISerializer>();
+        var storage = this.GetUtility<IStorage>();
 
         var gameData = new GameData
         {
@@ -200,8 +200,8 @@ public partial class DataManager : IController
 
     public async Task<GameData> LoadData()
     {
-        var serializer = Context.GetUtility<ISerializer>();
-        var storage = Context.GetUtility<IStorage>();
+        var serializer = this.GetUtility<ISerializer>();
+        var storage = this.GetUtility<IStorage>();
 
         // 从存储读取
         string json = await storage.ReadAsync<string>("game_data");

@@ -410,7 +410,7 @@ namespace MyGame.Controllers
         /// </summary>
         public async Task StartGame(int level = 1)
         {
-            var stateMachine = Context.GetSystem<IStateMachineSystem>();
+            var stateMachine = this.GetSystem<IStateMachineSystem>();
 
             // 设置加载状态的目标关卡
             var loadingState = stateMachine.GetState<LoadingState>();

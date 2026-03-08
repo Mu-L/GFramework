@@ -629,7 +629,7 @@ public partial class SettingsController : IController
 {
     public void ApplyGraphicsSettings(int quality, bool fullscreen)
     {
-        var config = Context.GetUtility<IConfigurationManager>();
+        var config = this.GetUtility<IConfigurationManager>();
 
         // 更新配置（会自动触发监听器）
         config.SetConfig("graphics.quality", quality);
@@ -641,7 +641,7 @@ public partial class SettingsController : IController
 
     public void ResetToDefaults()
     {
-        var config = Context.GetUtility<IConfigurationManager>();
+        var config = this.GetUtility<IConfigurationManager>();
 
         // 清空所有配置
         config.Clear();

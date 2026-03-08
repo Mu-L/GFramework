@@ -212,7 +212,7 @@ public partial class PlayerUI : Control, IController
 
     public override void _Ready()
     {
-        var playerModel = Context.GetModel<PlayerModel>();
+        var playerModel = this.GetModel<PlayerModel>();
 
         // 绑定生命值到UI（立即显示当前值）
         playerModel.Health
@@ -278,7 +278,7 @@ public partial class VolumeSlider : HSlider, IController
 
     public override void _Ready()
     {
-        _volumeProperty = Context.GetModel<SettingsModel>().MasterVolume;
+        _volumeProperty = this.GetModel<SettingsModel>().MasterVolume;
 
         // Model -> UI
         _volumeProperty.RegisterWithInitValue(vol => Value = vol)
@@ -350,7 +350,7 @@ public partial class CombatController : Node, IController
 {
     public override void _Ready()
     {
-        var playerModel = Context.GetModel<PlayerModel>();
+        var playerModel = this.GetModel<PlayerModel>();
 
         // 只在生命值低于30%时显示警告
         playerModel.Health.Register(hp =>

@@ -119,7 +119,7 @@ public partial class GameController : IController
     public void Initialize()
     {
         // 从架构中获取暂停管理器
-        _pauseManager = Context.GetUtility<IPauseStackManager>();
+        _pauseManager = this.GetUtility<IPauseStackManager>();
     }
 }
 ```
@@ -137,7 +137,7 @@ public partial class PauseMenuController : IController
 
     public void Initialize()
     {
-        _pauseManager = Context.GetUtility<IPauseStackManager>();
+        _pauseManager = this.GetUtility<IPauseStackManager>();
     }
 
     public void OpenPauseMenu()
@@ -371,7 +371,7 @@ public partial class PauseIndicator : IController
 
     public void Initialize()
     {
-        _pauseManager = Context.GetUtility<IPauseStackManager>();
+        _pauseManager = this.GetUtility<IPauseStackManager>();
 
         // 订阅状态变化事件
         _pauseManager.OnPauseStateChanged += OnPauseStateChanged;
@@ -692,7 +692,7 @@ public partial class ProperCleanup : IController
 
     public void Initialize()
     {
-        _pauseManager = Context.GetUtility<IPauseStackManager>();
+        _pauseManager = this.GetUtility<IPauseStackManager>();
         _customHandler = new CustomPauseHandler();
 
         _pauseManager.RegisterHandler(_customHandler);

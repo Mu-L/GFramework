@@ -134,7 +134,7 @@ public partial class UiController : IController
 {
     public async Task ShowSettings()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 压入设置页面（保留当前页面）
         await uiRouter.PushAsync("Settings");
@@ -142,7 +142,7 @@ public partial class UiController : IController
 
     public async Task CloseSettings()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 弹出当前页面（返回上一页）
         await uiRouter.PopAsync();
@@ -150,7 +150,7 @@ public partial class UiController : IController
 
     public async Task ShowMainMenu()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 替换所有页面（清空 UI 栈）
         await uiRouter.ReplaceAsync("MainMenu");
@@ -166,7 +166,7 @@ public partial class UiController : IController
 {
     public void ShowDialog()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 在 Modal 层显示对话框
         var handle = uiRouter.Show("ConfirmDialog", UiLayer.Modal);
@@ -174,7 +174,7 @@ public partial class UiController : IController
 
     public void ShowToast(string message)
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 在 Toast 层显示提示
         var handle = uiRouter.Show("ToastMessage", UiLayer.Toast,
@@ -183,7 +183,7 @@ public partial class UiController : IController
 
     public void ShowLoading()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 在 Topmost 层显示加载界面
         var handle = uiRouter.Show("LoadingScreen", UiLayer.Topmost);
@@ -314,7 +314,7 @@ public partial class DialogController : IController
 
     public void ShowDialog()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 显示对话框并保存句柄
         _dialogHandle = uiRouter.Show("ConfirmDialog", UiLayer.Modal);
@@ -324,7 +324,7 @@ public partial class DialogController : IController
     {
         if (_dialogHandle.HasValue)
         {
-            var uiRouter = Context.GetSystem<IUiRouter>();
+            var uiRouter = this.GetSystem<IUiRouter>();
 
             // 使用句柄关闭对话框
             uiRouter.Hide(_dialogHandle.Value, UiLayer.Modal, destroy: true);
@@ -345,7 +345,7 @@ public partial class NavigationController : IController
 {
     public void ShowUiStack()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         Console.WriteLine($"UI 栈深度: {uiRouter.Count}");
 
@@ -358,13 +358,13 @@ public partial class NavigationController : IController
 
     public bool IsSettingsOpen()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
         return uiRouter.Contains("Settings");
     }
 
     public bool IsTopPage(string uiKey)
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
         return uiRouter.IsTop(uiKey);
     }
 }
@@ -381,7 +381,7 @@ public partial class LayerController : IController
 {
     public void ShowMultipleToasts()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // Toast 层支持重入，可以同时显示多个
         uiRouter.Show("Toast1", UiLayer.Toast);
@@ -391,7 +391,7 @@ public partial class LayerController : IController
 
     public void ClearAllToasts()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 清空 Toast 层的所有 UI
         uiRouter.ClearLayer(UiLayer.Toast, destroy: true);
@@ -399,7 +399,7 @@ public partial class LayerController : IController
 
     public void HideAllDialogs()
     {
-        var uiRouter = Context.GetSystem<IUiRouter>();
+        var uiRouter = this.GetSystem<IUiRouter>();
 
         // 隐藏 Modal 层的所有对话框
         uiRouter.HideByKey("ConfirmDialog", UiLayer.Modal, hideAll: true);

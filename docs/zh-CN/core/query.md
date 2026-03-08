@@ -162,12 +162,12 @@ public partial class ShopUI : IController
     {
         // 查询玩家金币
         var query = new GetPlayerGoldQuery { Input = new GetPlayerGoldInput() };
-        int playerGold = Context.SendQuery(query);
+        int playerGold = this.SendQuery(query);
 
         if (playerGold >= _itemPrice)
         {
             // 发送购买命令
-            Context.SendCommand(new BuyItemCommand { Input = new BuyItemInput { ItemId = "sword_01" } });
+            this.SendCommand(new BuyItemCommand { Input = new BuyItemInput { ItemId = "sword_01" } });
         }
         else
         {

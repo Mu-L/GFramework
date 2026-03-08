@@ -492,8 +492,8 @@ namespace MyShooterGame.Controllers
 
         public override void _Ready()
         {
-            // 监听玩家死亡（通过 Context 属性访问架构）
-            var playerModel = Context.GetModel<PlayerModel>();
+            // 监听玩家死亡（使用扩展方法访问架构（[ContextAware] 实现 IContextAware 接口））
+            var playerModel = this.GetModel<PlayerModel>();
             playerModel.IsAlive.RegisterOnValueChanged(isAlive =>
             {
                 if (!isAlive)
@@ -648,8 +648,8 @@ public partial class MenuController : Control, IController
     {
         GD.Print("开始游戏");
 
-        // 初始化游戏（通过 Context 属性访问架构）
-        var gameplaySystem = Context.GetSystem<GameplaySystem>();
+        // 初始化游戏（使用扩展方法访问架构（[ContextAware] 实现 IContextAware 接口））
+        var gameplaySystem = this.GetSystem<GameplaySystem>();
         gameplaySystem.StartNewGame();
 
         // 切换到游戏场景
@@ -687,13 +687,13 @@ public partial class GameScene : Node2D, IController
 
     public override void _Ready()
     {
-        // 初始化生成系统（通过 Context 属性访问架构）
-        _spawnSystem = Context.GetSystem<SpawnSystem>();
+        // 初始化生成系统（使用扩展方法访问架构（[ContextAware] 实现 IContextAware 接口））
+        _spawnSystem = this.GetSystem<SpawnSystem>();
         _spawnSystem.Initialize(this, EnemyScene);
         _spawnSystem.StartSpawning();
 
         // 监听游戏状态
-        var gameModel = Context.GetModel<GameModel>();
+        var gameModel = this.GetModel<GameModel>();
         gameModel.IsPlaying.RegisterOnValueChanged(isPlaying =>
         {
             if (!isPlaying)

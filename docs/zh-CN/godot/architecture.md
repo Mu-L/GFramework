@@ -348,24 +348,21 @@ public partial class Player : CharacterBody2D, IController
 {
     public override void _Ready()
     {
-        // 方式 1: 通过 Context 属性访问（由 [ContextAware] 生成）
-        var playerModel = Context.GetModel<PlayerModel>();
-        var gameplaySystem = Context.GetSystem<GameplaySystem>();
-
-        // 方式 2: 通过扩展方法访问（扩展方法基于 IContextAware）
-        var playerModel2 = this.GetModel<PlayerModel>();
+        // 使用扩展方法访问架构（[ContextAware] 实现 IContextAware 接口）
+        var playerModel = this.GetModel<PlayerModel>();
+        var gameplaySystem = this.GetSystem<GameplaySystem>();
 
         // 发送事件
-        Context.SendEvent(new PlayerSpawnedEvent());
+        this.SendEvent(new PlayerSpawnedEvent());
 
         // 执行命令
-        Context.SendCommand(new InitPlayerCommand());
+        this.SendCommand(new InitPlayerCommand());
     }
 
     public override void _Process(double delta)
     {
         // 在 Process 中使用架构组件
-        var inputSystem = Context.GetSystem<InputSystem>();
+        var inputSystem = this.GetSystem<InputSystem>();
         var movement = inputSystem.GetMovementInput();
 
         Velocity = movement * 200;
@@ -530,12 +527,9 @@ public partial class Player : Node, IController
 {
     public override void _Ready()
     {
-        // 通过 Context 属性访问架构（由 [ContextAware] 生成）
-        var model = Context.GetModel<PlayerModel>();
-        var system = Context.GetSystem<GameplaySystem>();
-
-        // 或使用扩展方法（扩展方法基于 IContextAware）
-        var model2 = this.GetModel<PlayerModel>();
+        // 使用扩展方法访问架构（[ContextAware] 实现 IContextAware 接口）
+        var model = this.GetModel<PlayerModel>();
+        var system = this.GetSystem<GameplaySystem>();
     }
 }
 

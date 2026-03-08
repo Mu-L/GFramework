@@ -64,7 +64,7 @@ public partial class GameController : IController
 {
     public void OnRestoreHealthButtonClicked()
     {
-        Context.SendCommand(new SimpleCommand());
+        this.SendCommand(new SimpleCommand());
     }
 }
 ```
@@ -205,7 +205,7 @@ public partial class GameController : IController
     public void OnStartButtonClicked()
     {
         var input = new StartGameInput { LevelId = 1, PlayerName = "Player1" };
-        Context.SendCommand(new StartGameCommand { Input = input });
+        this.SendCommand(new StartGameCommand { Input = input });
     }
 }
 ```

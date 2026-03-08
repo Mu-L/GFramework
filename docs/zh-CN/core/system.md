@@ -194,8 +194,8 @@ public partial class GameController : IController
     public void Start()
     {
         // 获取 System
-        var combatSystem = Context.GetSystem<CombatSystem>();
-        var questSystem = Context.GetSystem<QuestSystem>();
+        var combatSystem = this.GetSystem<CombatSystem>();
+        var questSystem = this.GetSystem<QuestSystem>();
 
         // 使用 System
         combatSystem.StartBattle();

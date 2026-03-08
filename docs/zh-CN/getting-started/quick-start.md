@@ -162,8 +162,8 @@ public partial class GameController : IController
 
     public void Initialize()
     {
-        _playerModel = Context.GetModel<PlayerModel>();
-        _gameStateModel = Context.GetModel<GameStateModel>();
+        _playerModel = this.GetModel<PlayerModel>();
+        _gameStateModel = this.GetModel<GameStateModel>();
 
         // 初始化事件监听
         InitializeEventListeners();
@@ -180,18 +180,18 @@ public partial class GameController : IController
     public void StartGame()
     {
         _gameStateModel.IsGameRunning.Value = true;
-        Context.SendEvent(new GameStartEvent());
+        this.SendEvent(new GameStartEvent());
         Console.WriteLine("Game started!");
     }
 
     public void MovePlayer(Vector2 direction)
     {
-        Context.SendCommand(new MovePlayerCommand { Direction = direction });
+        this.SendCommand(new MovePlayerCommand { Direction = direction });
     }
 
     public void PlayerAttack(Vector2 target)
     {
-        Context.SendCommand(new AttackCommand { TargetPosition = target });
+        this.SendCommand(new AttackCommand { TargetPosition = target });
     }
 
     // UI 更新回调

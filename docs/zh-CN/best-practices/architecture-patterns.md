@@ -92,7 +92,7 @@ public partial class PlayerController : Node, IController
 
     public override void _Ready()
     {
-        _playerModel = Context.GetModel&lt;PlayerModel&gt;();
+        _playerModel = this.GetModel&lt;PlayerModel&gt;();
 
         // 监听数据变化，更新视图
         _playerModel.Health.Register(UpdateHealthUI);
@@ -107,7 +107,7 @@ public partial class PlayerController : Node, IController
             if (keyEvent.Keycode == Key.Space)
             {
                 // 发送命令修改 Model
-                Context.SendCommand(new AttackCommand());
+                this.SendCommand(new AttackCommand());
             }
         }
     }
@@ -238,7 +238,7 @@ public partial class PlayerView : Control, IController
 
     public override void _Ready()
     {
-        _viewModel = Context.GetModel&lt;PlayerViewModel&gt;();
+        _viewModel = this.GetModel&lt;PlayerViewModel&gt;();
 
         _healthLabel = GetNode&lt;Label&gt;("HealthLabel");
         _healthBar = GetNode&lt;ProgressBar&gt;("HealthBar");
@@ -331,7 +331,7 @@ public partial class ShopController : IController
             Quantity = quantity
         };
 
-        Context.SendCommand(new BuyItemCommand { Input = input });
+        this.SendCommand(new BuyItemCommand { Input = input });
     }
 }
 ```
@@ -462,7 +462,7 @@ public partial class CharacterPanelController : IController
     {
         var input = new GetPlayerStatsInput { PlayerId = "player1" };
         var query = new GetPlayerStatsQuery { Input = input };
-        var stats = Context.SendQuery(query);
+        var stats = this.SendQuery(query);
 
         // 显示统计信息
         DisplayStats(stats);
@@ -629,11 +629,11 @@ public partial class UIController : IController
     public void Initialize()
     {
         // 监听成就解锁事件
-        Context.RegisterEvent<AchievementUnlockedEvent>(OnAchievementUnlocked)
+        this.RegisterEvent<AchievementUnlockedEvent>(OnAchievementUnlocked)
             .AddToUnregisterList(_unregisterList);
 
         // 监听玩家死亡事件
-        Context.RegisterEvent<PlayerDiedEvent>(OnPlayerDied)
+        this.RegisterEvent<PlayerDiedEvent>(OnPlayerDied)
             .AddToUnregisterList(_unregisterList);
     }
 
@@ -883,11 +883,11 @@ public partial class MenuController : IController
     public void OnStartButtonClicked()
     {
         // 通过架构获取服务
-        var gameModel = Context.GetModel<GameModel>();
+        var gameModel = this.GetModel<GameModel>();
         gameModel.GameState.Value = GameState.Playing;
 
         // 发送命令
-        Context.SendCommand(new StartGameCommand());
+        this.SendCommand(new StartGameCommand());
     }
 }
 ```
@@ -1263,19 +1263,19 @@ public partial class GameController : IController
 {
     public async Task StartGame()
     {
-        var stateMachine = Context.GetSystem<IStateMachineSystem>();
+        var stateMachine = this.GetSystem<IStateMachineSystem>();
         await stateMachine.ChangeToAsync<GameplayState>();
     }
 
     public async Task PauseGame()
     {
-        var stateMachine = Context.GetSystem<IStateMachineSystem>();
+        var stateMachine = this.GetSystem<IStateMachineSystem>();
         await stateMachine.ChangeToAsync<PauseState>();
     }
 
     public async Task ResumeGame()
     {
-        var stateMachine = Context.GetSystem<IStateMachineSystem>();
+        var stateMachine = this.GetSystem<IStateMachineSystem>();
         await stateMachine.ChangeToAsync<GameplayState>();
     }
 }
@@ -1708,7 +1708,7 @@ namespace Game.Controllers
         
         public override void _Ready()
         {
-            _playerModel = Context.GetModel<PlayerModel>();
+            _playerModel = this.GetModel<PlayerModel>();
             
             // 监听用户输入
             SetProcessInput(true);
@@ -1723,7 +1723,7 @@ namespace Game.Controllers
             if (@event is InputEventKey keyEvent && keyEvent.Pressed)
             {
                 var direction = GetInputDirection(keyEvent);
-                Context.SendEvent(new PlayerInputEvent { Direction = direction });
+                this.SendEvent(new PlayerInputEvent { Direction = direction });
             }
         }
         

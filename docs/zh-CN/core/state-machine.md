@@ -136,7 +136,7 @@ public partial class GameController : IController
 {
     public async Task StartGame()
     {
-        var stateMachine = Context.GetSystem<IStateMachineSystem>();
+        var stateMachine = this.GetSystem<IStateMachineSystem>();
 
         // 切换到游戏状态
         var success = await stateMachine.ChangeToAsync<GameplayState>();
@@ -228,7 +228,7 @@ public partial class GameController : IController
 {
     public async Task NavigateBack()
     {
-        var stateMachine = Context.GetSystem<IStateMachineSystem>();
+        var stateMachine = this.GetSystem<IStateMachineSystem>();
 
         // 回退到上一个状态
         var success = await stateMachine.GoBackAsync();
@@ -241,7 +241,7 @@ public partial class GameController : IController
 
     public void ShowHistory()
     {
-        var stateMachine = Context.GetSystem<IStateMachineSystem>();
+        var stateMachine = this.GetSystem<IStateMachineSystem>();
 
         // 获取状态历史
         var history = stateMachine.GetStateHistory();

@@ -364,13 +364,13 @@ public partial class GameController : IController
     public void Initialize()
     {
         // 注册多个事件
-        Context.RegisterEvent<GameStartedEvent>(OnGameStarted)
+        this.RegisterEvent<GameStartedEvent>(OnGameStarted)
             .AddToUnregisterList(_unregisterList);
 
-        Context.RegisterEvent<PlayerDiedEvent>(OnPlayerDied)
+        this.RegisterEvent<PlayerDiedEvent>(OnPlayerDied)
             .AddToUnregisterList(_unregisterList);
 
-        Context.RegisterEvent<LevelCompletedEvent>(OnLevelCompleted)
+        this.RegisterEvent<LevelCompletedEvent>(OnLevelCompleted)
             .AddToUnregisterList(_unregisterList);
     }
 
@@ -419,7 +419,7 @@ onAnyDamage.Register(() =>
 
 ```csharp
 // 只处理高伤害事件
-Context.RegisterEvent<DamageDealtEvent>(e =>
+this.RegisterEvent<DamageDealtEvent>(e =>
 {
     if (e.Damage >= 50)
     {
@@ -461,7 +461,7 @@ public partial class TutorialController : IController
     {
         // 只监听一次
         IUnRegister unregister = null;
-        unregister = Context.RegisterEvent<FirstEnemyKilledEvent>(e =>
+        unregister = this.RegisterEvent<FirstEnemyKilledEvent>(e =>
         {
             ShowTutorialComplete();
             unregister?.UnRegister();  // 立即注销
@@ -513,10 +513,10 @@ public partial class MyController : IController
     public void Initialize()
     {
         // 所有注册都添加到列表
-        Context.RegisterEvent<Event1>(OnEvent1)
+        this.RegisterEvent<Event1>(OnEvent1)
             .AddToUnregisterList(_unregisterList);
 
-        Context.RegisterEvent<Event2>(OnEvent2)
+        this.RegisterEvent<Event2>(OnEvent2)
             .AddToUnregisterList(_unregisterList);
     }
 
