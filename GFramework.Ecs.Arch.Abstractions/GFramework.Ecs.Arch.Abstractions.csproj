@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>GeWuYou.$(AssemblyName)</PackageId>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\GFramework.Core.Abstractions\GFramework.Core.Abstractions.csproj" PrivateAssets="all"/>
+    </ItemGroup>
+
+</Project>

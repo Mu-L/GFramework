@@ -2,8 +2,6 @@ using GFramework.Core.Abstractions.architecture;
 using GFramework.Core.Abstractions.ioc;
 using GFramework.Core.Abstractions.lifecycle;
 using GFramework.Core.Abstractions.logging;
-using GFramework.Core.Abstractions.properties;
-using GFramework.Core.ecs;
 using GFramework.Core.logging;
 using GFramework.Core.services.modules;
 
@@ -44,12 +42,11 @@ public sealed class ServiceModuleManager : IServiceModuleManager
 
     /// <summary>
     ///     注册内置服务模块，并根据优先级排序后完成服务注册。
-    ///     内置模块包括事件总线、命令执行器、查询执行器等核心模块，
-    ///     并根据配置决定是否启用ECS模块。
+    ///     内置模块包括事件总线、命令执行器、查询执行器等核心模块。
+    ///     同时注册通过 ArchitectureModuleRegistry 自动注册的外部模块。
     /// </summary>
     /// <param name="container">IoC容器实例，用于模块服务注册。</param>
-    /// <param name="properties">架构属性配置，用于判断是否启用ECS模块。</param>
-    public void RegisterBuiltInModules(IIocContainer container, ArchitectureProperties properties)
+    public void RegisterBuiltInModules(IIocContainer container)
     {
         if (_builtInModulesRegistered)
         {
@@ -57,21 +54,25 @@ public sealed class ServiceModuleManager : IServiceModuleManager
             return;
         }
 
+        // 注册内置模块
         RegisterModule(new EventBusModule());
         RegisterModule(new CommandExecutorModule());
         RegisterModule(new QueryExecutorModule());
         RegisterModule(new AsyncQueryExecutorModule());
 
-        if (properties.EnableEcs)
+        // 注册外部模块（通过 ArchitectureModuleRegistry 自动注册）
+        foreach (var module in ArchitectureModuleRegistry.CreateModules())
         {
-            RegisterModule(new ArchEcsModule(enabled: true));
-            _logger.Info("ECS module enabled via configuration");
+            RegisterModule(module);
+            _logger.Info($"External module registered: {module.ModuleName}");
         }
 
+        // 按优先级排序
         var sortedModules = _modules.OrderBy(m => m.Priority).ToList();
         _modules.Clear();
         _modules.AddRange(sortedModules);
 
+        // 注册服务
         foreach (var module in _modules.Where(module => module.IsEnabled))
         {
             _logger.Debug($"Registering services for module: {module.ModuleName}");
@@ -79,7 +80,7 @@ public sealed class ServiceModuleManager : IServiceModuleManager
         }
 
         _builtInModulesRegistered = true;
-        _logger.Info($"Registered {_modules.Count} built-in service modules");
+        _logger.Info($"Registered {_modules.Count} service modules");
     }
 
     /// <summary>

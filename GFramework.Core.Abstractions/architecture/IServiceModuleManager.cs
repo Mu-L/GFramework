@@ -1,5 +1,4 @@
 using GFramework.Core.Abstractions.ioc;
-using GFramework.Core.Abstractions.properties;
 
 namespace GFramework.Core.Abstractions.architecture;
 
@@ -18,8 +17,7 @@ public interface IServiceModuleManager
     ///     注册内置的服务模块。
     /// </summary>
     /// <param name="container">IoC容器实例，用于解析依赖。</param>
-    /// <param name="properties">架构属性配置，用于模块初始化。</param>
-    void RegisterBuiltInModules(IIocContainer container, ArchitectureProperties properties);
+    void RegisterBuiltInModules(IIocContainer container);
 
     /// <summary>
     ///     获取所有已注册的服务模块。

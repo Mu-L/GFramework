@@ -47,6 +47,9 @@
         <None Remove="GFramework.Godot.Abstractions\**"/>
         <None Remove="GFramework.Game.Abstractions\**"/>
         <None Remove="GFramework.Core.Tests\**"/>
+        <None Remove="GFramework.Ecs.Arch.Tests\**"/>
+        <None Remove="GFramework.Ecs.Arch\**"/>
+        <None Remove="GFramework.Ecs.Arch.Abstractions\**"/>
         <None Remove="GFramework.Generator\**"/>
         <None Remove="GFramework.Generator.Attributes\**"/>
         <None Remove="GFramework.Godot.SourceGenerators.Attributes\**"/>
@@ -82,6 +85,9 @@
         <Compile Remove="GFramework.Godot.Abstractions\**"/>
         <Compile Remove="GFramework.Game.Abstractions\**"/>
         <Compile Remove="GFramework.Core.Tests\**"/>
+        <Compile Remove="GFramework.Ecs.Arch.Tests\**"/>
+        <Compile Remove="GFramework.Ecs.Arch\**"/>
+        <Compile Remove="GFramework.Ecs.Arch.Abstractions\**"/>
         <Compile Remove="GFramework.Generator\**"/>
         <Compile Remove="GFramework.Generator.Attributes\**"/>
         <Compile Remove="GFramework.Godot.SourceGenerators.Attributes\**"/>
@@ -103,6 +109,9 @@
         <EmbeddedResource Remove="GFramework.Godot.Abstractions\**"/>
         <EmbeddedResource Remove="GFramework.Game.Abstractions\**"/>
         <EmbeddedResource Remove="GFramework.Core.Tests\**"/>
+        <EmbeddedResource Remove="GFramework.Ecs.Arch.Tests\**"/>
+        <EmbeddedResource Remove="GFramework.Ecs.Arch\**"/>
+        <EmbeddedResource Remove="GFramework.Ecs.Arch.Abstractions\**"/>
         <EmbeddedResource Remove="GFramework.Generator\**"/>
         <EmbeddedResource Remove="GFramework.Generator.Attributes\**"/>
         <EmbeddedResource Remove="GFramework.Godot.SourceGenerators.Attributes\**"/>

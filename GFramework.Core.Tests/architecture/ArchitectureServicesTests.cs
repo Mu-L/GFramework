@@ -4,7 +4,6 @@ using GFramework.Core.Abstractions.environment;
 using GFramework.Core.Abstractions.events;
 using GFramework.Core.Abstractions.ioc;
 using GFramework.Core.Abstractions.model;
-using GFramework.Core.Abstractions.properties;
 using GFramework.Core.Abstractions.query;
 using GFramework.Core.Abstractions.system;
 using GFramework.Core.Abstractions.utility;
@@ -15,7 +14,6 @@ using GFramework.Core.events;
 using GFramework.Core.ioc;
 using GFramework.Core.query;
 using Mediator;
-using NUnit.Framework;
 using ICommand = GFramework.Core.Abstractions.command.ICommand;
 
 namespace GFramework.Core.Tests.architecture;
@@ -48,8 +46,7 @@ public class ArchitectureServicesTests
 
     private void RegisterBuiltInServices()
     {
-        var properties = new ArchitectureProperties();
-        _services!.ModuleManager.RegisterBuiltInModules(_services.Container, properties);
+        _services!.ModuleManager.RegisterBuiltInModules(_services.Container);
     }
 
     /// <summary>
@@ -216,13 +213,11 @@ public class ArchitectureServicesTests
     [Test]
     public void Multiple_Instances_Should_Have_Independent_EventBus()
     {
-        var properties = new ArchitectureProperties();
-
         var services1 = new ArchitectureServices();
-        services1.ModuleManager.RegisterBuiltInModules(services1.Container, properties);
+        services1.ModuleManager.RegisterBuiltInModules(services1.Container);
 
         var services2 = new ArchitectureServices();
-        services2.ModuleManager.RegisterBuiltInModules(services2.Container, properties);
+        services2.ModuleManager.RegisterBuiltInModules(services2.Container);
 
         Assert.That(services1.EventBus, Is.Not.SameAs(services2.EventBus));
     }
@@ -233,13 +228,11 @@ public class ArchitectureServicesTests
     [Test]
     public void Multiple_Instances_Should_Have_Independent_CommandBus()
     {
-        var properties = new ArchitectureProperties();
-
         var services1 = new ArchitectureServices();
-        services1.ModuleManager.RegisterBuiltInModules(services1.Container, properties);
+        services1.ModuleManager.RegisterBuiltInModules(services1.Container);
 
         var services2 = new ArchitectureServices();
-        services2.ModuleManager.RegisterBuiltInModules(services2.Container, properties);
+        services2.ModuleManager.RegisterBuiltInModules(services2.Container);
 
         Assert.That(services1.CommandExecutor, Is.Not.SameAs(services2.CommandExecutor));
     }
@@ -250,13 +243,11 @@ public class ArchitectureServicesTests
     [Test]
     public void Multiple_Instances_Should_Have_Independent_QueryBus()
     {
-        var properties = new ArchitectureProperties();
-
         var services1 = new ArchitectureServices();
-        services1.ModuleManager.RegisterBuiltInModules(services1.Container, properties);
+        services1.ModuleManager.RegisterBuiltInModules(services1.Container);
 
         var services2 = new ArchitectureServices();
-        services2.ModuleManager.RegisterBuiltInModules(services2.Container, properties);
+        services2.ModuleManager.RegisterBuiltInModules(services2.Container);
 
         Assert.That(services1.QueryExecutor, Is.Not.SameAs(services2.QueryExecutor));
     }
@@ -268,27 +259,6 @@ public class ArchitectureServicesTests
     public void ModuleManager_Should_Not_Be_Null()
     {
         Assert.That(_services!.ModuleManager, Is.Not.Null);
-    }
-
-    /// <summary>
-    ///     测试EnableEcs配置开关
-    /// </summary>
-    [Test]
-    public void EnableEcs_Should_Control_Ecs_Module_Registration()
-    {
-        var propertiesWithEcs = new ArchitectureProperties { EnableEcs = true };
-        var propertiesWithoutEcs = new ArchitectureProperties { EnableEcs = false };
-
-        var servicesWithEcs = new ArchitectureServices();
-        servicesWithEcs.ModuleManager.RegisterBuiltInModules(servicesWithEcs.Container, propertiesWithEcs);
-
-        var servicesWithoutEcs = new ArchitectureServices();
-        servicesWithoutEcs.ModuleManager.RegisterBuiltInModules(servicesWithoutEcs.Container, propertiesWithoutEcs);
-
-        var modulesWithEcs = servicesWithEcs.ModuleManager.GetModules();
-        var modulesWithoutEcs = servicesWithoutEcs.ModuleManager.GetModules();
-
-        Assert.That(modulesWithEcs.Count, Is.GreaterThan(modulesWithoutEcs.Count));
     }
 }
 
