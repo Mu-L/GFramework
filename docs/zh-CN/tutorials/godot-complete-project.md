@@ -112,8 +112,8 @@ MyShooterGame/
 
 ```csharp
 // Scripts/Models/PlayerModel.cs
-using GFramework.Core.model;
-using GFramework.Core.Abstractions.property;
+using GFramework.Core.Model;
+using GFramework.Core.Abstractions.Property;
 
 namespace MyShooterGame.Models
 {
@@ -170,8 +170,8 @@ namespace MyShooterGame.Models
 
 ```csharp
 // Scripts/Models/GameModel.cs
-using GFramework.Core.model;
-using GFramework.Core.Abstractions.property;
+using GFramework.Core.Model;
+using GFramework.Core.Abstractions.Property;
 
 namespace MyShooterGame.Models
 {
@@ -220,7 +220,7 @@ namespace MyShooterGame.Models
 
 ```csharp
 // Scripts/Data/GameSaveData.cs
-using GFramework.Game.Abstractions.data;
+using GFramework.Game.Abstractions.Data;
 using System;
 
 namespace MyShooterGame.Data
@@ -246,12 +246,12 @@ namespace MyShooterGame.Data
 
 ```csharp
 // Scripts/Architecture/GameArchitecture.cs
-using GFramework.Godot.architecture;
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Game.Abstractions.data;
-using GFramework.Game.Abstractions.storage;
-using GFramework.Game.data;
-using GFramework.Game.storage;
+using GFramework.Godot.Architecture;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Game.Abstractions.Data;
+using GFramework.Game.Abstractions.Storage;
+using GFramework.Game.Data;
+using GFramework.Game.Storage;
 using MyShooterGame.Models;
 using MyShooterGame.Systems;
 using MyShooterGame.Data;
@@ -315,8 +315,8 @@ namespace MyShooterGame.Architecture
 
 ```csharp
 // Scripts/Systems/GameplaySystem.cs
-using GFramework.Core.system;
-using GFramework.Core.extensions;
+using GFramework.Core.System;
+using GFramework.Core.Extensions;
 using MyShooterGame.Models;
 using Godot;
 
@@ -378,10 +378,10 @@ namespace MyShooterGame.Systems
 
 ```csharp
 // Scripts/Systems/SpawnSystem.cs
-using GFramework.Core.system;
-using GFramework.Core.extensions;
-using GFramework.Core.Abstractions.coroutine;
-using GFramework.Core.coroutine;
+using GFramework.Core.System;
+using GFramework.Core.Extensions;
+using GFramework.Core.Abstractions.Coroutine;
+using GFramework.Core.Coroutine;
 using MyShooterGame.Models;
 using Godot;
 using System.Collections.Generic;
@@ -472,9 +472,9 @@ namespace MyShooterGame.Systems
 
 ```csharp
 // Scripts/Controllers/PlayerController.cs
-using GFramework.Core.Abstractions.controller;
-using GFramework.Core.extensions;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.Core.Extensions;
+using GFramework.SourceGenerators.Abstractions.Rule;
 using MyShooterGame.Architecture;
 using MyShooterGame.Models;
 using Godot;
@@ -628,9 +628,9 @@ public partial class Main : Node
 ```csharp
 // Scripts/UI/MenuController.cs
 using Godot;
-using GFramework.Core.Abstractions.controller;
-using GFramework.Core.extensions;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.Core.Extensions;
+using GFramework.SourceGenerators.Abstractions.Rule;
 using MyShooterGame.Architecture;
 using MyShooterGame.Systems;
 
@@ -670,10 +670,10 @@ public partial class MenuController : Control, IController
 ```csharp
 // Scripts/GameScene.cs
 using Godot;
-using GFramework.Core.Abstractions.controller;
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Core.extensions;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.Extensions;
+using GFramework.SourceGenerators.Abstractions.Rule;
 using MyShooterGame.Architecture;
 using MyShooterGame.Systems;
 using MyShooterGame.Models;

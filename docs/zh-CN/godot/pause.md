@@ -102,9 +102,9 @@ public class GodotPauseHandler : IPauseHandler
 ### 设置暂停系统
 
 ```csharp
-using GFramework.Godot.architecture;
-using GFramework.Godot.pause;
-using GFramework.Core.pause;
+using GFramework.Godot.Architecture;
+using GFramework.Godot.Pause;
+using GFramework.Core.Pause;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -125,7 +125,7 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class PauseMenu : Control
 {
@@ -155,7 +155,7 @@ public partial class PauseMenu : Control
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class DialogBox : Control
 {
@@ -178,7 +178,7 @@ public partial class DialogBox : Control
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class GameController : Node
 {
@@ -210,7 +210,7 @@ public partial class GameController : Node
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class GameManager : Node
 {
@@ -256,7 +256,7 @@ public partial class GameManager : Node
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class GameScene : Node
 {
@@ -295,7 +295,7 @@ public partial class GameScene : Node
 ### 自定义暂停处理器
 
 ```csharp
-using GFramework.Core.Abstractions.pause;
+using GFramework.Core.Abstractions.Pause;
 using Godot;
 
 // 自定义动画暂停处理器
@@ -346,7 +346,7 @@ public partial class GameController : Node
 ### 音频暂停处理器
 
 ```csharp
-using GFramework.Core.Abstractions.pause;
+using GFramework.Core.Abstractions.Pause;
 using Godot;
 
 public class AudioPauseHandler : IPauseHandler
@@ -385,7 +385,7 @@ public class AudioPauseHandler : IPauseHandler
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class GameNode : Node
 {
@@ -421,7 +421,7 @@ public partial class GameNode : Node
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class PauseMenuUI : Control
 {
@@ -459,7 +459,7 @@ public partial class PauseMenuUI : Control
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class PauseIndicator : Label
 {
@@ -492,7 +492,7 @@ public partial class PauseIndicator : Label
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class PauseDebugger : Node
 {

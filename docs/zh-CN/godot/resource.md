@@ -104,7 +104,7 @@ public partial class ItemData : Resource, IHasKey<string>
 ### 创建资源仓储
 
 ```csharp
-using GFramework.Godot.data;
+using GFramework.Godot.Data;
 
 public class ItemRepository : GodotResourceRepository<string, ItemData>
 {
@@ -119,7 +119,7 @@ public class ItemRepository : GodotResourceRepository<string, ItemData>
 ### 注册到架构
 
 ```csharp
-using GFramework.Godot.architecture;
+using GFramework.Godot.Architecture;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -136,7 +136,7 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class InventoryController : Node
 {

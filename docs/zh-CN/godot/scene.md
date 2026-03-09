@@ -66,7 +66,7 @@ public interface IGodotSceneRegistry
 
 ```csharp
 using Godot;
-using GFramework.Game.Abstractions.scene;
+using GFramework.Game.Abstractions.Scene;
 
 public partial class MainMenuScene : Control, IScene
 {
@@ -113,7 +113,7 @@ public partial class MainMenuScene : Control, IScene
 ### 注册场景
 
 ```csharp
-using GFramework.Godot.scene;
+using GFramework.Godot.Scene;
 using Godot;
 
 public class GameSceneRegistry : GodotSceneRegistry
@@ -131,8 +131,8 @@ public class GameSceneRegistry : GodotSceneRegistry
 ### 设置场景系统
 
 ```csharp
-using GFramework.Godot.architecture;
-using GFramework.Godot.scene;
+using GFramework.Godot.Architecture;
+using GFramework.Godot.Scene;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -157,7 +157,7 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class GameController : Node
 {
@@ -193,8 +193,8 @@ public partial class GameController : Node
 
 ```csharp
 using Godot;
-using GFramework.Game.Abstractions.scene;
-using GFramework.Godot.scene;
+using GFramework.Game.Abstractions.Scene;
+using GFramework.Godot.Scene;
 
 public partial class GameplayScene : Node2D, ISceneBehaviorProvider
 {
@@ -266,7 +266,7 @@ public class ControlSceneBehavior : SceneBehaviorBase<Control>
 
 ```csharp
 using Godot;
-using GFramework.Godot.scene;
+using GFramework.Godot.Scene;
 
 public partial class SceneRoot : Node, ISceneRoot
 {
@@ -369,7 +369,7 @@ public partial class LoadingScene : Control
 
 ```csharp
 using Godot;
-using GFramework.Game.Abstractions.scene;
+using GFramework.Game.Abstractions.Scene;
 
 public class FadeTransitionHandler : ISceneTransitionHandler
 {

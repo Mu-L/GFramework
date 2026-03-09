@@ -94,7 +94,7 @@ public class GameSystem : AbstractSystem
 最常见的方式是继承框架提供的抽象基类：
 
 ```csharp
-using GFramework.Core.model;
+using GFramework.Core.Model;
 
 public class InventoryModel : AbstractModel
 {
@@ -114,8 +114,8 @@ public class InventoryModel : AbstractModel
 对于需要清理资源的组件，实现 `IDestroyable` 接口：
 
 ```csharp
-using GFramework.Core.Abstractions.system;
-using GFramework.Core.Abstractions.lifecycle;
+using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Lifecycle;
 
 public class AudioSystem : ISystem, IDestroyable
 {
@@ -164,8 +164,8 @@ public class GameArchitecture : Architecture
 对于需要异步操作的组件（如加载配置、连接数据库），使用异步生命周期：
 
 ```csharp
-using GFramework.Core.Abstractions.lifecycle;
-using GFramework.Core.Abstractions.system;
+using GFramework.Core.Abstractions.Lifecycle;
+using GFramework.Core.Abstractions.System;
 
 public class ConfigurationSystem : ISystem, IAsyncInitializable
 {
@@ -191,7 +191,7 @@ public class ConfigurationSystem : ISystem, IAsyncInitializable
 对于需要异步清理的资源（如关闭网络连接、保存数据）：
 
 ```csharp
-using GFramework.Core.Abstractions.lifecycle;
+using GFramework.Core.Abstractions.Lifecycle;
 
 public class NetworkSystem : ISystem, IAsyncDestroyable
 {
@@ -250,7 +250,7 @@ public class DatabaseSystem : ISystem, IAsyncLifecycle
 监听架构的生命周期阶段：
 
 ```csharp
-using GFramework.Core.Abstractions.enums;
+using GFramework.Core.Abstractions.Enums;
 
 public class AnalyticsSystem : AbstractSystem
 {

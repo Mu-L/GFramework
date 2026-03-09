@@ -80,7 +80,7 @@ public interface IVersionedData : IData
 ### 定义数据类型
 
 ```csharp
-using GFramework.Game.Abstractions.data;
+using GFramework.Game.Abstractions.Data;
 
 // 简单数据
 public class PlayerData : IData
@@ -102,8 +102,8 @@ public class SaveData : IVersionedData
 ### 使用存档仓库
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class SaveController : IController
@@ -159,7 +159,7 @@ public partial class SaveController : IController
 ### 注册存档仓库
 
 ```csharp
-using GFramework.Game.data;
+using GFramework.Game.Data;
 
 public class GameArchitecture : Architecture
 {
@@ -209,8 +209,8 @@ public async Task ShowSaveList()
 ### 自动保存
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class AutoSaveController : IController
@@ -324,8 +324,8 @@ public async Task<SaveDataV2> LoadWithMigration(int slot)
 ### 使用数据仓库
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class SettingsController : IController

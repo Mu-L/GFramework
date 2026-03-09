@@ -83,9 +83,9 @@ global using System.Linq;
 global using System.Threading.Tasks;
 global using NUnit.Framework;
 global using Moq;
-global using GFramework.Core.Abstractions.architecture;
-global using GFramework.Core.Abstractions.model;
-global using GFramework.Core.Abstractions.system;
+global using GFramework.Core.Abstractions.Architecture;
+global using GFramework.Core.Abstractions.Model;
+global using GFramework.Core.Abstractions.System;
 ```
 
 ## 步骤 2：测试架构组件
@@ -95,8 +95,8 @@ global using GFramework.Core.Abstractions.system;
 Model 是数据层组件，我们需要测试其初始化和数据访问功能。
 
 ```csharp
-using GFramework.Core.Abstractions.enums;
-using GFramework.Core.model;
+using GFramework.Core.Abstractions.Enums;
+using GFramework.Core.Model;
 
 namespace MyGame.Tests.model;
 
@@ -170,8 +170,8 @@ public class TestModelTests
 System 是业务逻辑层组件，测试其初始化和销毁功能。
 
 ```csharp
-using GFramework.Core.Abstractions.enums;
-using GFramework.Core.Abstractions.system;
+using GFramework.Core.Abstractions.Enums;
+using GFramework.Core.Abstractions.System;
 
 namespace MyGame.Tests.system;
 
@@ -264,7 +264,7 @@ public class TestSystemTests
 事件系统是框架的核心功能之一，需要测试事件的注册、发送和取消注册。
 
 ```csharp
-using GFramework.Core.events;
+using GFramework.Core.Events;
 
 namespace MyGame.Tests.events;
 
@@ -364,8 +364,8 @@ public class EventBusTests
 ### 4.1 测试 Command
 
 ```csharp
-using GFramework.Core.Abstractions.cqrs.command;
-using GFramework.Core.command;
+using GFramework.Core.Abstractions.CQRS.Command;
+using GFramework.Core.Command;
 
 namespace MyGame.Tests.command;
 
@@ -470,8 +470,8 @@ public class CommandExecutorTests
 ### 4.2 测试 Query
 
 ```csharp
-using GFramework.Core.Abstractions.cqrs.query;
-using GFramework.Core.query;
+using GFramework.Core.Abstractions.CQRS.Query;
+using GFramework.Core.Query;
 
 namespace MyGame.Tests.query;
 
@@ -571,8 +571,8 @@ public class QueryExecutorTests
 ### 5.1 Mock 接口依赖
 
 ```csharp
-using GFramework.Core.Abstractions.model;
-using GFramework.Core.system;
+using GFramework.Core.Abstractions.Model;
+using GFramework.Core.System;
 
 namespace MyGame.Tests.mock;
 
@@ -714,8 +714,8 @@ public class VerificationTests
 ### 6.1 创建测试架构
 
 ```csharp
-using GFramework.Core.architecture;
-using GFramework.Core.Abstractions.enums;
+using GFramework.Core.Architecture;
+using GFramework.Core.Abstractions.Enums;
 
 namespace MyGame.Tests.integration;
 
@@ -859,7 +859,7 @@ public class ArchitectureIntegrationTests
 ### 6.2 测试 BindableProperty
 
 ```csharp
-using GFramework.Core.property;
+using GFramework.Core.Property;
 
 namespace MyGame.Tests.property;
 

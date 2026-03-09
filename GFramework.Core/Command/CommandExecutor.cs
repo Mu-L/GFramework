@@ -1,0 +1,63 @@
+using GFramework.Core.Abstractions.Command;
+using IAsyncCommand = GFramework.Core.Abstractions.Command.IAsyncCommand;
+
+namespace GFramework.Core.Command;
+
+/// <summary>
+/// 表示一个命令执行器，用于执行命令操作。
+/// 该类实现了 ICommandExecutor 接口，提供命令执行的核心功能。
+/// </summary>
+public sealed class CommandExecutor : ICommandExecutor
+{
+    /// <summary>
+    ///     发送并执行无返回值的命令
+    /// </summary>
+    /// <param name="command">要执行的命令对象，不能为空</param>
+    /// <exception cref="ArgumentNullException">当command参数为null时抛出</exception>
+    public void Send(ICommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        command.Execute();
+    }
+
+    /// <summary>
+    ///     发送并执行有返回值的命令
+    /// </summary>
+    /// <typeparam name="TResult">命令执行结果的类型</typeparam>
+    /// <param name="command">要执行的命令对象，不能为空</param>
+    /// <returns>命令执行的结果</returns>
+    /// <exception cref="ArgumentNullException">当command参数为null时抛出</exception>
+    public TResult Send<TResult>(ICommand<TResult> command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return command.Execute();
+    }
+
+    /// <summary>
+    ///     发送并异步执行无返回值的命令
+    /// </summary>
+    /// <param name="command">要执行的命令对象，不能为空</param>
+    /// <exception cref="ArgumentNullException">当command参数为null时抛出</exception>
+    public Task SendAsync(IAsyncCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return command.ExecuteAsync();
+    }
+
+    /// <summary>
+    ///     发送并异步执行有返回值的命令
+    /// </summary>
+    /// <typeparam name="TResult">命令执行结果的类型</typeparam>
+    /// <param name="command">要执行的命令对象，不能为空</param>
+    /// <returns>命令执行的结果</returns>
+    /// <exception cref="ArgumentNullException">当command参数为null时抛出</exception>
+    public Task<TResult> SendAsync<TResult>(IAsyncCommand<TResult> command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return command.ExecuteAsync();
+    }
+}

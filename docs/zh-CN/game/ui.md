@@ -79,7 +79,7 @@ public enum UiLayer
 实现 `IUiPage` 接口创建 UI 页面：
 
 ```csharp
-using GFramework.Game.Abstractions.ui;
+using GFramework.Game.Abstractions.UI;
 
 public class MainMenuPage : IUiPage
 {
@@ -126,8 +126,8 @@ public class MainMenuPage : IUiPage
 使用 UI 路由进行导航：
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class UiController : IController
@@ -229,7 +229,7 @@ await uiRouter.PushAsync("Settings", new SettingsEnterParam
 ### 路由守卫
 
 ```csharp
-using GFramework.Game.Abstractions.ui;
+using GFramework.Game.Abstractions.UI;
 
 public class UnsavedChangesGuard : IUiRouteGuard
 {
@@ -267,7 +267,7 @@ uiRouter.AddGuard(new UnsavedChangesGuard());
 ### UI 转换处理器
 
 ```csharp
-using GFramework.Game.Abstractions.ui;
+using GFramework.Game.Abstractions.UI;
 
 public class FadeTransitionHandler : IUiTransitionHandler
 {
@@ -304,8 +304,8 @@ uiRouter.RegisterHandler(new FadeTransitionHandler());
 ### UI 句柄管理
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class DialogController : IController
@@ -337,8 +337,8 @@ public partial class DialogController : IController
 ### UI 栈管理
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class NavigationController : IController
@@ -373,8 +373,8 @@ public partial class NavigationController : IController
 ### 多层级 UI 管理
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class LayerController : IController

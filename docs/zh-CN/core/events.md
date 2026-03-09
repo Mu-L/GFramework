@@ -353,8 +353,8 @@ public class CombatSystem : AbstractSystem
 ### Controller 中注册事件
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController
@@ -451,8 +451,8 @@ public class EventBridge : AbstractSystem
 ### 4. 临时事件监听
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class TutorialController : IController
@@ -501,8 +501,8 @@ public class AchievementSystem : AbstractSystem
 ### 使用 UnRegisterList
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class MyController : IController

@@ -28,8 +28,8 @@ description: 学习如何使用状态机系统管理游戏状态和场景切换
 首先，让我们为一个简单的游戏定义几个基本状态：主菜单、加载、游戏中、暂停和游戏结束。
 
 ```csharp
-using GFramework.Core.Abstractions.state;
-using GFramework.Core.state;
+using GFramework.Core.Abstractions.State;
+using GFramework.Core.State;
 
 namespace MyGame.States
 {
@@ -255,7 +255,7 @@ namespace MyGame.States
 实现一个异步加载状态，用于加载游戏资源。
 
 ```csharp
-using GFramework.Core.state;
+using GFramework.Core.State;
 using System.Threading.Tasks;
 
 namespace MyGame.States
@@ -345,9 +345,9 @@ namespace MyGame.States
 在架构中注册状态机系统和所有状态。
 
 ```csharp
-using GFramework.Core.architecture;
-using GFramework.Core.Abstractions.state;
-using GFramework.Core.state;
+using GFramework.Core.Architecture;
+using GFramework.Core.Abstractions.State;
+using GFramework.Core.State;
 using MyGame.States;
 
 namespace MyGame
@@ -392,13 +392,13 @@ namespace MyGame
 创建控制器来管理游戏流程和状态切换。
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Core.Abstractions.controller;
-using GFramework.Core.Abstractions.state;
-using GFramework.Core.extensions;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.Core.Abstractions.State;
+using GFramework.Core.Extensions;
 using MyGame.States;
 using System.Threading.Tasks;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 namespace MyGame.Controllers
 {

@@ -86,7 +86,7 @@ dotnet add package GeWuYou.GFramework.Ecs.Arch
 ### 3. 注册 ECS 模块
 
 ```csharp
-using GFramework.Core.architecture;
+using GFramework.Core.Architecture;
 using GFramework.Ecs.Arc;
 
 public class GameArchitecture : Architecture

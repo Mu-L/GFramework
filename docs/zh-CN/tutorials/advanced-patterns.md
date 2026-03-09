@@ -16,9 +16,9 @@
 实现完整的 CQRS 模式，分离读写操作：
 
 ```csharp
-using GFramework.Core.command;
-using GFramework.Core.query;
-using GFramework.Core.events;
+using GFramework.Core.Command;
+using GFramework.Core.Query;
+using GFramework.Core.Events;
 
 // 命令 - 负责写操作
 public class CreatePlayerCommand : AbstractCommand
@@ -516,7 +516,7 @@ public class PlayerDomainService : IPlayerDomainService
 实现事件的持久化和重放：
 
 ```csharp
-using GFramework.Core.events;
+using GFramework.Core.Events;
 using System.Collections.Concurrent;
 
 public class EventStore : IEventStore
@@ -691,7 +691,7 @@ public abstract class AggregateRoot
 实现灵活的事件路由和处理：
 
 ```csharp
-using GFramework.Core.events;
+using GFramework.Core.Events;
 
 public class EventBus : IEventBus
 {

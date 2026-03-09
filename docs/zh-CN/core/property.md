@@ -198,8 +198,8 @@ public class PlayerModel : AbstractModel
 ### UI 数据绑定
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerUI : Control, IController
@@ -342,8 +342,8 @@ public class PlayerModel : AbstractModel
 ### 4. 条件监听
 
 ```c#
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class CombatController : Node, IController

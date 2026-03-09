@@ -1,0 +1,268 @@
+using GFramework.Core.Abstractions.Command;
+using GFramework.Core.Abstractions.Environment;
+using GFramework.Core.Abstractions.Events;
+using GFramework.Core.Abstractions.Model;
+using GFramework.Core.Abstractions.Query;
+using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Utility;
+using Mediator;
+using ICommand = GFramework.Core.Abstractions.Command.ICommand;
+
+namespace GFramework.Core.Abstractions.Architecture;
+
+/// <summary>
+///     架构上下文接口，提供对系统、模型、工具类的访问以及命令、查询、事件的发送和注册功能
+/// </summary>
+public interface IArchitectureContext
+{
+    /// <summary>
+    ///     获取指定类型的服务实例
+    /// </summary>
+    /// <typeparam name="TService">服务类型</typeparam>
+    /// <returns>服务实例，如果不存在则返回null</returns>
+    TService? GetService<TService>() where TService : class;
+
+    /// <summary>
+    ///     获取指定类型的所有服务实例
+    /// </summary>
+    /// <typeparam name="TService">服务类型</typeparam>
+    /// <returns>所有符合条件的服务实例列表</returns>
+    IReadOnlyList<TService> GetServices<TService>() where TService : class;
+
+    /// <summary>
+    ///     获取指定类型的系统实例
+    /// </summary>
+    /// <typeparam name="TSystem">系统类型，必须继承自ISystem接口</typeparam>
+    /// <returns>系统实例，如果不存在则返回null</returns>
+    TSystem? GetSystem<TSystem>() where TSystem : class, ISystem;
+
+    /// <summary>
+    ///     获取指定类型的所有系统实例
+    /// </summary>
+    /// <typeparam name="TSystem">系统类型，必须继承自ISystem接口</typeparam>
+    /// <returns>所有符合条件的系统实例列表</returns>
+    IReadOnlyList<TSystem> GetSystems<TSystem>() where TSystem : class, ISystem;
+
+    /// <summary>
+    ///     获取指定类型的模型实例
+    /// </summary>
+    /// <typeparam name="TModel">模型类型，必须继承自IModel接口</typeparam>
+    /// <returns>模型实例，如果不存在则返回null</returns>
+    TModel? GetModel<TModel>() where TModel : class, IModel;
+
+    /// <summary>
+    ///     获取指定类型的所有模型实例
+    /// </summary>
+    /// <typeparam name="TModel">模型类型，必须继承自IModel接口</typeparam>
+    /// <returns>所有符合条件的模型实例列表</returns>
+    IReadOnlyList<TModel> GetModels<TModel>() where TModel : class, IModel;
+
+    /// <summary>
+    ///     获取指定类型的工具类实例
+    /// </summary>
+    /// <typeparam name="TUtility">工具类类型，必须继承自IUtility接口</typeparam>
+    /// <returns>工具类实例，如果不存在则返回null</returns>
+    TUtility? GetUtility<TUtility>() where TUtility : class, IUtility;
+
+    /// <summary>
+    ///     获取指定类型的所有工具类实例
+    /// </summary>
+    /// <typeparam name="TUtility">工具类类型，必须继承自IUtility接口</typeparam>
+    /// <returns>所有符合条件的工具类实例列表</returns>
+    IReadOnlyList<TUtility> GetUtilities<TUtility>() where TUtility : class, IUtility;
+
+    /// <summary>
+    ///     获取指定类型的所有服务实例，并按优先级排序
+    ///     实现 IPrioritized 接口的服务将按优先级排序（数值越小优先级越高）
+    /// </summary>
+    /// <typeparam name="TService">服务类型</typeparam>
+    /// <returns>按优先级排序后的服务实例列表</returns>
+    IReadOnlyList<TService> GetServicesByPriority<TService>() where TService : class;
+
+    /// <summary>
+    ///     获取指定类型的所有系统实例，并按优先级排序
+    ///     实现 IPrioritized 接口的系统将按优先级排序（数值越小优先级越高）
+    /// </summary>
+    /// <typeparam name="TSystem">系统类型，必须继承自ISystem接口</typeparam>
+    /// <returns>按优先级排序后的系统实例列表</returns>
+    IReadOnlyList<TSystem> GetSystemsByPriority<TSystem>() where TSystem : class, ISystem;
+
+    /// <summary>
+    ///     获取指定类型的所有模型实例，并按优先级排序
+    ///     实现 IPrioritized 接口的模型将按优先级排序（数值越小优先级越高）
+    /// </summary>
+    /// <typeparam name="TModel">模型类型，必须继承自IModel接口</typeparam>
+    /// <returns>按优先级排序后的模型实例列表</returns>
+    IReadOnlyList<TModel> GetModelsByPriority<TModel>() where TModel : class, IModel;
+
+    /// <summary>
+    ///     获取指定类型的所有工具类实例，并按优先级排序
+    ///     实现 IPrioritized 接口的工具将按优先级排序（数值越小优先级越高）
+    /// </summary>
+    /// <typeparam name="TUtility">工具类类型，必须继承自IUtility接口</typeparam>
+    /// <returns>按优先级排序后的工具类实例列表</returns>
+    IReadOnlyList<TUtility> GetUtilitiesByPriority<TUtility>() where TUtility : class, IUtility;
+
+    /// <summary>
+    ///     发送一个命令
+    /// </summary>
+    /// <param name="command">要发送的命令</param>
+    void SendCommand(ICommand command);
+
+    /// <summary>
+    ///     发送一个带返回值的命令
+    /// </summary>
+    /// <typeparam name="TResult">命令执行结果类型</typeparam>
+    /// <param name="command">要发送的命令</param>
+    /// <returns>命令执行结果</returns>
+    TResult SendCommand<TResult>(Command.ICommand<TResult> command);
+
+    /// <summary>
+    /// [Mediator] 发送命令的同步版本（不推荐，仅用于兼容性）
+    /// </summary>
+    /// <typeparam name="TResponse">命令响应类型</typeparam>
+    /// <param name="command">要发送的命令对象</param>
+    /// <returns>命令执行结果</returns>
+    TResponse SendCommand<TResponse>(Mediator.ICommand<TResponse> command);
+
+
+    /// <summary>
+    ///     发送并异步执行一个命令
+    /// </summary>
+    /// <param name="command">要发送的命令</param>
+    Task SendCommandAsync(IAsyncCommand command);
+
+    /// <summary>
+    /// [Mediator] 异步发送命令并返回结果
+    /// 通过Mediator模式发送命令请求，支持取消操作
+    /// </summary>
+    /// <typeparam name="TResponse">命令响应类型</typeparam>
+    /// <param name="command">要发送的命令对象</param>
+    /// <param name="cancellationToken">取消令牌，用于取消操作</param>
+    /// <returns>包含命令执行结果的ValueTask</returns>
+    ValueTask<TResponse> SendCommandAsync<TResponse>(Mediator.ICommand<TResponse> command,
+        CancellationToken cancellationToken = default);
+
+
+    /// <summary>
+    ///     发送并异步执行一个带返回值的命令
+    /// </summary>
+    /// <typeparam name="TResult">命令执行结果类型</typeparam>
+    /// <param name="command">要发送的命令</param>
+    /// <returns>命令执行结果</returns>
+    Task<TResult> SendCommandAsync<TResult>(IAsyncCommand<TResult> command);
+
+    /// <summary>
+    ///     发送一个查询请求
+    /// </summary>
+    /// <typeparam name="TResult">查询结果类型</typeparam>
+    /// <param name="query">要发送的查询</param>
+    /// <returns>查询结果</returns>
+    TResult SendQuery<TResult>(Query.IQuery<TResult> query);
+
+    /// <summary>
+    /// [Mediator] 发送查询的同步版本（不推荐，仅用于兼容性）
+    /// </summary>
+    /// <typeparam name="TResponse">查询响应类型</typeparam>
+    /// <param name="query">要发送的查询对象</param>
+    /// <returns>查询结果</returns>
+    TResponse SendQuery<TResponse>(Mediator.IQuery<TResponse> query);
+
+    /// <summary>
+    ///     异步发送一个查询请求
+    /// </summary>
+    /// <typeparam name="TResult">查询结果类型</typeparam>
+    /// <param name="query">要发送的异步查询</param>
+    /// <returns>查询结果</returns>
+    Task<TResult> SendQueryAsync<TResult>(IAsyncQuery<TResult> query);
+
+    /// <summary>
+    /// [Mediator] 异步发送查询并返回结果
+    /// 通过Mediator模式发送查询请求，支持取消操作
+    /// </summary>
+    /// <typeparam name="TResponse">查询响应类型</typeparam>
+    /// <param name="query">要发送的查询对象</param>
+    /// <param name="cancellationToken">取消令牌，用于取消操作</param>
+    /// <returns>包含查询结果的ValueTask</returns>
+    ValueTask<TResponse> SendQueryAsync<TResponse>(Mediator.IQuery<TResponse> query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     发送一个事件
+    /// </summary>
+    /// <typeparam name="TEvent">事件类型，必须具有无参构造函数</typeparam>
+    void SendEvent<TEvent>() where TEvent : new();
+
+    /// <summary>
+    ///     发送一个带参数的事件
+    /// </summary>
+    /// <typeparam name="TEvent">事件类型</typeparam>
+    /// <param name="e">事件参数</param>
+    void SendEvent<TEvent>(TEvent e) where TEvent : class;
+
+    /// <summary>
+    ///     注册事件处理器
+    /// </summary>
+    /// <typeparam name="TEvent">事件类型</typeparam>
+    /// <param name="handler">事件处理委托</param>
+    /// <returns>事件注销接口</returns>
+    IUnRegister RegisterEvent<TEvent>(Action<TEvent> handler);
+
+    /// <summary>
+    ///     取消注册事件监听器
+    /// </summary>
+    /// <typeparam name="TEvent">事件类型</typeparam>
+    /// <param name="onEvent">要取消注册的事件回调方法</param>
+    void UnRegisterEvent<TEvent>(Action<TEvent> onEvent);
+
+    /// <summary>
+    /// 发送请求（统一处理 Command/Query）
+    /// </summary>
+    ValueTask<TResponse> SendRequestAsync<TResponse>(
+        IRequest<TResponse> request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 发送请求（同步版本，不推荐）
+    /// </summary>
+    TResponse SendRequest<TResponse>(IRequest<TResponse> request);
+
+    /// <summary>
+    /// 发布通知（一对多事件）
+    /// </summary>
+    ValueTask PublishAsync<TNotification>(
+        TNotification notification,
+        CancellationToken cancellationToken = default)
+        where TNotification : INotification;
+
+    /// <summary>
+    /// 创建流式请求（用于大数据集）
+    /// </summary>
+    IAsyncEnumerable<TResponse> CreateStream<TResponse>(
+        IStreamRequest<TResponse> request,
+        CancellationToken cancellationToken = default);
+
+    // === 便捷扩展方法 ===
+
+    /// <summary>
+    /// 发送命令（无返回值）
+    /// </summary>
+    ValueTask SendAsync<TCommand>(
+        TCommand command,
+        CancellationToken cancellationToken = default)
+        where TCommand : IRequest<Unit>;
+
+    /// <summary>
+    /// 发送命令（有返回值）
+    /// </summary>
+    ValueTask<TResponse> SendAsync<TResponse>(
+        IRequest<TResponse> command,
+        CancellationToken cancellationToken = default);
+
+
+    /// <summary>
+    ///     获取环境对象
+    /// </summary>
+    /// <returns>环境对象实例</returns>
+    IEnvironment GetEnvironment();
+}

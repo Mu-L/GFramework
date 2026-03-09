@@ -70,7 +70,7 @@ public interface IPoolableNode : IPoolableObject
 
 ```csharp
 using Godot;
-using GFramework.Godot.pool;
+using GFramework.Godot.Pool;
 
 public partial class Bullet : Node2D, IPoolableNode
 {
@@ -135,7 +135,7 @@ public partial class Bullet : Node2D, IPoolableNode
 
 ```csharp
 using Godot;
-using GFramework.Godot.pool;
+using GFramework.Godot.Pool;
 
 public class BulletPoolSystem : AbstractNodePoolSystem<string, Bullet>
 {
@@ -166,7 +166,7 @@ public class BulletPoolSystem : AbstractNodePoolSystem<string, Bullet>
 ### 注册节点池系统
 
 ```csharp
-using GFramework.Godot.architecture;
+using GFramework.Godot.Architecture;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -183,7 +183,7 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class Player : Node2D
 {

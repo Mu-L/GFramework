@@ -37,8 +37,8 @@ dotnet add package GeWuYou.GFramework.Ecs.Arch
 ### 1. 注册 ECS 模块
 
 ```csharp
-using GFramework.Core.architecture;
-using GFramework.Ecs.Arch.extensions;
+using GFramework.Core.Architecture;
+using GFramework.Ecs.Arch.Extensions;
 
 public class GameArchitecture : Architecture
 {
@@ -163,8 +163,8 @@ public class GameArchitecture : Architecture
 
 ```csharp
 using Arch.Core;
-using GFramework.Core.Abstractions.rule;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Rule;
+using GFramework.SourceGenerators.Abstractions.Rule;
 using MyGame.Components;
 
 [ContextAware]

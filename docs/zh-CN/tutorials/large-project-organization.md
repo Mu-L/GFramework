@@ -150,8 +150,8 @@ MyLargeGame/
 ### 1.2 创建核心架构
 
 ```csharp
-using GFramework.Core.architecture;
-using GFramework.Core.Abstractions.architecture;
+using GFramework.Core.Architecture;
+using GFramework.Core.Abstractions.Architecture;
 
 namespace MyGame.Core.Architecture
 {
@@ -185,8 +185,8 @@ namespace MyGame.Core.Architecture
 ### 2.1 领域层 - 玩家模型
 
 ```csharp
-using GFramework.Core.model;
-using GFramework.Core.property;
+using GFramework.Core.Model;
+using GFramework.Core.Property;
 
 namespace MyGame.Domain.Models.Player
 {
@@ -277,7 +277,7 @@ namespace MyGame.Domain.Models.Player
 ### 2.2 领域层 - 领域事件
 
 ```csharp
-using GFramework.Core.Abstractions.events;
+using GFramework.Core.Abstractions.Events;
 
 namespace MyGame.Domain.Events.Player
 {
@@ -306,8 +306,8 @@ namespace MyGame.Domain.Events.Player
 ### 2.3 应用层 - 玩家系统
 
 ```csharp
-using GFramework.Core.system;
-using GFramework.Core.Abstractions.events;
+using GFramework.Core.System;
+using GFramework.Core.Abstractions.Events;
 using MyGame.Domain.Models.Player;
 using MyGame.Domain.Events.Player;
 
@@ -388,7 +388,7 @@ namespace MyGame.Application.Systems.Player
 ### 2.4 应用层 - 命令模式
 
 ```csharp
-using GFramework.Core.command;
+using GFramework.Core.Command;
 using MyGame.Domain.Models.Player;
 
 namespace MyGame.Application.Commands.Player
@@ -451,7 +451,7 @@ namespace MyGame.Application.Commands.Player
 ### 3.1 创建玩家模块
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
+using GFramework.Core.Abstractions.Architecture;
 using MyGame.Domain.Models.Player;
 using MyGame.Application.Systems.Player;
 
@@ -517,8 +517,8 @@ namespace MyGame.Modules.PlayerModule
 ### 3.2 创建战斗模块
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Core.system;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.System;
 using MyGame.Domain.Models.Player;
 
 namespace MyGame.Modules.CombatModule
@@ -648,10 +648,10 @@ namespace MyGame.Modules.CombatModule
 ### 3.3 创建库存模块
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Core.model;
-using GFramework.Core.system;
-using GFramework.Core.property;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.Model;
+using GFramework.Core.System;
+using GFramework.Core.Property;
 
 namespace MyGame.Modules.InventoryModule
 {
@@ -841,9 +841,9 @@ namespace MyGame.Modules.InventoryModule
 ### 4.1 注册服务
 
 ```csharp
-using GFramework.Core.architecture;
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Core.ioc;
+using GFramework.Core.Architecture;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.IoC;
 using MyGame.Modules.PlayerModule;
 using MyGame.Modules.CombatModule;
 using MyGame.Modules.InventoryModule;
@@ -916,9 +916,9 @@ namespace MyGame.Core.Architecture
 ### 4.2 创建任务模块(展示模块间依赖)
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Core.model;
-using GFramework.Core.system;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.Model;
+using GFramework.Core.System;
 using MyGame.Domain.Models.Player;
 using MyGame.Modules.InventoryModule;
 
@@ -1123,8 +1123,8 @@ namespace MyGame.Core.Constants
 // 文件: PlayerModel.cs
 // 位置: MyGame.Domain/Models/Player/PlayerModel.cs
 
-using GFramework.Core.model;
-using GFramework.Core.property;
+using GFramework.Core.Model;
+using GFramework.Core.Property;
 
 namespace MyGame.Domain.Models.Player
 {
@@ -1195,7 +1195,7 @@ namespace MyGame.Domain.Models.Player
 ### 5.3 扩展方法组织
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
+using GFramework.Core.Abstractions.Architecture;
 using MyGame.Domain.Models.Player;
 
 namespace MyGame.Core.Extensions

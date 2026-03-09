@@ -1,0 +1,47 @@
+﻿using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.Abstractions.Enums;
+using GFramework.Core.Abstractions.Lifecycle;
+using GFramework.Core.Abstractions.System;
+
+namespace GFramework.Core.Tests.System;
+
+/// <summary>
+///     异步测试系统，实现 ISystem 和 IAsyncInitializable
+/// </summary>
+public sealed class AsyncTestSystem : ISystem, IAsyncInitializable
+{
+    private IArchitectureContext _context = null!;
+    public bool Initialized { get; private set; }
+    public bool DestroyCalled { get; private set; }
+
+    public async Task InitializeAsync()
+    {
+        await Task.Delay(10);
+        Initialized = true;
+    }
+
+    public void SetContext(IArchitectureContext context)
+    {
+        _context = context;
+    }
+
+    public IArchitectureContext GetContext()
+    {
+        return _context;
+    }
+
+    public void Initialize()
+    {
+        // 同步 OnInitialize 不应该被调用
+        throw new InvalidOperationException("Sync OnInitialize should not be called");
+    }
+
+    public void Destroy()
+    {
+        DestroyCalled = true;
+    }
+
+    public void OnArchitecturePhase(ArchitecturePhase phase)
+    {
+    }
+}

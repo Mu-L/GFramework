@@ -164,8 +164,8 @@ public static partial class MathHelper
 ### 基础使用
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerController : IController
@@ -191,21 +191,21 @@ public partial class PlayerController : IController
 
 namespace YourNamespace;
 
-partial class PlayerController : global::GFramework.Core.Abstractions.rule.IContextAware
+partial class PlayerController : global::GFramework.Core.Abstractions.Rule.IContextAware
 {
-    private global::GFramework.Core.Abstractions.architecture.IArchitectureContext? _context;
-    private static global::GFramework.Core.Abstractions.architecture.IArchitectureContextProvider? _contextProvider;
+    private global::GFramework.Core.Abstractions.Architecture.IArchitectureContext? _context;
+    private static global::GFramework.Core.Abstractions.Architecture.IArchitectureContextProvider? _contextProvider;
 
     /// <summary>
     /// 自动获取的架构上下文（懒加载，默认使用 GameContextProvider）
     /// </summary>
-    protected global::GFramework.Core.Abstractions.architecture.IArchitectureContext Context
+    protected global::GFramework.Core.Abstractions.Architecture.IArchitectureContext Context
     {
         get
         {
             if (_context == null)
             {
-                _contextProvider ??= new global::GFramework.Core.architecture.GameContextProvider();
+                _contextProvider ??= new global::GFramework.Core.Architecture.GameContextProvider();
                 _context = _contextProvider.GetContext();
             }
 
@@ -216,7 +216,7 @@ partial class PlayerController : global::GFramework.Core.Abstractions.rule.ICont
     /// <summary>
     /// 配置上下文提供者（用于测试或多架构场景）
     /// </summary>
-    public static void SetContextProvider(global::GFramework.Core.Abstractions.architecture.IArchitectureContextProvider provider)
+    public static void SetContextProvider(global::GFramework.Core.Abstractions.Architecture.IArchitectureContextProvider provider)
     {
         _contextProvider = provider;
     }
@@ -229,12 +229,12 @@ partial class PlayerController : global::GFramework.Core.Abstractions.rule.ICont
         _contextProvider = null;
     }
 
-    void global::GFramework.Core.Abstractions.rule.IContextAware.SetContext(global::GFramework.Core.Abstractions.architecture.IArchitectureContext context)
+    void global::GFramework.Core.Abstractions.Rule.IContextAware.SetContext(global::GFramework.Core.Abstractions.Architecture.IArchitectureContext context)
     {
         _context = context;
     }
 
-    global::GFramework.Core.Abstractions.architecture.IArchitectureContext global::GFramework.Core.Abstractions.rule.IContextAware.GetContext()
+    global::GFramework.Core.Abstractions.Architecture.IArchitectureContext global::GFramework.Core.Abstractions.Rule.IContextAware.GetContext()
     {
         return Context;
     }
@@ -272,9 +272,9 @@ public async Task TestPlayerController()
 ### 与其他属性组合
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.logging;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Logging;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [Log]
 [ContextAware]
@@ -300,7 +300,7 @@ public partial class AdvancedController : IController
 ### 基础使用
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.enums;
+using GFramework.SourceGenerators.Abstractions.Enums;
 
 [GenerateEnumExtensions]
 public enum GameState
@@ -510,9 +510,9 @@ public class InefficientController : IController
 ### 完整的游戏控制器示例
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.logging;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Logging;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [Log]
 [ContextAware]
@@ -600,9 +600,9 @@ public enum CharacterState
     Dead
 }
 
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.logging;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Logging;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [Log]
 [ContextAware]

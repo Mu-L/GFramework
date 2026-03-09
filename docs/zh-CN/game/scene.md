@@ -78,7 +78,7 @@ public interface ISceneBehavior
 实现 `IScene` 接口创建场景：
 
 ```csharp
-using GFramework.Game.Abstractions.scene;
+using GFramework.Game.Abstractions.Scene;
 
 public class MainMenuScene : IScene
 {
@@ -133,7 +133,7 @@ public class MainMenuScene : IScene
 在场景注册表中注册场景：
 
 ```csharp
-using GFramework.Game.Abstractions.scene;
+using GFramework.Game.Abstractions.Scene;
 
 public class GameSceneRegistry : IGameSceneRegistry
 {
@@ -164,8 +164,8 @@ public class GameSceneRegistry : IGameSceneRegistry
 使用场景路由进行导航：
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController
@@ -244,7 +244,7 @@ await sceneRouter.ReplaceAsync("Gameplay", new GameplayEnterParam
 使用路由守卫控制场景切换：
 
 ```csharp
-using GFramework.Game.Abstractions.scene;
+using GFramework.Game.Abstractions.Scene;
 
 public class SaveGameGuard : ISceneRouteGuard
 {
@@ -295,7 +295,7 @@ sceneRouter.AddGuard(new SaveGameGuard());
 自定义场景转换逻辑：
 
 ```csharp
-using GFramework.Game.Abstractions.scene;
+using GFramework.Game.Abstractions.Scene;
 
 public class FadeTransitionHandler : ISceneTransitionHandler
 {
@@ -352,8 +352,8 @@ sceneRouter.AddTransitionHandler(new FadeTransitionHandler());
 ### 场景栈管理
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class SceneNavigationController : IController
@@ -436,8 +436,8 @@ public class GameplayScene : IScene
 ### 场景预加载
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PreloadController : IController

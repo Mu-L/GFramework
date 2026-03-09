@@ -65,10 +65,10 @@ public sealed class GodotLoggerFactoryProvider : ILoggerFactoryProvider
 在架构初始化时配置日志提供程序：
 
 ```csharp
-using GFramework.Godot.architecture;
-using GFramework.Godot.logging;
-using GFramework.Core.logging;
-using GFramework.Core.Abstractions.logging;
+using GFramework.Godot.Architecture;
+using GFramework.Godot.Logging;
+using GFramework.Core.Logging;
+using GFramework.Core.Abstractions.Logging;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -102,8 +102,8 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Core.logging;
-using GFramework.Core.Abstractions.logging;
+using GFramework.Core.Logging;
+using GFramework.Core.Abstractions.Logging;
 
 public partial class Player : CharacterBody2D
 {
@@ -183,9 +183,9 @@ catch (Exception ex)
 ### 在 System 中使用日志
 
 ```csharp
-using GFramework.Core.system;
-using GFramework.Core.logging;
-using GFramework.Core.Abstractions.logging;
+using GFramework.Core.System;
+using GFramework.Core.Logging;
+using GFramework.Core.Abstractions.Logging;
 
 public class CombatSystem : AbstractSystem
 {
@@ -218,9 +218,9 @@ public class CombatSystem : AbstractSystem
 ### 在 Model 中使用日志
 
 ```csharp
-using GFramework.Core.model;
-using GFramework.Core.logging;
-using GFramework.Core.Abstractions.logging;
+using GFramework.Core.Model;
+using GFramework.Core.Logging;
+using GFramework.Core.Abstractions.Logging;
 
 public class PlayerModel : AbstractModel
 {
@@ -303,9 +303,9 @@ LoggerFactoryResolver.Provider = new GodotLoggerFactoryProvider
 ### 在 Godot 模块中使用日志
 
 ```csharp
-using GFramework.Godot.architecture;
-using GFramework.Core.logging;
-using GFramework.Core.Abstractions.logging;
+using GFramework.Godot.Architecture;
+using GFramework.Core.Logging;
+using GFramework.Core.Abstractions.Logging;
 using Godot;
 
 public class SceneModule : AbstractGodotModule

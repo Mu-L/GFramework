@@ -1,4 +1,4 @@
-using GFramework.Core.Abstractions.architecture;
+using GFramework.Core.Abstractions.Architecture;
 
 namespace GFramework.Ecs.Arch.Abstractions;
 

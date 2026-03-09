@@ -1,0 +1,727 @@
+{
+  "projects": [
+    {
+      "name": "GFramework.Core.Abstractions",
+      "path": "GFramework.Core.Abstractions",
+      "folders": [
+        {
+          "from": "architecture",
+          "to": "Architecture"
+        },
+        {
+          "from": "bases",
+          "to": "Bases"
+        },
+        {
+          "from": "command",
+          "to": "Command"
+        },
+        {
+          "from": "configuration",
+          "to": "Configuration"
+        },
+        {
+          "from": "coroutine",
+          "to": "Coroutine"
+        },
+        {
+          "from": "cqrs",
+          "to": "CQRS"
+        },
+        {
+          "from": "cqrs/command",
+          "to": "CQRS/Command"
+        },
+        {
+          "from": "cqrs/notification",
+          "to": "CQRS/Notification"
+        },
+        {
+          "from": "cqrs/query",
+          "to": "CQRS/Query"
+        },
+        {
+          "from": "cqrs/request",
+          "to": "CQRS/Request"
+        },
+        {
+          "from": "data",
+          "to": "Data"
+        },
+        {
+          "from": "enums",
+          "to": "Enums"
+        },
+        {
+          "from": "environment",
+          "to": "Environment"
+        },
+        {
+          "from": "events",
+          "to": "Events"
+        },
+        {
+          "from": "internals",
+          "to": "Internals"
+        },
+        {
+          "from": "ioc",
+          "to": "IoC"
+        },
+        {
+          "from": "lifecycle",
+          "to": "Lifecycle"
+        },
+        {
+          "from": "logging",
+          "to": "Logging"
+        },
+        {
+          "from": "model",
+          "to": "Model"
+        },
+        {
+          "from": "pause",
+          "to": "Pause"
+        },
+        {
+          "from": "pool",
+          "to": "Pool"
+        },
+        {
+          "from": "properties",
+          "to": "Properties"
+        },
+        {
+          "from": "property",
+          "to": "Property"
+        },
+        {
+          "from": "query",
+          "to": "Query"
+        },
+        {
+          "from": "registries",
+          "to": "Registries"
+        },
+        {
+          "from": "resource",
+          "to": "Resource"
+        },
+        {
+          "from": "rule",
+          "to": "Rule"
+        },
+        {
+          "from": "serializer",
+          "to": "Serializer"
+        },
+        {
+          "from": "state",
+          "to": "State"
+        },
+        {
+          "from": "storage",
+          "to": "Storage"
+        },
+        {
+          "from": "system",
+          "to": "System"
+        },
+        {
+          "from": "time",
+          "to": "Time"
+        },
+        {
+          "from": "utility",
+          "to": "Utility"
+        },
+        {
+          "from": "versioning",
+          "to": "Versioning"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Core",
+      "path": "GFramework.Core",
+      "folders": [
+        {
+          "from": "architecture",
+          "to": "Architecture"
+        },
+        {
+          "from": "command",
+          "to": "Command"
+        },
+        {
+          "from": "configuration",
+          "to": "Configuration"
+        },
+        {
+          "from": "constants",
+          "to": "Constants"
+        },
+        {
+          "from": "coroutine",
+          "to": "Coroutine"
+        },
+        {
+          "from": "coroutine/extensions",
+          "to": "Coroutine/Extensions"
+        },
+        {
+          "from": "coroutine/instructions",
+          "to": "Coroutine/Instructions"
+        },
+        {
+          "from": "cqrs",
+          "to": "CQRS"
+        },
+        {
+          "from": "cqrs/behaviors",
+          "to": "CQRS/Behaviors"
+        },
+        {
+          "from": "cqrs/command",
+          "to": "CQRS/Command"
+        },
+        {
+          "from": "cqrs/notification",
+          "to": "CQRS/Notification"
+        },
+        {
+          "from": "cqrs/query",
+          "to": "CQRS/Query"
+        },
+        {
+          "from": "cqrs/request",
+          "to": "CQRS/Request"
+        },
+        {
+          "from": "environment",
+          "to": "Environment"
+        },
+        {
+          "from": "events",
+          "to": "Events"
+        },
+        {
+          "from": "events/filters",
+          "to": "Events/Filters"
+        },
+        {
+          "from": "extensions",
+          "to": "Extensions"
+        },
+        {
+          "from": "functional",
+          "to": "Functional"
+        },
+        {
+          "from": "functional/async",
+          "to": "Functional/Async"
+        },
+        {
+          "from": "functional/control",
+          "to": "Functional/Control"
+        },
+        {
+          "from": "functional/functions",
+          "to": "Functional/Functions"
+        },
+        {
+          "from": "functional/pipe",
+          "to": "Functional/Pipe"
+        },
+        {
+          "from": "functional/result",
+          "to": "Functional/Result"
+        },
+        {
+          "from": "ioc",
+          "to": "IoC"
+        },
+        {
+          "from": "logging",
+          "to": "Logging"
+        },
+        {
+          "from": "logging/appenders",
+          "to": "Logging/Appenders"
+        },
+        {
+          "from": "logging/filters",
+          "to": "Logging/Filters"
+        },
+        {
+          "from": "logging/formatters",
+          "to": "Logging/Formatters"
+        },
+        {
+          "from": "model",
+          "to": "Model"
+        },
+        {
+          "from": "pause",
+          "to": "Pause"
+        },
+        {
+          "from": "pool",
+          "to": "Pool"
+        },
+        {
+          "from": "property",
+          "to": "Property"
+        },
+        {
+          "from": "query",
+          "to": "Query"
+        },
+        {
+          "from": "resource",
+          "to": "Resource"
+        },
+        {
+          "from": "rule",
+          "to": "Rule"
+        },
+        {
+          "from": "services",
+          "to": "Services"
+        },
+        {
+          "from": "services/modules",
+          "to": "Services/Modules"
+        },
+        {
+          "from": "state",
+          "to": "State"
+        },
+        {
+          "from": "system",
+          "to": "System"
+        },
+        {
+          "from": "time",
+          "to": "Time"
+        },
+        {
+          "from": "utility",
+          "to": "Utility"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Core.Tests",
+      "path": "GFramework.Core.Tests",
+      "folders": [
+        {
+          "from": "architecture",
+          "to": "Architecture"
+        },
+        {
+          "from": "command",
+          "to": "Command"
+        },
+        {
+          "from": "configuration",
+          "to": "Configuration"
+        },
+        {
+          "from": "coroutine",
+          "to": "Coroutine"
+        },
+        {
+          "from": "environment",
+          "to": "Environment"
+        },
+        {
+          "from": "events",
+          "to": "Events"
+        },
+        {
+          "from": "extensions",
+          "to": "Extensions"
+        },
+        {
+          "from": "functional",
+          "to": "Functional"
+        },
+        {
+          "from": "functional/control",
+          "to": "Functional/Control"
+        },
+        {
+          "from": "functional/functions",
+          "to": "Functional/Functions"
+        },
+        {
+          "from": "functional/pipe",
+          "to": "Functional/Pipe"
+        },
+        {
+          "from": "ioc",
+          "to": "IoC"
+        },
+        {
+          "from": "logging",
+          "to": "Logging"
+        },
+        {
+          "from": "mediator",
+          "to": "Mediator"
+        },
+        {
+          "from": "model",
+          "to": "Model"
+        },
+        {
+          "from": "pause",
+          "to": "Pause"
+        },
+        {
+          "from": "pool",
+          "to": "Pool"
+        },
+        {
+          "from": "property",
+          "to": "Property"
+        },
+        {
+          "from": "query",
+          "to": "Query"
+        },
+        {
+          "from": "resource",
+          "to": "Resource"
+        },
+        {
+          "from": "rule",
+          "to": "Rule"
+        },
+        {
+          "from": "state",
+          "to": "State"
+        },
+        {
+          "from": "system",
+          "to": "System"
+        },
+        {
+          "from": "tests",
+          "to": "Tests"
+        },
+        {
+          "from": "time",
+          "to": "Time"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Game.Abstractions",
+      "path": "GFramework.Game.Abstractions",
+      "folders": [
+        {
+          "from": "asset",
+          "to": "Asset"
+        },
+        {
+          "from": "data",
+          "to": "Data"
+        },
+        {
+          "from": "data/events",
+          "to": "Data/Events"
+        },
+        {
+          "from": "enums",
+          "to": "Enums"
+        },
+        {
+          "from": "internals",
+          "to": "Internals"
+        },
+        {
+          "from": "scene",
+          "to": "Scene"
+        },
+        {
+          "from": "setting",
+          "to": "Setting"
+        },
+        {
+          "from": "setting/data",
+          "to": "Setting/Data"
+        },
+        {
+          "from": "storage",
+          "to": "Storage"
+        },
+        {
+          "from": "ui",
+          "to": "UI"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Game",
+      "path": "GFramework.Game",
+      "folders": [
+        {
+          "from": "data",
+          "to": "Data"
+        },
+        {
+          "from": "extensions",
+          "to": "Extensions"
+        },
+        {
+          "from": "scene",
+          "to": "Scene"
+        },
+        {
+          "from": "scene/handler",
+          "to": "Scene/Handler"
+        },
+        {
+          "from": "serializer",
+          "to": "Serializer"
+        },
+        {
+          "from": "setting",
+          "to": "Setting"
+        },
+        {
+          "from": "setting/events",
+          "to": "Setting/Events"
+        },
+        {
+          "from": "state",
+          "to": "State"
+        },
+        {
+          "from": "storage",
+          "to": "Storage"
+        },
+        {
+          "from": "ui",
+          "to": "UI"
+        },
+        {
+          "from": "ui/handler",
+          "to": "UI/Handler"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Godot",
+      "path": "GFramework.Godot",
+      "folders": [
+        {
+          "from": "architecture",
+          "to": "Architecture"
+        },
+        {
+          "from": "coroutine",
+          "to": "Coroutine"
+        },
+        {
+          "from": "data",
+          "to": "Data"
+        },
+        {
+          "from": "extensions",
+          "to": "Extensions"
+        },
+        {
+          "from": "extensions/signal",
+          "to": "Extensions/Signal"
+        },
+        {
+          "from": "logging",
+          "to": "Logging"
+        },
+        {
+          "from": "pause",
+          "to": "Pause"
+        },
+        {
+          "from": "pool",
+          "to": "Pool"
+        },
+        {
+          "from": "scene",
+          "to": "Scene"
+        },
+        {
+          "from": "setting",
+          "to": "Setting"
+        },
+        {
+          "from": "setting/data",
+          "to": "Setting/Data"
+        },
+        {
+          "from": "storage",
+          "to": "Storage"
+        },
+        {
+          "from": "ui",
+          "to": "UI"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Ecs.Arch.Abstractions",
+      "path": "GFramework.Ecs.Arch.Abstractions",
+      "folders": []
+    },
+    {
+      "name": "GFramework.Ecs.Arch",
+      "path": "GFramework.Ecs.Arch",
+      "folders": [
+        {
+          "from": "components",
+          "to": "Components"
+        },
+        {
+          "from": "extensions",
+          "to": "Extensions"
+        },
+        {
+          "from": "systems",
+          "to": "Systems"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Ecs.Arch.Tests",
+      "path": "GFramework.Ecs.Arch.Tests",
+      "folders": [
+        {
+          "from": "ecs",
+          "to": "ECS"
+        },
+        {
+          "from": "integration",
+          "to": "Integration"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.SourceGenerators.Abstractions",
+      "path": "GFramework.SourceGenerators.Abstractions",
+      "folders": [
+        {
+          "from": "bases",
+          "to": "Bases"
+        },
+        {
+          "from": "enums",
+          "to": "Enums"
+        },
+        {
+          "from": "logging",
+          "to": "Logging"
+        },
+        {
+          "from": "rule",
+          "to": "Rule"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.SourceGenerators.Common",
+      "path": "GFramework.SourceGenerators.Common",
+      "folders": [
+        {
+          "from": "constants",
+          "to": "Constants"
+        },
+        {
+          "from": "diagnostics",
+          "to": "Diagnostics"
+        },
+        {
+          "from": "extensions",
+          "to": "Extensions"
+        },
+        {
+          "from": "generator",
+          "to": "Generator"
+        },
+        {
+          "from": "info",
+          "to": "Info"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.SourceGenerators",
+      "path": "GFramework.SourceGenerators",
+      "folders": [
+        {
+          "from": "analyzers",
+          "to": "Analyzers"
+        },
+        {
+          "from": "bases",
+          "to": "Bases"
+        },
+        {
+          "from": "diagnostics",
+          "to": "Diagnostics"
+        },
+        {
+          "from": "enums",
+          "to": "Enums"
+        },
+        {
+          "from": "logging",
+          "to": "Logging"
+        },
+        {
+          "from": "rule",
+          "to": "Rule"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.SourceGenerators.Tests",
+      "path": "GFramework.SourceGenerators.Tests",
+      "folders": [
+        {
+          "from": "bases",
+          "to": "Bases"
+        },
+        {
+          "from": "core",
+          "to": "Core"
+        },
+        {
+          "from": "enums",
+          "to": "Enums"
+        },
+        {
+          "from": "logging",
+          "to": "Logging"
+        },
+        {
+          "from": "rule",
+          "to": "Rule"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Godot.SourceGenerators.Abstractions",
+      "path": "GFramework.Godot.SourceGenerators.Abstractions",
+      "folders": []
+    },
+    {
+      "name": "GFramework.Godot.SourceGenerators",
+      "path": "GFramework.Godot.SourceGenerators",
+      "folders": []
+    }
+  ]
+}

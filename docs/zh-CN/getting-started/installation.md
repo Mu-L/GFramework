@@ -92,13 +92,13 @@ dotnet add package GeWuYou.GFramework.SourceGenerators
 
 ```csharp
 global using GFramework.Core;
-global using GFramework.Core.architecture;
-global using GFramework.Core.command;
-global using GFramework.Core.events;
-global using GFramework.Core.model;
-global using GFramework.Core.property;
-global using GFramework.Core.system;
-global using GFramework.Core.utility;
+global using GFramework.Core.Architecture;
+global using GFramework.Core.Command;
+global using GFramework.Core.Events;
+global using GFramework.Core.Model;
+global using GFramework.Core.Property;
+global using GFramework.Core.System;
+global using GFramework.Core.Utility;
 ```
 
 ### 2. Godot 项目配置
@@ -125,7 +125,7 @@ global using GFramework.Core.utility;
 创建一个简单的测试来验证安装是否成功：
 
 ```csharp
-using GFramework.Core.architecture;
+using GFramework.Core.Architecture;
 
 // 定义简单的架构
 public class TestArchitecture : Architecture

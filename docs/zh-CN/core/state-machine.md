@@ -66,7 +66,7 @@ public interface IStateMachineSystem : ISystem, IStateMachine
 继承 `ContextAwareStateBase` 创建状态：
 
 ```csharp
-using GFramework.Core.state;
+using GFramework.Core.State;
 
 // 菜单状态
 public class MenuState : ContextAwareStateBase
@@ -104,7 +104,7 @@ public class GameplayState : ContextAwareStateBase
 ### 注册和使用状态机
 
 ```csharp
-using GFramework.Core.state;
+using GFramework.Core.State;
 
 public class GameArchitecture : Architecture
 {
@@ -128,8 +128,8 @@ public class GameArchitecture : Architecture
 ### 切换状态
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController
@@ -185,7 +185,7 @@ public class PauseState : ContextAwareStateBase
 处理需要异步操作的状态：
 
 ```csharp
-using GFramework.Core.Abstractions.state;
+using GFramework.Core.Abstractions.State;
 
 public class LoadingState : AsyncContextAwareStateBase
 {
@@ -220,8 +220,8 @@ public class LoadingState : AsyncContextAwareStateBase
 ### 状态历史和回退
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController

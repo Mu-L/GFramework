@@ -32,8 +32,8 @@ public class CombatSystem : AbstractSystem
     }
 }
 
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerController : IController
@@ -181,8 +181,8 @@ public class StorageUtility : IUtility { }
 ### 1. 正确的注销管理
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class MyController : IController

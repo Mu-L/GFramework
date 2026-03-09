@@ -417,7 +417,7 @@ Migration guide: 将 Init() 改为 async Task Init()
 ```csharp
 using Xunit;
 
-namespace GFramework.Core.Tests.events;
+namespace GFramework.Core.Tests.Events;
 
 public class EventBusTests
 {
