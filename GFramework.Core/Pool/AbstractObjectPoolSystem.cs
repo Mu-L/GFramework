@@ -73,8 +73,7 @@ public abstract class AbstractObjectPoolSystem<TKey, TObject>
         {
             // 记录警告：检测到可能的双重释放或错误释放
             Debug.WriteLine(
-                $"[ObjectPool] Warning: Attempting to release object for key '{key}' " +
-                $"but ActiveCount is already 0. Possible double-release or incorrect key.");
+                $"[ObjectPool] Warning: Release called with key '{key}', but ActiveCount is already 0. Possible double release.");
         }
 
         // 检查容量限制
