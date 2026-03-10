@@ -32,6 +32,10 @@ public readonly struct Result : IEquatable<Result>
     /// <param name="exception">失败时的异常信息</param>
     private Result(bool isSuccess, Exception? exception)
     {
+        // 强制不变式：失败状态必须携带非空异常
+        if (!isSuccess && exception is null)
+            throw new ArgumentException("Failure Result must have a non-null exception.", nameof(exception));
+
         _isSuccess = isSuccess;
         _exception = exception;
     }
@@ -177,6 +181,7 @@ public readonly struct Result : IEquatable<Result>
     [Pure]
     public static Result Try(Action action)
     {
+        ArgumentNullException.ThrowIfNull(action);
         try
         {
             action();
@@ -194,8 +199,11 @@ public readonly struct Result : IEquatable<Result>
     /// <typeparam name="B">映射后的目标类型</typeparam>
     /// <param name="func">用于转换值的函数</param>
     /// <returns>若当前为成功状态，返回包含转换后值的成功 Result；若为失败状态，返回保持原有错误的失败 Result</returns>
-    public Result<B> Map<B>(Func<B> func) =>
-        IsSuccess ? Result<B>.Success(func()) : Result<B>.Failure(_exception!);
+    public Result<B> Map<B>(Func<B> func)
+    {
+        ArgumentNullException.ThrowIfNull(func);
+        return IsSuccess ? Result<B>.Success(func()) : Result<B>.Failure(_exception!);
+    }
 
     /// <summary>
     ///     将当前 Result 绑定到一个返回 Result 的函数上
@@ -203,6 +211,9 @@ public readonly struct Result : IEquatable<Result>
     /// <typeparam name="B">Result 中值的类型</typeparam>
     /// <param name="func">返回 Result 的函数</param>
     /// <returns>若当前为成功状态，返回函数执行的结果；若为失败状态，返回保持原有错误的失败 Result</returns>
-    public Result<B> Bind<B>(Func<Result<B>> func) =>
-        IsSuccess ? func() : Result<B>.Failure(_exception!);
+    public Result<B> Bind<B>(Func<Result<B>> func)
+    {
+        ArgumentNullException.ThrowIfNull(func);
+        return IsSuccess ? func() : Result<B>.Failure(_exception!);
+    }
 }
