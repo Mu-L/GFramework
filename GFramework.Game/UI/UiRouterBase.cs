@@ -1,7 +1,7 @@
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Extensions;
 using GFramework.Core.Logging;
-using GFramework.Core.System;
+using GFramework.Core.Systems;
 using GFramework.Game.Abstractions.Enums;
 using GFramework.Game.Abstractions.UI;
 

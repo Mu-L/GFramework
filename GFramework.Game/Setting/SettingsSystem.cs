@@ -1,5 +1,5 @@
 using GFramework.Core.Extensions;
-using GFramework.Core.System;
+using GFramework.Core.Systems;
 using GFramework.Game.Abstractions.Setting;
 using GFramework.Game.Setting.Events;
 

@@ -1,5 +1,5 @@
 ﻿using GFramework.Core.Abstractions.Rule;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Core.Abstractions.IoC;

@@ -1,8 +1,8 @@
 ﻿using GFramework.Core.Abstractions.Architecture;
 using GFramework.Core.Abstractions.Enums;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 
-namespace GFramework.Core.Tests.System;
+namespace GFramework.Core.Tests.Systems;
 
 /// <summary>
 ///     测试系统类，实现了ISystem接口

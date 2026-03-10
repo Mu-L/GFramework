@@ -1,13 +1,11 @@
 using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
 using GFramework.Core.Abstractions.Model;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
 using GFramework.Core.IoC;
 using GFramework.Core.Logging;
 using GFramework.Core.Model;
-using GFramework.Core.System;
-using NUnit.Framework;
 
 namespace GFramework.Core.Tests.Architecture;
 

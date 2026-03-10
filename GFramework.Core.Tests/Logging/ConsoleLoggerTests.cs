@@ -1,8 +1,6 @@
-using System;
 using System.IO;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging;
-using NUnit.Framework;
 
 namespace GFramework.Core.Tests.Logging;
 
@@ -161,7 +159,7 @@ public class ConsoleLoggerTests
         _logger.Error("Line 3");
 
         var output = _stringWriter.ToString();
-        var lines = output.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = output.Split([System.Environment.NewLine], StringSplitOptions.RemoveEmptyEntries);
 
         Assert.That(lines.Length, Is.EqualTo(3));
         Assert.That(lines[0], Does.Contain("INFO"));

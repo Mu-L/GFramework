@@ -1,10 +1,10 @@
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Logging;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Logging;
 using GFramework.Core.Rule;
 
-namespace GFramework.Core.System;
+namespace GFramework.Core.Systems;
 
 /// <summary>
 ///     抽象系统基类，实现系统接口的基本功能

@@ -1,8 +1,7 @@
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Tests.Architecture;
 using GFramework.Core.Tests.Model;
-using GFramework.Core.Tests.System;
-using NUnit.Framework;
+using GFramework.Core.Tests.Systems;
 using NUnit.Framework.Legacy;
 
 namespace GFramework.Core.Tests.Tests;

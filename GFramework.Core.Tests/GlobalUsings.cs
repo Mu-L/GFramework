@@ -18,3 +18,4 @@ global using System.Threading;
 global using System.Threading.Tasks;
 global using NUnit.Framework;
 global using NUnit.Compatibility;
+global using GFramework.Core.Systems;

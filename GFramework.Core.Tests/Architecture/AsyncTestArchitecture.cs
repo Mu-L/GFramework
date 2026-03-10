@@ -1,5 +1,5 @@
 ﻿using GFramework.Core.Tests.Model;
-using GFramework.Core.Tests.System;
+using GFramework.Core.Tests.Systems;
 
 namespace GFramework.Core.Tests.Architecture;
 

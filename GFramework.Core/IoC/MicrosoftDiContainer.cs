@@ -1,7 +1,7 @@
 using GFramework.Core.Abstractions.Bases;
 using GFramework.Core.Abstractions.IoC;
 using GFramework.Core.Abstractions.Logging;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Logging;
 using GFramework.Core.Rule;
 using Mediator;

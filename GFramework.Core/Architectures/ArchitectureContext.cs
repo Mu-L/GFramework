@@ -5,7 +5,7 @@ using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Abstractions.IoC;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Query;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
 using Mediator;
 using ICommand = GFramework.Core.Abstractions.Command.ICommand;

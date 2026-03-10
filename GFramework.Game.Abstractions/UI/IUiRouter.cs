@@ -1,4 +1,4 @@
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Game.Abstractions.Enums;
 
 namespace GFramework.Game.Abstractions.UI;

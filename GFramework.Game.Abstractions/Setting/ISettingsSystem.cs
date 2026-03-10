@@ -1,4 +1,4 @@
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 
 namespace GFramework.Game.Abstractions.Setting;
 

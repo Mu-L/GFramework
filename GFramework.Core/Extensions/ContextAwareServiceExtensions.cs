@@ -1,6 +1,6 @@
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Rule;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
 
 namespace GFramework.Core.Extensions;

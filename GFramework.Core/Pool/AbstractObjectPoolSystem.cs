@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 using GFramework.Core.Abstractions.Pool;
-using GFramework.Core.System;
+using GFramework.Core.Systems;
 
 namespace GFramework.Core.Pool;
 

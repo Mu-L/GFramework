@@ -1,9 +1,9 @@
 ﻿using GFramework.Core.Abstractions.Architecture;
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Lifecycle;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 
-namespace GFramework.Core.Tests.System;
+namespace GFramework.Core.Tests.Systems;
 
 /// <summary>
 ///     异步测试系统，实现 ISystem 和 IAsyncInitializable

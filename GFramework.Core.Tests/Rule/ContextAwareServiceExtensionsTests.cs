@@ -2,7 +2,7 @@ using GFramework.Core.Abstractions.Architecture;
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Rule;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
 using GFramework.Core.Architectures;
 using GFramework.Core.Extensions;

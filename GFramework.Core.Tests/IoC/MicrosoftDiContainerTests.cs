@@ -2,8 +2,7 @@ using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
 using GFramework.Core.IoC;
 using GFramework.Core.Logging;
-using GFramework.Core.Tests.System;
-using NUnit.Framework;
+using GFramework.Core.Tests.Systems;
 
 namespace GFramework.Core.Tests.IoC;
 

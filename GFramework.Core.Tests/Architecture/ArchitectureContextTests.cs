@@ -5,7 +5,7 @@ using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Environment;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Query;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
 using GFramework.Core.Architectures;
 using GFramework.Core.Command;

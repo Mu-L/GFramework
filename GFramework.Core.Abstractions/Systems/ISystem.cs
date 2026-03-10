@@ -2,7 +2,7 @@ using GFramework.Core.Abstractions.Architecture;
 using GFramework.Core.Abstractions.Lifecycle;
 using GFramework.Core.Abstractions.Rule;
 
-namespace GFramework.Core.Abstractions.System;
+namespace GFramework.Core.Abstractions.Systems;
 
 /// <summary>
 ///     系统接口，定义了系统的基本行为和功能

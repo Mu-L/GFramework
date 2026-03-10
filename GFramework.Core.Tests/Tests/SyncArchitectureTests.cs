@@ -3,7 +3,7 @@ using GFramework.Core.Architectures;
 using GFramework.Core.Tests.Architecture;
 using GFramework.Core.Tests.Events;
 using GFramework.Core.Tests.Model;
-using GFramework.Core.Tests.System;
+using GFramework.Core.Tests.Systems;
 using NUnit.Framework.Legacy;
 
 namespace GFramework.Core.Tests.Tests;

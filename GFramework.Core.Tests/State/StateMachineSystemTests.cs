@@ -1,7 +1,7 @@
 using System.Reflection;
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.State;
-using GFramework.Core.Abstractions.System;
+using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Architectures;
 using GFramework.Core.Command;
 using GFramework.Core.Environment;
