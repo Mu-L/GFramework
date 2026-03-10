@@ -111,8 +111,8 @@ public class AsyncArchitectureTests : ArchitectureTestsBase<AsyncTestArchitectur
         await Architecture!.InitializeAsync();
         await Architecture.DestroyAsync();
 
-        var system = Architecture.Context.GetSystem<TestSystem>();
-        Assert.That(system, Is.Null);
+        var system = Architecture.Context.GetSystem<AsyncTestSystem>();
+        Assert.That(system!.DestroyCalled, Is.True);
         Assert.That(Architecture.CurrentPhase, Is.EqualTo(ArchitecturePhase.Destroyed));
     }
 

@@ -32,11 +32,11 @@ namespace GFramework.Core.Tests.Architecture;
 ///     - SendEvent_WithInstance方法 - 正常事件发送
 ///     - SendEvent_WithInstance方法 - 空事件异常
 ///     - GetSystem方法 - 获取已注册系统
-///     - GetSystem方法 - 获取未注册系统
+///     - GetSystem方法 - 获取未注册系统时抛出异常
 ///     - GetModel方法 - 获取已注册模型
-///     - GetModel方法 - 获取未注册模型
+///     - GetModel方法 - 获取未注册模型时抛出异常
 ///     - GetUtility方法 - 获取已注册工具
-///     - GetUtility方法 - 获取未注册工具
+///     - GetUtility方法 - 获取未注册工具时抛出异常
 ///     - GetEnvironment方法 - 获取环境对象
 /// </summary>
 [TestFixture]
@@ -228,14 +228,13 @@ public class ArchitectureContextTests
     }
 
     /// <summary>
-    ///     测试GetSystem方法在系统未注册时返回null
+    ///     测试GetSystem方法在系统未注册时应抛出 InvalidOperationException
     /// </summary>
     [Test]
-    public void GetSystem_Should_ReturnNull_When_SystemIsNotRegistered()
+    public void GetSystem_Should_ThrowInvalidOperationException_When_SystemIsNotRegistered()
     {
-        var result = _context!.GetSystem<TestSystemV2>();
-
-        Assert.That(result, Is.Null);
+        Assert.That(() => _context!.GetSystem<TestSystemV2>(),
+            Throws.InvalidOperationException);
     }
 
     /// <summary>
@@ -254,14 +253,13 @@ public class ArchitectureContextTests
     }
 
     /// <summary>
-    ///     测试GetModel方法在模型未注册时返回null
+    ///     测试GetModel方法在模型未注册时应抛出 InvalidOperationException
     /// </summary>
     [Test]
-    public void GetModel_Should_ReturnNull_When_ModelIsNotRegistered()
+    public void GetModel_Should_ThrowInvalidOperationException_When_ModelIsNotRegistered()
     {
-        var result = _context!.GetModel<TestModelV2>();
-
-        Assert.That(result, Is.Null);
+        Assert.That(() => _context!.GetModel<TestModelV2>(),
+            Throws.InvalidOperationException);
     }
 
     /// <summary>
@@ -280,14 +278,13 @@ public class ArchitectureContextTests
     }
 
     /// <summary>
-    ///     测试GetUtility方法在工具未注册时返回null
+    ///     测试GetUtility方法在工具未注册时应抛出 InvalidOperationException
     /// </summary>
     [Test]
-    public void GetUtility_Should_ReturnNull_When_UtilityIsNotRegistered()
+    public void GetUtility_Should_ThrowInvalidOperationException_When_UtilityIsNotRegistered()
     {
-        var result = _context!.GetUtility<TestUtilityV2>();
-
-        Assert.That(result, Is.Null);
+        Assert.That(() => _context!.GetUtility<TestUtilityV2>(),
+            Throws.InvalidOperationException);
     }
 
     /// <summary>
