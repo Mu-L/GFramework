@@ -28,8 +28,8 @@ CQRS（Command Query Responsibility Segregation，命令查询职责分离）是
 命令表示修改系统状态的操作，如创建、更新、删除：
 
 ```csharp
-using GFramework.Core.cqrs.command;
-using GFramework.Core.Abstractions.cqrs.command;
+using GFramework.Core.CQRS.Command;
+using GFramework.Core.Abstractions.CQRS.Command;
 
 // 定义命令输入
 public class CreatePlayerInput : ICommandInput
@@ -50,8 +50,8 @@ public class CreatePlayerCommand : CommandBase<CreatePlayerInput, int>
 查询表示读取系统状态的操作，不修改数据：
 
 ```csharp
-using GFramework.Core.cqrs.query;
-using GFramework.Core.Abstractions.cqrs.query;
+using GFramework.Core.CQRS.Query;
+using GFramework.Core.Abstractions.CQRS.Query;
 
 // 定义查询输入
 public class GetPlayerInput : IQueryInput
@@ -71,7 +71,7 @@ public class GetPlayerQuery : QueryBase<GetPlayerInput, PlayerData>
 处理器负责执行命令或查询的具体逻辑：
 
 ```csharp
-using GFramework.Core.cqrs.command;
+using GFramework.Core.CQRS.Command;
 using Mediator;
 
 // 命令处理器
@@ -232,8 +232,8 @@ public class GameArchitecture : Architecture
 Request 是更通用的消息类型，可以用于任何场景：
 
 ```csharp
-using GFramework.Core.cqrs.request;
-using GFramework.Core.Abstractions.cqrs.request;
+using GFramework.Core.CQRS.Request;
+using GFramework.Core.Abstractions.CQRS.Request;
 
 // 定义请求输入
 public class ValidatePlayerInput : IRequestInput
@@ -270,8 +270,8 @@ public class ValidatePlayerRequestHandler : AbstractRequestHandler<ValidatePlaye
 Notification 用于一对多的消息广播：
 
 ```csharp
-using GFramework.Core.cqrs.notification;
-using GFramework.Core.Abstractions.cqrs.notification;
+using GFramework.Core.CQRS.Notification;
+using GFramework.Core.Abstractions.CQRS.Notification;
 
 // 定义通知输入
 public class PlayerLevelUpInput : INotificationInput

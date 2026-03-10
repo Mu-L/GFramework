@@ -1,0 +1,10 @@
+﻿using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.Abstractions.Lifecycle;
+using GFramework.Core.Abstractions.Rule;
+
+namespace GFramework.Core.Abstractions.Model;
+
+/// <summary>
+///     模型接口，定义了模型的基本行为和功能
+/// </summary>
+public interface IModel : IContextAware, IArchitecturePhaseListener, IInitializable;

@@ -74,8 +74,8 @@ public sealed class JsonSerializer : IRuntimeTypeSerializer
 在架构中注册序列化器：
 
 ```csharp
-using GFramework.Core.Abstractions.serializer;
-using GFramework.Game.serializer;
+using GFramework.Core.Abstractions.Serializer;
+using GFramework.Game.Serializer;
 
 public class GameArchitecture : Architecture
 {
@@ -94,7 +94,7 @@ public class GameArchitecture : Architecture
 使用泛型 API 序列化对象：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 public class PlayerData
 {
@@ -173,9 +173,9 @@ public void SerializeRuntimeType()
 序列化器与存储系统配合使用：
 
 ```csharp
-using GFramework.Core.Abstractions.storage;
-using GFramework.Game.storage;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Storage;
+using GFramework.Game.Storage;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class DataManager : IController

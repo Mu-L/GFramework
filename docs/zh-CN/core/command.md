@@ -56,8 +56,8 @@ public class SimpleCommand : AbstractCommand
 }
 
 // 使用命令
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController
@@ -196,8 +196,8 @@ public class StartGameCommand : AbstractCommand<StartGameInput>
 }
 
 // 使用命令
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController

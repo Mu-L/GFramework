@@ -67,8 +67,8 @@ public interface IGodotModule : IArchitectureModule
 ### 创建 Godot 架构
 
 ```csharp
-using GFramework.Godot.architecture;
-using GFramework.Core.Abstractions.architecture;
+using GFramework.Godot.Architecture;
+using GFramework.Core.Abstractions.Architecture;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -100,7 +100,7 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Godot.architecture;
+using GFramework.Godot.Architecture;
 
 public partial class GameRoot : Node
 {
@@ -133,7 +133,7 @@ public partial class GameRoot : Node
 ### 创建 Godot 模块
 
 ```csharp
-using GFramework.Godot.architecture;
+using GFramework.Godot.Architecture;
 using Godot;
 
 public class CoroutineModule : AbstractGodotModule
@@ -264,8 +264,8 @@ public class AnalyticsModule : AbstractGodotModule
 ### 自定义架构配置
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Core.Abstractions.environment;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Core.Abstractions.Environment;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -340,8 +340,8 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class Player : CharacterBody2D, IController
@@ -519,7 +519,7 @@ public partial class GameRoot : Node
 使用 `[ContextAware]` 特性或直接使用单例：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 // 方式 1: 使用 [ContextAware] 特性（推荐）
 [ContextAware]

@@ -11,7 +11,7 @@
 ### 标记类
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.logging;
+using GFramework.SourceGenerators.Abstractions.Logging;
 
 [Log]
 public partial class MyService
@@ -164,9 +164,9 @@ public partial class MySystem : AbstractSystem
 ### 游戏控制器
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.logging;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Logging;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [Log]
 [ContextAware]

@@ -49,7 +49,7 @@ Result 类型将错误处理显式化，避免使用异常进行流程控制。
 #### 创建 Option
 
 ```csharp
-using GFramework.Core.functional;
+using GFramework.Core.Functional;
 
 // 创建包含值的 Option
 var someValue = Option<int>.Some(42);
@@ -116,7 +116,7 @@ option.Match(
 #### 创建 Result
 
 ```csharp
-using GFramework.Core.functional;
+using GFramework.Core.Functional;
 
 // 创建成功结果
 var success = Result<int>.Succeed(42);
@@ -192,7 +192,7 @@ result.Match(
 #### Pipe：管道转换
 
 ```csharp
-using GFramework.Core.functional.pipe;
+using GFramework.Core.Functional.pipe;
 
 var result = 42
     .Pipe(x => x * 2)           // 84
@@ -235,7 +235,7 @@ var result = 42.PipeIf(
 #### Compose：函数组合
 
 ```csharp
-using GFramework.Core.functional.functions;
+using GFramework.Core.Functional.functions;
 
 Func<int, int> addOne = x => x + 1;
 Func<int, int> multiplyTwo = x => x * 2;
@@ -270,7 +270,7 @@ var result = add5(3);  // 8
 #### 链式副作用
 
 ```csharp
-using GFramework.Core.functional.result;
+using GFramework.Core.Functional.result;
 
 Result<int>.Succeed(42)
     .OnSuccess(x => Console.WriteLine($"Value: {x}"))
@@ -304,7 +304,7 @@ var combined = results.Combine();  // Result<List<int>>
 #### TakeIf：条件返回
 
 ```csharp
-using GFramework.Core.functional.control;
+using GFramework.Core.Functional.control;
 
 var user = GetUser().TakeIf(u => u.IsActive);  // 活跃用户或 null
 
@@ -345,7 +345,7 @@ var result = ControlExtensions.Retry(
 #### 异步重试
 
 ```csharp
-using GFramework.Core.functional.async;
+using GFramework.Core.Functional.async;
 
 var result = await (() => UnreliableOperationAsync())
     .WithRetryAsync(

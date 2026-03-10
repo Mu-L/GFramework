@@ -27,9 +27,9 @@ description: 学习如何使用协程系统实现异步操作和时间控制
 首先，让我们创建一个简单的协程来理解基本概念。
 
 ```csharp
-using GFramework.Core.Abstractions.coroutine;
-using GFramework.Core.coroutine;
-using GFramework.Core.coroutine.instructions;
+using GFramework.Core.Abstractions.Coroutine;
+using GFramework.Core.Coroutine;
+using GFramework.Core.Coroutine.Instructions;
 
 namespace MyGame.Systems
 {
@@ -81,9 +81,9 @@ namespace MyGame.Systems
 让我们实现一个实用的功能：玩家生命值自动恢复。
 
 ```csharp
-using GFramework.Core.Abstractions.model;
-using GFramework.Core.Abstractions.property;
-using GFramework.Core.model;
+using GFramework.Core.Abstractions.Model;
+using GFramework.Core.Abstractions.Property;
+using GFramework.Core.Model;
 
 namespace MyGame.Models
 {
@@ -171,7 +171,7 @@ namespace MyGame.Models
 接下来实现一个技能冷却系统，展示如何使用协程管理时间相关的游戏逻辑。
 
 ```csharp
-using GFramework.Core.system;
+using GFramework.Core.System;
 using System.Collections.Generic;
 
 namespace MyGame.Systems
@@ -257,8 +257,8 @@ namespace MyGame.Systems
 实现一个等待玩家完成任务的系统，展示如何在协程中等待事件。
 
 ```csharp
-using GFramework.Core.Abstractions.events;
-using GFramework.Core.coroutine.instructions;
+using GFramework.Core.Abstractions.Events;
+using GFramework.Core.Coroutine.Instructions;
 
 namespace MyGame.Systems
 {
@@ -479,7 +479,7 @@ namespace MyGame.Systems
 ### GameArchitecture.cs
 
 ```csharp
-using GFramework.Core.architecture;
+using GFramework.Core.Architecture;
 
 namespace MyGame
 {

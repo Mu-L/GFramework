@@ -176,8 +176,8 @@ await architecture.WaitUntilReadyAsync();
 
 // 4. 通过依赖注入使用架构
 // 在 Controller 或其他组件中获取架构实例
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController

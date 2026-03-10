@@ -84,9 +84,9 @@ Utility **不应该**：
 在 `scripts/utility/` 创建 `ICounterUtility.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.utility;
+using GFramework.Core.Abstractions.Utility;
 
-namespace MyGFrameworkGame.scripts.utility;
+namespace MyGFrameworkGame.scripts.Utility;
 
 /// <summary>
 /// 计数器工具接口
@@ -111,9 +111,9 @@ public interface ICounterUtility : IContextUtility
 
 ```csharp
 using System;
-using GFramework.Core.utility;
+using GFramework.Core.Utility;
 
-namespace MyGFrameworkGame.scripts.utility;
+namespace MyGFrameworkGame.scripts.Utility;
 
 /// <summary>
 /// 计数器工具实现
@@ -172,9 +172,9 @@ public class CounterUtility : AbstractContextUtility, ICounterUtility
 编辑 `scripts/module/UtilityModule.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Game.architecture;
-using MyGFrameworkGame.scripts.utility;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Game.Architecture;
+using MyGFrameworkGame.scripts.Utility;
 
 namespace MyGFrameworkGame.scripts.module;
 
@@ -196,12 +196,12 @@ public class UtilityModule : AbstractModule
 编辑 `IncreaseCountCommand.cs`：
 
 ```csharp
-using GFramework.Core.command;
-using GFramework.Core.extensions;
-using MyGFrameworkGame.scripts.model;
-using MyGFrameworkGame.scripts.utility;
+using GFramework.Core.Command;
+using GFramework.Core.Extensions;
+using MyGFrameworkGame.scripts.Model;
+using MyGFrameworkGame.scripts.Utility;
 
-namespace MyGFrameworkGame.scripts.command;
+namespace MyGFrameworkGame.scripts.Command;
 
 public class IncreaseCountCommand : AbstractCommand
 {
@@ -320,7 +320,7 @@ System **不应该**：
 在 `scripts/system/` 创建 `ICounterThresholdSystem.cs`：
 
 ```csharp
-namespace MyGFrameworkGame.scripts.system;
+namespace MyGFrameworkGame.scripts.System;
 
 /// <summary>
 /// 计数器阈值检查系统接口
@@ -339,12 +339,12 @@ public interface ICounterThresholdSystem
 在 `scripts/system/` 创建 `CounterThresholdSystem.cs`：
 
 ```csharp
-using GFramework.Core.extensions;
-using GFramework.Core.system;
+using GFramework.Core.Extensions;
+using GFramework.Core.System;
 using Godot;
-using MyGFrameworkGame.scripts.model;
+using MyGFrameworkGame.scripts.Model;
 
-namespace MyGFrameworkGame.scripts.system;
+namespace MyGFrameworkGame.scripts.System;
 
 /// <summary>
 /// 计数器阈值检查系统
@@ -390,9 +390,9 @@ public class CounterThresholdSystem : AbstractSystem, ICounterThresholdSystem
 编辑 `scripts/module/SystemModule.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Game.architecture;
-using MyGFrameworkGame.scripts.system;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Game.Architecture;
+using MyGFrameworkGame.scripts.System;
 
 namespace MyGFrameworkGame.scripts.module;
 

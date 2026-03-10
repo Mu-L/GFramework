@@ -62,7 +62,7 @@ GFramework.Game 为游戏开发提供了专门的功能模块，与 GFramework.C
 ### AbstractModule 基础使用
 
 ```csharp
-using GFramework.Game.architecture;
+using GFramework.Game.Architecture;
 
 public class AudioModule : AbstractModule
 {
@@ -411,7 +411,7 @@ public class PlayerFactory : IAssetFactory<Player>
 ### ScopedStorage 分层存储
 
 ```csharp
-using GFramework.Game.storage;
+using GFramework.Game.Storage;
 
 public class GameDataManager
 {
@@ -655,7 +655,7 @@ public class CachedStorage : IStorage
 ### JsonSerializer 使用
 
 ```csharp
-using GFramework.Game.serializer;
+using GFramework.Game.Serializer;
 
 public class GameDataSerializer
 {

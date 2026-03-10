@@ -127,7 +127,7 @@ Event   ──┘
 **作用**：Architecture 是整个应用的"中央调度器"，负责管理所有组件的生命周期。
 
 ```csharp
-using GFramework.Core.architecture;
+using GFramework.Core.Architecture;
 
 public class GameArchitecture : Architecture
 {

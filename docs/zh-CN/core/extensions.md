@@ -529,7 +529,7 @@ public class AchievementSystem : AbstractSystem
 
 1. **确保引用命名空间：**
    ```csharp
-   using GFramework.Core.extensions;
+   using GFramework.Core.Extensions;
    ```
 
 2. **理解扩展方法本质：**

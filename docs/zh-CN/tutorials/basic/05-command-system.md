@@ -107,11 +107,11 @@ AddButton.Pressed += async () =>
 在 `scripts/command/` 创建 `IncreaseCountCommand.cs`：
 
 ```csharp
-using GFramework.Core.command;
-using GFramework.Core.extensions;
-using MyGFrameworkGame.scripts.model;
+using GFramework.Core.Command;
+using GFramework.Core.Extensions;
+using MyGFrameworkGame.scripts.Model;
 
-namespace MyGFrameworkGame.scripts.command;
+namespace MyGFrameworkGame.scripts.Command;
 
 /// <summary>
 /// 增加计数器值的命令
@@ -143,11 +143,11 @@ public class IncreaseCountCommand : AbstractCommand
 在 `scripts/command/` 创建 `DecreaseCountCommand.cs`：
 
 ```csharp
-using GFramework.Core.command;
-using GFramework.Core.extensions;
-using MyGFrameworkGame.scripts.model;
+using GFramework.Core.Command;
+using GFramework.Core.Extensions;
+using MyGFrameworkGame.scripts.Model;
 
-namespace MyGFrameworkGame.scripts.command;
+namespace MyGFrameworkGame.scripts.Command;
 
 /// <summary>
 /// 减少计数器值的命令
@@ -172,12 +172,12 @@ public class DecreaseCountCommand : AbstractCommand
 编辑 `App.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.Core.extensions;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.Core.Extensions;
+using GFramework.SourceGenerators.Abstractions.Rule;
 using Godot;
-using MyGFrameworkGame.scripts.command;
-using MyGFrameworkGame.scripts.model;
+using MyGFrameworkGame.scripts.Command;
+using MyGFrameworkGame.scripts.Model;
 
 namespace MyGFrameworkGame.scripts.app;
 

@@ -19,7 +19,7 @@
 GFramework.Godot 提供了与 Godot 节点生命周期的无缝集成，确保框架初始化与 Godot 场景树同步。
 
 ```csharp
-using GFramework.Godot.architecture;
+using GFramework.Godot.Architecture;
 
 public class GodotGameArchitecture : AbstractArchitecture
 {
@@ -118,7 +118,7 @@ public partial class AudioModule : AbstractGodotModule
 实现高效的 Godot 节点池化，避免频繁的创建和销毁：
 
 ```csharp
-using GFramework.Godot.pool;
+using GFramework.Godot.Pool;
 
 public class BulletPoolSystem : AbstractNodePoolSystem<string, Bullet>
 {

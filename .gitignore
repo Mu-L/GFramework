@@ -12,3 +12,4 @@ opencode.json
 .omc/
 docs/.omc/
 docs/.vitepress/cache/
+local-plan/

@@ -75,7 +75,7 @@ public class ModalLayerUiPageBehavior : CanvasItemUiPageBehaviorBase<Control>
 
 ```csharp
 using Godot;
-using GFramework.Game.Abstractions.ui;
+using GFramework.Game.Abstractions.UI;
 
 public partial class MainMenuPage : Control, IUiPage
 {
@@ -117,8 +117,8 @@ public partial class MainMenuPage : Control, IUiPage
 
 ```csharp
 using Godot;
-using GFramework.Game.Abstractions.ui;
-using GFramework.Godot.ui;
+using GFramework.Game.Abstractions.UI;
+using GFramework.Godot.UI;
 
 public partial class MainMenuPage : Control, IUiPageBehaviorProvider
 {
@@ -139,7 +139,7 @@ public partial class MainMenuPage : Control, IUiPageBehaviorProvider
 ### 注册 UI
 
 ```csharp
-using GFramework.Godot.ui;
+using GFramework.Godot.UI;
 using Godot;
 
 public class GameUiRegistry : GodotUiRegistry
@@ -158,8 +158,8 @@ public class GameUiRegistry : GodotUiRegistry
 ### 设置 UI 系统
 
 ```csharp
-using GFramework.Godot.architecture;
-using GFramework.Godot.ui;
+using GFramework.Godot.Architecture;
+using GFramework.Godot.UI;
 
 public class GameArchitecture : AbstractArchitecture
 {
@@ -184,7 +184,7 @@ public class GameArchitecture : AbstractArchitecture
 
 ```csharp
 using Godot;
-using GFramework.Godot.extensions;
+using GFramework.Godot.Extensions;
 
 public partial class GameController : Node
 {
@@ -351,7 +351,7 @@ uiRouter.Show("ConfirmDialog", UiLayer.Modal, new ConfirmDialogParam
 
 ```csharp
 using Godot;
-using GFramework.Godot.ui;
+using GFramework.Godot.UI;
 
 public partial class UiRoot : CanvasLayer, IUiRoot
 {

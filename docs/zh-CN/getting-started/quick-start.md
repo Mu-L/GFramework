@@ -7,7 +7,7 @@
 首先定义您的应用架构：
 
 ```csharp
-using GFramework.Core.architecture;
+using GFramework.Core.Architecture;
 
 public class GameArchitecture : Architecture
 {
@@ -151,8 +151,8 @@ public class EnemyDamagedEvent : IEvent
 实现控制器来连接 UI 和业务逻辑：
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController

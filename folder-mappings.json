@@ -1,0 +1,618 @@
+{
+  "projects": [
+    {
+      "name": "GFramework.Core.Abstractions",
+      "path": "GFramework.Core.Abstractions",
+      "folders": [
+        {
+          "old": "cqrs/behaviors",
+          "new": "CQRS/Behaviors"
+        },
+        {
+          "old": "cqrs/command",
+          "new": "CQRS/Command"
+        },
+        {
+          "old": "cqrs/notification",
+          "new": "CQRS/Notification"
+        },
+        {
+          "old": "cqrs/query",
+          "new": "CQRS/Query"
+        },
+        {
+          "old": "cqrs/request",
+          "new": "CQRS/Request"
+        },
+        {
+          "old": "cqrs",
+          "new": "CQRS"
+        },
+        {
+          "old": "architecture",
+          "new": "Architecture"
+        },
+        {
+          "old": "bases",
+          "new": "Bases"
+        },
+        {
+          "old": "command",
+          "new": "Command"
+        },
+        {
+          "old": "configuration",
+          "new": "Configuration"
+        },
+        {
+          "old": "controller",
+          "new": "Controller"
+        },
+        {
+          "old": "coroutine",
+          "new": "Coroutine"
+        },
+        {
+          "old": "data",
+          "new": "Data"
+        },
+        {
+          "old": "enums",
+          "new": "Enums"
+        },
+        {
+          "old": "environment",
+          "new": "Environment"
+        },
+        {
+          "old": "events",
+          "new": "Events"
+        },
+        {
+          "old": "internals",
+          "new": "Internals"
+        },
+        {
+          "old": "ioc",
+          "new": "IoC"
+        },
+        {
+          "old": "lifecycle",
+          "new": "Lifecycle"
+        },
+        {
+          "old": "logging",
+          "new": "Logging"
+        },
+        {
+          "old": "model",
+          "new": "Model"
+        },
+        {
+          "old": "pause",
+          "new": "Pause"
+        },
+        {
+          "old": "pool",
+          "new": "Pool"
+        },
+        {
+          "old": "properties",
+          "new": "Properties"
+        },
+        {
+          "old": "property",
+          "new": "Property"
+        },
+        {
+          "old": "query",
+          "new": "Query"
+        },
+        {
+          "old": "registries",
+          "new": "Registries"
+        },
+        {
+          "old": "resource",
+          "new": "Resource"
+        },
+        {
+          "old": "rule",
+          "new": "Rule"
+        },
+        {
+          "old": "serializer",
+          "new": "Serializer"
+        },
+        {
+          "old": "state",
+          "new": "State"
+        },
+        {
+          "old": "storage",
+          "new": "Storage"
+        },
+        {
+          "old": "system",
+          "new": "System"
+        },
+        {
+          "old": "time",
+          "new": "Time"
+        },
+        {
+          "old": "utility",
+          "new": "Utility"
+        },
+        {
+          "old": "versioning",
+          "new": "Versioning"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Core",
+      "path": "GFramework.Core",
+      "folders": [
+        {
+          "old": "cqrs/behaviors",
+          "new": "CQRS/Behaviors"
+        },
+        {
+          "old": "cqrs/command",
+          "new": "CQRS/Command"
+        },
+        {
+          "old": "cqrs/notification",
+          "new": "CQRS/Notification"
+        },
+        {
+          "old": "cqrs/query",
+          "new": "CQRS/Query"
+        },
+        {
+          "old": "cqrs/request",
+          "new": "CQRS/Request"
+        },
+        {
+          "old": "cqrs",
+          "new": "CQRS"
+        },
+        {
+          "old": "coroutine/extensions",
+          "new": "Coroutine/Extensions"
+        },
+        {
+          "old": "coroutine/instructions",
+          "new": "Coroutine/Instructions"
+        },
+        {
+          "old": "coroutine",
+          "new": "Coroutine"
+        },
+        {
+          "old": "functional/async",
+          "new": "Functional/Async"
+        },
+        {
+          "old": "functional/control",
+          "new": "Functional/Control"
+        },
+        {
+          "old": "functional/functions",
+          "new": "Functional/Functions"
+        },
+        {
+          "old": "functional/pipe",
+          "new": "Functional/Pipe"
+        },
+        {
+          "old": "functional/result",
+          "new": "Functional/Result"
+        },
+        {
+          "old": "functional",
+          "new": "Functional"
+        },
+        {
+          "old": "logging/appenders",
+          "new": "Logging/Appenders"
+        },
+        {
+          "old": "logging/filters",
+          "new": "Logging/Filters"
+        },
+        {
+          "old": "log/formatters",
+          "new": "Logging/Formatters"
+        },
+        {
+          "old": "logging",
+          "new": "Logging"
+        },
+        {
+          "old": "services/modules",
+          "new": "Services/Modules"
+        },
+        {
+          "old": "services",
+          "new": "Services"
+        },
+        {
+          "old": "architecture",
+          "new": "Architecture"
+        },
+        {
+          "old": "command",
+          "new": "Command"
+        },
+        {
+          "old": "configuration",
+          "new": "Configuration"
+        },
+        {
+          "old": "environment",
+          "new": "Environment"
+        },
+        {
+          "old": "events",
+          "new": "Events"
+        },
+        {
+          "old": "extensions",
+          "new": "Extensions"
+        },
+        {
+          "old": "ioc",
+          "new": "IoC"
+        },
+        {
+          "old": "model",
+          "new": "Model"
+        },
+        {
+          "old": "pause",
+          "new": "Pause"
+        },
+        {
+          "old": "pool",
+          "new": "Pool"
+        },
+        {
+          "old": "property",
+          "new": "Property"
+        },
+        {
+          "old": "query",
+          "new": "Query"
+        },
+        {
+          "old": "resource",
+          "new": "Resource"
+        },
+        {
+          "old": "rule",
+          "new": "Rule"
+        },
+        {
+          "old": "state",
+          "new": "State"
+        },
+        {
+          "old": "system",
+          "new": "System"
+        },
+        {
+          "old": "time",
+          "new": "Time"
+        },
+        {
+          "old": "utility",
+          "new": "Utility"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Core.Tests",
+      "path": "GFramework.Core.Tests",
+      "folders": [
+        {
+          "old": "architecture",
+          "new": "Architecture"
+        },
+        {
+          "old": "extensions",
+          "new": "Extensions"
+        },
+        {
+          "old": "logging",
+          "new": "Logging"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Game.Abstractions",
+      "path": "GFramework.Game.Abstractions",
+      "folders": [
+        {
+          "old": "data",
+          "new": "Data"
+        },
+        {
+          "old": "scene",
+          "new": "Scene"
+        },
+        {
+          "old": "serializer",
+          "new": "Serializer"
+        },
+        {
+          "old": "setting/events",
+          "new": "Setting/Events"
+        },
+        {
+          "old": "setting",
+          "new": "Setting"
+        },
+        {
+          "old": "state",
+          "new": "State"
+        },
+        {
+          "old": "storage",
+          "new": "Storage"
+        },
+        {
+          "old": "ui/handler",
+          "new": "UI/Handler"
+        },
+        {
+          "old": "ui",
+          "new": "UI"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Game",
+      "path": "GFramework.Game",
+      "folders": [
+        {
+          "old": "data",
+          "new": "Data"
+        },
+        {
+          "old": "extensions",
+          "new": "Extensions"
+        },
+        {
+          "old": "scene/handler",
+          "new": "Scene/Handler"
+        },
+        {
+          "old": "scene",
+          "new": "Scene"
+        },
+        {
+          "old": "serializer",
+          "new": "Serializer"
+        },
+        {
+          "old": "setting/events",
+          "new": "Setting/Events"
+        },
+        {
+          "old": "setting",
+          "new": "Setting"
+        },
+        {
+          "old": "state",
+          "new": "State"
+        },
+        {
+          "old": "storage",
+          "new": "Storage"
+        },
+        {
+          "old": "ui/handler",
+          "new": "UI/Handler"
+        },
+        {
+          "old": "ui",
+          "new": "UI"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Godot",
+      "path": "GFramework.Godot",
+      "folders": [
+        {
+          "old": "extensions/signal",
+          "new": "Extensions/Signal"
+        },
+        {
+          "old": "extensions",
+          "new": "Extensions"
+        },
+        {
+          "old": "setting/data",
+          "new": "Setting/Data"
+        },
+        {
+          "old": "setting",
+          "new": "Setting"
+        },
+        {
+          "old": "architecture",
+          "new": "Architecture"
+        },
+        {
+          "old": "coroutine",
+          "new": "Coroutine"
+        },
+        {
+          "old": "data",
+          "new": "Data"
+        },
+        {
+          "old": "logging",
+          "new": "Logging"
+        },
+        {
+          "old": "pause",
+          "new": "Pause"
+        },
+        {
+          "old": "pool",
+          "new": "Pool"
+        },
+        {
+          "old": "scene",
+          "new": "Scene"
+        },
+        {
+          "old": "storage",
+          "new": "Storage"
+        },
+        {
+          "old": "ui",
+          "new": "UI"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Ecs.Arch.Abstractions",
+      "path": "GFramework.Ecs.Arch.Abstractions",
+      "folders": [
+        {
+          "old": "components",
+          "new": "Components"
+        },
+        {
+          "old": "systems",
+          "new": "Systems"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Ecs.Arch",
+      "path": "GFramework.Ecs.Arch",
+      "folders": [
+        {
+          "old": "components",
+          "new": "Components"
+        },
+        {
+          "old": "extensions",
+          "new": "Extensions"
+        },
+        {
+          "old": "systems",
+          "new": "Systems"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Ecs.Arch.Tests",
+      "path": "GFramework.Ecs.Arch.Tests",
+      "folders": [
+        {
+          "old": "integration",
+          "new": "Integration"
+        },
+        {
+          "old": "systems",
+          "new": "Systems"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.SourceGenerators.Abstractions",
+      "path": "GFramework.SourceGenerators.Abstractions",
+      "folders": [
+        {
+          "old": "bases",
+          "new": "Bases"
+        },
+        {
+          "old": "diagnostics",
+          "new": "Diagnostics"
+        },
+        {
+          "old": "enums",
+          "new": "Enums"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.SourceGenerators",
+      "path": "GFramework.SourceGenerators",
+      "folders": [
+        {
+          "old": "analyzers",
+          "new": "Analyzers"
+        },
+        {
+          "old": "bases",
+          "new": "Bases"
+        },
+        {
+          "old": "diagnostics",
+          "new": "Diagnostics"
+        },
+        {
+          "old": "enums",
+          "new": "Enums"
+        },
+        {
+          "old": "logging",
+          "new": "Logging"
+        },
+        {
+          "old": "rule",
+          "new": "Rule"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Godot.SourceGenerators.Abstractions",
+      "path": "GFramework.Godot.SourceGenerators.Abstractions",
+      "folders": [
+        {
+          "old": "bases",
+          "new": "Bases"
+        },
+        {
+          "old": "diagnostics",
+          "new": "Diagnostics"
+        },
+        {
+          "old": "enums",
+          "new": "Enums"
+        }
+      ]
+    },
+    {
+      "name": "GFramework.Godot.SourceGenerators",
+      "path": "GFramework.Godot.SourceGenerators",
+      "folders": [
+        {
+          "old": "analyzers",
+          "new": "Analyzers"
+        },
+        {
+          "old": "bases",
+          "new": "Bases"
+        },
+        {
+          "old": "diagnostics",
+          "new": "Diagnostics"
+        },
+        {
+          "old": "enums",
+          "new": "Enums"
+        }
+      ]
+    }
+  ]
+}

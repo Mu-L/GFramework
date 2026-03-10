@@ -185,8 +185,8 @@ public class GameArchitecture : Architecture
 
 ```csharp
 // 在 Controller 中
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController

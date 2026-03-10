@@ -21,8 +21,8 @@ ContextAware 生成器为标记了 `[ContextAware]` 属性的类自动生成 `IC
 使用 `[ContextAware]` 属性标记需要访问架构上下文的类：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.rule;
-using GFramework.Core.Abstractions.controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.Abstractions.Controller;
 
 [ContextAware]
 public partial class PlayerController : IController
@@ -75,21 +75,21 @@ public partial struct MyStruct { }
 
 namespace YourNamespace;
 
-partial class PlayerController : global::GFramework.Core.Abstractions.rule.IContextAware
+partial class PlayerController : global::GFramework.Core.Abstractions.Rule.IContextAware
 {
-    private global::GFramework.Core.Abstractions.architecture.IArchitectureContext? _context;
-    private static global::GFramework.Core.Abstractions.architecture.IArchitectureContextProvider? _contextProvider;
+    private global::GFramework.Core.Abstractions.Architecture.IArchitectureContext? _context;
+    private static global::GFramework.Core.Abstractions.Architecture.IArchitectureContextProvider? _contextProvider;
 
     /// <summary>
     /// 自动获取的架构上下文（懒加载，默认使用 GameContextProvider）
     /// </summary>
-    protected global::GFramework.Core.Abstractions.architecture.IArchitectureContext Context
+    protected global::GFramework.Core.Abstractions.Architecture.IArchitectureContext Context
     {
         get
         {
             if (_context == null)
             {
-                _contextProvider ??= new global::GFramework.Core.architecture.GameContextProvider();
+                _contextProvider ??= new global::GFramework.Core.Architecture.GameContextProvider();
                 _context = _contextProvider.GetContext();
             }
 
@@ -101,7 +101,7 @@ partial class PlayerController : global::GFramework.Core.Abstractions.rule.ICont
     /// 配置上下文提供者（用于测试或多架构场景）
     /// </summary>
     /// <param name="provider">上下文提供者实例</param>
-    public static void SetContextProvider(global::GFramework.Core.Abstractions.architecture.IArchitectureContextProvider provider)
+    public static void SetContextProvider(global::GFramework.Core.Abstractions.Architecture.IArchitectureContextProvider provider)
     {
         _contextProvider = provider;
     }
@@ -114,12 +114,12 @@ partial class PlayerController : global::GFramework.Core.Abstractions.rule.ICont
         _contextProvider = null;
     }
 
-    void global::GFramework.Core.Abstractions.rule.IContextAware.SetContext(global::GFramework.Core.Abstractions.architecture.IArchitectureContext context)
+    void global::GFramework.Core.Abstractions.Rule.IContextAware.SetContext(global::GFramework.Core.Abstractions.Architecture.IArchitectureContext context)
     {
         _context = context;
     }
 
-    global::GFramework.Core.Abstractions.architecture.IArchitectureContext global::GFramework.Core.Abstractions.rule.IContextAware.GetContext()
+    global::GFramework.Core.Abstractions.Architecture.IArchitectureContext global::GFramework.Core.Abstractions.Rule.IContextAware.GetContext()
     {
         return Context;
     }
@@ -232,8 +232,8 @@ public partial class GameFlowController : IController
 在 Godot 项目中，控制器通常同时实现 `IController` 和使用 `[ContextAware]`：
 
 ```csharp
-using GFramework.Core.Abstractions.controller;
-using GFramework.SourceGenerators.Abstractions.rule;
+using GFramework.Core.Abstractions.Controller;
+using GFramework.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerController : Node, IController
@@ -284,7 +284,7 @@ public partial class SimpleHelper
 生成的代码实现了 `IContextAware` 接口：
 
 ```csharp
-namespace GFramework.Core.Abstractions.rule;
+namespace GFramework.Core.Abstractions.Rule;
 
 public interface IContextAware
 {

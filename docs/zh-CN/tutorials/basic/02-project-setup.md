@@ -129,9 +129,9 @@ dotnet build
 在 `scripts/architecture/` 创建 `GameArchitecture.cs`：
 
 ```csharp
-using GFramework.Godot.architecture;
+using GFramework.Godot.Architecture;
 
-namespace MyGFrameworkGame.scripts.architecture;
+namespace MyGFrameworkGame.scripts.Architecture;
 
 /// <summary>
 /// 游戏架构类，负责管理整个应用的模块和依赖
@@ -161,8 +161,8 @@ public class GameArchitecture : AbstractArchitecture
 在 `scripts/module/` 创建 `ModelModule.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Game.architecture;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Game.Architecture;
 
 namespace MyGFrameworkGame.scripts.module;
 
@@ -196,8 +196,8 @@ Model **不应该**包含业务逻辑或 UI 逻辑。
 在 `scripts/module/` 创建 `SystemModule.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Game.architecture;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Game.Architecture;
 
 namespace MyGFrameworkGame.scripts.module;
 
@@ -231,8 +231,8 @@ public class SystemModule : AbstractModule
 在 `scripts/module/` 创建 `UtilityModule.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
-using GFramework.Game.architecture;
+using GFramework.Core.Abstractions.Architecture;
+using GFramework.Game.Architecture;
 
 namespace MyGFrameworkGame.scripts.module;
 
@@ -266,10 +266,10 @@ public class UtilityModule : AbstractModule
 回到 `GameArchitecture.cs`，注册刚创建的模块：
 
 ```csharp
-using GFramework.Godot.architecture;
+using GFramework.Godot.Architecture;
 using MyGFrameworkGame.scripts.module;
 
-namespace MyGFrameworkGame.scripts.architecture;
+namespace MyGFrameworkGame.scripts.Architecture;
 
 /// <summary>
 /// 游戏架构类，负责管理整个应用的模块和依赖
@@ -323,9 +323,9 @@ public class GameArchitecture : AbstractArchitecture
 编辑 `global/GameEntryPoint.cs`：
 
 ```csharp
-using GFramework.Core.Abstractions.architecture;
+using GFramework.Core.Abstractions.Architecture;
 using Godot;
-using MyGFrameworkGame.scripts.architecture;
+using MyGFrameworkGame.scripts.Architecture;
 
 namespace MyGFrameworkGame.global;
 

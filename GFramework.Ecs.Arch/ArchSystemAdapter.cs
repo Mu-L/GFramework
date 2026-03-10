@@ -1,6 +1,6 @@
 using Arch.Core;
-using GFramework.Core.extensions;
-using GFramework.Core.system;
+using GFramework.Core.Extensions;
+using GFramework.Core.Systems;
 using ArchSys = Arch.System;
 
 namespace GFramework.Ecs.Arch;

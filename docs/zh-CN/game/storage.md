@@ -97,8 +97,8 @@ public enum StorageKinds
 ### 创建文件存储
 
 ```csharp
-using GFramework.Game.storage;
-using GFramework.Game.serializer;
+using GFramework.Game.Storage;
+using GFramework.Game.Serializer;
 
 // 创建序列化器
 var serializer = new JsonSerializer();
@@ -194,7 +194,7 @@ int gold = storage.Read<int>("player/inventory/gold");
 ### 创建作用域存储
 
 ```csharp
-using GFramework.Game.storage;
+using GFramework.Game.Storage;
 
 // 基于文件存储创建作用域存储
 var baseStorage = new FileStorage(@"C:\MyGame\Data", serializer);
@@ -451,7 +451,7 @@ public class CachedStorage : IStorage
 ### 使用 Godot 文件存储
 
 ```csharp
-using GFramework.Godot.storage;
+using GFramework.Godot.Storage;
 
 // 创建 Godot 文件存储
 var storage = new GodotFileStorage(serializer);
