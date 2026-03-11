@@ -1,35 +1,60 @@
-using System.Collections.Concurrent;
 using System.IO;
 using System.Text;
+using GFramework.Core.Abstractions.Concurrency;
 using GFramework.Core.Abstractions.Serializer;
 using GFramework.Core.Abstractions.Storage;
+using GFramework.Core.Concurrency;
 using GFramework.Godot.Extensions;
 using Godot;
-using Error = Godot.Error;
 using FileAccess = Godot.FileAccess;
 
 namespace GFramework.Godot.Storage;
 
 /// <summary>
 ///     Godot 特化的文件存储实现，支持 res://、user:// 和普通文件路径
-///     支持按 key 细粒度锁保证线程安全
+///     支持按 key 细粒度锁保证线程安全，使用异步安全的锁机制
 /// </summary>
-public sealed class GodotFileStorage : IStorage
+public sealed class GodotFileStorage : IStorage, IDisposable
 {
-    /// <summary>
-    ///     每个 key 对应的锁对象
-    /// </summary>
-    private readonly ConcurrentDictionary<string, object> _keyLocks = new();
-
+    private readonly IAsyncKeyLockManager _lockManager;
+    private readonly bool _ownsLockManager;
     private readonly ISerializer _serializer;
+    private bool _disposed;
 
     /// <summary>
     ///     初始化 Godot 文件存储
     /// </summary>
     /// <param name="serializer">序列化器实例</param>
-    public GodotFileStorage(ISerializer serializer)
+    /// <param name="lockManager">可选的锁管理器，用于依赖注入</param>
+    public GodotFileStorage(ISerializer serializer, IAsyncKeyLockManager? lockManager = null)
     {
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+
+        if (lockManager == null)
+        {
+            _lockManager = new AsyncKeyLockManager();
+            _ownsLockManager = true;
+        }
+        else
+        {
+            _lockManager = lockManager;
+            _ownsLockManager = false;
+        }
+    }
+
+    /// <summary>
+    ///     释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        // 只释放内部创建的锁管理器
+        if (_ownsLockManager)
+        {
+            _lockManager.Dispose();
+        }
     }
 
     #region Delete
@@ -38,12 +63,26 @@ public sealed class GodotFileStorage : IStorage
     ///     删除指定键对应的文件
     /// </summary>
     /// <param name="key">存储键</param>
+    /// <remarks>
+    ///     此方法通过同步等待异步操作完成，可能在具有同步上下文的环境（例如 UI 线程、经典 ASP.NET）中导致死锁。
+    ///     仅在无法使用异步 API 时使用。如果可能，请优先使用 <see cref="DeleteAsync"/>。
+    /// </remarks>
     public void Delete(string key)
     {
-        var path = ToAbsolutePath(key);
-        var keyLock = GetLock(path);
+        DeleteAsync(key).ConfigureAwait(false).GetAwaiter().GetResult();
+    }
 
-        lock (keyLock)
+    /// <summary>
+    ///     异步删除指定键对应的文件
+    /// </summary>
+    /// <param name="key">存储键</param>
+    /// <returns>异步任务</returns>
+    public async Task DeleteAsync(string key)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var path = ToAbsolutePath(key);
+
+        await using (await _lockManager.AcquireLockAsync(path).ConfigureAwait(false))
         {
             // 处理Godot文件系统路径的删除操作
             if (path.IsGodotPath())
@@ -61,19 +100,6 @@ public sealed class GodotFileStorage : IStorage
                 if (File.Exists(path)) File.Delete(path);
             }
         }
-
-        // 删除完成后尝试移除锁，防止锁字典无限增长
-        _keyLocks.TryRemove(path, out _);
-    }
-
-    /// <summary>
-    ///     异步删除指定键对应的文件
-    /// </summary>
-    /// <param name="key">存储键</param>
-    /// <returns>异步任务</returns>
-    public async Task DeleteAsync(string key)
-    {
-        await Task.Run(() => Delete(key));
     }
 
     #endregion
@@ -126,16 +152,6 @@ public sealed class GodotFileStorage : IStorage
         return Path.Combine(dir, fileName);
     }
 
-    /// <summary>
-    ///     获取指定路径对应的锁对象，如果不存在则创建新的锁对象
-    /// </summary>
-    /// <param name="path">文件路径</param>
-    /// <returns>对应路径的锁对象</returns>
-    private object GetLock(string path)
-    {
-        return _keyLocks.GetOrAdd(path, _ => new object());
-    }
-
     #endregion
 
     #region Exists
@@ -145,17 +161,13 @@ public sealed class GodotFileStorage : IStorage
     /// </summary>
     /// <param name="key">存储键</param>
     /// <returns>文件存在返回 true，否则返回 false</returns>
+    /// <remarks>
+    ///     此方法通过同步等待异步操作完成，可能在具有同步上下文的环境（例如 UI 线程、经典 ASP.NET）中导致死锁。
+    ///     仅在无法使用异步 API 时使用。如果可能，请优先使用 <see cref="ExistsAsync"/>。
+    /// </remarks>
     public bool Exists(string key)
     {
-        var path = ToAbsolutePath(key);
-        var keyLock = GetLock(path);
-
-        lock (keyLock)
-        {
-            if (!path.IsGodotPath()) return File.Exists(path);
-            using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-            return file != null;
-        }
+        return ExistsAsync(key).ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -163,9 +175,17 @@ public sealed class GodotFileStorage : IStorage
     /// </summary>
     /// <param name="key">存储键</param>
     /// <returns>表示异步操作的任务，结果为布尔值表示文件是否存在</returns>
-    public Task<bool> ExistsAsync(string key)
+    public async Task<bool> ExistsAsync(string key)
     {
-        return Task.FromResult(Exists(key));
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var path = ToAbsolutePath(key);
+
+        await using (await _lockManager.AcquireLockAsync(path).ConfigureAwait(false))
+        {
+            if (!path.IsGodotPath()) return File.Exists(path);
+            using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+            return file != null;
+        }
     }
 
     #endregion
@@ -179,12 +199,47 @@ public sealed class GodotFileStorage : IStorage
     /// <param name="key">存储键</param>
     /// <returns>反序列化后的对象实例</returns>
     /// <exception cref="FileNotFoundException">当指定键对应的文件不存在时抛出</exception>
+    /// <remarks>
+    ///     此方法通过同步等待异步操作完成，可能在具有同步上下文的环境（例如 UI 线程、经典 ASP.NET）中导致死锁。
+    ///     仅在无法使用异步 API 时使用。如果可能，请优先使用 <see cref="ReadAsync{T}(string)"/>。
+    /// </remarks>
     public T Read<T>(string key)
     {
-        var path = ToAbsolutePath(key);
-        var keyLock = GetLock(path);
+        return ReadAsync<T>(key).ConfigureAwait(false).GetAwaiter().GetResult();
+    }
 
-        lock (keyLock)
+    /// <summary>
+    ///     读取指定键对应的序列化数据，如果文件不存在则返回默认值
+    /// </summary>
+    /// <typeparam name="T">要反序列化的类型</typeparam>
+    /// <param name="key">存储键</param>
+    /// <param name="defaultValue">当文件不存在时返回的默认值</param>
+    /// <returns>反序列化后的对象实例或默认值</returns>
+    public T Read<T>(string key, T defaultValue)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        try
+        {
+            return Read<T>(key);
+        }
+        catch (FileNotFoundException)
+        {
+            return defaultValue;
+        }
+    }
+
+    /// <summary>
+    ///     异步读取指定键对应的序列化数据并反序列化为指定类型
+    /// </summary>
+    /// <typeparam name="T">要反序列化的类型</typeparam>
+    /// <param name="key">存储键</param>
+    /// <returns>表示异步操作的任务，结果为反序列化后的对象实例</returns>
+    public async Task<T> ReadAsync<T>(string key)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var path = ToAbsolutePath(key);
+
+        await using (await _lockManager.AcquireLockAsync(path).ConfigureAwait(false))
         {
             string content;
 
@@ -198,67 +253,11 @@ public sealed class GodotFileStorage : IStorage
             {
                 if (!File.Exists(path))
                     throw new FileNotFoundException($"Storage key not found: {key}", path);
-                content = File.ReadAllText(path, Encoding.UTF8);
+                content = await File.ReadAllTextAsync(path, Encoding.UTF8).ConfigureAwait(false);
             }
 
             return _serializer.Deserialize<T>(content);
         }
-    }
-
-    /// <summary>
-    ///     读取指定键对应的序列化数据，如果文件不存在则返回默认值
-    /// </summary>
-    /// <typeparam name="T">要反序列化的类型</typeparam>
-    /// <param name="key">存储键</param>
-    /// <param name="defaultValue">当文件不存在时返回的默认值</param>
-    /// <returns>反序列化后的对象实例或默认值</returns>
-    public T Read<T>(string key, T defaultValue)
-    {
-        var path = ToAbsolutePath(key);
-        var keyLock = GetLock(path);
-
-        lock (keyLock)
-        {
-            if ((path.IsGodotPath() && !FileAccess.FileExists(path)) || (!path.IsGodotPath() && !File.Exists(path)))
-                return defaultValue;
-
-            return Read<T>(key);
-        }
-    }
-
-    /// <summary>
-    ///     异步读取指定键对应的序列化数据并反序列化为指定类型
-    /// </summary>
-    /// <typeparam name="T">要反序列化的类型</typeparam>
-    /// <param name="key">存储键</param>
-    /// <returns>表示异步操作的任务，结果为反序列化后的对象实例</returns>
-    public async Task<T> ReadAsync<T>(string key)
-    {
-        var path = ToAbsolutePath(key);
-        var keyLock = GetLock(path);
-
-        return await Task.Run(() =>
-        {
-            lock (keyLock)
-            {
-                string content;
-
-                if (path.IsGodotPath())
-                {
-                    using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-                    if (file == null) throw new FileNotFoundException($"Storage key not found: {key}", path);
-                    content = file.GetAsText();
-                }
-                else
-                {
-                    if (!File.Exists(path))
-                        throw new FileNotFoundException($"Storage key not found: {key}", path);
-                    content = File.ReadAllText(path, Encoding.UTF8);
-                }
-
-                return _serializer.Deserialize<T>(content);
-            }
-        });
     }
 
     #endregion
@@ -359,26 +358,13 @@ public sealed class GodotFileStorage : IStorage
     /// <typeparam name="T">要序列化的对象类型</typeparam>
     /// <param name="key">存储键</param>
     /// <param name="value">要写入的对象实例</param>
+    /// <remarks>
+    ///     此方法通过同步等待异步操作完成，可能在具有同步上下文的环境（例如 UI 线程、经典 ASP.NET）中导致死锁。
+    ///     仅在无法使用异步 API 时使用。如果可能，请优先使用 <see cref="WriteAsync{T}"/>。
+    /// </remarks>
     public void Write<T>(string key, T value)
     {
-        var path = ToAbsolutePath(key);
-        var keyLock = GetLock(path);
-
-        lock (keyLock)
-        {
-            var content = _serializer.Serialize(value);
-            if (path.IsGodotPath())
-            {
-                using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
-                if (file == null) throw new IOException($"Cannot write file: {path}");
-                file.StoreString(content);
-            }
-            else
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                File.WriteAllText(path, content, Encoding.UTF8);
-            }
-        }
+        WriteAsync(key, value).ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -390,7 +376,24 @@ public sealed class GodotFileStorage : IStorage
     /// <returns>表示异步操作的任务</returns>
     public async Task WriteAsync<T>(string key, T value)
     {
-        await Task.Run(() => Write(key, value));
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var path = ToAbsolutePath(key);
+
+        await using (await _lockManager.AcquireLockAsync(path).ConfigureAwait(false))
+        {
+            var content = _serializer.Serialize(value);
+            if (path.IsGodotPath())
+            {
+                using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
+                if (file == null) throw new IOException($"Cannot write file: {path}");
+                file.StoreString(content);
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await File.WriteAllTextAsync(path, content, Encoding.UTF8).ConfigureAwait(false);
+            }
+        }
     }
 
     #endregion
