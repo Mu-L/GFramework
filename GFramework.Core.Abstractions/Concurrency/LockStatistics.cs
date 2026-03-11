@@ -60,7 +60,10 @@ public readonly struct LockInfo
     public long LastAccessTicks { get; init; }
 
     /// <summary>
-    ///     等待队列长度
+    ///     等待队列长度（近似值）
+    ///     注意：这是一个基于 SemaphoreSlim.CurrentCount 的近似指示器，
+    ///     当 CurrentCount == 0 时表示锁被持有且可能有等待者，返回 1；
+    ///     否则返回 0。这不是精确的等待者数量，仅用于调试参考。
     /// </summary>
     public int WaitingCount { get; init; }
 }

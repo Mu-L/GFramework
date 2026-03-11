@@ -23,7 +23,7 @@ public sealed class AsyncKeyLockManager : IAsyncKeyLockManager
 {
     private readonly Timer _cleanupTimer;
     private readonly ConcurrentDictionary<string, LockEntry> _locks = new();
-    private readonly long _lockTimeoutTicks;
+    private readonly long _lockTimeoutMs;
     private volatile bool _disposed;
 
     // 统计计数器
@@ -40,7 +40,7 @@ public sealed class AsyncKeyLockManager : IAsyncKeyLockManager
     {
         var cleanupIntervalValue = cleanupInterval ?? TimeSpan.FromSeconds(60);
         var lockTimeoutValue = lockTimeout ?? TimeSpan.FromSeconds(300);
-        _lockTimeoutTicks = (long)(lockTimeoutValue.TotalMilliseconds * TimeSpan.TicksPerMillisecond / 10000);
+        _lockTimeoutMs = (long)lockTimeoutValue.TotalMilliseconds;
 
         _cleanupTimer = new Timer(CleanupUnusedLocks, null, cleanupIntervalValue, cleanupIntervalValue);
     }
@@ -63,19 +63,32 @@ public sealed class AsyncKeyLockManager : IAsyncKeyLockManager
             throw new ObjectDisposedException(nameof(AsyncKeyLockManager));
         }
 
-        await entry.Semaphore.WaitAsync(cancellationToken);
-
-        Interlocked.Increment(ref _totalAcquired);
-
-        return new AsyncLockHandle(this, key, entry, System.Environment.TickCount64);
+        try
+        {
+            await entry.Semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            Interlocked.Increment(ref _totalAcquired);
+            return new AsyncLockHandle(this, key, entry, System.Environment.TickCount64);
+        }
+        catch
+        {
+            // 如果等待失败（取消或异常），递减引用计数以防止泄漏
+            Interlocked.Decrement(ref entry.ReferenceCount);
+            throw;
+        }
     }
 
     /// <summary>
-    ///     同步获取指定键的锁
+    ///     同步获取指定键的锁（同步阻塞调用，优先使用 AcquireLockAsync）
     /// </summary>
+    /// <remarks>
+    ///     此方法通过同步等待异步操作完成，可能在具有同步上下文的环境（例如 UI 线程、经典 ASP.NET）中导致死锁。
+    ///     仅在无法使用异步 API 时，作为低级逃生口（escape hatch）使用。
+    ///     如果可能，请优先使用 <see cref="AcquireLockAsync(string,System.Threading.CancellationToken)"/>。
+    /// </remarks>
     public IAsyncLockHandle AcquireLock(string key)
     {
-        return AcquireLockAsync(key).AsTask().GetAwaiter().GetResult();
+        // 使用 ConfigureAwait(false) 以避免在具有同步上下文的环境中捕获上下文，降低死锁风险
+        return AcquireLockAsync(key).AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -104,6 +117,7 @@ public sealed class AsyncKeyLockManager : IAsyncKeyLockManager
                 Key = kvp.Key,
                 ReferenceCount = kvp.Value.ReferenceCount,
                 LastAccessTicks = kvp.Value.LastAccessTicks,
+                // CurrentCount == 0 表示锁被持有，可能有等待者（近似值）
                 WaitingCount = kvp.Value.Semaphore.CurrentCount == 0 ? 1 : 0
             });
     }
@@ -151,7 +165,7 @@ public sealed class AsyncKeyLockManager : IAsyncKeyLockManager
         {
             // 只检查引用计数和超时，不 Dispose
             if (entry.ReferenceCount == 0 &&
-                now - entry.LastAccessTicks > _lockTimeoutTicks &&
+                now - entry.LastAccessTicks > _lockTimeoutMs &&
                 _locks.TryRemove(key, out _))
             {
                 Interlocked.Increment(ref _totalCleaned);
