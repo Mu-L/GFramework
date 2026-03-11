@@ -89,7 +89,7 @@ public static class ArrayPoolExtensions
     ///     可自动释放的数组包装器
     /// </summary>
     /// <typeparam name="T">数组元素类型</typeparam>
-    public ref struct ScopedArray<T> : IDisposable
+    public ref struct ScopedArray<T>
     {
         private readonly ArrayPool<T> _pool;
         private readonly bool _clearOnReturn;
