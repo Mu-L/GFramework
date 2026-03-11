@@ -89,26 +89,29 @@ public static class ArrayPoolExtensions
     ///     可自动释放的数组包装器
     /// </summary>
     /// <typeparam name="T">数组元素类型</typeparam>
-    public readonly struct ScopedArray<T> : IDisposable
+    public ref struct ScopedArray<T>
     {
         private readonly ArrayPool<T> _pool;
         private readonly bool _clearOnReturn;
+        private T[]? _array;
 
+#pragma warning disable CA1819
         /// <summary>
         ///     获取租用的数组
         /// </summary>
-        public T[] Array { get; }
+        public T[] Array => _array!;
+#pragma warning restore CA1819
 
         /// <summary>
         ///     获取数组的长度
         /// </summary>
-        public int Length => Array.Length;
+        public int Length => _array!.Length;
 
         internal ScopedArray(ArrayPool<T> pool, int minimumLength, bool clearOnReturn)
         {
             _pool = pool;
             _clearOnReturn = clearOnReturn;
-            Array = pool.Rent(minimumLength);
+            _array = pool.Rent(minimumLength);
         }
 
         /// <summary>
@@ -116,14 +119,18 @@ public static class ArrayPoolExtensions
         /// </summary>
         public void Dispose()
         {
-            _pool.Return(Array, _clearOnReturn);
+            if (_array is null)
+                return;
+
+            _pool.Return(_array, _clearOnReturn);
+            _array = null;
         }
 
         /// <summary>
         ///     获取数组的 Span 视图
         /// </summary>
         /// <returns>数组的 Span</returns>
-        public Span<T> AsSpan() => Array.AsSpan();
+        public Span<T> AsSpan() => _array!;
 
         /// <summary>
         ///     获取数组指定范围的 Span 视图
@@ -131,6 +138,14 @@ public static class ArrayPoolExtensions
         /// <param name="start">起始索引</param>
         /// <param name="length">长度</param>
         /// <returns>数组指定范围的 Span</returns>
-        public Span<T> AsSpan(int start, int length) => Array.AsSpan(start, length);
+        public Span<T> AsSpan(int start, int length)
+            => _array!.AsSpan(start, length);
+
+        /// <summary>
+        ///     获取数组指定索引处的引用
+        /// </summary>
+        /// <param name="index">要获取引用的索引位置</param>
+        /// <returns>指定索引处元素的引用</returns>
+        public ref T this[int index] => ref _array![index];
     }
 }
