@@ -103,7 +103,14 @@ public partial class MyNode : Node
 - `CancelWith(Node node1, Node node2)`
 - `CancelWith(params Node[] nodes)`
 
-只要任一被监视的节点失效，包装后的协程就会停止继续枚举。
+`CancelWith(...)` 内部通过 `Timing.IsNodeAlive(...)` 判断节点是否仍然有效。只要任一被监视的节点出现以下任一情况，包装后的协程就会停止继续枚举：
+
+- 节点引用为 `null`
+- Godot 实例已经失效或已被释放
+- 节点已进入 `queue_free` / `IsQueuedForDeletion()`
+- 节点已退出场景树，`IsInsideTree()` 返回 `false`
+
+这意味着协程不只会在节点真正释放时停止；节点一旦退出场景树，下一次推进时也会停止。
 
 ## Segment 分段
 
@@ -194,6 +201,10 @@ LoadSomethingAsync()
     .ToCoroutineEnumerator()
     .RunCoroutine();
 ```
+
+- 已经在一个协程内部时，优先使用 `yield return task.AsCoroutineInstruction()`，这样可以直接把 `Task` 嵌入当前协程流程。
+- 如果要把一个现成的 `Task` 当作独立协程入口交给 Godot 协程系统运行，再使用
+  `task.ToCoroutineEnumerator().RunCoroutine()`。
 
 ### 等待事件总线事件
 

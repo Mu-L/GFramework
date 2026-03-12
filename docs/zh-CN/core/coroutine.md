@@ -175,6 +175,11 @@ var handle1 = scheduler.Run(coroutine);
 var handle2 = scheduler.StartTaskAsCoroutine(LoadDataAsync());
 ```
 
+- `AsCoroutineInstruction()` 适合已经处在某个协程内部，只需要在当前位置等待 `Task` 完成的场景。
+- `ToCoroutineEnumerator()` 适合需要把 `Task` 先转换成 `IEnumerator<IYieldInstruction>`，再传给 `scheduler.Run(...)`、
+  `Sequence(...)` 或其他只接受协程枚举器的 API。
+- `StartTaskAsCoroutine()` 适合已经持有 `CoroutineScheduler`，并希望把 `Task` 直接作为一个顶层协程启动的场景。
+
 ### 等待事件
 
 ```csharp
@@ -408,8 +413,8 @@ scheduler.OnCoroutineException += (handle, exception) =>
 
 ### 如何等待异步方法？
 
-可以直接 `yield return task.AsCoroutineInstruction()`，也可以使用 `scheduler.StartTaskAsCoroutine(task)` 启动一个以 Task
-为主体的协程。
+在现有协程里等待 `Task` 时，优先使用 `yield return task.AsCoroutineInstruction()`；如果要把 `Task` 单独交给调度器启动，使用
+`scheduler.StartTaskAsCoroutine(task)`；如果中间还需要传给只接受协程枚举器的 API，则先调用 `task.ToCoroutineEnumerator()`。
 
 ## 相关文档
 
