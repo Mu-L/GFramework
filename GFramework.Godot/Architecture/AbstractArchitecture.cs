@@ -1,4 +1,4 @@
-﻿using GFramework.Core.Abstractions.Architecture;
+﻿using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Environment;
 using GFramework.Core.Constants;
 using GFramework.Godot.Extensions;
