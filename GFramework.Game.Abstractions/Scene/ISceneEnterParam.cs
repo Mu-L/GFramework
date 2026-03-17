@@ -16,7 +16,7 @@ using GFramework.Game.Abstractions.Routing;
 namespace GFramework.Game.Abstractions.Scene;
 
 /// <summary>
-///     场景进入参数接口
-///     该接口用于定义场景跳转时传递的参数数据结构
+/// 场景进入参数接口
+/// 该接口用于定义场景跳转时传递的参数数据结构
 /// </summary>
 public interface ISceneEnterParam : IRouteContext;

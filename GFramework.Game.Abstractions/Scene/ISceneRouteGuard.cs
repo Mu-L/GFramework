@@ -27,12 +27,12 @@ public interface ISceneRouteGuard : IRouteGuard<ISceneBehavior>
     /// <param name="sceneKey">目标场景的唯一标识符。</param>
     /// <param name="param">场景进入参数，可能包含初始化数据或上下文信息。</param>
     /// <returns>如果允许进入则返回 true，否则返回 false。</returns>
-    Task<bool> CanEnterAsync(string sceneKey, ISceneEnterParam? param);
+    ValueTask<bool> CanEnterAsync(string sceneKey, ISceneEnterParam? param);
 
     /// <summary>
     /// 异步检查是否允许离开指定场景。
     /// </summary>
     /// <param name="sceneKey">当前场景的唯一标识符。</param>
     /// <returns>如果允许离开则返回 true，否则返回 false。</returns>
-    new Task<bool> CanLeaveAsync(string sceneKey);
+    ValueTask<bool> CanLeaveAsync(string sceneKey);
 }
