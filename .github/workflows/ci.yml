@@ -113,29 +113,42 @@ jobs:
         run: dotnet build -c Release --no-restore
 
       # 运行单元测试，输出TRX格式结果到TestResults目录
+      # 使用并发执行以加快测试速度
       - name: Test - Core
         run: |
           dotnet test GFramework.Core.Tests \
             -c Release \
             --no-build \
             --logger "trx;LogFileName=core-$RANDOM.trx" \
-            --results-directory TestResults
-    
+            --results-directory TestResults &
+
+      - name: Test - Game
+        run: |
+          dotnet test GFramework.Game.Tests \
+            -c Release \
+            --no-build \
+            --logger "trx;LogFileName=game-$RANDOM.trx" \
+            --results-directory TestResults &
+
       - name: Test - SourceGenerators
         run: |
           dotnet test GFramework.SourceGenerators.Tests \
             -c Release \
             --no-build \
             --logger "trx;LogFileName=sg-$RANDOM.trx" \
-            --results-directory TestResults
-          
-      - name: Test - GFramework.Ecs.Arch.Tests
+            --results-directory TestResults &
+
+      - name: Test - ECS Arch
         run: |
           dotnet test GFramework.Ecs.Arch.Tests \
             -c Release \
             --no-build \
             --logger "trx;LogFileName=ecs-arch-$RANDOM.trx" \
-            --results-directory TestResults
+            --results-directory TestResults &
+
+      # 等待所有并发测试完成
+      - name: Wait for tests
+        run: wait
           
       - name: Generate CTRF report
         run: |
