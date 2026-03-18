@@ -1,3 +1,4 @@
+using GFramework.Core.Abstractions.Localization;
 using GFramework.Core.Localization;
 
 namespace GFramework.Core.Tests.Localization;
@@ -5,9 +6,6 @@ namespace GFramework.Core.Tests.Localization;
 [TestFixture]
 public class LocalizationIntegrationTests
 {
-    private LocalizationManager? _manager;
-    private string _testDataPath = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -24,6 +22,9 @@ public class LocalizationIntegrationTests
         _manager = new LocalizationManager(config);
         _manager.Initialize();
     }
+
+    private LocalizationManager? _manager;
+    private string _testDataPath = null!;
 
     [Test]
     public void GetText_ShouldReturnEnglishText()
