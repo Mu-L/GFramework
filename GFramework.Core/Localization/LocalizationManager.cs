@@ -105,8 +105,9 @@ public class LocalizationManager : AbstractSystem, ILocalizationManager
             text = GetText(table, key);
             return true;
         }
-        catch
+        catch (LocalizationException)
         {
+            // 只捕获本地化相关的异常（键不存在、表不存在等）
             text = string.Empty;
             return false;
         }

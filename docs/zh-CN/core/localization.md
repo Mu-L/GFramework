@@ -103,10 +103,12 @@ bool TryFormat(string format, object value, IFormatProvider? provider, out strin
 string DefaultLanguage { get; set; }      // 默认语言代码，默认 "eng"
 string FallbackLanguage { get; set; }     // 回退语言代码，默认 "eng"
 string LocalizationPath { get; set; }     // 本地化文件路径，默认 "res://localization"
-string OverridePath { get; set; }         // 用户覆盖路径，默认 "user://localization_override"
-bool EnableHotReload { get; set; }        // 是否启用热重载，默认 true
-bool ValidateOnLoad { get; set; }         // 是否在加载时验证，默认 true
+string OverridePath { get; set; }         // 用户覆盖路径，默认 "user://localization_override" (暂不支持)
+bool EnableHotReload { get; set; }        // 是否启用热重载，默认 true (暂不支持)
+bool ValidateOnLoad { get; set; }         // 是否在加载时验证，默认 true (暂不支持)
 ```
+
+**注意：** `OverridePath`、`EnableHotReload` 和 `ValidateOnLoad` 配置项已定义但当前版本暂不支持，将在后续版本中实现。
 
 ## 文件组织
 
@@ -247,15 +249,25 @@ foreach (var lang in languages)
 ### 监听语言变化
 
 ```csharp
-// 订阅语言变化事件
+// 方式 1: 使用 lambda 表达式（无法取消订阅）
 locManager.SubscribeToLanguageChange(language =>
 {
     Debug.Log($"Language changed to: {language}");
     // 更新 UI、重新加载资源等
 });
 
-// 取消订阅
-locManager.UnsubscribeFromLanguageChange(callback);
+// 方式 2: 使用命名方法（推荐，可以取消订阅）
+void OnLanguageChanged(string language)
+{
+    Debug.Log($"Language changed to: {language}");
+    // 更新 UI、重新加载资源等
+}
+
+// 订阅
+locManager.SubscribeToLanguageChange(OnLanguageChanged);
+
+// 取消订阅（使用相同的方法引用）
+locManager.UnsubscribeFromLanguageChange(OnLanguageChanged);
 ```
 
 ## 高级功能
@@ -278,7 +290,9 @@ var text = locManager.GetText("common", "new.feature");
 
 ### 覆盖机制
 
-用户可以在 `user://localization_override/` 目录下放置覆盖文件：
+**注意：** 覆盖机制功能已规划但当前版本暂不支持，将在后续版本中实现。
+
+未来版本中，用户可以在 `user://localization_override/` 目录下放置覆盖文件：
 
 ```json
 // user://localization_override/eng/common.json

@@ -8,6 +8,18 @@ namespace GFramework.Core.Localization;
 /// </summary>
 public class LocalizationString : ILocalizationString
 {
+    /// <summary>
+    /// 匹配 {variableName} 或 {variableName:formatter:args} 的正则表达式模式
+    /// </summary>
+    private static readonly string FormatVariablePattern =
+        @"\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?)?\}";
+
+    /// <summary>
+    /// 预编译的静态正则表达式，用于格式化字符串中的变量替换
+    /// </summary>
+    private static readonly Regex FormatVariableRegex =
+        new(FormatVariablePattern, RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly ILocalizationManager _manager;
     private readonly Dictionary<string, object> _variables;
 
@@ -96,11 +108,8 @@ public class LocalizationString : ILocalizationString
             return template;
         }
 
-        // 匹配 {variableName} 或 {variableName:formatter:args}
-        var pattern = @"\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?)?\}";
-        var regex = new Regex(pattern);
-
-        return regex.Replace(template, match =>
+        // 使用预编译的静态正则表达式匹配 {variableName} 或 {variableName:formatter:args}
+        return FormatVariableRegex.Replace(template, match =>
         {
             var variableName = match.Groups[1].Value;
             var formatterName = match.Groups[2].Success ? match.Groups[2].Value : null;
