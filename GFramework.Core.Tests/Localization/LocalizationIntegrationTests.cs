@@ -1,3 +1,4 @@
+using System.IO;
 using GFramework.Core.Abstractions.Localization;
 using GFramework.Core.Localization;
 
@@ -9,7 +10,9 @@ public class LocalizationIntegrationTests
     [SetUp]
     public void Setup()
     {
-        _testDataPath = "/tmp/localization_example";
+        _testDataPath = Path.Combine(Path.GetTempPath(), $"gframework_localization_{Guid.NewGuid():N}");
+        CreateTestLocalizationFiles(_testDataPath);
+
         var config = new LocalizationConfig
         {
             DefaultLanguage = "eng",
@@ -23,8 +26,41 @@ public class LocalizationIntegrationTests
         _manager.Initialize();
     }
 
+    [TearDown]
+    public void TearDown()
+    {
+        if (Directory.Exists(_testDataPath))
+        {
+            Directory.Delete(_testDataPath, recursive: true);
+        }
+    }
+
     private LocalizationManager? _manager;
     private string _testDataPath = null!;
+
+    private static void CreateTestLocalizationFiles(string rootPath)
+    {
+        var engPath = Path.Combine(rootPath, "eng");
+        var zhsPath = Path.Combine(rootPath, "zhs");
+        Directory.CreateDirectory(engPath);
+        Directory.CreateDirectory(zhsPath);
+
+        File.WriteAllText(Path.Combine(engPath, "common.json"), """
+                                                                {
+                                                                  "game.title": "My Game",
+                                                                  "ui.message.welcome": "Welcome, {playerName}!",
+                                                                  "status.health": "Health: {current}/{max}"
+                                                                }
+                                                                """);
+
+        File.WriteAllText(Path.Combine(zhsPath, "common.json"), """
+                                                                {
+                                                                  "game.title": "我的游戏",
+                                                                  "ui.message.welcome": "欢迎, {playerName}!",
+                                                                  "status.health": "生命值: {current}/{max}"
+                                                                }
+                                                                """);
+    }
 
     [Test]
     public void GetText_ShouldReturnEnglishText()
