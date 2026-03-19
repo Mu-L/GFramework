@@ -11,7 +11,7 @@ public class LocalizationString : ILocalizationString
     /// <summary>
     /// 匹配 {variableName} 或 {variableName:formatter:args} 的正则表达式模式
     /// </summary>
-    private static readonly string FormatVariablePattern =
+    private const string FormatVariablePattern =
         @"\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?)?\}";
 
     /// <summary>
@@ -109,42 +109,61 @@ public class LocalizationString : ILocalizationString
         }
 
         // 使用预编译的静态正则表达式匹配 {variableName} 或 {variableName:formatter:args}
-        return FormatVariableRegex.Replace(template, match =>
+        return FormatVariableRegex.Replace(template, match => FormatMatch(match, variables, manager));
+    }
+
+    private static string FormatMatch(
+        Match match,
+        Dictionary<string, object> variables,
+        ILocalizationManager manager)
+    {
+        var variableName = match.Groups[1].Value;
+        if (!variables.TryGetValue(variableName, out var value))
         {
-            var variableName = match.Groups[1].Value;
-            var formatterName = match.Groups[2].Success ? match.Groups[2].Value : null;
-            var formatterArgs = match.Groups[3].Success ? match.Groups[3].Value : null;
+            return match.Value;
+        }
 
-            if (!variables.TryGetValue(variableName, out var value))
-            {
-                return match.Value; // 保持原样
-            }
+        var formatterName = GetOptionalGroupValue(match, 2);
+        if (string.IsNullOrEmpty(formatterName))
+        {
+            return FormatValue(value, manager);
+        }
 
-            // 如果没有格式化器，直接转换为字符串
-            if (string.IsNullOrEmpty(formatterName))
-            {
-                return value switch
-                {
-                    IFormattable formattable => formattable.ToString(null, manager.CurrentCulture),
-                    _ => value?.ToString() ?? string.Empty
-                };
-            }
+        return TryFormatValue(match, value, formatterName, manager, out var result)
+            ? result
+            : FormatValue(value, manager);
+    }
 
-            // 尝试使用注册的格式化器
-            var formatter = GetFormatter(manager, formatterName);
-            if (formatter != null && formatter.TryFormat(formatterArgs ?? string.Empty, value, manager.CurrentCulture,
-                    out var result))
-            {
-                return result;
-            }
+    private static bool TryFormatValue(
+        Match match,
+        object value,
+        string formatterName,
+        ILocalizationManager manager,
+        out string result)
+    {
+        var formatterArgs = GetOptionalGroupValue(match, 3) ?? string.Empty;
+        if (GetFormatter(manager, formatterName) is { } formatter &&
+            formatter.TryFormat(formatterArgs, value, manager.CurrentCulture, out result))
+        {
+            return true;
+        }
 
-            // 格式化失败，返回基本格式化
-            return value switch
-            {
-                IFormattable formattable => formattable.ToString(null, manager.CurrentCulture),
-                _ => value?.ToString() ?? string.Empty
-            };
-        });
+        result = string.Empty;
+        return false;
+    }
+
+    private static string FormatValue(object value, ILocalizationManager manager)
+    {
+        return value switch
+        {
+            IFormattable formattable => formattable.ToString(null, manager.CurrentCulture),
+            _ => value.ToString() ?? string.Empty
+        };
+    }
+
+    private static string? GetOptionalGroupValue(Match match, int groupIndex)
+    {
+        return match.Groups[groupIndex].Success ? match.Groups[groupIndex].Value : null;
     }
 
     /// <summary>
