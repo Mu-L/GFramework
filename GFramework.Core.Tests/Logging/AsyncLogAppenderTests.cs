@@ -1,3 +1,4 @@
+using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging.Appenders;
 
 namespace GFramework.Core.Tests.Logging;

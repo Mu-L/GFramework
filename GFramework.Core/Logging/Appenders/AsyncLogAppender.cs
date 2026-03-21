@@ -3,7 +3,7 @@ using GFramework.Core.Abstractions.Logging;
 namespace GFramework.Core.Logging.Appenders;
 
 /// <summary>
-///     异步日志输出器，使用 <see cref="Channel{T}" /> 将调用线程与慢速日志目标解耦。
+///     异步日志输出器，使用 <see cref="Channel" /> 将调用线程与慢速日志目标解耦。
 /// </summary>
 /// <remarks>
 ///     <para>
