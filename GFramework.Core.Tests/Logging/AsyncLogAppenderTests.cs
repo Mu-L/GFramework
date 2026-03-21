@@ -1,6 +1,5 @@
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging.Appenders;
-using NUnit.Framework;
 
 namespace GFramework.Core.Tests.Logging;
 
@@ -152,8 +151,12 @@ public class AsyncLogAppenderTests
     [Test]
     public void Append_WhenInnerAppenderThrows_ShouldNotCrash()
     {
+        var reportedExceptions = new List<Exception>();
         var innerAppender = new ThrowingAppender();
-        using var asyncAppender = new AsyncLogAppender(innerAppender, bufferSize: 1000);
+        using var asyncAppender = new AsyncLogAppender(
+            innerAppender,
+            bufferSize: 1000,
+            processingErrorHandler: reportedExceptions.Add);
 
         // 即使内部 Appender 抛出异常，也不应该影响调用线程
         Assert.DoesNotThrow(() =>
@@ -165,7 +168,33 @@ public class AsyncLogAppenderTests
             }
         });
 
-        Thread.Sleep(100); // 等待后台处理
+        asyncAppender.Flush();
+
+        Assert.That(reportedExceptions, Has.Count.EqualTo(10));
+        Assert.That(reportedExceptions, Has.All.TypeOf<InvalidOperationException>());
+        Assert.That(reportedExceptions.Select(static exception => exception.Message),
+            Has.All.EqualTo("Test exception"));
+    }
+
+    [Test]
+    public void Append_WhenProcessingErrorHandlerThrows_ShouldStillNotCrash()
+    {
+        var innerAppender = new ThrowingAppender();
+        using var asyncAppender = new AsyncLogAppender(
+            innerAppender,
+            bufferSize: 1000,
+            processingErrorHandler: static _ => throw new InvalidOperationException("Observer failure"));
+
+        Assert.DoesNotThrow(() =>
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                var entry = new LogEntry(DateTime.UtcNow, LogLevel.Info, "TestLogger", $"Message {i}", null, null);
+                asyncAppender.Append(entry);
+            }
+        });
+
+        Assert.That(asyncAppender.Flush(), Is.True);
     }
 
     // 辅助测试类
