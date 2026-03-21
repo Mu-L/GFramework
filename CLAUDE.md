@@ -1,36 +1,22 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides project understanding for AI agents working in this repository.
 
 ## Project Overview
 
-GFramework 是面向游戏开发的模块化 C# 框架，核心能力与引擎解耦。灵感参考 QFramework，在模块边界和可扩展性方面持续重构。
+GFramework 是面向游戏开发的模块化 C# 框架，核心能力与引擎解耦。项目灵感参考 QFramework，并在模块边界、工程组织和可扩展性方面持续重构。
 
-## Build & Test Commands
+## AI Agent Instructions
 
-```bash
-# 构建整个解决方案
-dotnet build GFramework.sln -c Release
+All coding rules are defined in:
 
-# 运行全部测试
-dotnet test GFramework.sln -c Release
+@AGENTS.md
 
-# 运行单个测试项目
-dotnet test GFramework.Core.Tests -c Release
-dotnet test GFramework.Game.Tests -c Release
-dotnet test GFramework.SourceGenerators.Tests -c Release
-dotnet test GFramework.Ecs.Arch.Tests -c Release
-
-# 运行单个测试方法（NUnit filter）
-dotnet test GFramework.Core.Tests -c Release --filter "FullyQualifiedName~CommandExecutorTests.Execute"
-
-# 命名规范验证（CI 中使用）
-bash scripts/validate-csharp-naming.sh
-```
+Follow them strictly.
 
 ## Module Dependency Graph
 
-```
+```text
 GFramework (meta package) ─→ Core + Game
 GFramework.Core ─→ Core.Abstractions
 GFramework.Game ─→ Game.Abstractions, Core, Core.Abstractions
@@ -39,71 +25,110 @@ GFramework.Ecs.Arch ─→ Ecs.Arch.Abstractions, Core, Core.Abstractions
 GFramework.SourceGenerators ─→ SourceGenerators.Common, SourceGenerators.Abstractions
 ```
 
-- **Abstractions projects** (netstandard2.1): 只含接口定义，零实现依赖
-- **Core/Game** (net8.0;net9.0;net10.0): 平台无关实现
-- **Godot**: Godot 引擎集成层
-- **SourceGenerators** (netstandard2.1): Roslyn 增量生成器
+- **Abstractions projects** (`netstandard2.1`): 只包含接口和契约定义，不承载运行时实现逻辑。
+- **Core / Game / Ecs.Arch** (`net8.0;net9.0;net10.0`): 平台无关的核心实现层。
+- **Godot**: Godot 引擎集成层，负责与节点、场景和引擎生命周期对接。
+- **SourceGenerators** (`netstandard2.1`): Roslyn 增量源码生成器及其公共基础设施。
 
 ## Architecture Pattern
 
-框架核心采用 Architecture / Model / System / Utility 四层结构：
+框架核心采用 `Architecture / Model / System / Utility` 四层结构：
 
-- **IArchitecture**: 顶层容器，管理生命周期（Init → Ready → Destroy）、注册 Model/System/Utility
-- **IContextAware**: 统一上下文访问接口，所有组件通过 `SetContext(IArchitectureContext)` 获得对 Architecture 服务的引用
-- **IModel**: 数据层（状态管理），继承 IContextAware
-- **ISystem**: 业务逻辑层，继承 IContextAware
-- **IUtility**: 无状态工具层
+- **IArchitecture**: 顶层容器，负责生命周期管理、组件注册、模块安装和统一服务访问。
+- **IContextAware**: 统一上下文访问接口，组件通过 `SetContext(IArchitectureContext)` 获取架构上下文。
+- **IModel**: 数据与状态层，负责长期状态和业务数据建模。
+- **ISystem**: 业务逻辑层，负责命令执行、流程编排和规则落地。
+- **IUtility**: 通用无状态工具层，供其他层复用。
 
-关键实现类：`GFramework.Core/Architectures/Architecture.cs`（主流程编排）
+关键实现位于 `GFramework.Core/Architectures/Architecture.cs`，其职责是作为总协调器串联生命周期、组件注册和模块系统。
+
+## Architecture Details
+
+### Lifecycle
+
+Architecture 负责统一生命周期编排，核心阶段包括：
+
+- `Init`
+- `Ready`
+- `Destroy`
+
+在实现层中，生命周期被拆分为更细粒度的初始化与销毁阶段，用于保证 Utility、Model、System、服务模块和钩子的顺序一致性。
+
+### Component Coordination
+
+框架通过独立组件协作完成架构编排：
+
+- `ArchitectureLifecycle`: 管理生命周期阶段、阶段转换和生命周期钩子。
+- `ArchitectureComponentRegistry`: 管理 Model、System、Utility 的注册与解析。
+- `ArchitectureModules`: 管理模块安装、服务模块接入和扩展点注册。
+
+这组拆分的目标是降低单个核心类的职责密度，同时保持对外 API 稳定。
+
+### Context Propagation
+
+`IArchitectureContext` 和相关 Provider 类型负责在组件之间传播上下文能力，使 Model、System
+和外部扩展都能通过统一入口访问架构服务，而不直接耦合具体实现细节。
 
 ## Key Patterns
 
-**CQRS**: Command/Query 分离，支持同步与异步。Mediator 模式通过 `Mediator.SourceGenerator` 实现。
+### CQRS
 
-**EventBus**: 类型安全事件总线，支持优先级、过滤器、弱引用订阅。`IEventBus.Send<T>()` / `Register<T>(handler)` →
-`IUnRegister`。
+命令与查询分离，支持同步与异步执行。Mediator 模式通过源码生成器集成，以减少模板代码并保持调用路径清晰。
 
-**BindableProperty**: 响应式属性绑定，`IBindableProperty<T>.Value` 变更自动触发 `OnValueChanged`。
+### EventBus
 
-**Coroutine**: 帧驱动协程系统，`IYieldInstruction` + `CoroutineScheduler`，提供 WaitForSeconds/WaitForEvent/WaitForTask
-等指令。
+类型安全事件总线支持事件发布、订阅、优先级、过滤器和弱引用订阅。它是模块之间松耦合通信的核心基础设施之一。
 
-**IoC**: 通过 `MicrosoftDiContainer` 封装 `Microsoft.Extensions.DependencyInjection`。
+### BindableProperty
 
-**Service Modules**: `IServiceModule` 模式用于向 Architecture 注册内置服务（EventBus、CommandExecutor、QueryExecutor 等）。
+响应式属性模型通过值变化通知驱动界面或业务层更新，适合表达轻量级状态同步。
 
-## Code Conventions
+### Coroutine
 
-- **命名空间**: `GFramework.{Module}.{Feature}` (PascalCase)，CI 通过 `scripts/validate-csharp-naming.sh` 强制校验
-- **ImplicitUsings: disabled** — 所有 using 必须显式声明
-- **Nullable: enabled**
-- **LangVersion: preview**
-- **GenerateDocumentationFile: true** — 公共 API 需要 XML 文档注释
-- **Analyzers**: Meziantou.Analyzer 在构建时强制代码规范
+帧驱动协程系统基于 `IYieldInstruction` 和调度器抽象，支持等待时间、事件和任务完成等常见模式。
 
-## Testing
+### IoC
 
-- **Framework**: NUnit 4.x + Moq
-- **测试结构**: 镜像源码目录（如 `Core.Tests/Command/` 对应 `Core/Command/`）
-- **基类**: `ArchitectureTestsBase<T>` 提供 Architecture 初始化/销毁模板；`SyncTestArchitecture` /
-  `AsyncTestArchitecture` 用于集成测试
-- **Target frameworks**: net8.0;net10.0
+依赖注入通过 `MicrosoftDiContainer` 对 `Microsoft.Extensions.DependencyInjection` 进行封装，用于统一组件注册和服务解析体验。
+
+### Service Modules
+
+`IServiceModule` 模式用于向 Architecture 注册内置服务，例如 EventBus、CommandExecutor、QueryExecutor 等。这一模式承担“基础设施能力装配”的职责。
 
 ## Source Generators
 
-四个生成器，均为 Roslyn 增量源码生成器：
+当前仓库包含多类 Roslyn 增量源码生成器：
 
-- `LoggerGenerator` (`[Log]`): 自动生成 ILogger 字段和日志方法
-- `PriorityGenerator` (`[Priority]`): 生成优先级比较实现
-- `EnumExtensionsGenerator` (`[GenerateEnumExtensions]`): 枚举扩展方法
-- `ContextAwareGenerator` (`[ContextAware]`): 自动实现 IContextAware 接口
+- `LoggerGenerator` (`[Log]`): 自动生成日志字段和日志辅助方法。
+- `PriorityGenerator` (`[Priority]`): 生成优先级比较相关实现。
+- `EnumExtensionsGenerator` (`[GenerateEnumExtensions]`): 生成枚举扩展能力。
+- `ContextAwareGenerator` (`[ContextAware]`): 自动实现 `IContextAware` 相关样板逻辑。
 
-测试使用快照验证（Verify + snapshot files）。
+这些生成器的目标是减少重复代码，同时保持框架层 API 的一致性与可维护性。
 
-## Documentation
+## Module Structure
 
-VitePress 站点位于 `docs/`，内容为中文 (`docs/zh-CN/`)。修改文档后本地预览：
+仓库以“抽象层 + 实现层 + 集成层 + 生成器层”的方式组织：
 
-```bash
-cd docs && bun install && bun run dev
-```
+- `GFramework.Core.Abstractions` / `GFramework.Game.Abstractions`: 约束接口和公共契约。
+- `GFramework.Core` / `GFramework.Game`: 提供平台无关实现。
+- `GFramework.Godot`: 提供与 Godot 运行时集成的适配实现。
+- `GFramework.Ecs.Arch`: 提供 ECS Architecture 相关扩展。
+- `GFramework.SourceGenerators` 及相关 Abstractions/Common: 提供代码生成能力。
+
+这种结构的核心设计目标是让抽象稳定、实现可替换、引擎集成隔离、生成器能力可独立演进。
+
+## Documentation Structure
+
+项目文档位于 `docs/`，中文内容位于 `docs/zh-CN/`。文档内容覆盖：
+
+- 入门与安装
+- Core / Game / Godot / ECS 各模块能力
+- Source Generator 使用说明
+- 教程、最佳实践与故障排查
+
+阅读顺序通常建议先看根目录 `README.md` 和各子模块 `README.md`，再进入 `docs/` 查阅专题说明。
+
+## Design Intent
+
+GFramework 的设计重点不是把所有能力堆进单一核心类，而是通过清晰的模块边界、可组合的服务注册方式、稳定的抽象契约以及适度自动化的源码生成，构建一个适合长期演进的游戏开发基础框架。
