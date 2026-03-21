@@ -1,4 +1,3 @@
-using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging.Appenders;
 
 namespace GFramework.Core.Tests.Logging;
@@ -197,6 +196,29 @@ public class AsyncLogAppenderTests
         Assert.That(asyncAppender.Flush(), Is.True);
     }
 
+    [Test]
+    public void Append_WhenInnerAppenderThrowsOperationCanceledException_ShouldNotReportError()
+    {
+        var reportedExceptions = new List<Exception>();
+        var innerAppender = new CancellationAppender();
+        using var asyncAppender = new AsyncLogAppender(
+            innerAppender,
+            bufferSize: 1000,
+            processingErrorHandler: reportedExceptions.Add);
+
+        Assert.DoesNotThrow(() =>
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                var entry = new LogEntry(DateTime.UtcNow, LogLevel.Info, "TestLogger", $"Message {i}", null, null);
+                asyncAppender.Append(entry);
+            }
+        });
+
+        Assert.That(asyncAppender.Flush(), Is.True);
+        Assert.That(reportedExceptions, Is.Empty);
+    }
+
     // 辅助测试类
     private class TestAppender : ILogAppender
     {
@@ -247,6 +269,22 @@ public class AsyncLogAppenderTests
         public void Append(LogEntry entry)
         {
             throw new InvalidOperationException("Test exception");
+        }
+
+        public void Flush()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private class CancellationAppender : ILogAppender
+    {
+        public void Append(LogEntry entry)
+        {
+            throw new OperationCanceledException("Simulated cancellation");
         }
 
         public void Flush()

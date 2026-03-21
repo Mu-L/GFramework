@@ -1,4 +1,3 @@
-using System.Threading.Channels;
 using GFramework.Core.Abstractions.Logging;
 
 namespace GFramework.Core.Logging.Appenders;
@@ -212,10 +211,16 @@ public sealed class AsyncLogAppender : ILogAppender
 
     /// <summary>
     ///     上报后台处理异常，同时隔离观察者自身抛出的错误，避免终止处理循环。
+    ///     取消相关异常表示关闭流程中的预期控制流，不应被视为后台处理失败。
     /// </summary>
     /// <param name="exception">后台处理中捕获到的异常。</param>
     private void ReportProcessingError(Exception exception)
     {
+        if (exception is OperationCanceledException)
+        {
+            return;
+        }
+
         if (_processingErrorHandler is null)
         {
             return;
