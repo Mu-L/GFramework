@@ -118,6 +118,10 @@ GFramework 是一个开源的游戏开发框架，我们欢迎所有形式的贡
 
 ## 开发环境设置
 
+当前推荐的项目相关环境、CLI 与 AI 可用工具清单请查看：
+
+- [开发环境能力清单](./contributor/development-environment.md)
+
 ### 前置要求
 
 - **.NET SDK**：8.0、9.0 或 10.0

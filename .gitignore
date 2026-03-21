@@ -13,3 +13,5 @@ opencode.json
 docs/.omc/
 docs/.vitepress/cache/
 local-plan/
+# tool
+.venv/

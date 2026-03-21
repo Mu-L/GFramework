@@ -4,6 +4,13 @@ This document is the single source of truth for coding behavior in this reposito
 
 All AI agents and contributors must follow these rules when writing, reviewing, or modifying code in `GFramework`.
 
+## Environment Capability Inventory
+
+- Before choosing runtimes or CLI tools, read `@.ai/environment/tools.ai.yaml`.
+- Use `@.ai/environment/tools.raw.yaml` only when you need the full collected facts behind the AI-facing hints.
+- Prefer the project-relevant tools listed there instead of assuming every installed system tool is fair game.
+- If the real environment differs from the inventory, use the project-relevant installed tool and report the mismatch.
+
 ## Commenting Rules (MUST)
 
 All generated or modified code MUST include clear and meaningful comments where required by the rules below.
