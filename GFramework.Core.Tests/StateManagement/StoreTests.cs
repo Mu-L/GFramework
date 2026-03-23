@@ -1,0 +1,362 @@
+using GFramework.Core.Abstractions.Property;
+using GFramework.Core.Abstractions.StateManagement;
+using GFramework.Core.Extensions;
+using GFramework.Core.Property;
+using GFramework.Core.StateManagement;
+
+namespace GFramework.Core.Tests.StateManagement;
+
+/// <summary>
+///     Store 状态管理能力的单元测试。
+///     这些测试覆盖集中式状态容器的核心职责：状态归约、订阅通知、选择器桥接和诊断行为。
+/// </summary>
+[TestFixture]
+public class StoreTests
+{
+    /// <summary>
+    ///     测试 Store 在创建后能够暴露初始状态。
+    /// </summary>
+    [Test]
+    public void State_Should_Return_Initial_State()
+    {
+        var store = CreateStore(new CounterState(1, "Player"));
+
+        Assert.That(store.State.Count, Is.EqualTo(1));
+        Assert.That(store.State.Name, Is.EqualTo("Player"));
+    }
+
+    /// <summary>
+    ///     测试 Dispatch 能够执行 reducer 并向订阅者广播新状态。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Update_State_And_Notify_Subscribers()
+    {
+        var store = CreateStore();
+        var receivedStates = new List<CounterState>();
+
+        store.Subscribe(receivedStates.Add);
+
+        store.Dispatch(new IncrementAction(2));
+
+        Assert.That(store.State.Count, Is.EqualTo(2));
+        Assert.That(receivedStates.Count, Is.EqualTo(1));
+        Assert.That(receivedStates[0].Count, Is.EqualTo(2));
+    }
+
+    /// <summary>
+    ///     测试当 reducer 返回逻辑相等状态时不会触发通知。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Not_Notify_When_State_Does_Not_Change()
+    {
+        var store = CreateStore();
+        var notifyCount = 0;
+
+        store.Subscribe(_ => notifyCount++);
+
+        store.Dispatch(new RenameAction("Player"));
+
+        Assert.That(store.State.Name, Is.EqualTo("Player"));
+        Assert.That(notifyCount, Is.EqualTo(0));
+    }
+
+    /// <summary>
+    ///     测试同一 action 类型的多个 reducer 会按注册顺序执行。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Run_Multiple_Reducers_In_Registration_Order()
+    {
+        var store = CreateStore();
+        store.RegisterReducer<IncrementAction>((state, action) =>
+            state with { Count = state.Count + action.Amount * 10 });
+
+        store.Dispatch(new IncrementAction(1));
+
+        Assert.That(store.State.Count, Is.EqualTo(11));
+    }
+
+    /// <summary>
+    ///     测试 SubscribeWithInitValue 会立即回放当前状态并继续接收后续变化。
+    /// </summary>
+    [Test]
+    public void SubscribeWithInitValue_Should_Replay_Current_State_And_Future_Changes()
+    {
+        var store = CreateStore(new CounterState(5, "Player"));
+        var receivedCounts = new List<int>();
+
+        store.SubscribeWithInitValue(state => receivedCounts.Add(state.Count));
+        store.Dispatch(new IncrementAction(3));
+
+        Assert.That(receivedCounts, Is.EqualTo(new[] { 5, 8 }));
+    }
+
+    /// <summary>
+    ///     测试注销订阅后不会再收到后续通知。
+    /// </summary>
+    [Test]
+    public void UnRegister_Handle_Should_Stop_Future_Notifications()
+    {
+        var store = CreateStore();
+        var notifyCount = 0;
+
+        var unRegister = store.Subscribe(_ => notifyCount++);
+        store.Dispatch(new IncrementAction(1));
+        unRegister.UnRegister();
+        store.Dispatch(new IncrementAction(1));
+
+        Assert.That(notifyCount, Is.EqualTo(1));
+    }
+
+    /// <summary>
+    ///     测试选择器仅在所选状态片段变化时触发通知。
+    /// </summary>
+    [Test]
+    public void Select_Should_Only_Notify_When_Selected_Slice_Changes()
+    {
+        var store = CreateStore();
+        var selectedCounts = new List<int>();
+        var selection = store.Select(state => state.Count);
+
+        selection.Register(selectedCounts.Add);
+
+        store.Dispatch(new RenameAction("Renamed"));
+        store.Dispatch(new IncrementAction(2));
+
+        Assert.That(selectedCounts, Is.EqualTo(new[] { 2 }));
+    }
+
+    /// <summary>
+    ///     测试选择器支持自定义比较器，从而抑制无意义的局部状态通知。
+    /// </summary>
+    [Test]
+    public void Select_Should_Respect_Custom_Selected_Value_Comparer()
+    {
+        var store = CreateStore();
+        var selectedCounts = new List<int>();
+        var selection = store.Select(
+            state => state.Count,
+            new TensBucketEqualityComparer());
+
+        selection.Register(selectedCounts.Add);
+
+        store.Dispatch(new IncrementAction(5));
+        store.Dispatch(new IncrementAction(6));
+
+        Assert.That(selectedCounts, Is.EqualTo(new[] { 11 }));
+    }
+
+    /// <summary>
+    ///     测试 ToBindableProperty 可桥接到现有 BindableProperty 风格用法，并与旧属性系统共存。
+    /// </summary>
+    [Test]
+    public void ToBindableProperty_Should_Work_With_Existing_BindableProperty_Pattern()
+    {
+        var store = CreateStore();
+        var mirror = new BindableProperty<int>(0);
+        IReadonlyBindableProperty<int> bindableProperty = store.ToBindableProperty(state => state.Count);
+
+        bindableProperty.Register(value => mirror.Value = value);
+        store.Dispatch(new IncrementAction(3));
+
+        Assert.That(mirror.Value, Is.EqualTo(3));
+    }
+
+    /// <summary>
+    ///     测试 IStateSelector 接口重载能够复用显式选择逻辑。
+    /// </summary>
+    [Test]
+    public void Select_With_IStateSelector_Should_Project_Selected_Value()
+    {
+        var store = CreateStore();
+        var selection = store.Select(new CounterNameSelector());
+
+        Assert.That(selection.Value, Is.EqualTo("Player"));
+    }
+
+    /// <summary>
+    ///     测试 Store 在中间件内部发生同一实例的嵌套分发时会抛出异常。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Throw_When_Nested_Dispatch_Happens_On_Same_Store()
+    {
+        var store = CreateStore();
+        store.UseMiddleware(new NestedDispatchMiddleware(store));
+
+        Assert.That(
+            () => store.Dispatch(new IncrementAction(1)),
+            Throws.InvalidOperationException.With.Message.Contain("Nested dispatch"));
+    }
+
+    /// <summary>
+    ///     测试中间件链执行顺序和 Store 诊断信息更新。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Run_Middlewares_In_Order_And_Update_Diagnostics()
+    {
+        var store = CreateStore();
+        var logs = new List<string>();
+
+        store.UseMiddleware(new RecordingMiddleware(logs, "first"));
+        store.UseMiddleware(new RecordingMiddleware(logs, "second"));
+
+        store.Dispatch(new IncrementAction(2));
+
+        Assert.That(logs, Is.EqualTo(new[]
+        {
+            "first:before",
+            "second:before",
+            "second:after",
+            "first:after"
+        }));
+
+        Assert.That(store.LastActionType, Is.EqualTo(typeof(IncrementAction)));
+        Assert.That(store.LastStateChangedAt, Is.Not.Null);
+        Assert.That(store.LastDispatchRecord, Is.Not.Null);
+        Assert.That(store.LastDispatchRecord!.HasStateChanged, Is.True);
+        Assert.That(store.LastDispatchRecord.NextState.Count, Is.EqualTo(2));
+    }
+
+    /// <summary>
+    ///     测试未命中的 action 仍会记录诊断信息，但不会改变状态。
+    /// </summary>
+    [Test]
+    public void Dispatch_Without_Matching_Reducer_Should_Update_Record_Without_Changing_State()
+    {
+        var store = CreateStore();
+
+        store.Dispatch(new NoopAction());
+
+        Assert.That(store.State.Count, Is.EqualTo(0));
+        Assert.That(store.LastActionType, Is.EqualTo(typeof(NoopAction)));
+        Assert.That(store.LastDispatchRecord, Is.Not.Null);
+        Assert.That(store.LastDispatchRecord!.HasStateChanged, Is.False);
+        Assert.That(store.LastStateChangedAt, Is.Null);
+    }
+
+    /// <summary>
+    ///     创建一个带有基础 reducer 的测试 Store。
+    /// </summary>
+    /// <param name="initialState">可选初始状态。</param>
+    /// <returns>已配置基础 reducer 的 Store 实例。</returns>
+    private static Store<CounterState> CreateStore(CounterState? initialState = null)
+    {
+        var store = new Store<CounterState>(initialState ?? new CounterState(0, "Player"));
+        store.RegisterReducer<IncrementAction>((state, action) => state with { Count = state.Count + action.Amount });
+        store.RegisterReducer<RenameAction>((state, action) => state with { Name = action.Name });
+        return store;
+    }
+
+    /// <summary>
+    ///     用于测试的计数器状态。
+    ///     使用 record 保持逻辑不可变语义，便于 Store 基于状态快照进行比较和断言。
+    /// </summary>
+    /// <param name="Count">当前计数值。</param>
+    /// <param name="Name">当前名称。</param>
+    private sealed record CounterState(int Count, string Name);
+
+    /// <summary>
+    ///     表示增加计数的 action。
+    /// </summary>
+    /// <param name="Amount">要增加的数量。</param>
+    private sealed record IncrementAction(int Amount);
+
+    /// <summary>
+    ///     表示修改名称的 action。
+    /// </summary>
+    /// <param name="Name">新的名称。</param>
+    private sealed record RenameAction(string Name);
+
+    /// <summary>
+    ///     表示没有匹配 reducer 的 action，用于验证无变更分发路径。
+    /// </summary>
+    private sealed record NoopAction;
+
+    /// <summary>
+    ///     显式选择器实现，用于验证 IStateSelector 重载。
+    /// </summary>
+    private sealed class CounterNameSelector : IStateSelector<CounterState, string>
+    {
+        /// <summary>
+        ///     从状态中选择名称字段。
+        /// </summary>
+        /// <param name="state">完整状态。</param>
+        /// <returns>名称字段。</returns>
+        public string Select(CounterState state)
+        {
+            return state.Name;
+        }
+    }
+
+    /// <summary>
+    ///     将计数值按十位分桶比较的测试比较器。
+    ///     该比较器用于验证选择器只在局部状态“语义变化”时才触发通知。
+    /// </summary>
+    private sealed class TensBucketEqualityComparer : IEqualityComparer<int>
+    {
+        /// <summary>
+        ///     判断两个值是否落在同一个十位分桶中。
+        /// </summary>
+        /// <param name="x">左侧值。</param>
+        /// <param name="y">右侧值。</param>
+        /// <returns>若位于同一分桶则返回 <see langword="true"/>，否则返回 <see langword="false"/>。</returns>
+        public bool Equals(int x, int y)
+        {
+            return x / 10 == y / 10;
+        }
+
+        /// <summary>
+        ///     返回基于十位分桶的哈希码。
+        /// </summary>
+        /// <param name="obj">目标值。</param>
+        /// <returns>分桶哈希码。</returns>
+        public int GetHashCode(int obj)
+        {
+            return obj / 10;
+        }
+    }
+
+    /// <summary>
+    ///     记录中间件调用顺序的测试中间件。
+    /// </summary>
+    private sealed class RecordingMiddleware(List<string> logs, string name) : IStoreMiddleware<CounterState>
+    {
+        /// <summary>
+        ///     记录当前中间件在分发前后的调用顺序。
+        /// </summary>
+        /// <param name="context">当前分发上下文。</param>
+        /// <param name="next">后续处理节点。</param>
+        public void Invoke(StoreDispatchContext<CounterState> context, Action next)
+        {
+            logs.Add($"{name}:before");
+            next();
+            logs.Add($"{name}:after");
+        }
+    }
+
+    /// <summary>
+    ///     在中间件阶段尝试二次分发的测试中间件，用于验证重入保护。
+    /// </summary>
+    private sealed class NestedDispatchMiddleware(Store<CounterState> store) : IStoreMiddleware<CounterState>
+    {
+        /// <summary>
+        ///     标记是否已经触发过一次嵌套分发，避免因测试实现本身导致无限递归。
+        /// </summary>
+        private bool _hasTriggered;
+
+        /// <summary>
+        ///     在第一次进入中间件时执行嵌套分发。
+        /// </summary>
+        /// <param name="context">当前分发上下文。</param>
+        /// <param name="next">后续处理节点。</param>
+        public void Invoke(StoreDispatchContext<CounterState> context, Action next)
+        {
+            if (!_hasTriggered)
+            {
+                _hasTriggered = true;
+                store.Dispatch(new IncrementAction(1));
+            }
+
+            next();
+        }
+    }
+}
