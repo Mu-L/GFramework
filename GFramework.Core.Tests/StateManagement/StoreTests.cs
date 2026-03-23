@@ -1,3 +1,5 @@
+using GFramework.Core.Abstractions.Property;
+using GFramework.Core.Abstractions.StateManagement;
 using GFramework.Core.Extensions;
 using GFramework.Core.Property;
 using GFramework.Core.StateManagement;
