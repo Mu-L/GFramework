@@ -12,7 +12,7 @@ namespace GFramework.Core.StateManagement;
 /// </summary>
 /// <typeparam name="TState">源状态类型。</typeparam>
 /// <typeparam name="TSelected">投影后的局部状态类型。</typeparam>
-public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSelected>
+public sealed class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSelected>
 {
     /// <summary>
     ///     用于判断选择结果是否真正变化的比较器。

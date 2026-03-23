@@ -1,5 +1,3 @@
-using GFramework.Core.Abstractions.Property;
-using GFramework.Core.Abstractions.StateManagement;
 using GFramework.Core.Extensions;
 using GFramework.Core.Property;
 using GFramework.Core.StateManagement;
@@ -317,6 +315,40 @@ public class StoreTests
     }
 
     /// <summary>
+    ///     测试长时间运行的 middleware 不会长时间占用状态锁，
+    ///     使读取状态和新增订阅仍能在 dispatch 进行期间完成。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Not_Block_State_Read_Or_Subscribe_While_Middleware_Is_Running()
+    {
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+
+        var store = CreateStore();
+        store.UseMiddleware(new BlockingMiddleware(entered, release));
+
+        var dispatchTask = Task.Run(() => store.Dispatch(new IncrementAction(1)));
+
+        Assert.That(entered.Wait(TimeSpan.FromSeconds(2)), Is.True, "middleware 未按预期进入阻塞阶段");
+
+        var stateReadTask = Task.Run(() => store.State.Count);
+        Assert.That(stateReadTask.Wait(TimeSpan.FromMilliseconds(200)), Is.True, "State 读取被 dispatch 长时间阻塞");
+        Assert.That(stateReadTask.Result, Is.EqualTo(0), "middleware 执行期间应仍能读取到提交前的状态快照");
+
+        var subscribeTask = Task.Run(() =>
+        {
+            var unRegister = store.Subscribe(_ => { });
+            unRegister.UnRegister();
+        });
+        Assert.That(subscribeTask.Wait(TimeSpan.FromMilliseconds(200)), Is.True, "Subscribe 被 dispatch 长时间阻塞");
+
+        release.Set();
+
+        Assert.That(dispatchTask.Wait(TimeSpan.FromSeconds(2)), Is.True, "dispatch 未在释放 middleware 后完成");
+        Assert.That(store.State.Count, Is.EqualTo(1));
+    }
+
+    /// <summary>
     ///     创建一个带有基础 reducer 的测试 Store。
     /// </summary>
     /// <param name="initialState">可选初始状态。</param>
@@ -452,6 +484,25 @@ public class StoreTests
             logs.Add($"{name}:before");
             next();
             logs.Add($"{name}:after");
+        }
+    }
+
+    /// <summary>
+    ///     用于验证 dispatch 管线在 middleware 执行期间不会占用状态锁的测试中间件。
+    /// </summary>
+    private sealed class BlockingMiddleware(ManualResetEventSlim entered, ManualResetEventSlim release)
+        : IStoreMiddleware<CounterState>
+    {
+        /// <summary>
+        ///     通知测试线程 middleware 已进入阻塞点，并等待释放信号后继续执行。
+        /// </summary>
+        /// <param name="context">当前分发上下文。</param>
+        /// <param name="next">后续处理节点。</param>
+        public void Invoke(StoreDispatchContext<CounterState> context, Action next)
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(2));
+            next();
         }
     }
 

@@ -10,8 +10,15 @@ namespace GFramework.Core.StateManagement;
 ///     或需要中间件/诊断能力的状态场景，而不是替代所有简单字段级响应式属性。
 /// </summary>
 /// <typeparam name="TState">状态树的根状态类型。</typeparam>
-public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
+public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 {
+    /// <summary>
+    ///     Dispatch 串行化门闩。
+    ///     该锁保证任意时刻只有一个 action 管线在运行，从而保持状态演进顺序确定，
+    ///     同时避免让耗时 middleware / reducer 长时间占用状态锁。
+    /// </summary>
+    private readonly object _dispatchGate = new();
+
     /// <summary>
     ///     当前状态变化订阅者列表。
     ///     使用显式订阅对象而不是委托链，便于处理原子初始化订阅、挂起补发和精确解绑。
@@ -20,18 +27,20 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
     /// <summary>
     ///     Store 内部所有可变状态的同步锁。
-    ///     该锁同时保护订阅集合、reducer 注册表和分发过程，确保状态演进是串行且可预测的。
+    ///     该锁仅保护状态快照、订阅集合、缓存选择视图和注册表本身的短临界区访问。
     /// </summary>
     private readonly object _lock = new();
 
     /// <summary>
     ///     已注册的中间件链，按添加顺序执行。
+    ///     Dispatch 开始时会抓取快照，因此运行中的分发不会受到后续注册变化影响。
     /// </summary>
     private readonly List<IStoreMiddleware<TState>> _middlewares = [];
 
     /// <summary>
     ///     按 action 具体运行时类型组织的 reducer 注册表。
     ///     Store 采用精确类型匹配策略，保证 reducer 执行顺序和行为保持确定性。
+    ///     Dispatch 开始时会抓取对应 action 类型的 reducer 快照。
     /// </summary>
     private readonly Dictionary<Type, List<IStoreReducerAdapter>> _reducers = [];
 
@@ -84,6 +93,34 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     }
 
     /// <summary>
+    ///     获取最近一次分发的 action 类型。
+    /// </summary>
+    public Type? LastActionType
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _lastActionType;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取最近一次真正改变状态的时间戳。
+    /// </summary>
+    public DateTimeOffset? LastStateChangedAt
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _lastStateChangedAt;
+            }
+        }
+    }
+
+    /// <summary>
     ///     获取当前状态快照。
     /// </summary>
     public TState State
@@ -93,6 +130,112 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
             lock (_lock)
             {
                 return _state;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     分发一个 action 并按顺序执行匹配的 reducer。
+    /// </summary>
+    /// <typeparam name="TAction">action 的具体类型。</typeparam>
+    /// <param name="action">要分发的 action。</param>
+    /// <exception cref="ArgumentNullException">当 <paramref name="action"/> 为 <see langword="null"/> 时抛出。</exception>
+    /// <exception cref="InvalidOperationException">当同一 Store 发生重入分发时抛出。</exception>
+    public void Dispatch<TAction>(TAction action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        Action<TState>[] listenersSnapshot = Array.Empty<Action<TState>>();
+        IStoreMiddleware<TState>[] middlewaresSnapshot = Array.Empty<IStoreMiddleware<TState>>();
+        IStoreReducerAdapter[] reducersSnapshot = Array.Empty<IStoreReducerAdapter>();
+        IEqualityComparer<TState> stateComparerSnapshot = _stateComparer;
+        StoreDispatchContext<TState>? context = null;
+        var enteredDispatchScope = false;
+
+        lock (_dispatchGate)
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    EnsureNotDispatching();
+                    _isDispatching = true;
+                    enteredDispatchScope = true;
+                    context = new StoreDispatchContext<TState>(action!, _state);
+                    stateComparerSnapshot = _stateComparer;
+                    middlewaresSnapshot = _middlewares.Count > 0
+                        ? _middlewares.ToArray()
+                        : Array.Empty<IStoreMiddleware<TState>>();
+                    reducersSnapshot = CreateReducerSnapshot(context.ActionType);
+                }
+
+                // middleware 和 reducer 可能包含较重的同步逻辑，因此仅持有 dispatch 串行门，
+                // 不占用状态锁，让读取、订阅和注册操作只在需要访问共享状态时短暂阻塞。
+                ExecuteDispatchPipeline(context, middlewaresSnapshot, reducersSnapshot, stateComparerSnapshot);
+
+                lock (_lock)
+                {
+                    _lastActionType = context.ActionType;
+                    _lastDispatchRecord = new StoreDispatchRecord<TState>(
+                        context.Action,
+                        context.PreviousState,
+                        context.NextState,
+                        context.HasStateChanged,
+                        context.DispatchedAt);
+
+                    if (!context.HasStateChanged)
+                    {
+                        return;
+                    }
+
+                    _state = context.NextState;
+                    _lastStateChangedAt = context.DispatchedAt;
+                    listenersSnapshot = SnapshotListenersForNotification(context.NextState);
+                }
+            }
+            finally
+            {
+                if (enteredDispatchScope)
+                {
+                    lock (_lock)
+                    {
+                        _isDispatching = false;
+                    }
+                }
+            }
+        }
+
+        // 始终在锁外通知订阅者，避免监听器内部读取 Store 或执行额外逻辑时产生死锁。
+        foreach (var listener in listenersSnapshot)
+        {
+            listener(context!.NextState);
+        }
+    }
+
+    /// <summary>
+    ///     获取当前订阅者数量。
+    /// </summary>
+    public int SubscriberCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _listeners.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取最近一次分发记录。
+    /// </summary>
+    public StoreDispatchRecord<TState>? LastDispatchRecord
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _lastDispatchRecord;
             }
         }
     }
@@ -195,119 +338,6 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
             _listeners[index].IsSubscribed = false;
             _listeners.RemoveAt(index);
-        }
-    }
-
-    /// <summary>
-    ///     分发一个 action 并按顺序执行匹配的 reducer。
-    /// </summary>
-    /// <typeparam name="TAction">action 的具体类型。</typeparam>
-    /// <param name="action">要分发的 action。</param>
-    /// <exception cref="ArgumentNullException">当 <paramref name="action"/> 为 <see langword="null"/> 时抛出。</exception>
-    /// <exception cref="InvalidOperationException">当同一 Store 发生重入分发时抛出。</exception>
-    public void Dispatch<TAction>(TAction action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-
-        Action<TState>[] listenersSnapshot = Array.Empty<Action<TState>>();
-        StoreDispatchContext<TState>? context = null;
-
-        lock (_lock)
-        {
-            EnsureNotDispatching();
-            _isDispatching = true;
-
-            try
-            {
-                context = new StoreDispatchContext<TState>(action!, _state);
-
-                // 在锁内串行执行完整分发流程，确保 reducer 与中间件看到的是一致的状态序列，
-                // 并且不会因为并发写入导致 reducer 顺序失效。
-                ExecuteDispatchPipeline(context);
-
-                _lastActionType = context.ActionType;
-                _lastDispatchRecord = new StoreDispatchRecord<TState>(
-                    context.Action,
-                    context.PreviousState,
-                    context.NextState,
-                    context.HasStateChanged,
-                    context.DispatchedAt);
-
-                if (!context.HasStateChanged)
-                {
-                    return;
-                }
-
-                _state = context.NextState;
-                _lastStateChangedAt = context.DispatchedAt;
-                listenersSnapshot = SnapshotListenersForNotification(context.NextState);
-            }
-            finally
-            {
-                _isDispatching = false;
-            }
-        }
-
-        // 始终在锁外通知订阅者，避免监听器内部读取 Store 或执行额外逻辑时产生死锁。
-        foreach (var listener in listenersSnapshot)
-        {
-            listener(context!.NextState);
-        }
-    }
-
-    /// <summary>
-    ///     获取当前订阅者数量。
-    /// </summary>
-    public int SubscriberCount
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _listeners.Count;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取最近一次分发的 action 类型。
-    /// </summary>
-    public Type? LastActionType
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _lastActionType;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取最近一次真正改变状态的时间戳。
-    /// </summary>
-    public DateTimeOffset? LastStateChangedAt
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _lastStateChangedAt;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取最近一次分发记录。
-    /// </summary>
-    public StoreDispatchRecord<TState>? LastDispatchRecord
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _lastDispatchRecord;
-            }
         }
     }
 
@@ -435,13 +465,20 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     ///     执行一次完整分发管线。
     /// </summary>
     /// <param name="context">当前分发上下文。</param>
-    private void ExecuteDispatchPipeline(StoreDispatchContext<TState> context)
+    /// <param name="middlewares">本次分发使用的中间件快照。</param>
+    /// <param name="reducers">本次分发使用的 reducer 快照。</param>
+    /// <param name="stateComparer">本次分发使用的状态比较器快照。</param>
+    private static void ExecuteDispatchPipeline(
+        StoreDispatchContext<TState> context,
+        IReadOnlyList<IStoreMiddleware<TState>> middlewares,
+        IReadOnlyList<IStoreReducerAdapter> reducers,
+        IEqualityComparer<TState> stateComparer)
     {
-        Action pipeline = () => ApplyReducers(context);
+        Action pipeline = () => ApplyReducers(context, reducers, stateComparer);
 
-        for (var i = _middlewares.Count - 1; i >= 0; i--)
+        for (var i = middlewares.Count - 1; i >= 0; i--)
         {
-            var middleware = _middlewares[i];
+            var middleware = middlewares[i];
             var next = pipeline;
             pipeline = () => middleware.Invoke(context, next);
         }
@@ -454,9 +491,14 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     ///     reducer 使用 action 的精确运行时类型进行查找，以保证匹配结果和执行顺序稳定。
     /// </summary>
     /// <param name="context">当前分发上下文。</param>
-    private void ApplyReducers(StoreDispatchContext<TState> context)
+    /// <param name="reducers">本次分发使用的 reducer 快照。</param>
+    /// <param name="stateComparer">本次分发使用的状态比较器快照。</param>
+    private static void ApplyReducers(
+        StoreDispatchContext<TState> context,
+        IReadOnlyList<IStoreReducerAdapter> reducers,
+        IEqualityComparer<TState> stateComparer)
     {
-        if (!_reducers.TryGetValue(context.ActionType, out var reducers) || reducers.Count == 0)
+        if (reducers.Count == 0)
         {
             context.NextState = context.PreviousState;
             context.HasStateChanged = false;
@@ -473,7 +515,7 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         }
 
         context.NextState = nextState;
-        context.HasStateChanged = !_stateComparer.Equals(context.PreviousState, nextState);
+        context.HasStateChanged = !stateComparer.Equals(context.PreviousState, nextState);
     }
 
     /// <summary>
@@ -519,6 +561,22 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         }
 
         return activeListeners.Count > 0 ? activeListeners.ToArray() : Array.Empty<Action<TState>>();
+    }
+
+    /// <summary>
+    ///     为当前 action 类型创建 reducer 快照。
+    ///     Dispatch 在离开状态锁前复制列表，以便后续在锁外执行稳定、不可变的 reducer 序列。
+    /// </summary>
+    /// <param name="actionType">当前分发的 action 类型。</param>
+    /// <returns>对应 action 类型的 reducer 快照；若未注册则返回空数组。</returns>
+    private IStoreReducerAdapter[] CreateReducerSnapshot(Type actionType)
+    {
+        if (!_reducers.TryGetValue(actionType, out var reducers) || reducers.Count == 0)
+        {
+            return Array.Empty<IStoreReducerAdapter>();
+        }
+
+        return reducers.ToArray();
     }
 
     /// <summary>

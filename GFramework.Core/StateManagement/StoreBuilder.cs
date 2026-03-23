@@ -7,7 +7,7 @@ namespace GFramework.Core.StateManagement;
 ///     该类型用于在 Store 创建之前集中配置比较器、reducer 和中间件，适合模块安装和测试工厂场景。
 /// </summary>
 /// <typeparam name="TState">状态树的根状态类型。</typeparam>
-public class StoreBuilder<TState> : IStoreBuilder<TState>
+public sealed class StoreBuilder<TState> : IStoreBuilder<TState>
 {
     /// <summary>
     ///     延迟应用到 Store 的配置操作列表。
@@ -19,43 +19,6 @@ public class StoreBuilder<TState> : IStoreBuilder<TState>
     ///     状态比较器。
     /// </summary>
     private IEqualityComparer<TState>? _comparer;
-
-    /// <summary>
-    ///     配置状态比较器。
-    /// </summary>
-    /// <param name="comparer">状态比较器。</param>
-    /// <returns>当前构建器实例。</returns>
-    public IStoreBuilder<TState> WithComparer(IEqualityComparer<TState> comparer)
-    {
-        _comparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
-        return this;
-    }
-
-    /// <summary>
-    ///     添加一个强类型 reducer。
-    /// </summary>
-    /// <typeparam name="TAction">当前 reducer 处理的 action 类型。</typeparam>
-    /// <param name="reducer">要添加的 reducer。</param>
-    /// <returns>当前构建器实例。</returns>
-    public IStoreBuilder<TState> AddReducer<TAction>(IReducer<TState, TAction> reducer)
-    {
-        ArgumentNullException.ThrowIfNull(reducer);
-        _configurators.Add(store => store.RegisterReducer(reducer));
-        return this;
-    }
-
-    /// <summary>
-    ///     使用委托快速添加一个 reducer。
-    /// </summary>
-    /// <typeparam name="TAction">当前 reducer 处理的 action 类型。</typeparam>
-    /// <param name="reducer">执行归约的委托。</param>
-    /// <returns>当前构建器实例。</returns>
-    public IStoreBuilder<TState> AddReducer<TAction>(Func<TState, TAction, TState> reducer)
-    {
-        ArgumentNullException.ThrowIfNull(reducer);
-        _configurators.Add(store => store.RegisterReducer(reducer));
-        return this;
-    }
 
     /// <summary>
     ///     添加一个 Store 中间件。
@@ -83,5 +46,43 @@ public class StoreBuilder<TState> : IStoreBuilder<TState>
         }
 
         return store;
+    }
+
+
+    /// <summary>
+    ///     添加一个强类型 reducer。
+    /// </summary>
+    /// <typeparam name="TAction">当前 reducer 处理的 action 类型。</typeparam>
+    /// <param name="reducer">要添加的 reducer。</param>
+    /// <returns>当前构建器实例。</returns>
+    public IStoreBuilder<TState> AddReducer<TAction>(IReducer<TState, TAction> reducer)
+    {
+        ArgumentNullException.ThrowIfNull(reducer);
+        _configurators.Add(store => store.RegisterReducer(reducer));
+        return this;
+    }
+
+    /// <summary>
+    ///     配置状态比较器。
+    /// </summary>
+    /// <param name="comparer">状态比较器。</param>
+    /// <returns>当前构建器实例。</returns>
+    public IStoreBuilder<TState> WithComparer(IEqualityComparer<TState> comparer)
+    {
+        _comparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
+        return this;
+    }
+
+    /// <summary>
+    ///     使用委托快速添加一个 reducer。
+    /// </summary>
+    /// <typeparam name="TAction">当前 reducer 处理的 action 类型。</typeparam>
+    /// <param name="reducer">执行归约的委托。</param>
+    /// <returns>当前构建器实例。</returns>
+    public IStoreBuilder<TState> AddReducer<TAction>(Func<TState, TAction, TState> reducer)
+    {
+        ArgumentNullException.ThrowIfNull(reducer);
+        _configurators.Add(store => store.RegisterReducer(reducer));
+        return this;
     }
 }
