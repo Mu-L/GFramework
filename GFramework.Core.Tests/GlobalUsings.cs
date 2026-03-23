@@ -23,3 +23,4 @@ global using GFramework.Core.Abstractions.StateManagement;
 global using GFramework.Core.Extensions;
 global using GFramework.Core.Property;
 global using GFramework.Core.StateManagement;
+global using GFramework.Core.Abstractions.Property;
