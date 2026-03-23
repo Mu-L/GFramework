@@ -14,9 +14,9 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 {
     /// <summary>
     ///     当前状态变化订阅者列表。
-    ///     使用列表而不是委托链，便于精确维护订阅数量并生成稳定的快照调用序列。
+    ///     使用显式订阅对象而不是委托链，便于处理原子初始化订阅、挂起补发和精确解绑。
     /// </summary>
-    private readonly List<Action<TState>> _listeners = [];
+    private readonly List<ListenerSubscription> _listeners = [];
 
     /// <summary>
     ///     Store 内部所有可变状态的同步锁。
@@ -34,6 +34,12 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     ///     Store 采用精确类型匹配策略，保证 reducer 执行顺序和行为保持确定性。
     /// </summary>
     private readonly Dictionary<Type, List<IStoreReducerAdapter>> _reducers = [];
+
+    /// <summary>
+    ///     已缓存的局部状态选择视图。
+    ///     该缓存用于避免高频访问的 Model 属性在每次 getter 调用时都创建新的选择对象。
+    /// </summary>
+    private readonly Dictionary<string, object> _selectionCache = [];
 
     /// <summary>
     ///     用于判断状态是否发生有效变化的比较器。
@@ -101,12 +107,14 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     {
         ArgumentNullException.ThrowIfNull(listener);
 
+        var subscription = new ListenerSubscription(listener);
+
         lock (_lock)
         {
-            _listeners.Add(listener);
+            _listeners.Add(subscription);
         }
 
-        return new DefaultUnRegister(() => UnSubscribe(listener));
+        return new DefaultUnRegister(() => UnSubscribe(subscription));
     }
 
     /// <summary>
@@ -119,9 +127,53 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     {
         ArgumentNullException.ThrowIfNull(listener);
 
-        var currentState = State;
-        listener(currentState);
-        return Subscribe(listener);
+        var subscription = new ListenerSubscription(listener)
+        {
+            IsActive = false
+        };
+        TState currentState;
+        TState? pendingState = default;
+        var hasPendingState = false;
+
+        lock (_lock)
+        {
+            currentState = _state;
+            _listeners.Add(subscription);
+        }
+
+        try
+        {
+            listener(currentState);
+        }
+        catch
+        {
+            UnSubscribe(subscription);
+            throw;
+        }
+
+        lock (_lock)
+        {
+            if (!subscription.IsSubscribed)
+            {
+                return new DefaultUnRegister(() => { });
+            }
+
+            subscription.IsActive = true;
+            if (subscription.HasPendingState)
+            {
+                pendingState = subscription.PendingState;
+                hasPendingState = true;
+                subscription.HasPendingState = false;
+                subscription.PendingState = default!;
+            }
+        }
+
+        if (hasPendingState)
+        {
+            listener(pendingState!);
+        }
+
+        return new DefaultUnRegister(() => UnSubscribe(subscription));
     }
 
     /// <summary>
@@ -135,7 +187,14 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
         lock (_lock)
         {
-            _listeners.Remove(listener);
+            var index = _listeners.FindIndex(subscription => subscription.Listener == listener);
+            if (index < 0)
+            {
+                return;
+            }
+
+            _listeners[index].IsSubscribed = false;
+            _listeners.RemoveAt(index);
         }
     }
 
@@ -181,7 +240,7 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
                 _state = context.NextState;
                 _lastStateChangedAt = context.DispatchedAt;
-                listenersSnapshot = _listeners.Count > 0 ? _listeners.ToArray() : Array.Empty<Action<TState>>();
+                listenersSnapshot = SnapshotListenersForNotification(context.NextState);
             }
             finally
             {
@@ -253,6 +312,15 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     }
 
     /// <summary>
+    ///     创建一个用于当前状态类型的 Store 构建器。
+    /// </summary>
+    /// <returns>新的 Store 构建器实例。</returns>
+    public static StoreBuilder<TState> CreateBuilder()
+    {
+        return new StoreBuilder<TState>();
+    }
+
+    /// <summary>
     ///     注册一个强类型 reducer。
     ///     同一 action 类型可注册多个 reducer，它们会按照注册顺序依次归约状态。
     /// </summary>
@@ -312,6 +380,58 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     }
 
     /// <summary>
+    ///     获取或创建一个带缓存的局部状态选择视图。
+    ///     对于会被频繁读取的 Model 只读属性，推荐使用该方法复用同一个选择实例。
+    /// </summary>
+    /// <typeparam name="TSelected">局部状态类型。</typeparam>
+    /// <param name="key">缓存键，调用方应保证同一个键始终表示同一局部状态语义。</param>
+    /// <param name="selector">状态选择委托。</param>
+    /// <param name="comparer">用于比较局部状态是否变化的比较器。</param>
+    /// <returns>稳定复用的选择视图实例。</returns>
+    public StoreSelection<TState, TSelected> GetOrCreateSelection<TSelected>(
+        string key,
+        Func<TState, TSelected> selector,
+        IEqualityComparer<TSelected>? comparer = null)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(selector);
+
+        lock (_lock)
+        {
+            if (_selectionCache.TryGetValue(key, out var existing))
+            {
+                if (existing is StoreSelection<TState, TSelected> cachedSelection)
+                {
+                    return cachedSelection;
+                }
+
+                throw new InvalidOperationException(
+                    $"A cached selection with key '{key}' already exists with a different selected type.");
+            }
+
+            var selection = new StoreSelection<TState, TSelected>(this, selector, comparer);
+            _selectionCache[key] = selection;
+            return selection;
+        }
+    }
+
+    /// <summary>
+    ///     获取或创建一个带缓存的只读 BindableProperty 风格视图。
+    /// </summary>
+    /// <typeparam name="TSelected">局部状态类型。</typeparam>
+    /// <param name="key">缓存键，调用方应保证同一个键始终表示同一局部状态语义。</param>
+    /// <param name="selector">状态选择委托。</param>
+    /// <param name="comparer">用于比较局部状态是否变化的比较器。</param>
+    /// <returns>稳定复用的只读绑定视图。</returns>
+    public StoreSelection<TState, TSelected> GetOrCreateBindableProperty<TSelected>(
+        string key,
+        Func<TState, TSelected> selector,
+        IEqualityComparer<TSelected>? comparer = null)
+    {
+        return GetOrCreateSelection(key, selector, comparer);
+    }
+
+    /// <summary>
     ///     执行一次完整分发管线。
     /// </summary>
     /// <param name="context">当前分发上下文。</param>
@@ -365,6 +485,52 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         if (_isDispatching)
         {
             throw new InvalidOperationException("Nested dispatch on the same store is not allowed.");
+        }
+    }
+
+    /// <summary>
+    ///     从当前订阅集合中提取需要立即通知的监听器快照，并为尚未激活的初始化订阅保存待补发状态。
+    /// </summary>
+    /// <param name="nextState">本次分发后的最新状态。</param>
+    /// <returns>需要在锁外立即调用的监听器快照。</returns>
+    private Action<TState>[] SnapshotListenersForNotification(TState nextState)
+    {
+        if (_listeners.Count == 0)
+        {
+            return Array.Empty<Action<TState>>();
+        }
+
+        var activeListeners = new List<Action<TState>>(_listeners.Count);
+        foreach (var subscription in _listeners)
+        {
+            if (!subscription.IsSubscribed)
+            {
+                continue;
+            }
+
+            if (subscription.IsActive)
+            {
+                activeListeners.Add(subscription.Listener);
+                continue;
+            }
+
+            subscription.PendingState = nextState;
+            subscription.HasPendingState = true;
+        }
+
+        return activeListeners.Count > 0 ? activeListeners.ToArray() : Array.Empty<Action<TState>>();
+    }
+
+    /// <summary>
+    ///     解绑一个精确的订阅对象。
+    /// </summary>
+    /// <param name="subscription">要解绑的订阅对象。</param>
+    private void UnSubscribe(ListenerSubscription subscription)
+    {
+        lock (_lock)
+        {
+            subscription.IsSubscribed = false;
+            _listeners.Remove(subscription);
         }
     }
 
@@ -430,5 +596,38 @@ public class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         {
             return _reducer(currentState, action);
         }
+    }
+
+    /// <summary>
+    ///     表示一个 Store 状态监听订阅。
+    ///     该对象用于支持初始化回放与正式订阅之间的原子衔接，避免 SubscribeWithInitValue 漏掉状态变化。
+    /// </summary>
+    private sealed class ListenerSubscription(Action<TState> listener)
+    {
+        /// <summary>
+        ///     获取订阅回调。
+        /// </summary>
+        public Action<TState> Listener { get; } = listener;
+
+        /// <summary>
+        ///     获取或设置订阅是否已激活。
+        ///     非激活状态表示正在执行初始化回放，此时新的状态变化会被暂存为待补发值。
+        /// </summary>
+        public bool IsActive { get; set; } = true;
+
+        /// <summary>
+        ///     获取或设置订阅是否仍然有效。
+        /// </summary>
+        public bool IsSubscribed { get; set; } = true;
+
+        /// <summary>
+        ///     获取或设置是否存在待补发的最新状态。
+        /// </summary>
+        public bool HasPendingState { get; set; }
+
+        /// <summary>
+        ///     获取或设置初始化阶段积累的最新状态。
+        /// </summary>
+        public TState PendingState { get; set; } = default!;
     }
 }

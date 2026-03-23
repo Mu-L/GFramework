@@ -129,6 +129,206 @@ public class PlayerStateModel : AbstractModel
 
 这样可以保留 Model 的生命周期和领域边界，同时获得统一状态入口。
 
+## 使用 StoreBuilder 组织配置
+
+当一个 Store 需要在模块安装、测试工厂或 DI 装配阶段统一配置时，可以使用 `StoreBuilder<TState>`：
+
+```csharp
+var store = (Store<PlayerState>)Store<PlayerState>
+    .CreateBuilder()
+    .AddReducer<DamageAction>((state, action) =>
+        state with { Health = Math.Max(0, state.Health - action.Amount) })
+    .Build(new PlayerState(100, "Player"));
+```
+
+适合以下场景：
+
+- 模块启动时集中注册 reducer 和 middleware
+- 测试里快速组装不同配置的 Store
+- 不希望把 Store 的装配细节散落在多个调用点
+
+## 官方示例：角色面板状态
+
+下面给出一个更贴近 GFramework 实战的完整示例，展示如何把 `Store<TState>` 放进 Model，
+再通过 Command 修改状态，并在 Controller 中使用 selector 做 UI 绑定。
+
+### 1. 定义状态和 action
+
+```csharp
+public sealed record PlayerPanelState(
+    string Name,
+    int Health,
+    int MaxHealth,
+    int Level);
+
+public sealed record DamagePlayerAction(int Amount);
+public sealed record HealPlayerAction(int Amount);
+public sealed record RenamePlayerAction(string Name);
+```
+
+### 2. 在 Model 中承载 Store
+
+```csharp
+using GFramework.Core.Abstractions.Property;
+using GFramework.Core.Model;
+using GFramework.Core.Extensions;
+using GFramework.Core.StateManagement;
+
+public class PlayerPanelModel : AbstractModel
+{
+    public Store<PlayerPanelState> Store { get; } =
+        new(new PlayerPanelState("Player", 100, 100, 1));
+
+    // 使用带缓存的选择视图，避免属性 getter 每次访问都创建新的 StoreSelection 实例。
+    public IReadonlyBindableProperty<int> Health =>
+        Store.GetOrCreateBindableProperty("health", state => state.Health);
+
+    public IReadonlyBindableProperty<string> Name =>
+        Store.GetOrCreateBindableProperty("name", state => state.Name);
+
+    public IReadonlyBindableProperty<float> HealthPercent =>
+        Store.GetOrCreateBindableProperty("health_percent",
+            state => (float)state.Health / state.MaxHealth);
+
+    protected override void OnInit()
+    {
+        Store
+            .RegisterReducer<DamagePlayerAction>((state, action) =>
+                state with
+                {
+                    Health = Math.Max(0, state.Health - action.Amount)
+                })
+            .RegisterReducer<HealPlayerAction>((state, action) =>
+                state with
+                {
+                    Health = Math.Min(state.MaxHealth, state.Health + action.Amount)
+                })
+            .RegisterReducer<RenamePlayerAction>((state, action) =>
+                state with
+                {
+                    Name = action.Name
+                });
+    }
+}
+```
+
+这个写法的关键点是：
+
+- 状态结构集中定义在 `PlayerPanelState`
+- 所有状态修改都经过 reducer
+- 高频访问的局部状态通过缓存选择视图复用实例
+- Controller 只消费局部只读视图，不直接修改 Store
+
+### 3. 通过 Command 修改状态
+
+```csharp
+using GFramework.Core.Command;
+
+public sealed class DamagePlayerCommand(int amount) : AbstractCommand
+{
+    protected override void OnExecute()
+    {
+        var model = this.GetModel<PlayerPanelModel>();
+        model.Store.Dispatch(new DamagePlayerAction(amount));
+    }
+}
+
+public sealed class RenamePlayerCommand(string name) : AbstractCommand
+{
+    protected override void OnExecute()
+    {
+        var model = this.GetModel<PlayerPanelModel>();
+        model.Store.Dispatch(new RenamePlayerAction(name));
+    }
+}
+```
+
+这里仍然遵循 GFramework 现有分层：
+
+- Controller 负责转发用户意图
+- Command 负责执行业务操作
+- Model 持有状态
+- Store 负责统一归约状态变化
+
+### 4. 在 Controller 中绑定局部状态
+
+```csharp
+using GFramework.Core.Abstractions.Controller;
+using GFramework.Core.Abstractions.Events;
+using GFramework.Core.Events;
+using GFramework.Core.Extensions;
+using GFramework.SourceGenerators.Abstractions.Rule;
+
+[ContextAware]
+public partial class PlayerPanelController : IController
+{
+    private readonly IUnRegisterList _unRegisterList = new UnRegisterList();
+
+    public void Initialize()
+    {
+        var model = this.GetModel<PlayerPanelModel>();
+
+        model.Name
+            .RegisterWithInitValue(name =>
+            {
+                Console.WriteLine($"Player Name: {name}");
+            })
+            .AddToUnregisterList(_unRegisterList);
+
+        model.Health
+            .RegisterWithInitValue(health =>
+            {
+                Console.WriteLine($"Health: {health}");
+            })
+            .AddToUnregisterList(_unRegisterList);
+
+        model.HealthPercent
+            .RegisterWithInitValue(percent =>
+            {
+                Console.WriteLine($"Health Percent: {percent:P0}");
+            })
+            .AddToUnregisterList(_unRegisterList);
+    }
+
+    public void OnDamageButtonClicked()
+    {
+        this.SendCommand(new DamagePlayerCommand(15));
+    }
+
+    public void OnRenameButtonClicked(string newName)
+    {
+        this.SendCommand(new RenamePlayerCommand(newName));
+    }
+}
+```
+
+### 5. 什么时候这个示例比 BindableProperty 更合适
+
+如果你只需要：
+
+- `Health`
+- `Name`
+- `Level`
+
+分别独立通知，那么多个 `BindableProperty<T>` 就足够了。
+
+如果你很快会遇到以下问题，这个 Store 方案会更稳：
+
+- 一次操作要同时修改多个字段
+- 同一个业务操作要在多个界面复用
+- 希望把“状态结构”和“状态变化规则”集中在一起
+- 未来要加入 middleware、调试记录或撤销/重做能力
+
+### 6. 推荐的落地方式
+
+在实际项目里，建议按这个顺序引入：
+
+1. 先把复杂聚合状态封装到某个 Model 内部
+2. 再把修改入口逐步迁移到 Command
+3. 最后在 Controller 层使用 selector 或 `ToBindableProperty()` 做局部绑定
+
+这样不会破坏现有 `BindableProperty<T>` 的轻量工作流，也能让复杂状态逐步收敛到统一入口。
+
 ## 什么时候不用 Store
 
 以下情况继续优先使用 `BindableProperty<T>`：

@@ -22,7 +22,7 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
     /// <summary>
     ///     当前监听器列表。
     /// </summary>
-    private readonly List<Action<TSelected>> _listeners = [];
+    private readonly List<SelectionListenerSubscription> _listeners = [];
 
     /// <summary>
     ///     保护监听器集合和底层 Store 订阅句柄的同步锁。
@@ -96,6 +96,7 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
     {
         ArgumentNullException.ThrowIfNull(onValueChanged);
 
+        var subscription = new SelectionListenerSubscription(onValueChanged);
         var shouldAttach = false;
 
         lock (_lock)
@@ -106,7 +107,7 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
                 shouldAttach = true;
             }
 
-            _listeners.Add(onValueChanged);
+            _listeners.Add(subscription);
         }
 
         if (shouldAttach)
@@ -114,7 +115,7 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
             AttachToStore();
         }
 
-        return new DefaultUnRegister(() => UnRegister(onValueChanged));
+        return new DefaultUnRegister(() => UnRegister(subscription));
     }
 
     /// <summary>
@@ -127,9 +128,58 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
     {
         ArgumentNullException.ThrowIfNull(action);
 
+        var subscription = new SelectionListenerSubscription(action)
+        {
+            IsActive = false
+        };
         var currentValue = Value;
-        action(currentValue);
-        return Register(action);
+        TSelected? pendingValue = default;
+        var hasPendingValue = false;
+
+        lock (_lock)
+        {
+            if (_listeners.Count == 0)
+            {
+                _currentValue = currentValue;
+            }
+
+            _listeners.Add(subscription);
+        }
+
+        EnsureAttached();
+        try
+        {
+            action(currentValue);
+        }
+        catch
+        {
+            UnRegister(subscription);
+            throw;
+        }
+
+        lock (_lock)
+        {
+            if (!subscription.IsSubscribed)
+            {
+                return new DefaultUnRegister(() => { });
+            }
+
+            subscription.IsActive = true;
+            if (subscription.HasPendingValue)
+            {
+                pendingValue = subscription.PendingValue;
+                hasPendingValue = true;
+                subscription.PendingValue = default!;
+                subscription.HasPendingValue = false;
+            }
+        }
+
+        if (hasPendingValue)
+        {
+            action(pendingValue!);
+        }
+
+        return new DefaultUnRegister(() => UnRegister(subscription));
     }
 
     /// <summary>
@@ -141,11 +191,55 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
     {
         ArgumentNullException.ThrowIfNull(onValueChanged);
 
+        SelectionListenerSubscription? subscriptionToRemove = null;
+
+        lock (_lock)
+        {
+            var index = _listeners.FindIndex(subscription => subscription.Listener == onValueChanged);
+            if (index < 0)
+            {
+                return;
+            }
+
+            subscriptionToRemove = _listeners[index];
+        }
+
+        if (subscriptionToRemove != null)
+        {
+            UnRegister(subscriptionToRemove);
+        }
+    }
+
+    /// <summary>
+    ///     确保当前选择视图已连接到底层 Store。
+    /// </summary>
+    private void EnsureAttached()
+    {
+        var shouldAttach = false;
+
+        lock (_lock)
+        {
+            shouldAttach = _listeners.Count > 0 && _storeSubscription == null;
+        }
+
+        if (shouldAttach)
+        {
+            AttachToStore();
+        }
+    }
+
+    /// <summary>
+    ///     取消注册一个精确的选择结果监听器。
+    /// </summary>
+    /// <param name="subscriptionToRemove">需要移除的订阅对象。</param>
+    private void UnRegister(SelectionListenerSubscription subscriptionToRemove)
+    {
         IUnRegister? storeSubscription = null;
 
         lock (_lock)
         {
-            _listeners.Remove(onValueChanged);
+            subscriptionToRemove.IsSubscribed = false;
+            _listeners.Remove(subscriptionToRemove);
             if (_listeners.Count == 0 && _storeSubscription != null)
             {
                 storeSubscription = _storeSubscription;
@@ -186,7 +280,26 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
             if (!_comparer.Equals(_currentValue, latestValue))
             {
                 _currentValue = latestValue;
-                listenersSnapshot = _listeners.ToArray();
+                foreach (var listener in _listeners)
+                {
+                    if (!listener.IsSubscribed)
+                    {
+                        continue;
+                    }
+
+                    if (listener.IsActive)
+                    {
+                        continue;
+                    }
+
+                    listener.PendingValue = latestValue;
+                    listener.HasPendingValue = true;
+                }
+
+                listenersSnapshot = _listeners
+                    .Where(listener => listener.IsSubscribed && listener.IsActive)
+                    .Select(listener => listener.Listener)
+                    .ToArray();
                 shouldNotify = listenersSnapshot.Length > 0;
             }
         }
@@ -219,12 +332,63 @@ public class StoreSelection<TState, TSelected> : IReadonlyBindableProperty<TSele
             }
 
             _currentValue = selectedValue;
-            listenersSnapshot = _listeners.ToArray();
+            foreach (var listener in _listeners)
+            {
+                if (!listener.IsSubscribed)
+                {
+                    continue;
+                }
+
+                if (listener.IsActive)
+                {
+                    continue;
+                }
+
+                listener.PendingValue = selectedValue;
+                listener.HasPendingValue = true;
+            }
+
+            listenersSnapshot = _listeners
+                .Where(listener => listener.IsSubscribed && listener.IsActive)
+                .Select(listener => listener.Listener)
+                .ToArray();
         }
 
         foreach (var listener in listenersSnapshot)
         {
             listener(selectedValue);
         }
+    }
+
+    /// <summary>
+    ///     表示一个选择结果监听订阅。
+    ///     该对象用于保证 RegisterWithInitValue 在初始化回放与后续状态变化之间不会漏掉最近一次更新。
+    /// </summary>
+    private sealed class SelectionListenerSubscription(Action<TSelected> listener)
+    {
+        /// <summary>
+        ///     获取订阅回调。
+        /// </summary>
+        public Action<TSelected> Listener { get; } = listener;
+
+        /// <summary>
+        ///     获取或设置订阅是否已激活。
+        /// </summary>
+        public bool IsActive { get; set; } = true;
+
+        /// <summary>
+        ///     获取或设置订阅是否仍然有效。
+        /// </summary>
+        public bool IsSubscribed { get; set; } = true;
+
+        /// <summary>
+        ///     获取或设置是否存在待补发的局部状态值。
+        /// </summary>
+        public bool HasPendingValue { get; set; }
+
+        /// <summary>
+        ///     获取或设置初始化阶段积累的最新局部状态值。
+        /// </summary>
+        public TSelected PendingValue { get; set; } = default!;
     }
 }

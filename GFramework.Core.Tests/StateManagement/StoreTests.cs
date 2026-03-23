@@ -91,6 +91,27 @@ public class StoreTests
     }
 
     /// <summary>
+    ///     测试 Store 的 SubscribeWithInitValue 在初始化回放期间不会漏掉后续状态变化。
+    /// </summary>
+    [Test]
+    public void SubscribeWithInitValue_Should_Not_Miss_Changes_During_Init_Callback()
+    {
+        var store = CreateStore();
+        var receivedCounts = new List<int>();
+
+        store.SubscribeWithInitValue(state =>
+        {
+            receivedCounts.Add(state.Count);
+            if (receivedCounts.Count == 1)
+            {
+                store.Dispatch(new IncrementAction(1));
+            }
+        });
+
+        Assert.That(receivedCounts, Is.EqualTo(new[] { 0, 1 }));
+    }
+
+    /// <summary>
     ///     测试注销订阅后不会再收到后续通知。
     /// </summary>
     [Test]
@@ -143,6 +164,28 @@ public class StoreTests
         store.Dispatch(new IncrementAction(6));
 
         Assert.That(selectedCounts, Is.EqualTo(new[] { 11 }));
+    }
+
+    /// <summary>
+    ///     测试 StoreSelection 的 RegisterWithInitValue 在初始化回放期间不会漏掉后续局部状态变化。
+    /// </summary>
+    [Test]
+    public void Selection_RegisterWithInitValue_Should_Not_Miss_Changes_During_Init_Callback()
+    {
+        var store = CreateStore();
+        var selection = store.Select(state => state.Count);
+        var receivedCounts = new List<int>();
+
+        selection.RegisterWithInitValue(value =>
+        {
+            receivedCounts.Add(value);
+            if (receivedCounts.Count == 1)
+            {
+                store.Dispatch(new IncrementAction(1));
+            }
+        });
+
+        Assert.That(receivedCounts, Is.EqualTo(new[] { 0, 1 }));
     }
 
     /// <summary>
@@ -234,6 +277,46 @@ public class StoreTests
     }
 
     /// <summary>
+    ///     测试 Store 能够复用同一个缓存选择视图实例。
+    /// </summary>
+    [Test]
+    public void GetOrCreateSelection_Should_Return_Cached_Instance_For_Same_Key()
+    {
+        var store = CreateStore();
+
+        var first = store.GetOrCreateSelection("count", state => state.Count);
+        var second = store.GetOrCreateSelection("count", state => state.Count);
+
+        Assert.That(second, Is.SameAs(first));
+    }
+
+    /// <summary>
+    ///     测试 StoreBuilder 能够应用 reducer、中间件和状态比较器配置。
+    /// </summary>
+    [Test]
+    public void StoreBuilder_Should_Apply_Configured_Reducers_Middlewares_And_Comparer()
+    {
+        var logs = new List<string>();
+        var store = (Store<CounterState>)Store<CounterState>
+            .CreateBuilder()
+            .WithComparer(new CounterStateNameInsensitiveComparer())
+            .AddReducer<IncrementAction>((state, action) => state with { Count = state.Count + action.Amount })
+            .AddReducer<RenameAction>((state, action) => state with { Name = action.Name })
+            .UseMiddleware(new RecordingMiddleware(logs, "builder"))
+            .Build(new CounterState(0, "Player"));
+
+        var notifyCount = 0;
+        store.Subscribe(_ => notifyCount++);
+
+        store.Dispatch(new RenameAction("player"));
+        store.Dispatch(new IncrementAction(2));
+
+        Assert.That(notifyCount, Is.EqualTo(1));
+        Assert.That(store.State.Count, Is.EqualTo(2));
+        Assert.That(logs, Is.EqualTo(new[] { "builder:before", "builder:after", "builder:before", "builder:after" }));
+    }
+
+    /// <summary>
     ///     创建一个带有基础 reducer 的测试 Store。
     /// </summary>
     /// <param name="initialState">可选初始状态。</param>
@@ -312,6 +395,45 @@ public class StoreTests
         public int GetHashCode(int obj)
         {
             return obj / 10;
+        }
+    }
+
+    /// <summary>
+    ///     用于测试 StoreBuilder 自定义状态比较器的比较器实现。
+    ///     该比较器忽略名称字段的大小写差异，并保持计数字段严格比较。
+    /// </summary>
+    private sealed class CounterStateNameInsensitiveComparer : IEqualityComparer<CounterState>
+    {
+        /// <summary>
+        ///     判断两个状态是否在业务语义上相等。
+        /// </summary>
+        /// <param name="x">左侧状态。</param>
+        /// <param name="y">右侧状态。</param>
+        /// <returns>若两个状态在计数相同且名称仅大小写不同，则返回 <see langword="true"/>。</returns>
+        public bool Equals(CounterState? x, CounterState? y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x is null || y is null)
+            {
+                return false;
+            }
+
+            return x.Count == y.Count &&
+                   string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        ///     返回与业务语义一致的哈希码。
+        /// </summary>
+        /// <param name="obj">目标状态。</param>
+        /// <returns>忽略名称大小写后的哈希码。</returns>
+        public int GetHashCode(CounterState obj)
+        {
+            return HashCode.Combine(obj.Count, StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Name));
         }
     }
 
