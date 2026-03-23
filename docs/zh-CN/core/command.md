@@ -122,6 +122,30 @@ public class UISystem : AbstractSystem
 - 避免在命令中保存长期引用
 - 命令执行应该是原子操作
 
+### 与 Store 配合使用
+
+当某个 Model 内部使用 `Store<TState>` 管理复杂聚合状态时，Command 依然是推荐的写入口。
+
+```csharp
+public sealed class DamagePlayerCommand(int amount) : AbstractCommand
+{
+    protected override void OnExecute()
+    {
+        var model = this.GetModel<PlayerPanelModel>();
+        model.Store.Dispatch(new DamagePlayerAction(amount));
+    }
+}
+```
+
+这样可以保持现有职责边界不变：
+
+- Controller 发送命令
+- Command 执行操作
+- Model 承载状态
+- Store 负责统一归约状态变化
+
+完整示例见 [`state-management`](./state-management)。
+
 ## CommandBus - 命令总线
 
 ### 功能说明
