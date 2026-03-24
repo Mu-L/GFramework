@@ -6,18 +6,35 @@ namespace GFramework.Core.StateManagement;
 
 /// <summary>
 ///     集中式状态容器的默认实现，用于统一管理复杂状态树的读取、归约和订阅通知。
-///     该类型定位于现有 BindableProperty 之上的可选能力，适合跨模块共享、需要统一变更入口
-///     或需要中间件/诊断能力的状态场景，而不是替代所有简单字段级响应式属性。
+///     该类型定位于现有 BindableProperty 之上的可选能力，适合跨模块共享、需要统一变更入口、
+///     支持调试历史或需要中间件/诊断能力的状态场景，而不是替代所有简单字段级响应式属性。
 /// </summary>
 /// <typeparam name="TState">状态树的根状态类型。</typeparam>
 public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 {
     /// <summary>
+    ///     当前 Store 使用的 action 匹配策略。
+    /// </summary>
+    private readonly StoreActionMatchingMode _actionMatchingMode;
+
+    /// <summary>
     ///     Dispatch 串行化门闩。
-    ///     该锁保证任意时刻只有一个 action 管线在运行，从而保持状态演进顺序确定，
+    ///     该锁保证任意时刻只有一个 action 管线或历史跳转在提交状态，从而保持状态演进顺序确定，
     ///     同时避免让耗时 middleware / reducer 长时间占用状态锁。
     /// </summary>
     private readonly object _dispatchGate = new();
+
+    /// <summary>
+    ///     历史快照缓冲区。
+    ///     当容量为 0 时该集合始终为空；启用后会保留当前时间线上的最近若干个状态快照。
+    /// </summary>
+    private readonly List<StoreHistoryEntry<TState>> _history = [];
+
+    /// <summary>
+    ///     历史缓冲区容量。
+    ///     该容量包含当前状态锚点，因此容量越小，可撤销的步数也越少。
+    /// </summary>
+    private readonly int _historyCapacity;
 
     /// <summary>
     ///     当前状态变化订阅者列表。
@@ -27,7 +44,7 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
     /// <summary>
     ///     Store 内部所有可变状态的同步锁。
-    ///     该锁仅保护状态快照、订阅集合、缓存选择视图和注册表本身的短临界区访问。
+    ///     该锁仅保护状态快照、订阅集合、缓存选择视图、历史记录和注册表本身的短临界区访问。
     /// </summary>
     private readonly object _lock = new();
 
@@ -39,10 +56,8 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     private readonly List<MiddlewareRegistration> _middlewares = [];
 
     /// <summary>
-    ///     按 action 具体运行时类型组织的 reducer 注册表。
-    ///     Store 采用精确类型匹配策略，保证 reducer 执行顺序和行为保持确定性。
-    ///     每个 reducer 通过注册条目获得稳定身份，以支持运行时精确注销。
-    ///     Dispatch 开始时会抓取对应 action 类型的 reducer 快照。
+    ///     按 action 注册类型组织的 reducer 注册表。
+    ///     默认使用精确类型匹配；启用多态匹配时，会在分发时按确定性的优先级扫描可赋值类型。
     /// </summary>
     private readonly Dictionary<Type, List<ReducerRegistration>> _reducers = [];
 
@@ -58,8 +73,25 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     private readonly IEqualityComparer<TState> _stateComparer;
 
     /// <summary>
+    ///     当前批处理嵌套深度。
+    ///     大于 0 时会推迟状态通知，直到最外层批处理结束。
+    /// </summary>
+    private int _batchDepth;
+
+    /// <summary>
+    ///     当前批处理中是否有待发送的最终状态通知。
+    /// </summary>
+    private bool _hasPendingBatchNotification;
+
+    /// <summary>
+    ///     当前历史游标位置。
+    ///     当未启用历史记录时，该值保持为 -1。
+    /// </summary>
+    private int _historyIndex = -1;
+
+    /// <summary>
     ///     标记当前 Store 是否正在执行分发。
-    ///     该标记用于阻止同一 Store 的重入分发，避免产生难以推导的执行顺序和状态回滚问题。
+    ///     该标记用于阻止同一 Store 的重入分发或在 dispatch 中执行历史跳转，避免产生难以推导的执行顺序。
     /// </summary>
     private bool _isDispatching;
 
@@ -79,6 +111,17 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     private DateTimeOffset? _lastStateChangedAt;
 
     /// <summary>
+    ///     reducer 注册序号。
+    ///     该序号用于在多态匹配时为不同注册桶提供跨类型的稳定排序键。
+    /// </summary>
+    private long _nextReducerSequence;
+
+    /// <summary>
+    ///     当前批处理中最后一个应通知给订阅者的状态快照。
+    /// </summary>
+    private TState _pendingBatchState = default!;
+
+    /// <summary>
     ///     当前 Store 持有的状态快照。
     /// </summary>
     private TState _state;
@@ -88,10 +131,30 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     /// </summary>
     /// <param name="initialState">Store 的初始状态。</param>
     /// <param name="comparer">状态比较器；未提供时使用 <see cref="EqualityComparer{T}.Default"/>。</param>
-    public Store(TState initialState, IEqualityComparer<TState>? comparer = null)
+    /// <param name="historyCapacity">历史缓冲区容量；0 表示不启用历史记录。</param>
+    /// <param name="actionMatchingMode">reducer 的 action 匹配策略。</param>
+    /// <exception cref="ArgumentOutOfRangeException">当 <paramref name="historyCapacity"/> 小于 0 时抛出。</exception>
+    public Store(
+        TState initialState,
+        IEqualityComparer<TState>? comparer = null,
+        int historyCapacity = 0,
+        StoreActionMatchingMode actionMatchingMode = StoreActionMatchingMode.ExactTypeOnly)
     {
+        if (historyCapacity < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(historyCapacity), historyCapacity,
+                "History capacity cannot be negative.");
+        }
+
         _state = initialState;
         _stateComparer = comparer ?? EqualityComparer<TState>.Default;
+        _historyCapacity = historyCapacity;
+        _actionMatchingMode = actionMatchingMode;
+
+        if (_historyCapacity > 0)
+        {
+            ResetHistoryToCurrentState(DateTimeOffset.UtcNow);
+        }
     }
 
     /// <summary>
@@ -104,6 +167,34 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
             lock (_lock)
             {
                 return _state;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前是否可以撤销到更早的历史状态。
+    /// </summary>
+    public bool CanUndo
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _historyCapacity > 0 && _historyIndex > 0;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前是否可以重做到更晚的历史状态。
+    /// </summary>
+    public bool CanRedo
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _historyCapacity > 0 && _historyIndex >= 0 && _historyIndex < _history.Count - 1;
             }
         }
     }
@@ -124,6 +215,8 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         IStoreReducerAdapter[] reducersSnapshot = Array.Empty<IStoreReducerAdapter>();
         IEqualityComparer<TState> stateComparerSnapshot = _stateComparer;
         StoreDispatchContext<TState>? context = null;
+        TState notificationState = default!;
+        var hasNotification = false;
         var enteredDispatchScope = false;
 
         lock (_dispatchGate)
@@ -137,8 +230,8 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
                     enteredDispatchScope = true;
                     context = new StoreDispatchContext<TState>(action!, _state);
                     stateComparerSnapshot = _stateComparer;
-                    middlewaresSnapshot = CreateMiddlewareSnapshot();
-                    reducersSnapshot = CreateReducerSnapshot(context.ActionType);
+                    middlewaresSnapshot = CreateMiddlewareSnapshotCore();
+                    reducersSnapshot = CreateReducerSnapshotCore(context.ActionType);
                 }
 
                 // middleware 和 reducer 可能包含较重的同步逻辑，因此仅持有 dispatch 串行门，
@@ -160,9 +253,9 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
                         return;
                     }
 
-                    _state = context.NextState;
-                    _lastStateChangedAt = context.DispatchedAt;
-                    listenersSnapshot = SnapshotListenersForNotification(context.NextState);
+                    ApplyCommittedStateChange(context.NextState, context.DispatchedAt, context.Action);
+                    listenersSnapshot = CaptureListenersOrDeferNotification(context.NextState, out notificationState);
+                    hasNotification = listenersSnapshot.Length > 0;
                 }
             }
             finally
@@ -177,10 +270,108 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
             }
         }
 
-        // 始终在锁外通知订阅者，避免监听器内部读取 Store 或执行额外逻辑时产生死锁。
-        foreach (var listener in listenersSnapshot)
+        if (!hasNotification)
         {
-            listener(context!.NextState);
+            return;
+        }
+
+        NotifyListeners(listenersSnapshot, notificationState);
+    }
+
+    /// <summary>
+    ///     将多个状态操作合并到一个批处理中执行。
+    ///     批处理内的状态变化会立即提交，但通知会在最外层批处理结束后折叠为一次最终回放。
+    /// </summary>
+    /// <param name="batchAction">批处理主体。</param>
+    /// <exception cref="ArgumentNullException">当 <paramref name="batchAction"/> 为 <see langword="null"/> 时抛出。</exception>
+    public void RunInBatch(Action batchAction)
+    {
+        ArgumentNullException.ThrowIfNull(batchAction);
+
+        lock (_lock)
+        {
+            _batchDepth++;
+        }
+
+        Action<TState>[] listenersSnapshot = Array.Empty<Action<TState>>();
+        TState notificationState = default!;
+
+        try
+        {
+            batchAction();
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                if (_batchDepth == 0)
+                {
+                    throw new InvalidOperationException("Batch depth is already zero.");
+                }
+
+                _batchDepth--;
+                if (_batchDepth == 0 && _hasPendingBatchNotification)
+                {
+                    notificationState = _pendingBatchState;
+                    _pendingBatchState = default!;
+                    _hasPendingBatchNotification = false;
+                    listenersSnapshot = SnapshotListenersForNotification(notificationState);
+                }
+            }
+        }
+
+        if (listenersSnapshot.Length > 0)
+        {
+            NotifyListeners(listenersSnapshot, notificationState);
+        }
+    }
+
+    /// <summary>
+    ///     将当前状态回退到上一个历史点。
+    /// </summary>
+    /// <exception cref="InvalidOperationException">当历史缓冲区未启用，或当前已经没有可撤销的历史点时抛出。</exception>
+    public void Undo()
+    {
+        MoveToHistoryIndex(-1, isRelative: true, nameof(Undo), "No earlier history entry is available for undo.");
+    }
+
+    /// <summary>
+    ///     将当前状态前进到下一个历史点。
+    /// </summary>
+    /// <exception cref="InvalidOperationException">当历史缓冲区未启用，或当前已经没有可重做的历史点时抛出。</exception>
+    public void Redo()
+    {
+        MoveToHistoryIndex(1, isRelative: true, nameof(Redo), "No later history entry is available for redo.");
+    }
+
+    /// <summary>
+    ///     跳转到指定索引的历史点。
+    /// </summary>
+    /// <param name="historyIndex">目标历史索引，从 0 开始。</param>
+    /// <exception cref="InvalidOperationException">当历史缓冲区未启用时抛出。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">当 <paramref name="historyIndex"/> 超出历史范围时抛出。</exception>
+    public void TimeTravelTo(int historyIndex)
+    {
+        MoveToHistoryIndex(historyIndex, isRelative: false, nameof(historyIndex), null);
+    }
+
+    /// <summary>
+    ///     清空当前撤销/重做历史，并以当前状态作为新的历史锚点。
+    /// </summary>
+    public void ClearHistory()
+    {
+        lock (_dispatchGate)
+        {
+            lock (_lock)
+            {
+                EnsureNotDispatching();
+                if (_historyCapacity == 0)
+                {
+                    return;
+                }
+
+                ResetHistoryToCurrentState(DateTimeOffset.UtcNow);
+            }
         }
     }
 
@@ -342,6 +533,72 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     }
 
     /// <summary>
+    ///     获取当前 Store 使用的 action 匹配策略。
+    /// </summary>
+    public StoreActionMatchingMode ActionMatchingMode => _actionMatchingMode;
+
+    /// <summary>
+    ///     获取历史缓冲区容量。
+    /// </summary>
+    public int HistoryCapacity => _historyCapacity;
+
+    /// <summary>
+    ///     获取当前可见历史记录数量。
+    /// </summary>
+    public int HistoryCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _history.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前状态在历史缓冲区中的索引。
+    /// </summary>
+    public int HistoryIndex
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _historyIndex;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前历史快照列表。
+    /// </summary>
+    public IReadOnlyList<StoreHistoryEntry<TState>> HistoryEntries
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _history.Count == 0 ? Array.Empty<StoreHistoryEntry<TState>>() : _history.ToArray();
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前是否处于批处理阶段。
+    /// </summary>
+    public bool IsBatching
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _batchDepth > 0;
+            }
+        }
+    }
+
+    /// <summary>
     ///     创建一个用于当前状态类型的 Store 构建器。
     /// </summary>
     /// <returns>新的 Store 构建器实例。</returns>
@@ -394,10 +651,12 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         ArgumentNullException.ThrowIfNull(reducer);
 
         var actionType = typeof(TAction);
-        var registration = new ReducerRegistration(new ReducerAdapter<TAction>(reducer));
+        ReducerRegistration registration;
 
         lock (_lock)
         {
+            registration = new ReducerRegistration(new ReducerAdapter<TAction>(reducer), _nextReducerSequence++);
+
             if (!_reducers.TryGetValue(actionType, out var reducers))
             {
                 reducers = [];
@@ -540,7 +799,7 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
     /// <summary>
     ///     对当前 action 应用所有匹配的 reducer。
-    ///     reducer 使用 action 的精确运行时类型进行查找，以保证匹配结果和执行顺序稳定。
+    ///     reducer 会按照预先计算好的稳定顺序执行，从而在多态匹配模式下仍保持确定性的状态演进。
     /// </summary>
     /// <param name="context">当前分发上下文。</param>
     /// <param name="reducers">本次分发使用的 reducer 快照。</param>
@@ -571,7 +830,7 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     }
 
     /// <summary>
-    ///     确保当前 Store 没有发生重入分发。
+    ///     确保当前 Store 没有发生重入分发或在 dispatch 中执行历史控制。
     /// </summary>
     /// <exception cref="InvalidOperationException">当检测到重入分发时抛出。</exception>
     private void EnsureNotDispatching()
@@ -580,6 +839,20 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         {
             throw new InvalidOperationException("Nested dispatch on the same store is not allowed.");
         }
+    }
+
+    /// <summary>
+    ///     将新的已提交状态应用到 Store。
+    ///     该方法负责统一更新当前状态、最后变更时间和历史缓冲区，避免 dispatch 与 time-travel 路径产生分叉语义。
+    /// </summary>
+    /// <param name="nextState">要提交的新状态。</param>
+    /// <param name="changedAt">状态生效时间。</param>
+    /// <param name="action">触发该状态的 action；若本次变化不是由 dispatch 触发，则为 <see langword="null"/>。</param>
+    private void ApplyCommittedStateChange(TState nextState, DateTimeOffset changedAt, object? action)
+    {
+        _state = nextState;
+        _lastStateChangedAt = changedAt;
+        RecordHistoryEntry(nextState, changedAt, action);
     }
 
     /// <summary>
@@ -616,52 +889,310 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     }
 
     /// <summary>
+    ///     根据当前批处理状态决定是立即提取监听器快照，还是把通知折叠到批处理尾部。
+    /// </summary>
+    /// <param name="nextState">最新状态快照。</param>
+    /// <param name="notificationState">若需要立即通知，则返回要回放给监听器的状态。</param>
+    /// <returns>需要立即通知的监听器快照；若处于批处理阶段则返回空数组。</returns>
+    private Action<TState>[] CaptureListenersOrDeferNotification(TState nextState, out TState notificationState)
+    {
+        if (_batchDepth > 0)
+        {
+            _pendingBatchState = nextState;
+            _hasPendingBatchNotification = true;
+            notificationState = default!;
+            return Array.Empty<Action<TState>>();
+        }
+
+        notificationState = nextState;
+        return SnapshotListenersForNotification(nextState);
+    }
+
+    /// <summary>
     ///     为当前中间件链创建快照。
-    ///     该方法自行获取状态锁，避免调用方必须记住“只能在已加锁条件下调用”这一隐含约束，
-    ///     从而降低未来重构时把它误用到锁外路径中的风险。
+    ///     调用该方法时必须已经持有状态锁，从而避免额外的锁重入和快照时序歧义。
     /// </summary>
     /// <returns>当前中间件链的快照；若未注册则返回空数组。</returns>
-    private IStoreMiddleware<TState>[] CreateMiddlewareSnapshot()
+    private IStoreMiddleware<TState>[] CreateMiddlewareSnapshotCore()
     {
-        lock (_lock)
+        if (_middlewares.Count == 0)
         {
-            if (_middlewares.Count == 0)
-            {
-                return Array.Empty<IStoreMiddleware<TState>>();
-            }
-
-            var snapshot = new IStoreMiddleware<TState>[_middlewares.Count];
-            for (var i = 0; i < _middlewares.Count; i++)
-            {
-                snapshot[i] = _middlewares[i].Middleware;
-            }
-
-            return snapshot;
+            return Array.Empty<IStoreMiddleware<TState>>();
         }
+
+        var snapshot = new IStoreMiddleware<TState>[_middlewares.Count];
+        for (var i = 0; i < _middlewares.Count; i++)
+        {
+            snapshot[i] = _middlewares[i].Middleware;
+        }
+
+        return snapshot;
     }
 
     /// <summary>
     ///     为当前 action 类型创建 reducer 快照。
-    ///     该方法自行获取状态锁，避免让快照安全性依赖调用方的锁顺序知识。
+    ///     在精确匹配模式下只读取一个注册桶；在多态模式下会按稳定排序规则合并可赋值的基类和接口注册。
     /// </summary>
     /// <param name="actionType">当前分发的 action 类型。</param>
     /// <returns>对应 action 类型的 reducer 快照；若未注册则返回空数组。</returns>
-    private IStoreReducerAdapter[] CreateReducerSnapshot(Type actionType)
+    private IStoreReducerAdapter[] CreateReducerSnapshotCore(Type actionType)
     {
-        lock (_lock)
+        if (_actionMatchingMode == StoreActionMatchingMode.ExactTypeOnly)
         {
-            if (!_reducers.TryGetValue(actionType, out var reducers) || reducers.Count == 0)
+            if (!_reducers.TryGetValue(actionType, out var exactReducers) || exactReducers.Count == 0)
             {
                 return Array.Empty<IStoreReducerAdapter>();
             }
 
-            var snapshot = new IStoreReducerAdapter[reducers.Count];
-            for (var i = 0; i < reducers.Count; i++)
+            var exactSnapshot = new IStoreReducerAdapter[exactReducers.Count];
+            for (var i = 0; i < exactReducers.Count; i++)
             {
-                snapshot[i] = reducers[i].Adapter;
+                exactSnapshot[i] = exactReducers[i].Adapter;
             }
 
-            return snapshot;
+            return exactSnapshot;
+        }
+
+        List<ReducerMatch>? matches = null;
+
+        foreach (var reducerBucket in _reducers)
+        {
+            if (!TryCreateReducerMatch(actionType, reducerBucket.Key, out var matchCategory,
+                    out var inheritanceDistance))
+            {
+                continue;
+            }
+
+            matches ??= new List<ReducerMatch>();
+            foreach (var registration in reducerBucket.Value)
+            {
+                matches.Add(new ReducerMatch(
+                    registration.Adapter,
+                    registration.Sequence,
+                    matchCategory,
+                    inheritanceDistance));
+            }
+        }
+
+        if (matches is null || matches.Count == 0)
+        {
+            return Array.Empty<IStoreReducerAdapter>();
+        }
+
+        matches.Sort(static (left, right) =>
+        {
+            var categoryComparison = left.MatchCategory.CompareTo(right.MatchCategory);
+            if (categoryComparison != 0)
+            {
+                return categoryComparison;
+            }
+
+            var distanceComparison = left.InheritanceDistance.CompareTo(right.InheritanceDistance);
+            if (distanceComparison != 0)
+            {
+                return distanceComparison;
+            }
+
+            return left.Sequence.CompareTo(right.Sequence);
+        });
+
+        var snapshot = new IStoreReducerAdapter[matches.Count];
+        for (var i = 0; i < matches.Count; i++)
+        {
+            snapshot[i] = matches[i].Adapter;
+        }
+
+        return snapshot;
+    }
+
+    /// <summary>
+    ///     判断指定 reducer 注册类型是否能匹配当前 action 类型，并给出用于稳定排序的分类信息。
+    /// </summary>
+    /// <param name="actionType">当前 action 的运行时类型。</param>
+    /// <param name="registeredActionType">reducer 注册时声明的 action 类型。</param>
+    /// <param name="matchCategory">匹配分类：0 为精确类型，1 为基类，2 为接口。</param>
+    /// <param name="inheritanceDistance">继承距离，值越小表示越接近当前 action 类型。</param>
+    /// <returns>若可以匹配则返回 <see langword="true"/>。</returns>
+    private static bool TryCreateReducerMatch(
+        Type actionType,
+        Type registeredActionType,
+        out int matchCategory,
+        out int inheritanceDistance)
+    {
+        if (registeredActionType == actionType)
+        {
+            matchCategory = 0;
+            inheritanceDistance = 0;
+            return true;
+        }
+
+        if (!registeredActionType.IsAssignableFrom(actionType))
+        {
+            matchCategory = default;
+            inheritanceDistance = default;
+            return false;
+        }
+
+        if (registeredActionType.IsInterface)
+        {
+            matchCategory = 2;
+            inheritanceDistance = 0;
+            return true;
+        }
+
+        matchCategory = 1;
+        inheritanceDistance = GetInheritanceDistance(actionType, registeredActionType);
+        return true;
+    }
+
+    /// <summary>
+    ///     计算当前 action 类型到目标基类的继承距离。
+    ///     距离越小表示基类越接近当前 action 类型，在多态匹配排序中优先级越高。
+    /// </summary>
+    /// <param name="actionType">当前 action 的运行时类型。</param>
+    /// <param name="registeredActionType">reducer 注册时声明的基类类型。</param>
+    /// <returns>从当前 action 到目标基类的继承层级数。</returns>
+    private static int GetInheritanceDistance(Type actionType, Type registeredActionType)
+    {
+        var distance = 0;
+        var currentType = actionType;
+
+        while (currentType != registeredActionType && currentType.BaseType is not null)
+        {
+            currentType = currentType.BaseType;
+            distance++;
+        }
+
+        return distance;
+    }
+
+    /// <summary>
+    ///     记录一条新的历史快照。
+    ///     当当前游标不在时间线末尾时，会先裁掉 redo 分支，再追加新的状态快照。
+    /// </summary>
+    /// <param name="state">要记录的状态快照。</param>
+    /// <param name="recordedAt">历史记录时间。</param>
+    /// <param name="action">触发该状态的 action；若为空则表示当前变化不应写入历史。</param>
+    private void RecordHistoryEntry(TState state, DateTimeOffset recordedAt, object? action)
+    {
+        if (_historyCapacity == 0)
+        {
+            return;
+        }
+
+        if (action is null)
+        {
+            return;
+        }
+
+        if (_historyIndex >= 0 && _historyIndex < _history.Count - 1)
+        {
+            _history.RemoveRange(_historyIndex + 1, _history.Count - _historyIndex - 1);
+        }
+
+        _history.Add(new StoreHistoryEntry<TState>(state, recordedAt, action));
+        _historyIndex = _history.Count - 1;
+
+        if (_history.Count <= _historyCapacity)
+        {
+            return;
+        }
+
+        var overflow = _history.Count - _historyCapacity;
+        _history.RemoveRange(0, overflow);
+        _historyIndex = Math.Max(0, _historyIndex - overflow);
+    }
+
+    /// <summary>
+    ///     将当前状态重置为新的历史锚点。
+    ///     该操作用于 Store 初始化和显式清空历史后重新建立时间线起点。
+    /// </summary>
+    /// <param name="recordedAt">锚点记录时间。</param>
+    private void ResetHistoryToCurrentState(DateTimeOffset recordedAt)
+    {
+        _history.Clear();
+        _history.Add(new StoreHistoryEntry<TState>(_state, recordedAt));
+        _historyIndex = 0;
+    }
+
+    /// <summary>
+    ///     将当前状态移动到指定历史索引。
+    ///     该方法统一承载 Undo、Redo 和显式时间旅行路径，确保通知与批处理语义保持一致。
+    /// </summary>
+    /// <param name="historyIndexOrOffset">目标索引或相对偏移量。</param>
+    /// <param name="isRelative">是否按相对偏移量解释 <paramref name="historyIndexOrOffset"/>。</param>
+    /// <param name="argumentName">参数名，用于异常信息。</param>
+    /// <param name="emptyHistoryMessage">当相对跳转无可用历史时的错误信息；绝对跳转场景传 <see langword="null"/>。</param>
+    private void MoveToHistoryIndex(
+        int historyIndexOrOffset,
+        bool isRelative,
+        string argumentName,
+        string? emptyHistoryMessage)
+    {
+        Action<TState>[] listenersSnapshot = Array.Empty<Action<TState>>();
+        TState notificationState = default!;
+
+        lock (_dispatchGate)
+        {
+            lock (_lock)
+            {
+                EnsureNotDispatching();
+                EnsureHistoryEnabled();
+
+                var targetIndex = isRelative ? _historyIndex + historyIndexOrOffset : historyIndexOrOffset;
+                if (targetIndex < 0 || targetIndex >= _history.Count)
+                {
+                    if (isRelative)
+                    {
+                        throw new InvalidOperationException(emptyHistoryMessage);
+                    }
+
+                    throw new ArgumentOutOfRangeException(argumentName, historyIndexOrOffset,
+                        "History index is out of range.");
+                }
+
+                if (targetIndex == _historyIndex)
+                {
+                    return;
+                }
+
+                _historyIndex = targetIndex;
+                notificationState = _history[targetIndex].State;
+                _state = notificationState;
+                _lastStateChangedAt = DateTimeOffset.UtcNow;
+                listenersSnapshot = CaptureListenersOrDeferNotification(notificationState, out notificationState);
+            }
+        }
+
+        if (listenersSnapshot.Length > 0)
+        {
+            NotifyListeners(listenersSnapshot, notificationState);
+        }
+    }
+
+    /// <summary>
+    ///     确保当前 Store 已启用历史缓冲区。
+    /// </summary>
+    /// <exception cref="InvalidOperationException">当历史记录未启用时抛出。</exception>
+    private void EnsureHistoryEnabled()
+    {
+        if (_historyCapacity == 0)
+        {
+            throw new InvalidOperationException("History is not enabled for this store.");
+        }
+    }
+
+    /// <summary>
+    ///     在锁外顺序通知监听器。
+    ///     始终在锁外通知可避免监听器内部读取 Store 或执行额外逻辑时产生死锁。
+    /// </summary>
+    /// <param name="listenersSnapshot">监听器快照。</param>
+    /// <param name="state">要回放给监听器的状态。</param>
+    private static void NotifyListeners(Action<TState>[] listenersSnapshot, TState state)
+    {
+        foreach (var listener in listenersSnapshot)
+        {
+            listener(state);
         }
     }
 
@@ -756,14 +1287,51 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
     /// <summary>
     ///     表示一条 reducer 注册记录。
-    ///     该包装对象为运行时注销提供稳定身份，同时不改变 reducer 的执行顺序语义。
+    ///     该包装对象为运行时注销提供稳定身份，并携带全局序号以支撑多态匹配时的稳定排序。
     /// </summary>
-    private sealed class ReducerRegistration(IStoreReducerAdapter adapter)
+    private sealed class ReducerRegistration(IStoreReducerAdapter adapter, long sequence)
     {
         /// <summary>
         ///     获取真正执行归约的内部适配器。
         /// </summary>
         public IStoreReducerAdapter Adapter { get; } = adapter;
+
+        /// <summary>
+        ///     获取该 reducer 的全局注册序号。
+        /// </summary>
+        public long Sequence { get; } = sequence;
+    }
+
+    /// <summary>
+    ///     表示一次多态 reducer 匹配结果。
+    ///     该结构在创建快照时缓存排序所需元数据，避免排序阶段重复计算类型关系。
+    /// </summary>
+    private sealed class ReducerMatch(
+        IStoreReducerAdapter adapter,
+        long sequence,
+        int matchCategory,
+        int inheritanceDistance)
+    {
+        /// <summary>
+        ///     获取匹配到的 reducer 适配器。
+        /// </summary>
+        public IStoreReducerAdapter Adapter { get; } = adapter;
+
+        /// <summary>
+        ///     获取 reducer 的全局注册序号。
+        /// </summary>
+        public long Sequence { get; } = sequence;
+
+        /// <summary>
+        ///     获取匹配分类：0 为精确类型，1 为基类，2 为接口。
+        /// </summary>
+        public int MatchCategory { get; } = matchCategory;
+
+        /// <summary>
+        ///     获取继承距离。
+        ///     该值越小表示注册类型越接近当前 action 类型。
+        /// </summary>
+        public int InheritanceDistance { get; } = inheritanceDistance;
     }
 
     /// <summary>

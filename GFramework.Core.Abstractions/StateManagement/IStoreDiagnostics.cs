@@ -28,4 +28,39 @@ public interface IStoreDiagnostics<TState>
     ///     获取最近一次分发记录。
     /// </summary>
     StoreDispatchRecord<TState>? LastDispatchRecord { get; }
+
+    /// <summary>
+    ///     获取当前 Store 使用的 action 匹配策略。
+    /// </summary>
+    StoreActionMatchingMode ActionMatchingMode { get; }
+
+    /// <summary>
+    ///     获取历史缓冲区容量。
+    ///     返回 0 表示当前 Store 未启用历史记录能力。
+    /// </summary>
+    int HistoryCapacity { get; }
+
+    /// <summary>
+    ///     获取当前可见历史记录数量。
+    ///     当历史记录启用时，该值至少为 1，因为当前状态会作为历史锚点存在。
+    /// </summary>
+    int HistoryCount { get; }
+
+    /// <summary>
+    ///     获取当前状态在历史缓冲区中的索引。
+    ///     当未启用历史记录时返回 -1。
+    /// </summary>
+    int HistoryIndex { get; }
+
+    /// <summary>
+    ///     获取当前历史快照列表。
+    ///     调试工具可以基于该列表渲染时间旅行面板，而不需要访问 Store 内部结构。
+    /// </summary>
+    IReadOnlyList<StoreHistoryEntry<TState>> HistoryEntries { get; }
+
+    /// <summary>
+    ///     获取当前是否处于批处理阶段。
+    ///     该值为 <see langword="true"/> 时，状态变更通知会延迟到最外层批处理结束后再统一发送。
+    /// </summary>
+    bool IsBatching { get; }
 }

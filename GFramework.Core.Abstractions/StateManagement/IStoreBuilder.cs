@@ -15,6 +15,22 @@ public interface IStoreBuilder<TState>
     IStoreBuilder<TState> WithComparer(IEqualityComparer<TState> comparer);
 
     /// <summary>
+    ///     配置历史缓冲区容量。
+    ///     传入 0 表示禁用历史记录；大于 0 时会保留最近若干个状态快照，用于撤销、重做和时间旅行调试。
+    /// </summary>
+    /// <param name="historyCapacity">历史缓冲区容量。</param>
+    /// <returns>当前构建器实例。</returns>
+    IStoreBuilder<TState> WithHistoryCapacity(int historyCapacity);
+
+    /// <summary>
+    ///     配置 reducer 的 action 匹配策略。
+    ///     默认使用 <see cref="StoreActionMatchingMode.ExactTypeOnly"/>，仅在需要复用基类或接口 action 层次时再启用多态匹配。
+    /// </summary>
+    /// <param name="actionMatchingMode">要使用的匹配策略。</param>
+    /// <returns>当前构建器实例。</returns>
+    IStoreBuilder<TState> WithActionMatching(StoreActionMatchingMode actionMatchingMode);
+
+    /// <summary>
     ///     添加一个强类型 reducer。
     /// </summary>
     /// <typeparam name="TAction">当前 reducer 处理的 action 类型。</typeparam>
