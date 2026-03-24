@@ -536,7 +536,8 @@ public class StoreTests
 
         Assert.That(store.State.Count, Is.EqualTo(12));
         Assert.That(store.CanRedo, Is.False, "新 dispatch 应清除 redo 分支");
-        Assert.That(store.HistoryEntries.Select(entry => entry.State.Count), Is.EqualTo(new[] { 0, 1, 2, 12 }));
+        Assert.That(store.GetHistoryEntriesSnapshot().Select(entry => entry.State.Count),
+            Is.EqualTo(new[] { 0, 1, 2, 12 }));
     }
 
     /// <summary>
@@ -556,7 +557,7 @@ public class StoreTests
         Assert.That(store.HistoryCount, Is.EqualTo(1));
         Assert.That(store.HistoryIndex, Is.EqualTo(0));
         Assert.That(store.CanUndo, Is.False);
-        Assert.That(store.HistoryEntries[0].State.Count, Is.EqualTo(2));
+        Assert.That(store.GetHistoryEntriesSnapshot()[0].State.Count, Is.EqualTo(2));
     }
 
     /// <summary>

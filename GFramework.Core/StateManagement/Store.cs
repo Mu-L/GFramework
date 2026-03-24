@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Abstractions.StateManagement;
 using GFramework.Core.Events;
@@ -154,48 +155,6 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
         if (_historyCapacity > 0)
         {
             ResetHistoryToCurrentState(DateTimeOffset.UtcNow);
-        }
-    }
-
-    /// <summary>
-    ///     获取最近一次分发的 action 类型。
-    /// </summary>
-    public Type? LastActionType
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _lastActionType;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取最近一次真正改变状态的时间戳。
-    /// </summary>
-    public DateTimeOffset? LastStateChangedAt
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _lastStateChangedAt;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取当前历史快照列表。
-    /// </summary>
-    public IReadOnlyList<StoreHistoryEntry<TState>> HistoryEntries
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _history.Count == 0 ? Array.Empty<StoreHistoryEntry<TState>>() : _history.ToArray();
-            }
         }
     }
 
@@ -370,86 +329,6 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
     }
 
     /// <summary>
-    ///     获取当前订阅者数量。
-    /// </summary>
-    public int SubscriberCount
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _listeners.Count;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取最近一次分发记录。
-    /// </summary>
-    public StoreDispatchRecord<TState>? LastDispatchRecord
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _lastDispatchRecord;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取当前 Store 使用的 action 匹配策略。
-    /// </summary>
-    public StoreActionMatchingMode ActionMatchingMode => _actionMatchingMode;
-
-    /// <summary>
-    ///     获取历史缓冲区容量。
-    /// </summary>
-    public int HistoryCapacity => _historyCapacity;
-
-    /// <summary>
-    ///     获取当前可见历史记录数量。
-    /// </summary>
-    public int HistoryCount
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _history.Count;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取当前状态在历史缓冲区中的索引。
-    /// </summary>
-    public int HistoryIndex
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _historyIndex;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     获取当前是否处于批处理阶段。
-    /// </summary>
-    public bool IsBatching
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _batchDepth > 0;
-            }
-        }
-    }
-
-    /// <summary>
     ///     将多个状态操作合并到一个批处理中执行。
     ///     批处理内的状态变化会立即提交，但通知会在最外层批处理结束后折叠为一次最终回放。
     /// </summary>
@@ -477,16 +356,18 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
             {
                 if (_batchDepth == 0)
                 {
-                    throw new InvalidOperationException("Batch depth is already zero.");
+                    Debug.Fail("Batch depth is already zero during RunInBatch cleanup.");
                 }
-
-                _batchDepth--;
-                if (_batchDepth == 0 && _hasPendingBatchNotification)
+                else
                 {
-                    notificationState = _pendingBatchState;
-                    _pendingBatchState = default!;
-                    _hasPendingBatchNotification = false;
-                    listenersSnapshot = SnapshotListenersForNotification(notificationState);
+                    _batchDepth--;
+                    if (_batchDepth == 0 && _hasPendingBatchNotification)
+                    {
+                        notificationState = _pendingBatchState;
+                        _pendingBatchState = default!;
+                        _hasPendingBatchNotification = false;
+                        listenersSnapshot = SnapshotListenersForNotification(notificationState);
+                    }
                 }
             }
         }
@@ -595,6 +476,127 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
 
             _listeners[index].IsSubscribed = false;
             _listeners.RemoveAt(index);
+        }
+    }
+
+    /// <summary>
+    ///     获取最近一次分发的 action 类型。
+    /// </summary>
+    public Type? LastActionType
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _lastActionType;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取最近一次真正改变状态的时间戳。
+    /// </summary>
+    public DateTimeOffset? LastStateChangedAt
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _lastStateChangedAt;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前订阅者数量。
+    /// </summary>
+    public int SubscriberCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _listeners.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取最近一次分发记录。
+    /// </summary>
+    public StoreDispatchRecord<TState>? LastDispatchRecord
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _lastDispatchRecord;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前 Store 使用的 action 匹配策略。
+    /// </summary>
+    public StoreActionMatchingMode ActionMatchingMode => _actionMatchingMode;
+
+    /// <summary>
+    ///     获取历史缓冲区容量。
+    /// </summary>
+    public int HistoryCapacity => _historyCapacity;
+
+    /// <summary>
+    ///     获取当前可见历史记录数量。
+    /// </summary>
+    public int HistoryCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _history.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前状态在历史缓冲区中的索引。
+    /// </summary>
+    public int HistoryIndex
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _historyIndex;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前是否处于批处理阶段。
+    /// </summary>
+    public bool IsBatching
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _batchDepth > 0;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     获取当前历史快照列表的只读快照。
+    ///     该方法以方法语义显式表达会分配并返回集合副本，避免把快照克隆隐藏在属性访问中。
+    /// </summary>
+    /// <returns>当前历史快照列表；若未启用历史记录或当前没有历史，则返回空数组。</returns>
+    public IReadOnlyList<StoreHistoryEntry<TState>> GetHistoryEntriesSnapshot()
+    {
+        lock (_lock)
+        {
+            return _history.Count == 0 ? Array.Empty<StoreHistoryEntry<TState>>() : _history.ToArray();
         }
     }
 

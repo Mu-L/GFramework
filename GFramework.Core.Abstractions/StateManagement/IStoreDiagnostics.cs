@@ -53,14 +53,15 @@ public interface IStoreDiagnostics<TState>
     int HistoryIndex { get; }
 
     /// <summary>
-    ///     获取当前历史快照列表。
-    ///     调试工具可以基于该列表渲染时间旅行面板，而不需要访问 Store 内部结构。
-    /// </summary>
-    IReadOnlyList<StoreHistoryEntry<TState>> HistoryEntries { get; }
-
-    /// <summary>
     ///     获取当前是否处于批处理阶段。
     ///     该值为 <see langword="true"/> 时，状态变更通知会延迟到最外层批处理结束后再统一发送。
     /// </summary>
     bool IsBatching { get; }
+
+    /// <summary>
+    ///     获取当前历史快照列表的只读快照。
+    ///     该方法会返回一份独立快照，供调试工具渲染时间旅行面板，而不暴露 Store 的内部可变集合。
+    /// </summary>
+    /// <returns>当前历史快照列表；若未启用历史记录或当前没有历史，则返回空数组。</returns>
+    IReadOnlyList<StoreHistoryEntry<TState>> GetHistoryEntriesSnapshot();
 }
