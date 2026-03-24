@@ -33,6 +33,10 @@ State Management 提供一个可选的集中式状态容器方案，用于补足
 在只读能力上增加：
 
 - `Dispatch<TAction>()`：统一分发 action
+- `RunInBatch()`：在一个批处理中合并多次状态通知
+- `Undo()` / `Redo()`：基于历史缓冲区回退或前进状态
+- `TimeTravelTo()`：跳转到指定历史索引
+- `ClearHistory()`：以当前状态重置历史锚点
 
 ### IReducer`<TState, TAction>`
 
@@ -56,8 +60,11 @@ public interface IReducer<TState, in TAction>
 - 初始状态快照
 - reducer 注册
 - middleware 分发管线
+- 可选历史缓冲区、撤销/重做和时间旅行
+- 可选批处理通知折叠
+- 可选多态 action 匹配（基类 / 接口）
 - 只在状态真正变化时通知订阅者
-- 基础诊断信息（最近一次 action、最近一次分发记录、最近一次状态变化时间）
+- 基础诊断信息（最近一次 action、最近一次分发记录、最近一次状态变化时间、历史游标、批处理状态）
 
 ## 基本示例
 
@@ -136,6 +143,7 @@ public class PlayerStateModel : AbstractModel
 ```csharp
 var store = (Store<PlayerState>)Store<PlayerState>
     .CreateBuilder()
+    .WithHistoryCapacity(32)
     .AddReducer<DamageAction>((state, action) =>
         state with { Health = Math.Max(0, state.Health - action.Amount) })
     .Build(new PlayerState(100, "Player"));
@@ -146,6 +154,94 @@ var store = (Store<PlayerState>)Store<PlayerState>
 - 模块启动时集中注册 reducer 和 middleware
 - 测试里快速组装不同配置的 Store
 - 不希望把 Store 的装配细节散落在多个调用点
+
+如果需要扩展新语义，`StoreBuilder<TState>` 还支持：
+
+- `WithHistoryCapacity(int)`：开启撤销 / 重做 / 时间旅行缓冲区
+- `WithActionMatching(StoreActionMatchingMode)`：切换 reducer 的 action 匹配策略
+
+## 历史记录、撤销 / 重做与时间旅行
+
+当状态需要调试回放、工具面板查看或编辑器内撤销/重做时，可以开启历史缓冲区：
+
+```csharp
+var store = new Store<PlayerState>(
+    new PlayerState(100, "Player"),
+    historyCapacity: 32);
+
+store.Dispatch(new DamageAction(10));
+store.Dispatch(new RenameAction("Knight"));
+
+store.Undo();
+store.Redo();
+store.TimeTravelTo(0);
+store.ClearHistory();
+```
+
+需要注意：
+
+- `historyCapacity: 0` 表示关闭历史记录
+- 历史只记录“状态真正变化”的 dispatch
+- `Undo()` / `Redo()` / `TimeTravelTo()` 会更新当前状态并像普通状态变化一样通知订阅者
+- 当你从历史中回退后再执行新的 `Dispatch()`，原来的 redo 分支会被裁掉
+
+## 批处理通知折叠
+
+如果一次业务操作会连续触发多个 action，但外部订阅者只需要看到最终状态，可以使用批处理：
+
+```csharp
+store.RunInBatch(() =>
+{
+    store.Dispatch(new DamageAction(10));
+    store.Dispatch(new RenameAction("Knight"));
+});
+```
+
+批处理语义如下：
+
+- 批处理内部每次 dispatch 仍会立即更新 Store 状态
+- 订阅通知会延迟到最外层批处理结束后再统一发送一次
+- 嵌套批处理是允许的，只有最外层结束时才会发通知
+- 状态变化桥接到 `EventBus` 时，也会复用这个折叠语义
+
+## 多态 action 匹配
+
+默认情况下，Store 只匹配与 action 运行时类型完全一致的 reducer，这样最稳定，也最容易推导。
+
+如果你的 action 体系确实依赖基类或接口复用，可以显式开启多态匹配：
+
+```csharp
+var store = new Store<PlayerState>(
+    new PlayerState(100, "Player"),
+    actionMatchingMode: StoreActionMatchingMode.IncludeAssignableTypes);
+```
+
+启用后，reducer 的执行顺序保持确定性：
+
+1. 精确类型 reducer
+2. 最近的基类 reducer
+3. 接口 reducer
+
+只有在你明确需要这类复用关系时才建议启用；大多数业务状态仍建议继续使用默认的精确匹配模式。
+
+## Store 到 EventBus 的兼容桥接
+
+如果你在迁移旧模块时，现有逻辑仍然依赖 `EventBus`，可以临时把 Store 的 dispatch 和状态变化桥接过去：
+
+```csharp
+using GFramework.Core.Events;
+using GFramework.Core.Extensions;
+
+var eventBus = new EventBus();
+var bridge = store.BridgeToEventBus(eventBus);
+```
+
+桥接后会发送两类事件：
+
+- `StoreDispatchedEvent<TState>`：每次 dispatch 都会发送一次，即使状态没有变化
+- `StoreStateChangedEvent<TState>`：只在状态真正变化时发送；批处理中只发送最终状态
+
+不再需要兼容层时，调用 `bridge.UnRegister()` 即可拆除桥接。
 
 ## 运行时临时注册与注销
 
@@ -354,7 +450,7 @@ public partial class PlayerPanelController : IController
 - 一次操作要同时修改多个字段
 - 同一个业务操作要在多个界面复用
 - 希望把“状态结构”和“状态变化规则”集中在一起
-- 未来要加入 middleware、调试记录或撤销/重做能力
+- 需要 middleware、调试记录、撤销/重做或时间旅行能力
 
 ### 6. 推荐的落地方式
 
@@ -381,6 +477,8 @@ public partial class PlayerPanelController : IController
 2. 让 reducer 保持纯函数风格，不在 reducer 内执行副作用
 3. 使用 selector 暴露局部状态，而不是让 UI 自己解析整棵状态树
 4. 需要日志或诊断时，优先通过 middleware 扩展，而不是把横切逻辑塞进 reducer
+5. 默认优先使用精确类型 reducer 匹配；只有确有继承层次复用需求时再启用多态匹配
+6. `EventBus` 桥接只建议作为迁移过渡层，新模块应优先直接依赖 Store
 
 ## 相关文档
 

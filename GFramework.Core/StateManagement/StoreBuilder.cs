@@ -16,9 +16,21 @@ public sealed class StoreBuilder<TState> : IStoreBuilder<TState>
     private readonly List<Action<Store<TState>>> _configurators = [];
 
     /// <summary>
+    ///     action 匹配策略。
+    ///     默认使用精确类型匹配，只有在明确需要复用基类/接口 action 层次时才切换为多态匹配。
+    /// </summary>
+    private StoreActionMatchingMode _actionMatchingMode = StoreActionMatchingMode.ExactTypeOnly;
+
+    /// <summary>
     ///     状态比较器。
     /// </summary>
     private IEqualityComparer<TState>? _comparer;
+
+    /// <summary>
+    ///     历史缓冲区容量。
+    ///     默认值为 0，表示不记录撤销/重做历史，以维持最轻量的运行时开销。
+    /// </summary>
+    private int _historyCapacity;
 
     /// <summary>
     ///     添加一个 Store 中间件。
@@ -39,7 +51,7 @@ public sealed class StoreBuilder<TState> : IStoreBuilder<TState>
     /// <returns>已应用当前构建器配置的 Store 实例。</returns>
     public IStore<TState> Build(TState initialState)
     {
-        var store = new Store<TState>(initialState, _comparer);
+        var store = new Store<TState>(initialState, _comparer, _historyCapacity, _actionMatchingMode);
         foreach (var configurator in _configurators)
         {
             configurator(store);
@@ -48,17 +60,32 @@ public sealed class StoreBuilder<TState> : IStoreBuilder<TState>
         return store;
     }
 
+    /// <summary>
+    ///     配置历史缓冲区容量。
+    /// </summary>
+    /// <param name="historyCapacity">历史缓冲区容量；0 表示禁用历史记录。</param>
+    /// <returns>当前构建器实例。</returns>
+    /// <exception cref="ArgumentOutOfRangeException">当 <paramref name="historyCapacity"/> 小于 0 时抛出。</exception>
+    public IStoreBuilder<TState> WithHistoryCapacity(int historyCapacity)
+    {
+        if (historyCapacity < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(historyCapacity), historyCapacity,
+                "History capacity cannot be negative.");
+        }
+
+        _historyCapacity = historyCapacity;
+        return this;
+    }
 
     /// <summary>
-    ///     添加一个强类型 reducer。
+    ///     配置 action 匹配策略。
     /// </summary>
-    /// <typeparam name="TAction">当前 reducer 处理的 action 类型。</typeparam>
-    /// <param name="reducer">要添加的 reducer。</param>
+    /// <param name="actionMatchingMode">要使用的匹配策略。</param>
     /// <returns>当前构建器实例。</returns>
-    public IStoreBuilder<TState> AddReducer<TAction>(IReducer<TState, TAction> reducer)
+    public IStoreBuilder<TState> WithActionMatching(StoreActionMatchingMode actionMatchingMode)
     {
-        ArgumentNullException.ThrowIfNull(reducer);
-        _configurators.Add(store => store.RegisterReducer(reducer));
+        _actionMatchingMode = actionMatchingMode;
         return this;
     }
 
@@ -80,6 +107,19 @@ public sealed class StoreBuilder<TState> : IStoreBuilder<TState>
     /// <param name="reducer">执行归约的委托。</param>
     /// <returns>当前构建器实例。</returns>
     public IStoreBuilder<TState> AddReducer<TAction>(Func<TState, TAction, TState> reducer)
+    {
+        ArgumentNullException.ThrowIfNull(reducer);
+        _configurators.Add(store => store.RegisterReducer(reducer));
+        return this;
+    }
+
+    /// <summary>
+    ///     添加一个强类型 reducer。
+    /// </summary>
+    /// <typeparam name="TAction">当前 reducer 处理的 action 类型。</typeparam>
+    /// <param name="reducer">要添加的 reducer。</param>
+    /// <returns>当前构建器实例。</returns>
+    public IStoreBuilder<TState> AddReducer<TAction>(IReducer<TState, TAction> reducer)
     {
         ArgumentNullException.ThrowIfNull(reducer);
         _configurators.Add(store => store.RegisterReducer(reducer));

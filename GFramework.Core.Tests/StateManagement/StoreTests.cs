@@ -442,6 +442,199 @@ public class StoreTests
     }
 
     /// <summary>
+    ///     测试批处理会折叠多次状态变化通知，只在最外层结束时发布最终状态。
+    /// </summary>
+    [Test]
+    public void RunInBatch_Should_Collapse_Notifications_To_Final_State()
+    {
+        var store = CreateStore();
+        var receivedCounts = new List<int>();
+
+        store.Subscribe(state => receivedCounts.Add(state.Count));
+
+        store.RunInBatch(() =>
+        {
+            Assert.That(store.IsBatching, Is.True);
+
+            store.Dispatch(new IncrementAction(1));
+            store.Dispatch(new IncrementAction(2));
+        });
+
+        Assert.That(store.IsBatching, Is.False);
+        Assert.That(store.State.Count, Is.EqualTo(3));
+        Assert.That(receivedCounts, Is.EqualTo(new[] { 3 }));
+    }
+
+    /// <summary>
+    ///     测试嵌套批处理只会在最外层结束时发出一次通知。
+    /// </summary>
+    [Test]
+    public void RunInBatch_Should_Support_Nested_Batches()
+    {
+        var store = CreateStore();
+        var receivedCounts = new List<int>();
+
+        store.Subscribe(state => receivedCounts.Add(state.Count));
+
+        store.RunInBatch(() =>
+        {
+            store.Dispatch(new IncrementAction(1));
+
+            store.RunInBatch(() =>
+            {
+                Assert.That(store.IsBatching, Is.True);
+                store.Dispatch(new IncrementAction(1));
+            });
+
+            store.Dispatch(new IncrementAction(1));
+        });
+
+        Assert.That(store.State.Count, Is.EqualTo(3));
+        Assert.That(receivedCounts, Is.EqualTo(new[] { 3 }));
+    }
+
+    /// <summary>
+    ///     测试启用历史记录后支持撤销、重做、时间旅行和 redo 分支裁剪。
+    /// </summary>
+    [Test]
+    public void History_Should_Support_Undo_Redo_Time_Travel_And_Branch_Reset()
+    {
+        var store = new Store<CounterState>(new CounterState(0, "Player"), historyCapacity: 8);
+        store.RegisterReducer<IncrementAction>((state, action) => state with { Count = state.Count + action.Amount });
+
+        store.Dispatch(new IncrementAction(1));
+        store.Dispatch(new IncrementAction(1));
+        store.Dispatch(new IncrementAction(1));
+
+        Assert.That(store.HistoryCount, Is.EqualTo(4));
+        Assert.That(store.HistoryIndex, Is.EqualTo(3));
+        Assert.That(store.CanUndo, Is.True);
+        Assert.That(store.CanRedo, Is.False);
+
+        store.Undo();
+        Assert.That(store.State.Count, Is.EqualTo(2));
+        Assert.That(store.HistoryIndex, Is.EqualTo(2));
+        Assert.That(store.CanRedo, Is.True);
+
+        store.Undo();
+        Assert.That(store.State.Count, Is.EqualTo(1));
+        Assert.That(store.HistoryIndex, Is.EqualTo(1));
+
+        store.Redo();
+        Assert.That(store.State.Count, Is.EqualTo(2));
+        Assert.That(store.HistoryIndex, Is.EqualTo(2));
+
+        store.TimeTravelTo(0);
+        Assert.That(store.State.Count, Is.EqualTo(0));
+        Assert.That(store.HistoryIndex, Is.EqualTo(0));
+
+        store.TimeTravelTo(2);
+        Assert.That(store.State.Count, Is.EqualTo(2));
+        Assert.That(store.HistoryIndex, Is.EqualTo(2));
+
+        store.Dispatch(new IncrementAction(10));
+
+        Assert.That(store.State.Count, Is.EqualTo(12));
+        Assert.That(store.CanRedo, Is.False, "新 dispatch 应清除 redo 分支");
+        Assert.That(store.GetHistoryEntriesSnapshot().Select(entry => entry.State.Count),
+            Is.EqualTo(new[] { 0, 1, 2, 12 }));
+    }
+
+    /// <summary>
+    ///     测试 ClearHistory 会以当前状态重置历史锚点，而不会修改当前状态。
+    /// </summary>
+    [Test]
+    public void ClearHistory_Should_Reset_To_Current_State_Anchor()
+    {
+        var store = new Store<CounterState>(new CounterState(0, "Player"), historyCapacity: 4);
+        store.RegisterReducer<IncrementAction>((state, action) => state with { Count = state.Count + action.Amount });
+
+        store.Dispatch(new IncrementAction(1));
+        store.Dispatch(new IncrementAction(1));
+        store.ClearHistory();
+
+        Assert.That(store.State.Count, Is.EqualTo(2));
+        Assert.That(store.HistoryCount, Is.EqualTo(1));
+        Assert.That(store.HistoryIndex, Is.EqualTo(0));
+        Assert.That(store.CanUndo, Is.False);
+        Assert.That(store.GetHistoryEntriesSnapshot()[0].State.Count, Is.EqualTo(2));
+    }
+
+    /// <summary>
+    ///     测试默认 action 匹配策略仍然只命中精确类型 reducer。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Remain_Exact_Type_Only_By_Default()
+    {
+        var store = new Store<CounterState>(new CounterState(0, "Player"));
+        store.RegisterReducer<IncrementActionBase>((state, action) =>
+            state with { Count = state.Count + action.Amount * 10 });
+        store.RegisterReducer<IIncrementActionMarker>((state, action) =>
+            state with { Count = state.Count + action.Amount * 100 });
+
+        store.Dispatch(new DerivedIncrementAction(1));
+
+        Assert.That(store.State.Count, Is.EqualTo(0));
+        Assert.That(store.ActionMatchingMode, Is.EqualTo(StoreActionMatchingMode.ExactTypeOnly));
+    }
+
+    /// <summary>
+    ///     测试启用多态匹配后，Store 会按“精确类型 -> 基类 -> 接口”的稳定顺序执行 reducer。
+    /// </summary>
+    [Test]
+    public void Dispatch_Should_Use_Polymorphic_Action_Matching_In_Deterministic_Order()
+    {
+        var executionOrder = new List<string>();
+        var store = new Store<CounterState>(
+            new CounterState(0, "Player"),
+            actionMatchingMode: StoreActionMatchingMode.IncludeAssignableTypes);
+
+        store.RegisterReducer<IncrementActionBase>((state, action) =>
+        {
+            executionOrder.Add("base");
+            return state with { Count = state.Count + action.Amount * 10 };
+        });
+
+        store.RegisterReducer<IIncrementActionMarker>((state, action) =>
+        {
+            executionOrder.Add("interface");
+            return state with { Count = state.Count + action.Amount * 100 };
+        });
+
+        store.RegisterReducer<DerivedIncrementAction>((state, action) =>
+        {
+            executionOrder.Add("exact");
+            return state with { Count = state.Count + action.Amount };
+        });
+
+        store.Dispatch(new DerivedIncrementAction(1));
+
+        Assert.That(executionOrder, Is.EqualTo(new[] { "exact", "base", "interface" }));
+        Assert.That(store.State.Count, Is.EqualTo(111));
+    }
+
+    /// <summary>
+    ///     测试 StoreBuilder 能够应用历史容量和 action 匹配策略配置。
+    /// </summary>
+    [Test]
+    public void StoreBuilder_Should_Apply_History_And_Action_Matching_Configuration()
+    {
+        var store = (Store<CounterState>)Store<CounterState>
+            .CreateBuilder()
+            .WithHistoryCapacity(6)
+            .WithActionMatching(StoreActionMatchingMode.IncludeAssignableTypes)
+            .AddReducer<IncrementActionBase>((state, action) => state with { Count = state.Count + action.Amount })
+            .Build(new CounterState(0, "Player"));
+
+        store.Dispatch(new DerivedIncrementAction(2));
+
+        Assert.That(store.ActionMatchingMode, Is.EqualTo(StoreActionMatchingMode.IncludeAssignableTypes));
+        Assert.That(store.HistoryCapacity, Is.EqualTo(6));
+        Assert.That(store.HistoryCount, Is.EqualTo(2));
+        Assert.That(store.State.Count, Is.EqualTo(2));
+    }
+
+    /// <summary>
     ///     测试长时间运行的 middleware 不会长时间占用状态锁，
     ///     使读取状态和新增订阅仍能在 dispatch 进行期间完成。
     /// </summary>
@@ -512,6 +705,30 @@ public class StoreTests
     ///     表示没有匹配 reducer 的 action，用于验证无变更分发路径。
     /// </summary>
     private sealed record NoopAction;
+
+    /// <summary>
+    ///     表示参与多态匹配测试的 action 标记接口。
+    /// </summary>
+    private interface IIncrementActionMarker
+    {
+        /// <summary>
+        ///     获取增量值。
+        /// </summary>
+        int Amount { get; }
+    }
+
+    /// <summary>
+    ///     表示多态匹配测试中的基类 action。
+    /// </summary>
+    /// <param name="Amount">要增加的数量。</param>
+    private abstract record IncrementActionBase(int Amount);
+
+    /// <summary>
+    ///     表示多态匹配测试中的派生 action。
+    /// </summary>
+    /// <param name="Amount">要增加的数量。</param>
+    private sealed record DerivedIncrementAction(int Amount)
+        : IncrementActionBase(Amount), IIncrementActionMarker;
 
     /// <summary>
     ///     显式选择器实现，用于验证 IStateSelector 重载。
