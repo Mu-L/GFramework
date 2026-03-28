@@ -18,8 +18,9 @@ public static class ContextAwareServiceExtensions
     /// </summary>
     /// <typeparam name="TService">要获取的服务类型</typeparam>
     /// <param name="contextAware">实现 IContextAware 接口的上下文感知对象</param>
-    /// <returns>指定类型的服务实例,如果未找到则返回 null</returns>
+    /// <returns>指定类型的服务实例，如果未找到则抛出异常</returns>
     /// <exception cref="ArgumentNullException">当 contextAware 参数为 null 时抛出</exception>
+    /// <exception cref="InvalidOperationException">当指定服务未注册时抛出</exception>
     public static TService GetService<TService>(this IContextAware contextAware) where TService : class
     {
         ArgumentNullException.ThrowIfNull(contextAware);

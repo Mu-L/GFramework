@@ -89,6 +89,20 @@ public sealed class ContextGetGenerator : IIncrementalGenerator
             true)
     ];
 
+    private static readonly ImmutableHashSet<string> FieldCandidateAttributeNames = BindingDescriptors
+        .SelectMany(static descriptor => new[]
+        {
+            descriptor.AttributeName,
+            descriptor.AttributeName + "Attribute"
+        })
+        .ToImmutableHashSet(StringComparer.Ordinal);
+
+    private static readonly ImmutableHashSet<string> TypeCandidateAttributeNames =
+    [
+        "GetAll",
+        "GetAllAttribute"
+    ];
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var fieldCandidates = context.SyntaxProvider.CreateSyntaxProvider(
@@ -125,9 +139,7 @@ public sealed class ContextGetGenerator : IIncrementalGenerator
             })
             return false;
 
-        return fieldDeclaration.AttributeLists
-            .SelectMany(static list => list.Attributes)
-            .Any(static attribute => attribute.Name.ToString().Contains("Get", StringComparison.Ordinal));
+        return HasCandidateAttribute(fieldDeclaration.AttributeLists, FieldCandidateAttributeNames);
     }
 
     private static FieldCandidateInfo? TransformField(GeneratorSyntaxContext context)
@@ -135,7 +147,10 @@ public sealed class ContextGetGenerator : IIncrementalGenerator
         if (context.Node is not VariableDeclaratorSyntax variable)
             return null;
 
-        return context.SemanticModel.GetDeclaredSymbol(variable) is IFieldSymbol fieldSymbol
+        if (context.SemanticModel.GetDeclaredSymbol(variable) is not IFieldSymbol fieldSymbol)
+            return null;
+
+        return HasAnyBindingAttribute(fieldSymbol, context.SemanticModel.Compilation)
             ? new FieldCandidateInfo(variable, fieldSymbol)
             : null;
     }
@@ -145,9 +160,7 @@ public sealed class ContextGetGenerator : IIncrementalGenerator
         if (node is not ClassDeclarationSyntax classDeclaration)
             return false;
 
-        return classDeclaration.AttributeLists
-            .SelectMany(static list => list.Attributes)
-            .Any(static attribute => attribute.Name.ToString().Contains("GetAll", StringComparison.Ordinal));
+        return HasCandidateAttribute(classDeclaration.AttributeLists, TypeCandidateAttributeNames);
     }
 
     private static TypeCandidateInfo? TransformType(GeneratorSyntaxContext context)
@@ -155,7 +168,10 @@ public sealed class ContextGetGenerator : IIncrementalGenerator
         if (context.Node is not ClassDeclarationSyntax classDeclaration)
             return null;
 
-        return context.SemanticModel.GetDeclaredSymbol(classDeclaration) is INamedTypeSymbol typeSymbol
+        if (context.SemanticModel.GetDeclaredSymbol(classDeclaration) is not INamedTypeSymbol typeSymbol)
+            return null;
+
+        return HasAttribute(typeSymbol, context.SemanticModel.Compilation, GetAllAttributeMetadataName)
             ? new TypeCandidateInfo(classDeclaration, typeSymbol)
             : null;
     }
@@ -315,6 +331,54 @@ public sealed class ContextGetGenerator : IIncrementalGenerator
             ContextGetDiagnostics.ReadOnlyFieldNotSupported,
             field);
         return false;
+    }
+
+    private static bool HasCandidateAttribute(
+        SyntaxList<AttributeListSyntax> attributeLists,
+        ImmutableHashSet<string> candidateNames)
+    {
+        return attributeLists
+            .SelectMany(static list => list.Attributes)
+            .Any(attribute => TryGetAttributeSimpleName(attribute.Name, out var name) && candidateNames.Contains(name));
+    }
+
+    private static bool TryGetAttributeSimpleName(NameSyntax attributeName, out string name)
+    {
+        switch (attributeName)
+        {
+            case SimpleNameSyntax simpleName:
+                name = simpleName.Identifier.ValueText;
+                return true;
+
+            case QualifiedNameSyntax qualifiedName:
+                name = qualifiedName.Right.Identifier.ValueText;
+                return true;
+
+            case AliasQualifiedNameSyntax aliasQualifiedName:
+                name = aliasQualifiedName.Name.Identifier.ValueText;
+                return true;
+
+            default:
+                name = string.Empty;
+                return false;
+        }
+    }
+
+    private static bool HasAnyBindingAttribute(IFieldSymbol fieldSymbol, Compilation compilation)
+    {
+        return Enumerable.Any(BindingDescriptors,
+            descriptor => HasAttribute(fieldSymbol, compilation, descriptor.MetadataName));
+    }
+
+    private static bool HasAttribute(
+        ISymbol symbol,
+        Compilation compilation,
+        string metadataName)
+    {
+        var attributeSymbol = compilation.GetTypeByMetadataName(metadataName);
+        return attributeSymbol is not null &&
+               symbol.GetAttributes().Any(attribute =>
+                   SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, attributeSymbol));
     }
 
     private static Dictionary<INamedTypeSymbol, TypeWorkItem> CollectWorkItems(
@@ -654,17 +718,32 @@ public sealed class ContextGetGenerator : IIncrementalGenerator
     {
         elementType = null!;
 
-        if (readOnlyList is null || fieldType is not INamedTypeSymbol namedType)
+        if (readOnlyList is null || fieldType is not INamedTypeSymbol targetType)
             return false;
 
-        if (!SymbolEqualityComparer.Default.Equals(namedType.OriginalDefinition, readOnlyList))
-            return false;
+        foreach (var candidateType in EnumerateCollectionTypeCandidates(targetType))
+        {
+            if (candidateType.TypeArguments.Length != 1)
+                continue;
 
-        if (namedType.TypeArguments.Length != 1)
-            return false;
+            var candidateElementType = candidateType.TypeArguments[0];
+            var expectedSourceType = readOnlyList.Construct(candidateElementType);
+            if (!expectedSourceType.IsAssignableTo(targetType))
+                continue;
 
-        elementType = namedType.TypeArguments[0];
-        return true;
+            elementType = candidateElementType;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumerateCollectionTypeCandidates(INamedTypeSymbol typeSymbol)
+    {
+        yield return typeSymbol;
+
+        foreach (var interfaceType in typeSymbol.AllInterfaces)
+            yield return interfaceType;
     }
 
     private static IEnumerable<IFieldSymbol> GetAllFields(INamedTypeSymbol typeSymbol)
