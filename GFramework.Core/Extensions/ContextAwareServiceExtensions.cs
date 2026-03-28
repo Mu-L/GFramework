@@ -37,6 +37,7 @@ public static class ContextAwareServiceExtensions
     /// <param name="contextAware">实现 IContextAware 接口的对象</param>
     /// <returns>指定类型的系统实例</returns>
     /// <exception cref="ArgumentNullException">当 contextAware 为 null 时抛出</exception>
+    /// <exception cref="InvalidOperationException">当指定系统未注册时抛出</exception>
     public static TSystem GetSystem<TSystem>(this IContextAware contextAware) where TSystem : class, ISystem
     {
         ArgumentNullException.ThrowIfNull(contextAware);
@@ -52,6 +53,7 @@ public static class ContextAwareServiceExtensions
     /// <param name="contextAware">实现 IContextAware 接口的对象</param>
     /// <returns>指定类型的模型实例</returns>
     /// <exception cref="ArgumentNullException">当 contextAware 为 null 时抛出</exception>
+    /// <exception cref="InvalidOperationException">当指定模型未注册时抛出</exception>
     public static TModel GetModel<TModel>(this IContextAware contextAware) where TModel : class, IModel
     {
         ArgumentNullException.ThrowIfNull(contextAware);
@@ -67,6 +69,7 @@ public static class ContextAwareServiceExtensions
     /// <param name="contextAware">实现 IContextAware 接口的对象</param>
     /// <returns>指定类型的工具实例</returns>
     /// <exception cref="ArgumentNullException">当 contextAware 为 null 时抛出</exception>
+    /// <exception cref="InvalidOperationException">当指定工具未注册时抛出</exception>
     public static TUtility GetUtility<TUtility>(this IContextAware contextAware) where TUtility : class, IUtility
     {
         ArgumentNullException.ThrowIfNull(contextAware);
