@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace GFramework.Core.Extensions;
 
 /// <summary>
@@ -28,9 +30,13 @@ public static class ArrayExtensions
     /// <returns>如果坐标在数组边界内则返回 true；否则返回 false。</returns>
     public static bool IsInBounds<T>(this T[,] array, int x, int y)
     {
+        // 在热路径中缓存维度长度，避免每次比较都重复读取数组元数据。
+        var width = array.GetLength(0);
+        var height = array.GetLength(1);
+
         return x >= 0 && y >= 0 &&
-               x < array.GetLength(0) &&
-               y < array.GetLength(1);
+               x < width &&
+               y < height;
     }
 
 
@@ -68,9 +74,11 @@ public static class ArrayExtensions
     /// <param name="array">要访问的二维数组。</param>
     /// <param name="x">X 坐标（第一维索引）。</param>
     /// <param name="y">Y 坐标（第二维索引）。</param>
-    /// <param name="value">输出参数，用于存储获取到的元素值。</param>
+    /// <param name="value">
+    /// 输出参数，用于存储获取到的元素值；当返回 false 时，该参数会被赋值为 <c>default(T)</c>。
+    /// </param>
     /// <returns>如果成功获取元素则返回 true；否则返回 false。</returns>
-    public static bool TryGet<T>(this T[,] array, int x, int y, out T value)
+    public static bool TryGet<T>(this T[,] array, int x, int y, [MaybeNullWhen(false)] out T value)
     {
         if (array.IsInBounds(x, y))
         {
@@ -141,9 +149,13 @@ public static class ArrayExtensions
     /// <returns>依次返回每个元素的坐标和值的元组。</returns>
     public static IEnumerable<(int x, int y, T value)> Enumerate<T>(this T[,] array)
     {
-        for (var x = 0; x < array.GetLength(0); x++)
+        // 缓存维度长度，确保双层循环不会在每次迭代时重复读取数组元数据。
+        var width = array.GetLength(0);
+        var height = array.GetLength(1);
+
+        for (var x = 0; x < width; x++)
         {
-            for (var y = 0; y < array.GetLength(1); y++)
+            for (var y = 0; y < height; y++)
             {
                 yield return (x, y, array[x, y]);
             }
