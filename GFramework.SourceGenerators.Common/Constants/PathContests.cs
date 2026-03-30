@@ -26,7 +26,7 @@ public static class PathContests
     public const string GameNamespace = $"{BaseNamespace}.Game";
 
     /// <summary>
-    ///     GFramework源代码生成器抽象层命名空间
+    ///     GFramework源代码生成器根命名空间
     /// </summary>
     public const string SourceGeneratorsPath = $"{BaseNamespace}.SourceGenerators";
 
