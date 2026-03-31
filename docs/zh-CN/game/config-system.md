@@ -143,7 +143,7 @@ var hotReload = loader.EnableHotReload(
 - 浏览 `config/` 目录
 - 打开 raw YAML 文件
 - 打开匹配的 schema 文件
-- 对必填字段和基础标量类型做轻量校验
+- 对必填字段、未知顶层字段、基础标量类型和标量数组元素做轻量校验
 - 对顶层标量字段提供轻量表单入口
 
 当前仍建议把复杂数组、嵌套对象和批量修改放在 raw YAML 中完成。

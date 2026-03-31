@@ -20,6 +20,9 @@
     "onCommand:gframeworkConfig.validateAll"
   ],
   "main": "./src/extension.js",
+  "scripts": {
+    "test": "node --test ./test/*.test.js"
+  },
   "contributes": {
     "views": {
       "explorer": [

@@ -1,6 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
+const {
+    applyScalarUpdates,
+    parseSchemaContent,
+    parseTopLevelYaml,
+    unquoteScalar,
+    validateParsedConfig
+} = require("./configValidation");
 
 /**
  * Activate the GFramework config extension.
@@ -342,27 +349,13 @@ async function validateConfigFile(configUri, diagnostics) {
         return;
     }
 
-    for (const requiredProperty of schemaInfo.required) {
-        if (!parsedYaml.keys.has(requiredProperty)) {
-            fileDiagnostics.push(new vscode.Diagnostic(
-                new vscode.Range(0, 0, 0, 1),
-                `Required property '${requiredProperty}' is missing.`,
-                vscode.DiagnosticSeverity.Error));
-        }
-    }
-
-    for (const [propertyName, expectedType] of Object.entries(schemaInfo.propertyTypes)) {
-        if (!parsedYaml.scalars.has(propertyName)) {
-            continue;
-        }
-
-        const scalarValue = parsedYaml.scalars.get(propertyName);
-        if (!isScalarCompatible(expectedType, scalarValue)) {
-            fileDiagnostics.push(new vscode.Diagnostic(
-                new vscode.Range(0, 0, 0, 1),
-                `Property '${propertyName}' is expected to be '${expectedType}', but the current scalar value is incompatible.`,
-                vscode.DiagnosticSeverity.Warning));
-        }
+    for (const diagnostic of validateParsedConfig(schemaInfo, parsedYaml)) {
+        fileDiagnostics.push(new vscode.Diagnostic(
+            new vscode.Range(0, 0, 0, 1),
+            diagnostic.message,
+            diagnostic.severity === "error"
+                ? vscode.DiagnosticSeverity.Error
+                : vscode.DiagnosticSeverity.Warning));
     }
 
     diagnostics.set(configUri, fileDiagnostics);
@@ -373,7 +366,7 @@ async function validateConfigFile(configUri, diagnostics) {
  *
  * @param {vscode.Uri} configUri Config file URI.
  * @param {vscode.WorkspaceFolder} workspaceRoot Workspace root.
- * @returns {Promise<{exists: boolean, schemaPath: string, required: string[], propertyTypes: Record<string, string>}>} Schema info.
+ * @returns {Promise<{exists: boolean, schemaPath: string, required: string[], properties: Record<string, {type: string, itemType?: string}>}>} Schema info.
  */
 async function loadSchemaInfoForConfig(configUri, workspaceRoot) {
     const schemaUri = getSchemaUriForConfigFile(configUri, workspaceRoot);
@@ -383,144 +376,44 @@ async function loadSchemaInfoForConfig(configUri, workspaceRoot) {
             exists: false,
             schemaPath,
             required: [],
-            propertyTypes: {}
+            properties: {}
         };
     }
 
     const content = await fs.promises.readFile(schemaUri.fsPath, "utf8");
     try {
-        const parsed = JSON.parse(content);
-        const required = Array.isArray(parsed.required)
-            ? parsed.required.filter((value) => typeof value === "string")
-            : [];
-        const propertyTypes = {};
-        const properties = parsed.properties || {};
-
-        for (const [key, value] of Object.entries(properties)) {
-            if (!value || typeof value !== "object") {
-                continue;
-            }
-
-            if (typeof value.type === "string") {
-                propertyTypes[key] = value.type;
-            }
-        }
+        const parsed = parseSchemaContent(content);
 
         return {
             exists: true,
             schemaPath,
-            required,
-            propertyTypes
+            required: parsed.required,
+            properties: parsed.properties
         };
     } catch (error) {
         return {
             exists: false,
             schemaPath,
             required: [],
-            propertyTypes: {}
+            properties: {}
         };
     }
-}
-
-/**
- * Parse top-level YAML keys and scalar values.
- * This intentionally supports only the MVP subset needed for lightweight form
- * preview and validation.
- *
- * @param {string} text YAML text.
- * @returns {{keys: Set<string>, scalars: Map<string, string>}} Parsed shape.
- */
-function parseTopLevelYaml(text) {
-    const keys = new Set();
-    const scalars = new Map();
-    const lines = text.split(/\r?\n/u);
-
-    for (const line of lines) {
-        if (!line || line.trim().length === 0 || line.trim().startsWith("#")) {
-            continue;
-        }
-
-        if (/^\s/u.test(line)) {
-            continue;
-        }
-
-        const match = /^([A-Za-z0-9_]+):(?:\s*(.*))?$/u.exec(line);
-        if (!match) {
-            continue;
-        }
-
-        const key = match[1];
-        const rawValue = match[2] || "";
-        keys.add(key);
-
-        if (rawValue.length === 0) {
-            continue;
-        }
-
-        if (rawValue.startsWith("|") || rawValue.startsWith(">")) {
-            continue;
-        }
-
-        scalars.set(key, rawValue.trim());
-    }
-
-    return {keys, scalars};
-}
-
-/**
- * Apply scalar field updates back into the original YAML text.
- *
- * @param {string} originalYaml Original YAML content.
- * @param {Record<string, string>} updates Updated scalar values.
- * @returns {string} Updated YAML content.
- */
-function applyScalarUpdates(originalYaml, updates) {
-    const lines = originalYaml.split(/\r?\n/u);
-    const touched = new Set();
-
-    const updatedLines = lines.map((line) => {
-        if (/^\s/u.test(line)) {
-            return line;
-        }
-
-        const match = /^([A-Za-z0-9_]+):(?:\s*(.*))?$/u.exec(line);
-        if (!match) {
-            return line;
-        }
-
-        const key = match[1];
-        if (!Object.prototype.hasOwnProperty.call(updates, key)) {
-            return line;
-        }
-
-        touched.add(key);
-        return `${key}: ${formatYamlScalar(updates[key])}`;
-    });
-
-    for (const [key, value] of Object.entries(updates)) {
-        if (touched.has(key)) {
-            continue;
-        }
-
-        updatedLines.push(`${key}: ${formatYamlScalar(value)}`);
-    }
-
-    return updatedLines.join("\n");
 }
 
 /**
  * Render the form-preview webview HTML.
  *
  * @param {string} fileName File name.
- * @param {{exists: boolean, schemaPath: string, required: string[], propertyTypes: Record<string, string>}} schemaInfo Schema info.
- * @param {{keys: Set<string>, scalars: Map<string, string>}} parsedYaml Parsed YAML data.
+ * @param {{exists: boolean, schemaPath: string, required: string[], properties: Record<string, {type: string, itemType?: string}>}} schemaInfo Schema info.
+ * @param {{entries: Map<string, {kind: string, value?: string, items?: Array<{raw: string, isComplex: boolean}>}>, keys: Set<string>}} parsedYaml Parsed YAML data.
  * @returns {string} HTML string.
  */
 function renderFormHtml(fileName, schemaInfo, parsedYaml) {
-    const fields = Array.from(parsedYaml.scalars.entries())
-        .map(([key, value]) => {
+    const fields = Array.from(parsedYaml.entries.entries())
+        .filter(([, entry]) => entry.kind === "scalar")
+        .map(([key, entry]) => {
             const escapedKey = escapeHtml(key);
-            const escapedValue = escapeHtml(unquoteScalar(value));
+            const escapedValue = escapeHtml(unquoteScalar(entry.value || ""));
             const required = schemaInfo.required.includes(key) ? "<span class=\"badge\">required</span>" : "";
             return `
                 <label class="field">
@@ -620,62 +513,6 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
     </script>
 </body>
 </html>`;
-}
-
-/**
- * Determine whether a scalar value matches a minimal schema type.
- *
- * @param {string} expectedType Schema type.
- * @param {string} scalarValue YAML scalar value.
- * @returns {boolean} True when compatible.
- */
-function isScalarCompatible(expectedType, scalarValue) {
-    const value = unquoteScalar(scalarValue);
-    switch (expectedType) {
-        case "integer":
-            return /^-?\d+$/u.test(value);
-        case "number":
-            return /^-?\d+(?:\.\d+)?$/u.test(value);
-        case "boolean":
-            return /^(true|false)$/iu.test(value);
-        case "string":
-            return true;
-        default:
-            return true;
-    }
-}
-
-/**
- * Format a scalar value for YAML output.
- *
- * @param {string} value Scalar value.
- * @returns {string} YAML-ready scalar.
- */
-function formatYamlScalar(value) {
-    if (/^-?\d+(?:\.\d+)?$/u.test(value) || /^(true|false)$/iu.test(value)) {
-        return value;
-    }
-
-    if (value.length === 0 || /[:#\[\]\{\},]|^\s|\s$/u.test(value)) {
-        return JSON.stringify(value);
-    }
-
-    return value;
-}
-
-/**
- * Remove a simple YAML string quote wrapper.
- *
- * @param {string} value Scalar value.
- * @returns {string} Unquoted value.
- */
-function unquoteScalar(value) {
-    if ((value.startsWith("\"") && value.endsWith("\"")) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-        return value.slice(1, -1);
-    }
-
-    return value;
 }
 
 /**
