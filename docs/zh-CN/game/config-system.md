@@ -94,6 +94,40 @@ var slime = monsterTable.Get(1);
 
 这样可以避免错误配置被默认值或 `IgnoreUnmatchedProperties` 静默吞掉。
 
+## 开发期热重载
+
+如果你希望在开发期修改配置文件后自动刷新运行时表，可以在初次加载完成后启用热重载：
+
+```csharp
+using GFramework.Game.Config;
+
+var registry = new ConfigRegistry();
+var loader = new YamlConfigLoader("config-root")
+    .RegisterTable<int, MonsterConfig>(
+        "monster",
+        "monster",
+        "schemas/monster.schema.json",
+        static config => config.Id);
+
+await loader.LoadAsync(registry);
+
+var hotReload = loader.EnableHotReload(
+    registry,
+    onTableReloaded: tableName => Console.WriteLine($"Reloaded: {tableName}"),
+    onTableReloadFailed: (tableName, exception) =>
+        Console.WriteLine($"Reload failed: {tableName}, {exception.Message}"));
+```
+
+当前热重载行为如下：
+
+- 监听已注册表对应的配置目录
+- 监听该表绑定的 schema 文件
+- 检测到变更后按表粒度重载
+- 重载成功后替换该表在 `IConfigRegistry` 中的注册
+- 重载失败时保留旧表，并通过失败回调提供诊断
+
+这项能力默认定位为开发期工具，不承诺生产环境热更新平台语义。
+
 ## 生成器接入约定
 
 配置生成器会从 `*.schema.json` 生成配置类型和表包装类。
@@ -118,7 +152,6 @@ var slime = monsterTable.Get(1);
 
 以下能力尚未完全完成：
 
-- 运行时热重载
 - 跨表引用校验
 - 更完整的 JSON Schema 支持
 - 更强的 VS Code 表单编辑器

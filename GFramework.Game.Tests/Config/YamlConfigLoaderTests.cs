@@ -9,8 +9,6 @@ namespace GFramework.Game.Tests.Config;
 [TestFixture]
 public class YamlConfigLoaderTests
 {
-    private string _rootPath = null!;
-
     /// <summary>
     ///     为每个测试创建独立临时目录，避免文件系统状态互相污染。
     /// </summary>
@@ -32,6 +30,8 @@ public class YamlConfigLoaderTests
             Directory.Delete(_rootPath, true);
         }
     }
+
+    private string _rootPath = null!;
 
     /// <summary>
     ///     验证加载器能够扫描 YAML 文件并将结果写入注册表。
@@ -332,6 +332,143 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证启用热重载后，配置文件内容变更会刷新已注册配置表。
+    /// </summary>
+    [Test]
+    public async Task EnableHotReload_Should_Update_Registered_Table_When_Config_File_Changes()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            hp: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "hp": { "type": "integer" }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+        await loader.LoadAsync(registry);
+
+        var reloadTaskSource = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hotReload = loader.EnableHotReload(
+            registry,
+            onTableReloaded: tableName => reloadTaskSource.TrySetResult(tableName),
+            debounceDelay: TimeSpan.FromMilliseconds(150));
+
+        try
+        {
+            CreateConfigFile(
+                "monster/slime.yaml",
+                """
+                id: 1
+                name: Slime
+                hp: 25
+                """);
+
+            var tableName = await WaitForTaskWithinAsync(reloadTaskSource.Task, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(tableName, Is.EqualTo("monster"));
+                Assert.That(registry.GetTable<int, MonsterConfigStub>("monster").Get(1).Hp, Is.EqualTo(25));
+            });
+        }
+        finally
+        {
+            hotReload.UnRegister();
+        }
+    }
+
+    /// <summary>
+    ///     验证热重载失败时会保留旧表状态，并通过失败回调暴露诊断信息。
+    /// </summary>
+    [Test]
+    public async Task EnableHotReload_Should_Keep_Previous_Table_When_Schema_Change_Makes_Reload_Fail()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            hp: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "hp": { "type": "integer" }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+        await loader.LoadAsync(registry);
+
+        var reloadFailureTaskSource =
+            new TaskCompletionSource<(string TableName, Exception Exception)>(TaskCreationOptions
+                .RunContinuationsAsynchronously);
+        var hotReload = loader.EnableHotReload(
+            registry,
+            onTableReloadFailed: (tableName, exception) =>
+                reloadFailureTaskSource.TrySetResult((tableName, exception)),
+            debounceDelay: TimeSpan.FromMilliseconds(150));
+
+        try
+        {
+            CreateSchemaFile(
+                "schemas/monster.schema.json",
+                """
+                {
+                  "type": "object",
+                  "required": ["id", "name", "rarity"],
+                  "properties": {
+                    "id": { "type": "integer" },
+                    "name": { "type": "string" },
+                    "hp": { "type": "integer" },
+                    "rarity": { "type": "string" }
+                  }
+                }
+                """);
+
+            var failure = await WaitForTaskWithinAsync(reloadFailureTaskSource.Task, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(failure.TableName, Is.EqualTo("monster"));
+                Assert.That(failure.Exception.Message, Does.Contain("rarity"));
+                Assert.That(registry.GetTable<int, MonsterConfigStub>("monster").Get(1).Hp, Is.EqualTo(10));
+            });
+        }
+        finally
+        {
+            hotReload.UnRegister();
+        }
+    }
+
+    /// <summary>
     ///     创建测试用配置文件。
     /// </summary>
     /// <param name="relativePath">相对根目录的文件路径。</param>
@@ -356,6 +493,24 @@ public class YamlConfigLoaderTests
     private void CreateSchemaFile(string relativePath, string content)
     {
         CreateConfigFile(relativePath, content);
+    }
+
+    /// <summary>
+    ///     在限定时间内等待异步任务完成，避免文件监听测试无限挂起。
+    /// </summary>
+    /// <typeparam name="T">任务结果类型。</typeparam>
+    /// <param name="task">要等待的任务。</param>
+    /// <param name="timeout">超时时间。</param>
+    /// <returns>任务结果。</returns>
+    private static async Task<T> WaitForTaskWithinAsync<T>(Task<T> task, TimeSpan timeout)
+    {
+        var completedTask = await Task.WhenAny(task, Task.Delay(timeout));
+        if (!ReferenceEquals(completedTask, task))
+        {
+            Assert.Fail($"Timed out after {timeout} while waiting for file watcher notification.");
+        }
+
+        return await task;
     }
 
     /// <summary>
