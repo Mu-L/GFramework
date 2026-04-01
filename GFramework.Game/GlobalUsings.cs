@@ -17,3 +17,7 @@ global using System.Collections.Concurrent;
 global using System.Linq;
 global using System.Threading;
 global using System.Threading.Tasks;
+global using System.Globalization;
+global using System.IO;
+global using System.Text.Json;
+global using YamlDotNet.RepresentationModel;
