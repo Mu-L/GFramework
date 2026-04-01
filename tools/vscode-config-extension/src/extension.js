@@ -3,6 +3,8 @@ const path = require("path");
 const vscode = require("vscode");
 const {
     applyFormUpdates,
+    getEditableSchemaFields,
+    parseBatchArrayValue,
     parseSchemaContent,
     parseTopLevelYaml,
     unquoteScalar,
@@ -35,6 +37,9 @@ function activate(context) {
         }),
         vscode.commands.registerCommand("gframeworkConfig.openFormPreview", async (item) => {
             await openFormPreview(item, diagnostics);
+        }),
+        vscode.commands.registerCommand("gframeworkConfig.batchEditDomain", async (item) => {
+            await openBatchEdit(item, diagnostics, provider);
         }),
         vscode.commands.registerCommand("gframeworkConfig.validateAll", async () => {
             await validateAllConfigs(diagnostics);
@@ -365,6 +370,142 @@ async function validateConfigFile(configUri, diagnostics) {
 }
 
 /**
+ * Open a minimal batch editor for one config domain.
+ * The workflow intentionally focuses on one schema-bound directory at a time
+ * so designers can apply the same top-level scalar or scalar-array values
+ * across multiple files without dropping down to repetitive raw-YAML edits.
+ *
+ * @param {ConfigTreeItem | { kind?: string, resourceUri?: vscode.Uri }} item Tree item.
+ * @param {vscode.DiagnosticCollection} diagnostics Diagnostic collection.
+ * @param {ConfigTreeDataProvider} provider Tree provider.
+ * @returns {Promise<void>} Async task.
+ */
+async function openBatchEdit(item, diagnostics, provider) {
+    const workspaceRoot = getWorkspaceRoot();
+    const domainUri = item && item.resourceUri;
+    if (!workspaceRoot || !domainUri || item.kind !== "domain") {
+        return;
+    }
+
+    const fileItems = fs.readdirSync(domainUri.fsPath, {withFileTypes: true})
+        .filter((entry) => entry.isFile() && isYamlPath(entry.name))
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map((entry) => {
+            const fileUri = vscode.Uri.joinPath(domainUri, entry.name);
+            return {
+                label: entry.name,
+                description: path.relative(workspaceRoot.uri.fsPath, fileUri.fsPath),
+                fileUri,
+                picked: true
+            };
+        });
+
+    if (fileItems.length === 0) {
+        void vscode.window.showWarningMessage("No YAML config files were found in the selected domain.");
+        return;
+    }
+
+    const selectedFiles = await vscode.window.showQuickPick(fileItems, {
+        canPickMany: true,
+        title: `Batch Edit: ${path.basename(domainUri.fsPath)}`,
+        placeHolder: "Select the config files to update."
+    });
+    if (!selectedFiles || selectedFiles.length === 0) {
+        return;
+    }
+
+    const schemaInfo = await loadSchemaInfoForConfig(selectedFiles[0].fileUri, workspaceRoot);
+    if (!schemaInfo.exists) {
+        void vscode.window.showWarningMessage("Batch edit requires a matching schema file for the selected domain.");
+        return;
+    }
+
+    const editableFields = getEditableSchemaFields(schemaInfo);
+    if (editableFields.length === 0) {
+        void vscode.window.showWarningMessage(
+            "No top-level scalar or scalar-array fields were found in the matching schema.");
+        return;
+    }
+
+    const selectedFields = await vscode.window.showQuickPick(
+        editableFields.map((field) => ({
+            label: field.key,
+            description: field.inputKind === "array"
+                ? `array<${field.itemType}>`
+                : field.type,
+            detail: field.required ? "required" : undefined,
+            field
+        })),
+        {
+            canPickMany: true,
+            title: `Batch Edit Fields: ${path.basename(domainUri.fsPath)}`,
+            placeHolder: "Select the fields to apply across the chosen files."
+        });
+    if (!selectedFields || selectedFields.length === 0) {
+        return;
+    }
+
+    const updates = {
+        scalars: {},
+        arrays: {}
+    };
+
+    for (const selectedField of selectedFields) {
+        const field = selectedField.field;
+        const rawValue = await promptBatchFieldValue(field);
+        if (rawValue === undefined) {
+            return;
+        }
+
+        if (field.inputKind === "array") {
+            updates.arrays[field.key] = parseBatchArrayValue(rawValue);
+            continue;
+        }
+
+        updates.scalars[field.key] = rawValue;
+    }
+
+    const edit = new vscode.WorkspaceEdit();
+    const touchedDocuments = [];
+    let changedFileCount = 0;
+
+    for (const fileItem of selectedFiles) {
+        const document = await vscode.workspace.openTextDocument(fileItem.fileUri);
+        const originalYaml = document.getText();
+        const updatedYaml = applyFormUpdates(originalYaml, updates);
+        if (updatedYaml === originalYaml) {
+            continue;
+        }
+
+        const fullRange = new vscode.Range(
+            document.positionAt(0),
+            document.positionAt(originalYaml.length));
+        edit.replace(fileItem.fileUri, fullRange, updatedYaml);
+        touchedDocuments.push(document);
+        changedFileCount += 1;
+    }
+
+    if (changedFileCount === 0) {
+        void vscode.window.showInformationMessage("Batch edit did not change any selected config files.");
+        return;
+    }
+
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (!applied) {
+        throw new Error("VS Code rejected the batch edit workspace update.");
+    }
+
+    for (const document of touchedDocuments) {
+        await document.save();
+        await validateConfigFile(document.uri, diagnostics);
+    }
+
+    provider.refresh();
+    void vscode.window.showInformationMessage(
+        `Batch updated ${changedFileCount} config file(s) in '${path.basename(domainUri.fsPath)}'.`);
+}
+
+/**
  * Load schema info for a config file.
  *
  * @param {vscode.Uri} configUri Config file URI.
@@ -580,6 +721,28 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
     </script>
 </body>
 </html>`;
+}
+
+/**
+ * Prompt for one batch-edit field value.
+ *
+ * @param {{key: string, type: string, itemType?: string, inputKind: "scalar" | "array", required: boolean}} field Editable field descriptor.
+ * @returns {Promise<string | undefined>} User input, or undefined when cancelled.
+ */
+async function promptBatchFieldValue(field) {
+    if (field.inputKind === "array") {
+        return vscode.window.showInputBox({
+            title: `Batch Edit Array: ${field.key}`,
+            prompt: `Enter comma-separated items for '${field.key}' (expected array<${field.itemType}>). Leave empty to clear the array.`,
+            ignoreFocusOut: true
+        });
+    }
+
+    return vscode.window.showInputBox({
+        title: `Batch Edit Field: ${field.key}`,
+        prompt: `Enter the new value for '${field.key}' (expected ${field.type}).`,
+        ignoreFocusOut: true
+    });
 }
 
 /**

@@ -42,6 +42,44 @@ function parseSchemaContent(content) {
 }
 
 /**
+ * Collect top-level schema fields that the current tooling can edit in bulk.
+ * The bulk editor intentionally stays aligned with the lightweight form editor:
+ * top-level scalars and scalar arrays are supported, while nested objects and
+ * complex array items remain raw-YAML-only.
+ *
+ * @param {{required: string[], properties: Record<string, {type: string, itemType?: string}>}} schemaInfo Parsed schema info.
+ * @returns {Array<{key: string, type: string, itemType?: string, inputKind: "scalar" | "array", required: boolean}>} Editable field descriptors.
+ */
+function getEditableSchemaFields(schemaInfo) {
+    const editableFields = [];
+    const requiredSet = new Set(Array.isArray(schemaInfo.required) ? schemaInfo.required : []);
+
+    for (const [key, property] of Object.entries(schemaInfo.properties || {})) {
+        if (isEditableScalarType(property.type)) {
+            editableFields.push({
+                key,
+                type: property.type,
+                inputKind: "scalar",
+                required: requiredSet.has(key)
+            });
+            continue;
+        }
+
+        if (property.type === "array" && isEditableScalarType(property.itemType || "")) {
+            editableFields.push({
+                key,
+                type: property.type,
+                itemType: property.itemType,
+                inputKind: "array",
+                required: requiredSet.has(key)
+            });
+        }
+    }
+
+    return editableFields.sort((left, right) => left.key.localeCompare(right.key));
+}
+
+/**
  * Parse a minimal top-level YAML structure for config validation and form
  * preview. This parser intentionally focuses on the repository's current
  * config conventions: one root mapping object per file, top-level scalar
@@ -204,6 +242,20 @@ function validateParsedConfig(schemaInfo, parsedYaml) {
 }
 
 /**
+ * Determine whether the current schema type can be edited through the
+ * lightweight form or batch-edit tooling.
+ *
+ * @param {string} schemaType Schema type.
+ * @returns {boolean} True when the type is supported by the lightweight editors.
+ */
+function isEditableScalarType(schemaType) {
+    return schemaType === "string" ||
+        schemaType === "integer" ||
+        schemaType === "number" ||
+        schemaType === "boolean";
+}
+
+/**
  * Determine whether a scalar value matches a minimal schema type.
  *
  * @param {string} expectedType Schema type.
@@ -306,6 +358,19 @@ function applyFormUpdates(originalYaml, updates) {
  */
 function applyScalarUpdates(originalYaml, updates) {
     return applyFormUpdates(originalYaml, {scalars: updates});
+}
+
+/**
+ * Parse the batch editor's comma-separated array input.
+ *
+ * @param {string} value Raw input value.
+ * @returns {string[]} Parsed array items.
+ */
+function parseBatchArrayValue(value) {
+    return String(value)
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
 }
 
 /**
@@ -455,7 +520,9 @@ module.exports = {
     applyScalarUpdates,
     findTopLevelBlocks,
     formatYamlScalar,
+    getEditableSchemaFields,
     isScalarCompatible,
+    parseBatchArrayValue,
     parseSchemaContent,
     parseTopLevelYaml,
     unquoteScalar,

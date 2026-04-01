@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const {
     applyFormUpdates,
     applyScalarUpdates,
+    getEditableSchemaFields,
+    parseBatchArrayValue,
     parseSchemaContent,
     parseTopLevelYaml,
     validateParsedConfig
@@ -137,4 +139,41 @@ test("applyFormUpdates should replace top-level scalar arrays and preserve unrel
     assert.match(updated, /^  - hi potion$/mu);
     assert.match(updated, /^reward:$/mu);
     assert.match(updated, /^  gold: 10$/mu);
+});
+
+test("getEditableSchemaFields should expose only scalar and scalar-array properties", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "required": ["id", "dropItems"],
+          "properties": {
+            "id": { "type": "integer" },
+            "name": { "type": "string" },
+            "reward": { "type": "object" },
+            "dropItems": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "waypoints": {
+              "type": "array",
+              "items": { "type": "object" }
+            }
+          }
+        }
+    `);
+
+    assert.deepEqual(getEditableSchemaFields(schema), [
+        {key: "dropItems", type: "array", itemType: "string", inputKind: "array", required: true},
+        {key: "id", type: "integer", inputKind: "scalar", required: true},
+        {key: "name", type: "string", inputKind: "scalar", required: false}
+    ]);
+});
+
+test("parseBatchArrayValue should split comma-separated items and drop empty segments", () => {
+    assert.deepEqual(parseBatchArrayValue(" potion, hi potion , ,bomb "), [
+        "potion",
+        "hi potion",
+        "bomb"
+    ]);
+    assert.deepEqual(parseBatchArrayValue(""), []);
 });
