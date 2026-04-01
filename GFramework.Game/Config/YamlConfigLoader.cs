@@ -20,6 +20,10 @@ public sealed class YamlConfigLoader : IConfigLoader
         "Schema relative path cannot be null or whitespace.";
 
     private readonly IDeserializer _deserializer;
+
+    private readonly Dictionary<string, IReadOnlyCollection<string>> _lastSuccessfulDependencies =
+        new(StringComparer.Ordinal);
+
     private readonly List<IYamlTableRegistration> _registrations = new();
     private readonly string _rootPath;
 
@@ -57,7 +61,7 @@ public sealed class YamlConfigLoader : IConfigLoader
     {
         ArgumentNullException.ThrowIfNull(registry);
 
-        var loadedTables = new List<(string name, IConfigTable table)>(_registrations.Count);
+        var loadedTables = new List<YamlTableLoadResult>(_registrations.Count);
 
         foreach (var registration in _registrations)
         {
@@ -65,11 +69,15 @@ public sealed class YamlConfigLoader : IConfigLoader
             loadedTables.Add(await registration.LoadAsync(_rootPath, _deserializer, cancellationToken));
         }
 
+        CrossTableReferenceValidator.Validate(registry, loadedTables);
+
         // 仅当本轮所有配置表都成功加载后才写入注册表，避免暴露部分成功的中间状态。
-        foreach (var (name, table) in loadedTables)
+        foreach (var loadedTable in loadedTables)
         {
-            RegistrationDispatcher.Register(registry, name, table);
+            RegistrationDispatcher.Register(registry, loadedTable.Name, loadedTable.Table);
         }
+
+        UpdateLastSuccessfulDependencies(loadedTables);
     }
 
     /// <summary>
@@ -96,9 +104,20 @@ public sealed class YamlConfigLoader : IConfigLoader
             _deserializer,
             registry,
             _registrations,
+            _lastSuccessfulDependencies,
             onTableReloaded,
             onTableReloadFailed,
             debounceDelay ?? TimeSpan.FromMilliseconds(200));
+    }
+
+    private void UpdateLastSuccessfulDependencies(IEnumerable<YamlTableLoadResult> loadedTables)
+    {
+        _lastSuccessfulDependencies.Clear();
+
+        foreach (var loadedTable in loadedTables)
+        {
+            _lastSuccessfulDependencies[loadedTable.Name] = loadedTable.ReferencedTableNames;
+        }
     }
 
     /// <summary>
@@ -244,8 +263,8 @@ public sealed class YamlConfigLoader : IConfigLoader
         /// <param name="rootPath">配置根目录。</param>
         /// <param name="deserializer">YAML 反序列化器。</param>
         /// <param name="cancellationToken">取消令牌。</param>
-        /// <returns>已加载的配置表名称与配置表实例。</returns>
-        Task<(string name, IConfigTable table)> LoadAsync(
+        /// <returns>已加载的配置表结果。</returns>
+        Task<YamlTableLoadResult> LoadAsync(
             string rootPath,
             IDeserializer deserializer,
             CancellationToken cancellationToken);
@@ -300,7 +319,7 @@ public sealed class YamlConfigLoader : IConfigLoader
         public string? SchemaRelativePath { get; }
 
         /// <inheritdoc />
-        public async Task<(string name, IConfigTable table)> LoadAsync(
+        public async Task<YamlTableLoadResult> LoadAsync(
             string rootPath,
             IDeserializer deserializer,
             CancellationToken cancellationToken)
@@ -313,12 +332,15 @@ public sealed class YamlConfigLoader : IConfigLoader
             }
 
             YamlConfigSchema? schema = null;
+            IReadOnlyCollection<string> referencedTableNames = Array.Empty<string>();
             if (!string.IsNullOrEmpty(SchemaRelativePath))
             {
                 var schemaPath = Path.Combine(rootPath, SchemaRelativePath);
                 schema = await YamlConfigSchemaValidator.LoadAsync(schemaPath, cancellationToken);
+                referencedTableNames = schema.ReferencedTableNames;
             }
 
+            var referenceUsages = new List<YamlConfigReferenceUsage>();
             var values = new List<TValue>();
             var files = Directory
                 .EnumerateFiles(directoryPath, "*.*", SearchOption.TopDirectoryOnly)
@@ -346,8 +368,9 @@ public sealed class YamlConfigLoader : IConfigLoader
 
                 if (schema != null)
                 {
-                    // 先按 schema 拒绝结构问题，避免被 IgnoreUnmatchedProperties 或默认值掩盖配置错误。
-                    YamlConfigSchemaValidator.Validate(schema, file, yaml);
+                    // 先按 schema 拒绝结构问题并提取跨表引用，避免被 IgnoreUnmatchedProperties 或默认值掩盖配置错误。
+                    referenceUsages.AddRange(
+                        YamlConfigSchemaValidator.ValidateAndCollectReferences(schema, file, yaml));
                 }
 
                 try
@@ -372,7 +395,7 @@ public sealed class YamlConfigLoader : IConfigLoader
             try
             {
                 var table = new InMemoryConfigTable<TKey, TValue>(values, _keySelector, _comparer);
-                return (Name, table);
+                return new YamlTableLoadResult(Name, table, referencedTableNames, referenceUsages);
             }
             catch (Exception exception)
             {
@@ -384,12 +407,247 @@ public sealed class YamlConfigLoader : IConfigLoader
     }
 
     /// <summary>
+    ///     表示单个注册项加载完成后的中间结果。
+    ///     该结果同时携带配置表实例、schema 声明的依赖关系和 YAML 中提取出的实际引用，以便在批量提交前完成跨表一致性校验。
+    /// </summary>
+    private sealed class YamlTableLoadResult
+    {
+        /// <summary>
+        ///     初始化一个表加载结果。
+        /// </summary>
+        /// <param name="name">配置表名称。</param>
+        /// <param name="table">已构建好的配置表。</param>
+        /// <param name="referencedTableNames">schema 声明的依赖表名称集合。</param>
+        /// <param name="referenceUsages">YAML 中提取出的实际引用集合。</param>
+        public YamlTableLoadResult(
+            string name,
+            IConfigTable table,
+            IReadOnlyCollection<string> referencedTableNames,
+            IReadOnlyCollection<YamlConfigReferenceUsage> referenceUsages)
+        {
+            ArgumentNullException.ThrowIfNull(name);
+            ArgumentNullException.ThrowIfNull(table);
+            ArgumentNullException.ThrowIfNull(referencedTableNames);
+            ArgumentNullException.ThrowIfNull(referenceUsages);
+
+            Name = name;
+            Table = table;
+            ReferencedTableNames = referencedTableNames;
+            ReferenceUsages = referenceUsages;
+        }
+
+        /// <summary>
+        ///     获取配置表名称。
+        /// </summary>
+        public string Name { get; }
+
+        /// <summary>
+        ///     获取已构建好的配置表。
+        /// </summary>
+        public IConfigTable Table { get; }
+
+        /// <summary>
+        ///     获取 schema 声明的依赖表名称集合。
+        /// </summary>
+        public IReadOnlyCollection<string> ReferencedTableNames { get; }
+
+        /// <summary>
+        ///     获取 YAML 中提取出的实际引用集合。
+        /// </summary>
+        public IReadOnlyCollection<YamlConfigReferenceUsage> ReferenceUsages { get; }
+    }
+
+    /// <summary>
+    ///     负责在所有注册项加载完成后执行跨表引用校验。
+    ///     该阶段在真正写入注册表之前运行，确保任何缺失目标表、主键类型不兼容或目标行不存在的情况都会整体回滚。
+    /// </summary>
+    private static class CrossTableReferenceValidator
+    {
+        /// <summary>
+        ///     使用本轮新加载结果与注册表中保留的旧表，一起验证跨表引用是否全部有效。
+        /// </summary>
+        /// <param name="registry">当前配置注册表。</param>
+        /// <param name="loadedTables">本轮加载出的配置表集合。</param>
+        public static void Validate(IConfigRegistry registry, IReadOnlyCollection<YamlTableLoadResult> loadedTables)
+        {
+            ArgumentNullException.ThrowIfNull(registry);
+            ArgumentNullException.ThrowIfNull(loadedTables);
+
+            var loadedTableLookup = loadedTables.ToDictionary(static table => table.Name, StringComparer.Ordinal);
+
+            foreach (var loadedTable in loadedTables)
+            {
+                foreach (var referenceUsage in loadedTable.ReferenceUsages)
+                {
+                    if (!TryResolveTargetTable(registry, loadedTableLookup, referenceUsage.ReferencedTableName,
+                            out var targetTable))
+                    {
+                        throw new InvalidOperationException(
+                            $"Config file '{referenceUsage.YamlPath}' property '{referenceUsage.DisplayPath}' references table '{referenceUsage.ReferencedTableName}', but that table is not available in the current loader batch or registry.");
+                    }
+
+                    if (!TryConvertReferenceKey(referenceUsage, targetTable.KeyType, out var convertedKey,
+                            out var conversionError))
+                    {
+                        throw new InvalidOperationException(
+                            $"Config file '{referenceUsage.YamlPath}' property '{referenceUsage.DisplayPath}' cannot target table '{referenceUsage.ReferencedTableName}' with key type '{targetTable.KeyType.Name}'. {conversionError}");
+                    }
+
+                    if (!ContainsKey(targetTable, convertedKey!))
+                    {
+                        throw new InvalidOperationException(
+                            $"Config file '{referenceUsage.YamlPath}' property '{referenceUsage.DisplayPath}' references missing key '{referenceUsage.RawValue}' in table '{referenceUsage.ReferencedTableName}'.");
+                    }
+                }
+            }
+        }
+
+        private static bool TryResolveTargetTable(
+            IConfigRegistry registry,
+            IReadOnlyDictionary<string, YamlTableLoadResult> loadedTableLookup,
+            string tableName,
+            out IConfigTable table)
+        {
+            if (loadedTableLookup.TryGetValue(tableName, out var loadedTable))
+            {
+                table = loadedTable.Table;
+                return true;
+            }
+
+            if (registry.TryGetTable(tableName, out var registeredTable) && registeredTable != null)
+            {
+                table = registeredTable;
+                return true;
+            }
+
+            table = null!;
+            return false;
+        }
+
+        private static bool TryConvertReferenceKey(
+            YamlConfigReferenceUsage referenceUsage,
+            Type targetKeyType,
+            out object? convertedKey,
+            out string errorMessage)
+        {
+            convertedKey = null;
+            errorMessage = string.Empty;
+
+            if (referenceUsage.ValueType == YamlConfigSchemaPropertyType.String)
+            {
+                if (targetKeyType != typeof(string))
+                {
+                    errorMessage =
+                        $"Reference values declared as schema type 'string' can currently only target string-key tables, but the target key type is '{targetKeyType.Name}'.";
+                    return false;
+                }
+
+                convertedKey = referenceUsage.RawValue;
+                return true;
+            }
+
+            if (referenceUsage.ValueType != YamlConfigSchemaPropertyType.Integer)
+            {
+                errorMessage =
+                    $"Reference values currently only support schema scalar types 'string' and 'integer', but the actual type is '{referenceUsage.ValueType}'.";
+                return false;
+            }
+
+            return TryConvertIntegerKey(referenceUsage.RawValue, targetKeyType, out convertedKey, out errorMessage);
+        }
+
+        private static bool TryConvertIntegerKey(
+            string rawValue,
+            Type targetKeyType,
+            out object? convertedKey,
+            out string errorMessage)
+        {
+            convertedKey = null;
+            errorMessage = string.Empty;
+
+            if (targetKeyType == typeof(int) &&
+                int.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue))
+            {
+                convertedKey = intValue;
+                return true;
+            }
+
+            if (targetKeyType == typeof(long) &&
+                long.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
+            {
+                convertedKey = longValue;
+                return true;
+            }
+
+            if (targetKeyType == typeof(short) &&
+                short.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shortValue))
+            {
+                convertedKey = shortValue;
+                return true;
+            }
+
+            if (targetKeyType == typeof(byte) &&
+                byte.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var byteValue))
+            {
+                convertedKey = byteValue;
+                return true;
+            }
+
+            if (targetKeyType == typeof(uint) &&
+                uint.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var uintValue))
+            {
+                convertedKey = uintValue;
+                return true;
+            }
+
+            if (targetKeyType == typeof(ulong) &&
+                ulong.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ulongValue))
+            {
+                convertedKey = ulongValue;
+                return true;
+            }
+
+            if (targetKeyType == typeof(ushort) &&
+                ushort.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ushortValue))
+            {
+                convertedKey = ushortValue;
+                return true;
+            }
+
+            if (targetKeyType == typeof(sbyte) &&
+                sbyte.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sbyteValue))
+            {
+                convertedKey = sbyteValue;
+                return true;
+            }
+
+            errorMessage =
+                $"Reference value '{rawValue}' cannot be converted to supported target key type '{targetKeyType.Name}'. Integer references currently support the standard signed and unsigned integer CLR key types.";
+            return false;
+        }
+
+        private static bool ContainsKey(IConfigTable table, object key)
+        {
+            var tableInterface = table.GetType()
+                .GetInterfaces()
+                .First(static type =>
+                    type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IConfigTable<,>));
+            var containsKeyMethod = tableInterface.GetMethod(nameof(IConfigTable<int, int>.ContainsKey))!;
+            return (bool)containsKeyMethod.Invoke(table, new[] { key })!;
+        }
+    }
+
+    /// <summary>
     ///     封装开发期热重载所需的文件监听与按表重载逻辑。
     ///     该会话只影响通过当前加载器注册的表，不尝试接管注册表中的其他来源数据。
     /// </summary>
     private sealed class HotReloadSession : IUnRegister, IDisposable
     {
         private readonly TimeSpan _debounceDelay;
+
+        private readonly Dictionary<string, IReadOnlyCollection<string>> _dependenciesByTable =
+            new(StringComparer.Ordinal);
+
         private readonly IDeserializer _deserializer;
         private readonly object _gate = new();
         private readonly Action<string>? _onTableReloaded;
@@ -409,6 +667,7 @@ public sealed class YamlConfigLoader : IConfigLoader
         /// <param name="deserializer">YAML 反序列化器。</param>
         /// <param name="registry">要更新的配置注册表。</param>
         /// <param name="registrations">已注册的配置表定义。</param>
+        /// <param name="initialDependencies">最近一次成功加载后记录下来的跨表依赖图。</param>
         /// <param name="onTableReloaded">单表重载成功回调。</param>
         /// <param name="onTableReloadFailed">单表重载失败回调。</param>
         /// <param name="debounceDelay">监听事件防抖延迟。</param>
@@ -417,6 +676,7 @@ public sealed class YamlConfigLoader : IConfigLoader
             IDeserializer deserializer,
             IConfigRegistry registry,
             IEnumerable<IYamlTableRegistration> registrations,
+            IReadOnlyDictionary<string, IReadOnlyCollection<string>> initialDependencies,
             Action<string>? onTableReloaded,
             Action<string, Exception>? onTableReloadFailed,
             TimeSpan debounceDelay)
@@ -425,6 +685,7 @@ public sealed class YamlConfigLoader : IConfigLoader
             ArgumentNullException.ThrowIfNull(deserializer);
             ArgumentNullException.ThrowIfNull(registry);
             ArgumentNullException.ThrowIfNull(registrations);
+            ArgumentNullException.ThrowIfNull(initialDependencies);
 
             _rootPath = rootPath;
             _deserializer = deserializer;
@@ -437,6 +698,10 @@ public sealed class YamlConfigLoader : IConfigLoader
             {
                 _registrations.Add(registration.Name, registration);
                 _reloadLocks.Add(registration.Name, new SemaphoreSlim(1, 1));
+                _dependenciesByTable[registration.Name] =
+                    initialDependencies.TryGetValue(registration.Name, out var dependencies)
+                        ? dependencies
+                        : Array.Empty<string>();
                 CreateWatchersForRegistration(registration);
             }
         }
@@ -604,7 +869,7 @@ public sealed class YamlConfigLoader : IConfigLoader
 
         private async Task ReloadTableAsync(string tableName, CancellationToken cancellationToken)
         {
-            if (!_registrations.TryGetValue(tableName, out var registration))
+            if (!_registrations.ContainsKey(tableName))
             {
                 return;
             }
@@ -616,9 +881,26 @@ public sealed class YamlConfigLoader : IConfigLoader
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var (name, table) = await registration.LoadAsync(_rootPath, _deserializer, cancellationToken);
-                RegistrationDispatcher.Register(_registry, name, table);
-                InvokeReloaded(name);
+                var affectedTableNames = GetAffectedTableNames(tableName);
+                var loadedTables = new List<YamlTableLoadResult>(affectedTableNames.Count);
+
+                // 目标表变更可能让依赖它的表立即失效，因此热重载需要按受影响闭包整体重验并整体提交。
+                foreach (var affectedTableName in affectedTableNames)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    loadedTables.Add(await _registrations[affectedTableName].LoadAsync(_rootPath, _deserializer,
+                        cancellationToken));
+                }
+
+                CrossTableReferenceValidator.Validate(_registry, loadedTables);
+
+                foreach (var loadedTable in loadedTables)
+                {
+                    RegistrationDispatcher.Register(_registry, loadedTable.Name, loadedTable.Table);
+                    _dependenciesByTable[loadedTable.Name] = loadedTable.ReferencedTableNames;
+                }
+
+                InvokeReloaded(tableName);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -632,6 +914,38 @@ public sealed class YamlConfigLoader : IConfigLoader
             {
                 reloadLock.Release();
             }
+        }
+
+        private IReadOnlyCollection<string> GetAffectedTableNames(string changedTableName)
+        {
+            var affectedTableNames = new HashSet<string>(StringComparer.Ordinal)
+            {
+                changedTableName
+            };
+            var pendingTableNames = new Queue<string>();
+            pendingTableNames.Enqueue(changedTableName);
+
+            while (pendingTableNames.Count > 0)
+            {
+                var currentTableName = pendingTableNames.Dequeue();
+
+                foreach (var dependency in _dependenciesByTable)
+                {
+                    if (!dependency.Value.Contains(currentTableName))
+                    {
+                        continue;
+                    }
+
+                    if (affectedTableNames.Add(dependency.Key))
+                    {
+                        pendingTableNames.Enqueue(dependency.Key);
+                    }
+                }
+            }
+
+            return affectedTableNames
+                .OrderBy(static name => name, StringComparer.Ordinal)
+                .ToArray();
         }
 
         private void InvokeReloaded(string tableName)

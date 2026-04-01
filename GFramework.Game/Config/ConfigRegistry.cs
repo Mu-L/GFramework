@@ -121,6 +121,25 @@ public sealed class ConfigRegistry : IConfigRegistry
     }
 
     /// <summary>
+    ///     尝试根据名称获取原始配置表。
+    /// </summary>
+    /// <param name="name">要查找的配置表名称。</param>
+    /// <param name="table">输出参数，如果查找成功则返回原始配置表实例，否则为 null。</param>
+    /// <returns>如果找到指定名称的配置表则返回 true，否则返回 false。</returns>
+    /// <exception cref="ArgumentException">当 <paramref name="name" /> 为 null、空或仅包含空白字符时抛出。</exception>
+    public bool TryGetTable(string name, out IConfigTable? table)
+    {
+        table = default;
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException(NameCannotBeNullOrWhiteSpaceMessage, nameof(name));
+        }
+
+        return _tables.TryGetValue(name, out table);
+    }
+
+    /// <summary>
     ///     检查指定名称的配置表是否已注册。
     /// </summary>
     /// <param name="name">要检查的配置表名称。</param>

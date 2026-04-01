@@ -55,6 +55,15 @@ public interface IConfigRegistry : IUtility
         where TKey : notnull;
 
     /// <summary>
+    ///     尝试获取指定名称的原始配置表。
+    ///     该入口用于跨表校验或诊断场景，以便在不知道泛型参数时仍能访问表元数据。
+    /// </summary>
+    /// <param name="name">配置表名称。</param>
+    /// <param name="table">匹配的原始配置表；未找到时返回空。</param>
+    /// <returns>找到配置表时返回 <c>true</c>，否则返回 <c>false</c>。</returns>
+    bool TryGetTable(string name, out IConfigTable? table);
+
+    /// <summary>
     ///     检查指定名称的配置表是否存在。
     /// </summary>
     /// <param name="name">配置表名称。</param>

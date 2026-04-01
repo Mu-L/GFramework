@@ -62,6 +62,26 @@ public class ConfigRegistryTests
     }
 
     /// <summary>
+    ///     验证弱类型查询入口可以在不知道泛型参数时返回原始配置表。
+    /// </summary>
+    [Test]
+    public void TryGetTable_Should_Return_Raw_Table_When_Name_Exists()
+    {
+        var registry = new ConfigRegistry();
+        var table = CreateMonsterTable();
+        registry.RegisterTable("monster", table);
+
+        var found = registry.TryGetTable("monster", out var rawTable);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(found, Is.True);
+            Assert.That(rawTable, Is.SameAs(table));
+            Assert.That(rawTable!.KeyType, Is.EqualTo(typeof(int)));
+        });
+    }
+
+    /// <summary>
     ///     验证移除和清空操作会更新注册表状态。
     /// </summary>
     [Test]

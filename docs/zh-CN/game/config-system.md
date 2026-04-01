@@ -91,6 +91,29 @@ var slime = monsterTable.Get(1);
 - 未在 schema 中声明的未知字段
 - 标量类型不匹配
 - 数组元素类型不匹配
+- 通过 `x-gframework-ref-table` 声明的跨表引用缺失目标行
+
+跨表引用当前使用最小扩展关键字：
+
+```json
+{
+  "type": "object",
+  "required": ["id", "dropItemId"],
+  "properties": {
+    "id": { "type": "integer" },
+    "dropItemId": {
+      "type": "string",
+      "x-gframework-ref-table": "item"
+    }
+  }
+}
+```
+
+约束如下：
+
+- 仅支持 `string`、`integer` 及其标量数组声明跨表引用
+- 引用目标表需要由同一个 `YamlConfigLoader` 注册，或已存在于当前 `IConfigRegistry`
+- 热重载中若目标表变更导致依赖表引用失效，会整体回滚受影响表，避免注册表进入不一致状态
 
 这样可以避免错误配置被默认值或 `IgnoreUnmatchedProperties` 静默吞掉。
 
@@ -123,6 +146,7 @@ var hotReload = loader.EnableHotReload(
 - 监听已注册表对应的配置目录
 - 监听该表绑定的 schema 文件
 - 检测到变更后按表粒度重载
+- 若变更表被其他表通过跨表引用依赖，会联动重验受影响表
 - 重载成功后替换该表在 `IConfigRegistry` 中的注册
 - 重载失败时保留旧表，并通过失败回调提供诊断
 
@@ -152,7 +176,6 @@ var hotReload = loader.EnableHotReload(
 
 以下能力尚未完全完成：
 
-- 跨表引用校验
 - 更完整的 JSON Schema 支持
 - 更强的 VS Code 嵌套对象与复杂数组编辑器
 

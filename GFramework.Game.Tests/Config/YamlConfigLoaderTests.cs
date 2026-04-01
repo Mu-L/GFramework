@@ -332,6 +332,212 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证绑定跨表引用 schema 时，存在的目标行可以通过加载校验。
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_Should_Accept_Existing_Cross_Table_Reference()
+    {
+        CreateConfigFile(
+            "item/potion.yaml",
+            """
+            id: potion
+            name: Potion
+            """);
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropItemId: potion
+            """);
+        CreateSchemaFile(
+            "schemas/item.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            }
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropItemId"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropItemId": {
+                  "type": "string",
+                  "x-gframework-ref-table": "item"
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
+                static config => config.Id)
+            .RegisterTable<int, MonsterDropConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        await loader.LoadAsync(registry);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(registry.GetTable<string, ItemConfigStub>("item").ContainsKey("potion"), Is.True);
+            Assert.That(registry.GetTable<int, MonsterDropConfigStub>("monster").Get(1).DropItemId,
+                Is.EqualTo("potion"));
+        });
+    }
+
+    /// <summary>
+    ///     验证缺失的跨表引用会阻止整批配置写入注册表。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Cross_Table_Reference_Target_Is_Missing()
+    {
+        CreateConfigFile(
+            "item/slime-gel.yaml",
+            """
+            id: slime_gel
+            name: Slime Gel
+            """);
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropItemId: potion
+            """);
+        CreateSchemaFile(
+            "schemas/item.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            }
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropItemId"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropItemId": {
+                  "type": "string",
+                  "x-gframework-ref-table": "item"
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
+                static config => config.Id)
+            .RegisterTable<int, MonsterDropConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Message, Does.Contain("dropItemId"));
+            Assert.That(exception!.Message, Does.Contain("potion"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证跨表引用同样支持标量数组中的每个元素。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Array_Reference_Item_Is_Missing()
+    {
+        CreateConfigFile(
+            "item/potion.yaml",
+            """
+            id: potion
+            name: Potion
+            """);
+        CreateConfigFile(
+            "item/slime-gel.yaml",
+            """
+            id: slime_gel
+            name: Slime Gel
+            """);
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropItemIds:
+              - potion
+              - missing_item
+            """);
+        CreateSchemaFile(
+            "schemas/item.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            }
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropItemIds"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropItemIds": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "x-gframework-ref-table": "item"
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
+                static config => config.Id)
+            .RegisterTable<int, MonsterDropArrayConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Message, Does.Contain("dropItemIds[1]"));
+            Assert.That(exception!.Message, Does.Contain("missing_item"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证启用热重载后，配置文件内容变更会刷新已注册配置表。
     /// </summary>
     [Test]
@@ -469,6 +675,97 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证当被引用表变更导致依赖表引用失效时，热重载会整体回滚受影响表。
+    /// </summary>
+    [Test]
+    public async Task EnableHotReload_Should_Keep_Previous_State_When_Dependency_Table_Breaks_Cross_Table_Reference()
+    {
+        CreateConfigFile(
+            "item/potion.yaml",
+            """
+            id: potion
+            name: Potion
+            """);
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropItemId: potion
+            """);
+        CreateSchemaFile(
+            "schemas/item.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            }
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropItemId"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropItemId": {
+                  "type": "string",
+                  "x-gframework-ref-table": "item"
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
+                static config => config.Id)
+            .RegisterTable<int, MonsterDropConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+        await loader.LoadAsync(registry);
+
+        var reloadFailureTaskSource =
+            new TaskCompletionSource<(string TableName, Exception Exception)>(TaskCreationOptions
+                .RunContinuationsAsynchronously);
+        var hotReload = loader.EnableHotReload(
+            registry,
+            onTableReloadFailed: (tableName, exception) =>
+                reloadFailureTaskSource.TrySetResult((tableName, exception)),
+            debounceDelay: TimeSpan.FromMilliseconds(150));
+
+        try
+        {
+            CreateConfigFile(
+                "item/potion.yaml",
+                """
+                id: elixir
+                name: Elixir
+                """);
+
+            var failure = await WaitForTaskWithinAsync(reloadFailureTaskSource.Task, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(failure.TableName, Is.EqualTo("item"));
+                Assert.That(failure.Exception.Message, Does.Contain("dropItemId"));
+                Assert.That(registry.GetTable<string, ItemConfigStub>("item").ContainsKey("potion"), Is.True);
+                Assert.That(registry.GetTable<int, MonsterDropConfigStub>("monster").Get(1).DropItemId,
+                    Is.EqualTo("potion"));
+            });
+        }
+        finally
+        {
+            hotReload.UnRegister();
+        }
+    }
+
+    /// <summary>
     ///     创建测试用配置文件。
     /// </summary>
     /// <param name="relativePath">相对根目录的文件路径。</param>
@@ -553,6 +850,64 @@ public class YamlConfigLoaderTests
         ///     获取或设置掉落率列表。
         /// </summary>
         public IReadOnlyList<int> DropRates { get; set; } = Array.Empty<int>();
+    }
+
+    /// <summary>
+    ///     用于跨表引用测试的最小物品配置类型。
+    /// </summary>
+    private sealed class ItemConfigStub
+    {
+        /// <summary>
+        ///     获取或设置主键。
+        /// </summary>
+        public string Id { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     获取或设置名称。
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    ///     用于单值跨表引用测试的怪物配置类型。
+    /// </summary>
+    private sealed class MonsterDropConfigStub
+    {
+        /// <summary>
+        ///     获取或设置主键。
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        ///     获取或设置名称。
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     获取或设置掉落物品主键。
+        /// </summary>
+        public string DropItemId { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    ///     用于数组跨表引用测试的怪物配置类型。
+    /// </summary>
+    private sealed class MonsterDropArrayConfigStub
+    {
+        /// <summary>
+        ///     获取或设置主键。
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        ///     获取或设置名称。
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     获取或设置掉落物品主键列表。
+        /// </summary>
+        public List<string> DropItemIds { get; set; } = new();
     }
 
     /// <summary>
