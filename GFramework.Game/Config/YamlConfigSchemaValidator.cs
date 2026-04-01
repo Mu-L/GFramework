@@ -398,8 +398,7 @@ internal static class YamlConfigSchemaValidator
         if (isValid)
         {
             var normalizedValue = NormalizeScalarValue(expectedType, value);
-            if (allowedValues != null &&
-                allowedValues.Count > 0 &&
+            if (allowedValues is { Count: > 0 } &&
                 !allowedValues.Contains(normalizedValue, StringComparer.Ordinal))
             {
                 var enumSubject = isArrayItem
