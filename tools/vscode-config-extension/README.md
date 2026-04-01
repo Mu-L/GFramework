@@ -1,6 +1,6 @@
-# GFramework Config Tools
+# GFramework Config Tool
 
-Minimal VS Code extension scaffold for the GFramework AI-First config workflow.
+VS Code extension for the GFramework AI-First config workflow.
 
 ## Current MVP
 
@@ -29,7 +29,17 @@ The extension currently validates the repository's minimal config-schema subset:
 
 ```bash
 cd tools/vscode-config-extension
-node --test ./test/*.test.js
+bun install
+bun run test
+```
+
+## Packaging And Publishing
+
+```bash
+cd tools/vscode-config-extension
+bun install
+bun run package:vsix
+VSCE_PAT=your_marketplace_pat bun run publish:marketplace
 ```
 
 ## Current Constraints
