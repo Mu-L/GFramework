@@ -1,8 +1,8 @@
 {
   "name": "gframework-config-tool",
-  "displayName": "GFramework Config Tool",
-  "description": "VS Code tooling for browsing, validating, and editing AI-First config files in GFramework projects.",
-  "version": "0.0.1",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.0.3",
   "publisher": "GeWuYou",
   "license": "Apache-2.0",
   "repository": {
@@ -54,34 +54,34 @@
       "explorer": [
         {
           "id": "gframeworkConfigExplorer",
-          "name": "GFramework Config"
+          "name": "%view.gframeworkConfig.name%"
         }
       ]
     },
     "commands": [
       {
         "command": "gframeworkConfig.refresh",
-        "title": "GFramework Config: Refresh"
+        "title": "%command.refresh.title%"
       },
       {
         "command": "gframeworkConfig.openRaw",
-        "title": "GFramework Config: Open Raw File"
+        "title": "%command.openRaw.title%"
       },
       {
         "command": "gframeworkConfig.openSchema",
-        "title": "GFramework Config: Open Schema"
+        "title": "%command.openSchema.title%"
       },
       {
         "command": "gframeworkConfig.openFormPreview",
-        "title": "GFramework Config: Open Form Preview"
+        "title": "%command.openFormPreview.title%"
       },
       {
         "command": "gframeworkConfig.batchEditDomain",
-        "title": "GFramework Config: Batch Edit Domain"
+        "title": "%command.batchEditDomain.title%"
       },
       {
         "command": "gframeworkConfig.validateAll",
-        "title": "GFramework Config: Validate All"
+        "title": "%command.validateAll.title%"
       }
     ],
     "menus": {
@@ -121,17 +121,17 @@
       ]
     },
     "configuration": {
-      "title": "GFramework Config",
+      "title": "%configuration.title%",
       "properties": {
         "gframeworkConfig.configPath": {
           "type": "string",
           "default": "config",
-          "description": "Relative path from the workspace root to the config directory."
+          "description": "%configuration.configPath.description%"
         },
         "gframeworkConfig.schemasPath": {
           "type": "string",
           "default": "schemas",
-          "description": "Relative path from the workspace root to the schema directory."
+          "description": "%configuration.schemasPath.description%"
         }
       }
     }

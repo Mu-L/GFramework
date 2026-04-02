@@ -1,0 +1,14 @@
+{
+  "extension.displayName": "GFramework 配置工具",
+  "extension.description": "为 GFramework 项目中的 AI-First 配置文件提供浏览、校验和编辑能力的 VS Code 扩展。",
+  "view.gframeworkConfig.name": "GFramework 配置",
+  "command.refresh.title": "GFramework 配置：刷新",
+  "command.openRaw.title": "GFramework 配置：打开原始文件",
+  "command.openSchema.title": "GFramework 配置：打开 Schema",
+  "command.openFormPreview.title": "GFramework 配置：打开表单预览",
+  "command.batchEditDomain.title": "GFramework 配置：批量编辑配置域",
+  "command.validateAll.title": "GFramework 配置：校验全部",
+  "configuration.title": "GFramework 配置",
+  "configuration.configPath.description": "从工作区根目录到配置目录的相对路径。",
+  "configuration.schemasPath.description": "从工作区根目录到 Schema 目录的相对路径。"
+}

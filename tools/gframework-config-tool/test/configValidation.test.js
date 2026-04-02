@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const {
     applyFormUpdates,
     applyScalarUpdates,
+    createSampleConfigYaml,
+    extractYamlComments,
     getEditableSchemaFields,
     parseBatchArrayValue,
     parseSchemaContent,
@@ -81,6 +83,20 @@ phases:
     assert.equal(yaml.map.get("phases").kind, "array");
     assert.equal(yaml.map.get("phases").items[0].kind, "object");
     assert.equal(yaml.map.get("phases").items[0].map.get("wave").value, "1");
+});
+
+test("parseTopLevelYaml should keep complex mapping keys", () => {
+    const yaml = parseTopLevelYaml(`
+my-key: slime
+"complex key": value
+root:
+  item.id: potion
+`);
+
+    assert.equal(yaml.kind, "object");
+    assert.equal(yaml.map.get("my-key").value, "slime");
+    assert.equal(yaml.map.get("complex key").value, "value");
+    assert.equal(yaml.map.get("root").map.get("item.id").value, "potion");
 });
 
 test("validateParsedConfig should report missing and unknown nested properties", () => {
@@ -172,6 +188,27 @@ reward:
 
     assert.equal(diagnostics.length, 1);
     assert.match(diagnostics[0].message, /coin, gem/u);
+});
+
+test("validateParsedConfig should localize diagnostics when Chinese UI is requested", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+id: 1
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml, {isChinese: true});
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /缺少必填属性/u);
+    assert.match(diagnostics[1].message, /未在匹配的 schema 中声明/u);
 });
 
 test("applyFormUpdates should update nested scalar and scalar-array paths", () => {
@@ -267,6 +304,111 @@ test("applyFormUpdates should clear object arrays when the form removes all item
         "id: 1",
         "phases: []"
     ].join("\n"));
+});
+
+test("extractYamlComments should map nested comments to logical paths", () => {
+    const comments = extractYamlComments(`
+# Monster display name
+name: Slime
+stats:
+  # Current hp value
+  hp: 10
+skills:
+  # First skill entry
+  -
+    # Skill id note
+    id: jump
+`);
+
+    assert.equal(comments.name, "Monster display name");
+    assert.equal(comments["stats.hp"], "Current hp value");
+    assert.equal(comments["skills[0]"], "First skill entry");
+    assert.equal(comments["skills[0].id"], "Skill id note");
+});
+
+test("extractYamlComments should keep comments for complex YAML keys", () => {
+    const comments = extractYamlComments(`
+# Dashed key comment
+my-key: Slime
+# Quoted key comment
+"complex key": value
+root:
+  # Dotted key comment
+  item.id: potion
+`);
+
+    assert.equal(comments["my-key"], "Dashed key comment");
+    assert.equal(comments["complex key"], "Quoted key comment");
+    assert.equal(comments["root.item.id"], "Dotted key comment");
+});
+
+test("applyFormUpdates should preserve and update YAML comments", () => {
+    const updated = applyFormUpdates(
+        [
+            "# Monster display name",
+            "name: Slime",
+            "stats:",
+            "  # Current hp value",
+            "  hp: 10"
+        ].join("\n"),
+        {
+            scalars: {
+                name: "Slime King"
+            },
+            comments: {
+                name: "Localized display name",
+                "stats.hp": "Health points after rebalance"
+            }
+        });
+
+    assert.match(updated, /^# Localized display name$/mu);
+    assert.match(updated, /^name: Slime King$/mu);
+    assert.match(updated, /^  # Health points after rebalance$/mu);
+    assert.match(updated, /^  hp: 10$/mu);
+});
+
+test("createSampleConfigYaml should bootstrap comments and placeholder values from schema", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Monster display name."
+            },
+            "rarity": {
+              "type": "string",
+              "description": "Monster rarity.",
+              "enum": ["common", "rare"]
+            },
+            "skills": {
+              "type": "array",
+              "description": "Skill entries.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Skill id."
+                  }
+                }
+              }
+            }
+          }
+        }
+    `);
+
+    const sample = createSampleConfigYaml(schema);
+
+    assert.match(sample, /^# Monster display name\.$/mu);
+    assert.match(sample, /^name: example$/mu);
+    assert.match(sample, /^# Monster rarity\.$/mu);
+    assert.match(sample, /^rarity: common$/mu);
+    assert.match(sample, /^# Skill entries\.$/mu);
+    assert.match(sample, /^skills:$/mu);
+    assert.match(sample, /^  -$/mu);
+    assert.match(sample, /^    # Skill id\.$/mu);
+    assert.match(sample, /^    id: example$/mu);
 });
 
 test("applyScalarUpdates should preserve the scalar-only compatibility wrapper", () => {

@@ -1,0 +1,198 @@
+const {ValidationMessageKeys} = require("./localizationKeys");
+
+/**
+ * Create a tiny in-process localizer for the extension runtime and webview.
+ * VS Code contribution points use package.nls files, while runtime strings are
+ * resolved here so the preview panel and prompts stay readable for both
+ * Simplified Chinese and English users.
+ *
+ * @param {string | undefined} language VS Code UI language.
+ * @returns {{languageTag: string, isChinese: boolean, t: (key: string, params?: Record<string, string | number>) => string}} Localizer.
+ */
+function createLocalizer(language) {
+    const normalizedLanguage = String(language || "en").toLowerCase();
+    const isChinese = normalizedLanguage.startsWith("zh");
+    const isTraditionalChinese =
+        normalizedLanguage === "zh-tw" ||
+        normalizedLanguage === "zh-hk" ||
+        normalizedLanguage === "zh-mo" ||
+        normalizedLanguage.startsWith("zh-hant");
+    const isSimplifiedChinese = isChinese && !isTraditionalChinese;
+    const languageTag = isTraditionalChinese
+        ? normalizedLanguage
+        : isSimplifiedChinese
+            ? "zh-CN"
+            : "en";
+    const dictionary = isTraditionalChinese
+        ? enMessages
+        : isSimplifiedChinese
+            ? zhCnMessages
+            : enMessages;
+
+    return {
+        languageTag,
+        isChinese: isSimplifiedChinese,
+        t(key, params) {
+            const template = dictionary[key] || enMessages[key] || key;
+            return template.replace(/\{([A-Za-z0-9_]+)\}/gu, (match, token) => {
+                if (!params || !Object.prototype.hasOwnProperty.call(params, token)) {
+                    return match;
+                }
+
+                return String(params[token]);
+            });
+        }
+    };
+}
+
+const enMessages = {
+    "tree.noConfigDirectory.label": "No config directory",
+    "tree.noConfigDirectory.description": "Set gframeworkConfig.configPath or create the directory.",
+    "tree.fileDescription.schema": "schema",
+    "tree.fileDescription.schemaMissing": "schema missing",
+    "command.openRaw.title": "Open Raw",
+    "message.schemaNotFound": "Matching schema file was not found.",
+    "message.formSaved": "Config file saved from form preview.",
+    "message.formInitialized": "Example config initialized from the schema.",
+    "message.initializeFromSchemaConfirm": "Initializing from the schema will replace the current configuration and may discard unsaved form changes. Do you want to continue?",
+    "message.noYamlFilesInDomain": "No YAML config files were found in the selected domain.",
+    "message.batchEditNeedsSchema": "Batch edit requires a matching schema file for the selected domain.",
+    "message.batchEditNoEditableFields": "No top-level scalar or scalar-array fields were found in the matching schema.",
+    "message.batchEditNoChanges": "Batch edit did not change any selected config files.",
+    "message.batchEditUpdated": "Batch updated {count} config file(s) in '{domain}'.",
+    "message.referenceSchemaMissing": "The referenced schema '{refTable}.schema.json' was not found.",
+    "message.referenceDomainMissing": "The referenced config domain '{refTable}' was not found.",
+    "message.referenceValueMissing": "The referenced config '{refValue}' was not found in '{refTable}'.",
+    "diagnostic.schemaMissing": "Matching schema file not found: {schemaPath}",
+    "quickPick.batchEdit.title": "Batch Edit: {domain}",
+    "quickPick.batchEdit.placeholder": "Select the config files to update.",
+    "quickPick.batchEditFields.title": "Batch Edit Fields: {domain}",
+    "quickPick.batchEditFields.placeholder": "Select the fields to apply across the chosen files.",
+    "detail.required": "required",
+    "detail.refTable": "ref: {refTable}",
+    "detail.arrayType": "array<{itemType}>",
+    "detail.default": "default",
+    "button.cancel": "Cancel",
+    "button.initializeFromSchemaConfirm": "Initialize from schema",
+    "input.batchArray.title": "Batch Edit Array: {field}",
+    "input.batchArray.prompt": "Enter comma-separated items for '{fieldKey}' (expected array<{itemType}>). Leave empty to clear the array.",
+    "input.batchArray.placeholder.allowedItems": "Allowed items: {values}",
+    "input.batchArray.placeholder.default": "Default: {value}",
+    "quickPick.batchField.title": "Batch Edit Field: {field}",
+    "quickPick.batchField.placeholder": "Select a value for '{fieldKey}'.",
+    "input.batchField.title": "Batch Edit Field: {field}",
+    "input.batchField.prompt": "Enter the new value for '{fieldKey}' (expected {type}).",
+    "input.batchField.placeholder.refTable": "Ref table: {refTable}",
+    "webview.panelTitle": "Config Form: {fileName}",
+    "webview.meta.file": "File: {fileName}",
+    "webview.meta.schema": "Schema: {schemaPath}",
+    "webview.meta.schemaMissing": "Schema missing: {schemaPath}",
+    "webview.emptyState": "No editable schema-bound fields were detected. Use raw YAML for unsupported shapes.",
+    "webview.button.save": "Save Form",
+    "webview.button.openRaw": "Open Raw YAML",
+    "webview.button.initialize": "Initialize Example",
+    "webview.badge.required": "required",
+    "webview.help.summary": "Edit values, comments, and references here. Use raw YAML when you need unsupported structures or exact formatting control.",
+    "webview.comment.label": "YAML comment",
+    "webview.ref.openSchema": "Open Ref Schema",
+    "webview.ref.openDomain": "Open Ref Domain",
+    "webview.ref.openValue": "Open Ref File",
+    "webview.objectArray.item": "Item",
+    "webview.objectArray.itemNumber": "Item {index}",
+    "webview.objectArray.hint": "Each item uses the object schema below.",
+    "webview.objectArray.add": "Add Item",
+    "webview.objectArray.remove": "Remove",
+    "webview.array.hint": "One item per line. Expected type: {itemType}",
+    "webview.hint.default": "Default: {value}",
+    "webview.hint.allowed": "Allowed: {values}",
+    "webview.hint.refTable": "Ref table: {refTable}",
+    "webview.unsupported.array": "Unsupported array shapes are currently raw-YAML-only in the form preview.",
+    "webview.unsupported.type": "{type} fields are currently raw-YAML-only.",
+    "webview.unsupported.objectArrayMixed": "Object-array items must be mappings. Use raw YAML if the current file mixes scalar and object items.",
+    "webview.unsupported.nestedObjectArray": "Nested object-array fields are currently raw-YAML-only inside the object-array editor.",
+    [ValidationMessageKeys.enumMismatch]: "Property '{displayPath}' must be one of: {values}.",
+    [ValidationMessageKeys.expectedArray]: "Property '{displayPath}' is expected to be an array.",
+    [ValidationMessageKeys.expectedObject]: "{subject} is expected to be an object.",
+    [ValidationMessageKeys.expectedScalarShape]: "Property '{displayPath}' is expected to be '{schemaType}', but the current YAML shape is '{yamlKind}'.",
+    [ValidationMessageKeys.expectedScalarValue]: "Property '{displayPath}' is expected to be '{schemaType}', but the current scalar value is incompatible.",
+    [ValidationMessageKeys.missingRequired]: "Required property '{displayPath}' is missing.",
+    [ValidationMessageKeys.unknownProperty]: "Property '{displayPath}' is not declared in the matching schema."
+};
+
+const zhCnMessages = {
+    "tree.noConfigDirectory.label": "未找到配置目录",
+    "tree.noConfigDirectory.description": "请设置 gframeworkConfig.configPath，或先创建该目录。",
+    "tree.fileDescription.schema": "已匹配 schema",
+    "tree.fileDescription.schemaMissing": "缺少 schema",
+    "command.openRaw.title": "打开原始文件",
+    "message.schemaNotFound": "未找到匹配的 schema 文件。",
+    "message.formSaved": "已从表单预览保存配置文件。",
+    "message.formInitialized": "已根据 schema 初始化示例配置。",
+    "message.initializeFromSchemaConfirm": "从 schema 初始化会替换当前配置，并且可能丢失尚未保存的表单修改。是否继续？",
+    "message.noYamlFilesInDomain": "所选配置域中没有找到 YAML 配置文件。",
+    "message.batchEditNeedsSchema": "批量编辑要求该配置域存在匹配的 schema 文件。",
+    "message.batchEditNoEditableFields": "匹配的 schema 中没有可批量编辑的顶层标量字段或标量数组字段。",
+    "message.batchEditNoChanges": "批量编辑未修改任何已选配置文件。",
+    "message.batchEditUpdated": "已在“{domain}”中批量更新 {count} 个配置文件。",
+    "message.referenceSchemaMissing": "未找到引用的 schema 文件“{refTable}.schema.json”。",
+    "message.referenceDomainMissing": "未找到引用的配置域“{refTable}”。",
+    "message.referenceValueMissing": "在“{refTable}”中未找到引用配置“{refValue}”。",
+    "diagnostic.schemaMissing": "未找到匹配的 schema 文件：{schemaPath}",
+    "quickPick.batchEdit.title": "批量编辑：{domain}",
+    "quickPick.batchEdit.placeholder": "选择要更新的配置文件。",
+    "quickPick.batchEditFields.title": "批量编辑字段：{domain}",
+    "quickPick.batchEditFields.placeholder": "选择要应用到已选文件的字段。",
+    "detail.required": "必填",
+    "detail.refTable": "引用表：{refTable}",
+    "detail.arrayType": "数组<{itemType}>",
+    "detail.default": "默认值",
+    "button.cancel": "取消",
+    "button.initializeFromSchemaConfirm": "从 schema 初始化",
+    "input.batchArray.title": "批量编辑数组：{field}",
+    "input.batchArray.prompt": "请输入“{fieldKey}”的逗号分隔项（期望类型：数组<{itemType}>）。留空表示清空数组。",
+    "input.batchArray.placeholder.allowedItems": "允许项：{values}",
+    "input.batchArray.placeholder.default": "默认值：{value}",
+    "quickPick.batchField.title": "批量编辑字段：{field}",
+    "quickPick.batchField.placeholder": "为“{fieldKey}”选择一个值。",
+    "input.batchField.title": "批量编辑字段：{field}",
+    "input.batchField.prompt": "请输入“{fieldKey}”的新值（期望类型：{type}）。",
+    "input.batchField.placeholder.refTable": "引用表：{refTable}",
+    "webview.panelTitle": "配置表单：{fileName}",
+    "webview.meta.file": "文件：{fileName}",
+    "webview.meta.schema": "Schema：{schemaPath}",
+    "webview.meta.schemaMissing": "缺少 Schema：{schemaPath}",
+    "webview.emptyState": "当前没有可编辑的 schema 绑定字段。对于暂不支持的结构，请回退到原始 YAML 编辑。",
+    "webview.button.save": "保存表单",
+    "webview.button.openRaw": "打开原始 YAML",
+    "webview.button.initialize": "初始化示例",
+    "webview.badge.required": "必填",
+    "webview.help.summary": "你可以在这里直接编辑字段值、YAML 注释和关联跳转。遇到暂不支持的复杂结构或需要精确保留排版时，请回退到原始 YAML。",
+    "webview.comment.label": "YAML 注释",
+    "webview.ref.openSchema": "打开引用 Schema",
+    "webview.ref.openDomain": "打开引用配置域",
+    "webview.ref.openValue": "打开引用文件",
+    "webview.objectArray.item": "对象项",
+    "webview.objectArray.itemNumber": "对象项 {index}",
+    "webview.objectArray.hint": "每一项都按下面的对象 schema 编辑。",
+    "webview.objectArray.add": "新增对象项",
+    "webview.objectArray.remove": "删除",
+    "webview.array.hint": "每行一个元素。期望类型：{itemType}",
+    "webview.hint.default": "默认值：{value}",
+    "webview.hint.allowed": "允许值：{values}",
+    "webview.hint.refTable": "引用表：{refTable}",
+    "webview.unsupported.array": "当前表单预览暂不支持这种数组结构，请改用原始 YAML。",
+    "webview.unsupported.type": "当前表单预览暂不支持 {type} 字段，请改用原始 YAML。",
+    "webview.unsupported.objectArrayMixed": "对象数组中的每一项都必须是映射对象。如果当前文件混用了标量项和对象项，请改用原始 YAML。",
+    "webview.unsupported.nestedObjectArray": "对象数组编辑器内暂不支持更深层的对象数组字段，请改用原始 YAML。",
+    [ValidationMessageKeys.enumMismatch]: "属性“{displayPath}”必须是以下值之一：{values}。",
+    [ValidationMessageKeys.expectedArray]: "属性“{displayPath}”应为数组。",
+    [ValidationMessageKeys.expectedObject]: "{subject}",
+    [ValidationMessageKeys.expectedScalarShape]: "属性“{displayPath}”应为“{schemaType}”，但当前 YAML 结构是“{yamlKind}”。",
+    [ValidationMessageKeys.expectedScalarValue]: "属性“{displayPath}”应为“{schemaType}”，但当前标量值不兼容。",
+    [ValidationMessageKeys.missingRequired]: "缺少必填属性“{displayPath}”。",
+    [ValidationMessageKeys.unknownProperty]: "属性“{displayPath}”未在匹配的 schema 中声明。"
+};
+
+module.exports = {
+    createLocalizer
+};

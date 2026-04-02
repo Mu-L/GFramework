@@ -3,6 +3,8 @@ const path = require("path");
 const vscode = require("vscode");
 const {
     applyFormUpdates,
+    createSampleConfigYaml,
+    extractYamlComments,
     getEditableSchemaFields,
     parseBatchArrayValue,
     parseSchemaContent,
@@ -10,6 +12,15 @@ const {
     unquoteScalar,
     validateParsedConfig
 } = require("./configValidation");
+const {
+    isTemplatePath,
+    joinArrayIndexPath,
+    joinArrayTemplatePath,
+    joinPropertyPath
+} = require("./configPath");
+const {createLocalizer} = require("./localization");
+
+const localizer = createLocalizer(vscode.env.language);
 
 /**
  * Activate the GFramework config extension.
@@ -132,11 +143,11 @@ class ConfigTreeDataProvider {
         if (!configRoot || !fs.existsSync(configRoot.fsPath)) {
             return [
                 new ConfigTreeItem(
-                    "No config directory",
+                    localizer.t("tree.noConfigDirectory.label"),
                     "info",
                     vscode.TreeItemCollapsibleState.None,
                     undefined,
-                    "Set gframeworkConfig.configPath or create the directory.")
+                    localizer.t("tree.noConfigDirectory.description"))
             ];
         }
 
@@ -171,8 +182,8 @@ class ConfigTreeDataProvider {
             const fileUri = vscode.Uri.joinPath(domainUri, entry.name);
             const schemaUri = getSchemaUriForConfigFile(fileUri, workspaceRoot);
             const description = schemaUri && fs.existsSync(schemaUri.fsPath)
-                ? "schema"
-                : "schema missing";
+                ? localizer.t("tree.fileDescription.schema")
+                : localizer.t("tree.fileDescription.schemaMissing");
             const item = new ConfigTreeItem(
                 entry.name,
                 "file",
@@ -183,7 +194,7 @@ class ConfigTreeDataProvider {
             item.contextValue = "gframeworkConfigFile";
             item.command = {
                 command: "gframeworkConfig.openRaw",
-                title: "Open Raw",
+                title: localizer.t("command.openRaw.title"),
                 arguments: [item]
             };
 
@@ -243,11 +254,92 @@ async function openSchemaFile(item) {
 
     const schemaUri = getSchemaUriForConfigFile(configUri, workspaceRoot);
     if (!schemaUri || !fs.existsSync(schemaUri.fsPath)) {
-        void vscode.window.showWarningMessage("Matching schema file was not found.");
+        void vscode.window.showWarningMessage(localizer.t("message.schemaNotFound"));
         return;
     }
 
     const document = await vscode.workspace.openTextDocument(schemaUri);
+    await vscode.window.showTextDocument(document, {preview: false});
+}
+
+/**
+ * Open the schema file for a referenced config table.
+ *
+ * @param {vscode.WorkspaceFolder} workspaceRoot Workspace root.
+ * @param {string | undefined} refTable Referenced table name.
+ * @returns {Promise<void>} Async task.
+ */
+async function openReferenceSchemaFile(workspaceRoot, refTable) {
+    if (!workspaceRoot || !refTable) {
+        return;
+    }
+
+    const schemaUri = vscode.Uri.joinPath(getSchemasRoot(workspaceRoot), `${refTable}.schema.json`);
+    if (!fs.existsSync(schemaUri.fsPath)) {
+        void vscode.window.showWarningMessage(localizer.t("message.referenceSchemaMissing", {refTable}));
+        return;
+    }
+
+    const document = await vscode.workspace.openTextDocument(schemaUri);
+    await vscode.window.showTextDocument(document, {preview: false});
+}
+
+/**
+ * Reveal the referenced config domain directory in the Explorer.
+ *
+ * @param {vscode.WorkspaceFolder} workspaceRoot Workspace root.
+ * @param {string | undefined} refTable Referenced table name.
+ * @returns {Promise<void>} Async task.
+ */
+async function revealReferenceDomain(workspaceRoot, refTable) {
+    if (!workspaceRoot || !refTable) {
+        return;
+    }
+
+    const domainUri = vscode.Uri.joinPath(getConfigRoot(workspaceRoot), refTable);
+    if (!fs.existsSync(domainUri.fsPath)) {
+        void vscode.window.showWarningMessage(localizer.t("message.referenceDomainMissing", {refTable}));
+        return;
+    }
+
+    await vscode.commands.executeCommand("revealInExplorer", domainUri);
+}
+
+/**
+ * Open the referenced config file when the current field already has a key
+ * value. If the direct file cannot be found, fall back to revealing the whole
+ * referenced domain.
+ *
+ * @param {vscode.WorkspaceFolder} workspaceRoot Workspace root.
+ * @param {string | undefined} refTable Referenced table name.
+ * @param {string | undefined} refValue Referenced config id or file stem.
+ * @returns {Promise<void>} Async task.
+ */
+async function openReferenceValueFile(workspaceRoot, refTable, refValue) {
+    if (!workspaceRoot || !refTable || !refValue) {
+        return;
+    }
+
+    const configRoot = getConfigRoot(workspaceRoot);
+    const domainUri = vscode.Uri.joinPath(configRoot, refTable);
+    const yamlCandidate = vscode.Uri.joinPath(domainUri, `${refValue}.yaml`);
+    const ymlCandidate = vscode.Uri.joinPath(domainUri, `${refValue}.yml`);
+    const targetUri = fs.existsSync(yamlCandidate.fsPath)
+        ? yamlCandidate
+        : fs.existsSync(ymlCandidate.fsPath)
+            ? ymlCandidate
+            : undefined;
+
+    if (!targetUri) {
+        await revealReferenceDomain(workspaceRoot, refTable);
+        void vscode.window.showWarningMessage(localizer.t("message.referenceValueMissing", {
+            refTable,
+            refValue
+        }));
+        return;
+    }
+
+    const document = await vscode.workspace.openTextDocument(targetUri);
     await vscode.window.showTextDocument(document, {preview: false});
 }
 
@@ -267,38 +359,97 @@ async function openFormPreview(item, diagnostics) {
         return;
     }
 
-    const yamlText = await fs.promises.readFile(configUri.fsPath, "utf8");
-    const parsedYaml = parseTopLevelYaml(yamlText);
+    let latestYamlText = await fs.promises.readFile(configUri.fsPath, "utf8");
+    const parsedYaml = parseTopLevelYaml(latestYamlText);
+    const commentLookup = extractYamlComments(latestYamlText);
     const schemaInfo = await loadSchemaInfoForConfig(configUri, workspaceRoot);
+    const canInitializeFromSchema = schemaInfo.exists && latestYamlText.trim().length === 0;
 
     const panel = vscode.window.createWebviewPanel(
         "gframeworkConfigFormPreview",
-        `Config Form: ${path.basename(configUri.fsPath)}`,
+        localizer.t("webview.panelTitle", {fileName: path.basename(configUri.fsPath)}),
         vscode.ViewColumn.Beside,
         {enableScripts: true});
 
     panel.webview.html = renderFormHtml(
         path.basename(configUri.fsPath),
         schemaInfo,
-        parsedYaml);
+        parsedYaml,
+        {
+            commentLookup,
+            canInitializeFromSchema
+        });
 
     panel.webview.onDidReceiveMessage(async (message) => {
         if (message.type === "save") {
-            const latestYamlText = await fs.promises.readFile(configUri.fsPath, "utf8");
+            latestYamlText = await fs.promises.readFile(configUri.fsPath, "utf8");
             const updatedYaml = applyFormUpdates(latestYamlText, {
                 scalars: message.scalars || {},
                 arrays: parseArrayFieldPayload(message.arrays || {}),
-                objectArrays: message.objectArrays || {}
+                objectArrays: message.objectArrays || {},
+                comments: message.comments || {}
             });
             await fs.promises.writeFile(configUri.fsPath, updatedYaml, "utf8");
             const document = await vscode.workspace.openTextDocument(configUri);
             await document.save();
             await validateConfigFile(configUri, diagnostics);
-            void vscode.window.showInformationMessage("Config file saved from form preview.");
+            void vscode.window.showInformationMessage(localizer.t("message.formSaved"));
+            return;
         }
 
         if (message.type === "openRaw") {
             await openRawFile({resourceUri: configUri});
+            return;
+        }
+
+        if (message.type === "initializeFromSchema") {
+            if (!schemaInfo.exists) {
+                void vscode.window.showWarningMessage(localizer.t("message.schemaNotFound"));
+                return;
+            }
+
+            const confirmLabel = localizer.t("button.initializeFromSchemaConfirm");
+            const cancelLabel = localizer.t("button.cancel");
+            const userChoice = await vscode.window.showWarningMessage(
+                localizer.t("message.initializeFromSchemaConfirm"),
+                {modal: true},
+                confirmLabel,
+                cancelLabel);
+
+            if (userChoice !== confirmLabel) {
+                return;
+            }
+
+            const sampleYaml = createSampleConfigYaml(schemaInfo);
+            await fs.promises.writeFile(configUri.fsPath, sampleYaml, "utf8");
+            const document = await vscode.workspace.openTextDocument(configUri);
+            await document.save();
+            latestYamlText = sampleYaml;
+            await validateConfigFile(configUri, diagnostics);
+            panel.webview.html = renderFormHtml(
+                path.basename(configUri.fsPath),
+                schemaInfo,
+                parseTopLevelYaml(latestYamlText),
+                {
+                    commentLookup: extractYamlComments(latestYamlText),
+                    canInitializeFromSchema: false
+                });
+            void vscode.window.showInformationMessage(localizer.t("message.formInitialized"));
+            return;
+        }
+
+        if (message.type === "openReferenceSchema") {
+            await openReferenceSchemaFile(workspaceRoot, message.refTable);
+            return;
+        }
+
+        if (message.type === "openReferenceDomain") {
+            await revealReferenceDomain(workspaceRoot, message.refTable);
+            return;
+        }
+
+        if (message.type === "openReferenceValue") {
+            await openReferenceValueFile(workspaceRoot, message.refTable, message.refValue);
         }
     });
 }
@@ -353,13 +504,13 @@ async function validateConfigFile(configUri, diagnostics) {
     if (!schemaInfo.exists) {
         fileDiagnostics.push(new vscode.Diagnostic(
             new vscode.Range(0, 0, 0, 1),
-            `Matching schema file not found: ${schemaInfo.schemaPath}`,
+            localizer.t("diagnostic.schemaMissing", {schemaPath: schemaInfo.schemaPath}),
             vscode.DiagnosticSeverity.Warning));
         diagnostics.set(configUri, fileDiagnostics);
         return;
     }
 
-    for (const diagnostic of validateParsedConfig(schemaInfo, parsedYaml)) {
+    for (const diagnostic of validateParsedConfig(schemaInfo, parsedYaml, localizer)) {
         fileDiagnostics.push(new vscode.Diagnostic(
             new vscode.Range(0, 0, 0, 1),
             diagnostic.message,
@@ -403,14 +554,14 @@ async function openBatchEdit(item, diagnostics, provider) {
         });
 
     if (fileItems.length === 0) {
-        void vscode.window.showWarningMessage("No YAML config files were found in the selected domain.");
+        void vscode.window.showWarningMessage(localizer.t("message.noYamlFilesInDomain"));
         return;
     }
 
     const selectedFiles = await vscode.window.showQuickPick(fileItems, {
         canPickMany: true,
-        title: `Batch Edit: ${path.basename(domainUri.fsPath)}`,
-        placeHolder: "Select the config files to update."
+        title: localizer.t("quickPick.batchEdit.title", {domain: path.basename(domainUri.fsPath)}),
+        placeHolder: localizer.t("quickPick.batchEdit.placeholder")
     });
     if (!selectedFiles || selectedFiles.length === 0) {
         return;
@@ -418,14 +569,13 @@ async function openBatchEdit(item, diagnostics, provider) {
 
     const schemaInfo = await loadSchemaInfoForConfig(selectedFiles[0].fileUri, workspaceRoot);
     if (!schemaInfo.exists) {
-        void vscode.window.showWarningMessage("Batch edit requires a matching schema file for the selected domain.");
+        void vscode.window.showWarningMessage(localizer.t("message.batchEditNeedsSchema"));
         return;
     }
 
     const editableFields = getEditableSchemaFields(schemaInfo);
     if (editableFields.length === 0) {
-        void vscode.window.showWarningMessage(
-            "No top-level scalar or scalar-array fields were found in the matching schema.");
+        void vscode.window.showWarningMessage(localizer.t("message.batchEditNoEditableFields"));
         return;
     }
 
@@ -433,19 +583,19 @@ async function openBatchEdit(item, diagnostics, provider) {
         editableFields.map((field) => ({
             label: field.title || field.key,
             description: field.inputKind === "array"
-                ? `array<${field.itemType}>`
+                ? localizer.t("detail.arrayType", {itemType: field.itemType})
                 : field.type,
             detail: [
-                field.required ? "required" : "",
+                field.required ? localizer.t("detail.required") : "",
                 field.description || "",
-                field.refTable ? `ref: ${field.refTable}` : ""
+                field.refTable ? localizer.t("detail.refTable", {refTable: field.refTable}) : ""
             ].filter((part) => part.length > 0).join(" · ") || undefined,
             field
         })),
         {
             canPickMany: true,
-            title: `Batch Edit Fields: ${path.basename(domainUri.fsPath)}`,
-            placeHolder: "Select the fields to apply across the chosen files."
+            title: localizer.t("quickPick.batchEditFields.title", {domain: path.basename(domainUri.fsPath)}),
+            placeHolder: localizer.t("quickPick.batchEditFields.placeholder")
         });
     if (!selectedFields || selectedFields.length === 0) {
         return;
@@ -492,13 +642,15 @@ async function openBatchEdit(item, diagnostics, provider) {
     }
 
     if (changedFileCount === 0) {
-        void vscode.window.showInformationMessage("Batch edit did not change any selected config files.");
+        void vscode.window.showInformationMessage(localizer.t("message.batchEditNoChanges"));
         return;
     }
 
     const applied = await vscode.workspace.applyEdit(edit);
     if (!applied) {
-        throw new Error("VS Code rejected the batch edit workspace update.");
+        throw new Error(localizer.isChinese
+            ? "VS Code 拒绝了这次批量编辑工作区更新。"
+            : "VS Code rejected the batch edit workspace update.");
     }
 
     for (const document of touchedDocuments) {
@@ -507,8 +659,10 @@ async function openBatchEdit(item, diagnostics, provider) {
     }
 
     provider.refresh();
-    void vscode.window.showInformationMessage(
-        `Batch updated ${changedFileCount} config file(s) in '${path.basename(domainUri.fsPath)}'.`);
+    void vscode.window.showInformationMessage(localizer.t("message.batchEditUpdated", {
+        count: changedFileCount,
+        domain: path.basename(domainUri.fsPath)
+    }));
 }
 
 /**
@@ -566,10 +720,18 @@ async function loadSchemaInfoForConfig(configUri, workspaceRoot) {
  * @param {string} fileName File name.
  * @param {{exists: boolean, schemaPath: string, required: string[], properties: Record<string, unknown>, type?: string}} schemaInfo Schema info.
  * @param {unknown} parsedYaml Parsed YAML data.
+ * @param {{commentLookup?: Record<string, string>, canInitializeFromSchema?: boolean} | undefined} options Render options.
  * @returns {string} HTML string.
  */
-function renderFormHtml(fileName, schemaInfo, parsedYaml) {
-    const formModel = buildFormModel(schemaInfo, parsedYaml);
+function renderFormHtml(fileName, schemaInfo, parsedYaml, options) {
+    const renderOptions = options || {};
+    const formModel = buildFormModel(schemaInfo, parsedYaml, renderOptions.commentLookup || {});
+    const saveButtonLabel = escapeHtml(localizer.t("webview.button.save"));
+    const openRawButtonLabel = escapeHtml(localizer.t("webview.button.openRaw"));
+    const objectArrayItemLabel = localizer.t("webview.objectArray.item");
+    const initializeAction = renderOptions.canInitializeFromSchema
+        ? `<button id="initializeFromSchema" class="secondary-button">${escapeHtml(localizer.t("webview.button.initialize"))}</button>`
+        : "";
     const renderedFields = formModel.fields
         .map((field) => renderFormField(field))
         .join("\n");
@@ -583,8 +745,8 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
         .join("\n");
 
     const schemaStatus = schemaInfo.exists
-        ? `Schema: ${escapeHtml(schemaInfo.schemaPath)}`
-        : `Schema missing: ${escapeHtml(schemaInfo.schemaPath)}`;
+        ? escapeHtml(localizer.t("webview.meta.schema", {schemaPath: schemaInfo.schemaPath}))
+        : escapeHtml(localizer.t("webview.meta.schemaMissing", {schemaPath: schemaInfo.schemaPath}));
 
     const editableContent = renderedFields;
     const unsupportedSection = unsupportedFields.length > 0
@@ -592,10 +754,10 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
         : "";
     const emptyState = editableContent.length > 0
         ? `${editableContent}${unsupportedSection}`
-        : "<p>No editable schema-bound fields were detected. Use raw YAML for unsupported shapes.</p>";
+        : `<p>${escapeHtml(localizer.t("webview.emptyState"))}</p>`;
 
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${escapeHtml(localizer.languageTag)}">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -625,6 +787,12 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
         .meta {
             margin-bottom: 16px;
             color: var(--vscode-descriptionForeground);
+        }
+        .hint-banner {
+            padding: 10px 12px;
+            border: 1px solid var(--vscode-panel-border, transparent);
+            border-radius: 6px;
+            background: color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-panel-border, transparent));
         }
         .field {
             display: block;
@@ -692,6 +860,30 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
             margin-bottom: 10px;
             color: var(--vscode-descriptionForeground);
         }
+        .field-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+        .link-button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .yaml-comment {
+            display: block;
+            margin-bottom: 6px;
+            padding: 8px 10px;
+            border-left: 3px solid var(--vscode-textBlockQuote-border);
+            background: color-mix(in srgb, var(--vscode-editor-background) 90%, var(--vscode-textBlockQuote-border));
+            color: var(--vscode-descriptionForeground);
+            white-space: pre-wrap;
+            font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+            font-size: 12px;
+        }
+        .comment-editor {
+            margin-top: 8px;
+        }
         .object-array {
             margin-bottom: 18px;
             padding: 12px;
@@ -739,16 +931,19 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
 </head>
 <body>
     <div class="toolbar">
-        <button id="save">Save Form</button>
-        <button id="openRaw">Open Raw YAML</button>
+        <button id="save">${saveButtonLabel}</button>
+        <button id="openRaw">${openRawButtonLabel}</button>
+        ${initializeAction}
     </div>
+    <div class="meta hint-banner">${escapeHtml(localizer.t("webview.help.summary"))}</div>
     <div class="meta">
-        <div>File: ${escapeHtml(fileName)}</div>
+        <div>${escapeHtml(localizer.t("webview.meta.file", {fileName}))}</div>
         <div>${schemaStatus}</div>
     </div>
     <div id="fields">${emptyState}</div>
     <script>
         const vscode = acquireVsCodeApi();
+        const objectArrayItemLabel = ${JSON.stringify(objectArrayItemLabel)};
         function parseArrayEditorValue(value) {
             return String(value)
                 .split(/\\r?\\n/u)
@@ -781,11 +976,39 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
             items.forEach((item, index) => {
                 const title = item.querySelector(".object-array-item-title");
                 if (title) {
-                    title.textContent = "Item " + (index + 1);
+                    title.textContent = objectArrayItemLabel + " " + (index + 1);
                 }
             });
         }
         document.addEventListener("click", (event) => {
+            const schemaButton = event.target.closest("[data-open-ref-schema]");
+            if (schemaButton) {
+                vscode.postMessage({
+                    type: "openReferenceSchema",
+                    refTable: schemaButton.dataset.openRefSchema
+                });
+                return;
+            }
+
+            const domainButton = event.target.closest("[data-open-ref-domain]");
+            if (domainButton) {
+                vscode.postMessage({
+                    type: "openReferenceDomain",
+                    refTable: domainButton.dataset.openRefDomain
+                });
+                return;
+            }
+
+            const valueButton = event.target.closest("[data-open-ref-value]");
+            if (valueButton) {
+                vscode.postMessage({
+                    type: "openReferenceValue",
+                    refTable: valueButton.dataset.refTable,
+                    refValue: valueButton.dataset.refValue
+                });
+                return;
+            }
+
             const addButton = event.target.closest("[data-add-object-array-item]");
             if (addButton) {
                 const editor = addButton.closest("[data-object-array-editor]");
@@ -814,11 +1037,15 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
             const scalars = {};
             const arrays = {};
             const objectArrays = {};
+            const comments = {};
             for (const control of document.querySelectorAll("[data-path]")) {
                 scalars[control.dataset.path] = control.value;
             }
             for (const textarea of document.querySelectorAll("textarea[data-array-path]")) {
                 arrays[textarea.dataset.arrayPath] = textarea.value;
+            }
+            for (const textarea of document.querySelectorAll("textarea[data-comment-path]")) {
+                comments[textarea.dataset.commentPath] = textarea.value;
             }
             for (const editor of document.querySelectorAll("[data-object-array-editor]")) {
                 const path = editor.dataset.objectArrayPath;
@@ -838,11 +1065,17 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
                 }
                 objectArrays[path] = items;
             }
-            vscode.postMessage({ type: "save", scalars, arrays, objectArrays });
+            vscode.postMessage({ type: "save", scalars, arrays, objectArrays, comments });
         });
         document.getElementById("openRaw").addEventListener("click", () => {
             vscode.postMessage({ type: "openRaw" });
         });
+        const initializeButton = document.getElementById("initializeFromSchema");
+        if (initializeButton) {
+            initializeButton.addEventListener("click", () => {
+                vscode.postMessage({ type: "initializeFromSchema" });
+            });
+        }
     </script>
 </body>
 </html>`;
@@ -858,9 +1091,11 @@ function renderFormField(field) {
     if (field.kind === "section") {
         return `
             <div class="section depth-${field.depth}">
-                <div class="section-title">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</div>
+                <div class="section-title">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</div>
                 <div class="meta-key">${escapeHtml(field.displayPath || field.path)}</div>
+                ${renderYamlCommentBlock(field)}
                 ${field.description ? `<span class="hint">${escapeHtml(field.description)}</span>` : ""}
+                ${renderCommentEditor(field)}
             </div>
         `;
     }
@@ -870,36 +1105,42 @@ function renderFormField(field) {
             .map((item) => renderObjectArrayItem(item))
             .join("\n");
         const renderedTemplate = renderObjectArrayItem({
-            title: "Item",
+            title: localizer.t("webview.objectArray.item"),
             fields: field.templateFields
         });
         return `
             <div class="object-array depth-${field.depth}" data-object-array-editor data-object-array-path="${escapeHtml(field.path)}">
-                <div class="label">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</div>
+                <div class="label">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</div>
                 <div class="meta-key">${escapeHtml(field.displayPath || field.path)}</div>
-                <span class="hint">Each item uses the object schema below.</span>
+                ${renderYamlCommentBlock(field)}
+                <span class="hint">${escapeHtml(localizer.t("webview.objectArray.hint"))}</span>
                 ${renderFieldHint(field.schema, true)}
+                ${renderReferenceActions(field)}
+                ${renderCommentEditor(field)}
                 <div class="object-array-items" data-object-array-items>${renderedItems}</div>
                 <template data-object-array-template>${renderedTemplate}</template>
-                <button type="button" class="secondary-button" data-add-object-array-item>Add Item</button>
+                <button type="button" class="secondary-button" data-add-object-array-item>${escapeHtml(localizer.t("webview.objectArray.add"))}</button>
             </div>
         `;
     }
 
     if (field.kind === "array") {
         const itemType = field.itemType
-            ? `array<${escapeHtml(field.itemType)}>`
+            ? `array<${field.itemType}>`
             : "array";
         const dataAttribute = field.itemMode
             ? `data-item-array-path="${escapeHtml(field.path)}"`
             : `data-array-path="${escapeHtml(field.path)}"`;
         return `
             <label class="field depth-${field.depth}">
-                <span class="label">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</span>
+                <span class="label">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</span>
                 <span class="meta-key">${escapeHtml(field.displayPath || field.path)}</span>
-                <span class="hint">One item per line. Expected type: ${itemType}</span>
+                ${renderYamlCommentBlock(field)}
+                <span class="hint">${escapeHtml(localizer.t("webview.array.hint", {itemType}))}</span>
                 ${renderFieldHint(field.schema, true)}
+                ${renderReferenceActions(field)}
                 <textarea ${dataAttribute} rows="5">${escapeHtml(field.value.join("\n"))}</textarea>
+                ${renderCommentEditor(field)}
             </label>
         `;
     }
@@ -922,12 +1163,76 @@ function renderFormField(field) {
 
     return `
         <label class="field depth-${field.depth}">
-            <span class="label">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</span>
+            <span class="label">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</span>
             <span class="meta-key">${escapeHtml(field.displayPath || field.path)}</span>
+            ${renderYamlCommentBlock(field)}
             ${renderFieldHint(field.schema, false)}
+            ${renderReferenceActions(field)}
             ${inputControl}
+            ${renderCommentEditor(field)}
         </label>
     `;
+}
+
+/**
+ * Render one existing YAML comment block for a field.
+ *
+ * @param {{comment?: string}} field Form field descriptor.
+ * @returns {string} HTML fragment.
+ */
+function renderYamlCommentBlock(field) {
+    if (!field.comment) {
+        return "";
+    }
+
+    return `<span class="yaml-comment">${escapeHtml(field.comment)}</span>`;
+}
+
+/**
+ * Render one comment editor so users can add or update YAML comments directly
+ * from the structured form without dropping down to raw YAML first.
+ *
+ * @param {{displayPath?: string, path: string, comment?: string}} field Form field descriptor.
+ * @returns {string} HTML fragment.
+ */
+function renderCommentEditor(field) {
+    const commentPath = field.displayPath || field.path;
+    if (isTemplatePath(commentPath)) {
+        return "";
+    }
+
+    return `
+        <div class="comment-editor">
+            <span class="hint">${escapeHtml(localizer.t("webview.comment.label"))}</span>
+            <textarea data-comment-path="${escapeHtml(commentPath)}" rows="2">${escapeHtml(field.comment || "")}</textarea>
+        </div>
+    `;
+}
+
+/**
+ * Render lightweight reference-navigation actions for fields that point to
+ * another config table.
+ *
+ * @param {{schema?: {refTable?: string}, value?: string, kind?: string, displayPath?: string}} field Form field descriptor.
+ * @returns {string} HTML fragment.
+ */
+function renderReferenceActions(field) {
+    if (!field.schema || !field.schema.refTable) {
+        return "";
+    }
+
+    const refTable = escapeHtml(field.schema.refTable);
+    const actions = [
+        `<button type="button" class="secondary-button link-button" data-open-ref-schema="${refTable}">${escapeHtml(localizer.t("webview.ref.openSchema"))}</button>`,
+        `<button type="button" class="secondary-button link-button" data-open-ref-domain="${refTable}">${escapeHtml(localizer.t("webview.ref.openDomain"))}</button>`
+    ];
+
+    if (field.kind === "scalar" && field.value) {
+        actions.push(
+            `<button type="button" class="secondary-button link-button" data-open-ref-value="true" data-ref-table="${refTable}" data-ref-value="${escapeHtml(field.value)}">${escapeHtml(localizer.t("webview.ref.openValue"))}</button>`);
+    }
+
+    return `<div class="field-actions">${actions.join("")}</div>`;
 }
 
 /**
@@ -941,7 +1246,7 @@ function renderObjectArrayItem(item) {
         <div class="object-array-item" data-object-array-item>
             <div class="object-array-item-header">
                 <span class="object-array-item-title">${escapeHtml(item.title)}</span>
-                <button type="button" class="secondary-button" data-remove-object-array-item>Remove</button>
+                <button type="button" class="secondary-button" data-remove-object-array-item>${escapeHtml(localizer.t("webview.objectArray.remove"))}</button>
             </div>
             ${item.fields.map((field) => renderFormField(field)).join("\n")}
         </div>
@@ -953,16 +1258,17 @@ function renderObjectArrayItem(item) {
  *
  * @param {{exists: boolean, schemaPath: string, required: string[], properties: Record<string, unknown>, type?: string}} schemaInfo Schema info.
  * @param {unknown} parsedYaml Parsed YAML data.
+ * @param {Record<string, string>} commentLookup YAML comment lookup.
  * @returns {{fields: Array<Record<string, unknown>>, unsupported: Array<{path: string, message: string}>}} Form model.
  */
-function buildFormModel(schemaInfo, parsedYaml) {
+function buildFormModel(schemaInfo, parsedYaml, commentLookup) {
     if (!schemaInfo || schemaInfo.type !== "object") {
         return {fields: [], unsupported: []};
     }
 
     const fields = [];
     const unsupported = [];
-    collectFormFields(schemaInfo, parsedYaml, "", 0, fields, unsupported);
+    collectFormFields(schemaInfo, parsedYaml, "", 0, fields, unsupported, commentLookup || {});
     return {fields, unsupported};
 }
 
@@ -975,8 +1281,9 @@ function buildFormModel(schemaInfo, parsedYaml) {
  * @param {number} depth Current depth.
  * @param {Array<Record<string, unknown>>} fields Field sink.
  * @param {Array<{path: string, message: string}>} unsupported Unsupported sink.
+ * @param {Record<string, string>} commentLookup YAML comment lookup.
  */
-function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, unsupported) {
+function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, unsupported, commentLookup) {
     if (!schemaNode || schemaNode.type !== "object") {
         return;
     }
@@ -985,7 +1292,7 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
     const requiredSet = new Set(Array.isArray(schemaNode.required) ? schemaNode.required : []);
 
     for (const [key, propertySchema] of Object.entries(schemaNode.properties || {})) {
-        const propertyPath = currentPath ? `${currentPath}.${key}` : key;
+        const propertyPath = joinPropertyPath(currentPath, key);
         const label = propertySchema.title || key;
         const propertyValue = yamlMap.get(key);
 
@@ -995,10 +1302,11 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
                 path: propertyPath,
                 label,
                 description: propertySchema.description,
+                comment: commentLookup[propertyPath] || "",
                 required: requiredSet.has(key),
                 depth
             });
-            collectFormFields(propertySchema, propertyValue, propertyPath, depth + 1, fields, unsupported);
+            collectFormFields(propertySchema, propertyValue, propertyPath, depth + 1, fields, unsupported, commentLookup);
             continue;
         }
 
@@ -1014,7 +1322,8 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
                 depth,
                 itemType: propertySchema.items.type,
                 value: getScalarArrayValue(propertyValue),
-                schema: propertySchema
+                schema: propertySchema,
+                comment: commentLookup[propertyPath] || ""
             });
             continue;
         }
@@ -1027,10 +1336,11 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
                 propertySchema.items,
                 undefined,
                 "",
-                `${propertyPath}[]`,
+                joinArrayTemplatePath(propertyPath),
                 depth + 1,
                 itemFieldsTemplate,
-                unsupported);
+                unsupported,
+                commentLookup);
             fields.push({
                 kind: "objectArray",
                 path: propertyPath,
@@ -1039,7 +1349,14 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
                 required: requiredSet.has(key),
                 depth,
                 schema: propertySchema,
-                items: buildObjectArrayItemModels(propertySchema.items, propertyValue, propertyPath, depth + 1, unsupported),
+                comment: commentLookup[propertyPath] || "",
+                items: buildObjectArrayItemModels(
+                    propertySchema.items,
+                    propertyValue,
+                    propertyPath,
+                    depth + 1,
+                    unsupported,
+                    commentLookup),
                 templateFields: itemFieldsTemplate
             });
             continue;
@@ -1054,7 +1371,8 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
                 required: requiredSet.has(key),
                 depth,
                 value: getScalarFieldValue(propertyValue, propertySchema.defaultValue),
-                schema: propertySchema
+                schema: propertySchema,
+                comment: commentLookup[propertyPath] || ""
             });
             continue;
         }
@@ -1062,8 +1380,8 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
         unsupported.push({
             path: propertyPath,
             message: propertySchema.type === "array"
-                ? "Unsupported array shapes are currently raw-YAML-only in the form preview."
-                : `${propertySchema.type} fields are currently raw-YAML-only.`
+                ? localizer.t("webview.unsupported.array")
+                : localizer.t("webview.unsupported.type", {type: propertySchema.type})
         });
     }
 }
@@ -1076,9 +1394,10 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
  * @param {string} propertyPath Top-level object-array path.
  * @param {number} depth Current depth.
  * @param {Array<{path: string, message: string}>} unsupported Unsupported sink.
+ * @param {Record<string, string>} commentLookup YAML comment lookup.
  * @returns {Array<{title: string, fields: Array<Record<string, unknown>>}>} Item models.
  */
-function buildObjectArrayItemModels(itemSchema, yamlNode, propertyPath, depth, unsupported) {
+function buildObjectArrayItemModels(itemSchema, yamlNode, propertyPath, depth, unsupported, commentLookup) {
     if (!yamlNode || yamlNode.kind !== "array") {
         return [];
     }
@@ -1086,11 +1405,11 @@ function buildObjectArrayItemModels(itemSchema, yamlNode, propertyPath, depth, u
     const items = [];
     for (let index = 0; index < yamlNode.items.length; index += 1) {
         const itemNode = yamlNode.items[index];
-        const itemPath = `${propertyPath}[${index}]`;
+        const itemPath = joinArrayIndexPath(propertyPath, index);
         if (!itemNode || itemNode.kind !== "object") {
             unsupported.push({
                 path: itemPath,
-                message: "Object-array items must be mappings. Use raw YAML if the current file mixes scalar and object items."
+                message: localizer.t("webview.unsupported.objectArrayMixed")
             });
             continue;
         }
@@ -1103,9 +1422,10 @@ function buildObjectArrayItemModels(itemSchema, yamlNode, propertyPath, depth, u
             itemPath,
             depth,
             fields,
-            unsupported);
+            unsupported,
+            commentLookup);
         items.push({
-            title: `Item ${index + 1}`,
+            title: localizer.t("webview.objectArray.itemNumber", {index: index + 1}),
             fields
         });
     }
@@ -1125,8 +1445,9 @@ function buildObjectArrayItemModels(itemSchema, yamlNode, propertyPath, depth, u
  * @param {number} depth Current depth.
  * @param {Array<Record<string, unknown>>} fields Field sink.
  * @param {Array<{path: string, message: string}>} unsupported Unsupported sink.
+ * @param {Record<string, string>} commentLookup YAML comment lookup.
  */
-function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPath, depth, fields, unsupported) {
+function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPath, depth, fields, unsupported, commentLookup) {
     if (!schemaNode || schemaNode.type !== "object") {
         return;
     }
@@ -1135,8 +1456,8 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
     const requiredSet = new Set(Array.isArray(schemaNode.required) ? schemaNode.required : []);
 
     for (const [key, propertySchema] of Object.entries(schemaNode.properties || {})) {
-        const itemLocalPath = localPath ? `${localPath}.${key}` : key;
-        const itemDisplayPath = `${displayPath}.${key}`;
+        const itemLocalPath = joinPropertyPath(localPath, key);
+        const itemDisplayPath = joinPropertyPath(displayPath, key);
         const label = propertySchema.title || key;
         const propertyValue = yamlMap.get(key);
 
@@ -1147,6 +1468,7 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
                 displayPath: itemDisplayPath,
                 label,
                 description: propertySchema.description,
+                comment: commentLookup[itemDisplayPath] || "",
                 required: requiredSet.has(key),
                 depth
             });
@@ -1157,7 +1479,8 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
                 itemDisplayPath,
                 depth + 1,
                 fields,
-                unsupported);
+                unsupported,
+                commentLookup);
             continue;
         }
 
@@ -1174,7 +1497,8 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
                 itemType: propertySchema.items.type,
                 value: getScalarArrayValue(propertyValue),
                 schema: propertySchema,
-                itemMode: true
+                itemMode: true,
+                comment: commentLookup[itemDisplayPath] || ""
             });
             continue;
         }
@@ -1189,7 +1513,8 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
                 depth,
                 value: getScalarFieldValue(propertyValue, propertySchema.defaultValue),
                 schema: propertySchema,
-                itemMode: true
+                itemMode: true,
+                comment: commentLookup[itemDisplayPath] || ""
             });
             continue;
         }
@@ -1197,8 +1522,8 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
         unsupported.push({
             path: itemDisplayPath,
             message: propertySchema.type === "array"
-                ? "Nested object-array fields are currently raw-YAML-only inside the object-array editor."
-                : `${propertySchema.type} fields are currently raw-YAML-only.`
+                ? localizer.t("webview.unsupported.nestedObjectArray")
+                : localizer.t("webview.unsupported.type", {type: propertySchema.type})
         });
     }
 }
@@ -1261,7 +1586,7 @@ function renderFieldHint(propertySchema, isArrayField) {
     }
 
     if (propertySchema.defaultValue) {
-        hints.push(`Default: ${escapeHtml(propertySchema.defaultValue)}`);
+        hints.push(escapeHtml(localizer.t("webview.hint.default", {value: propertySchema.defaultValue})));
     }
 
     const enumValues = isArrayField
@@ -1270,11 +1595,11 @@ function renderFieldHint(propertySchema, isArrayField) {
             : []
         : propertySchema.enumValues;
     if (Array.isArray(enumValues) && enumValues.length > 0) {
-        hints.push(`Allowed: ${escapeHtml(enumValues.join(", "))}`);
+        hints.push(escapeHtml(localizer.t("webview.hint.allowed", {values: enumValues.join(", ")})));
     }
 
     if (propertySchema.refTable) {
-        hints.push(`Ref table: ${escapeHtml(propertySchema.refTable)}`);
+        hints.push(escapeHtml(localizer.t("webview.hint.refTable", {refTable: propertySchema.refTable})));
     }
 
     if (hints.length === 0) {
@@ -1294,16 +1619,21 @@ async function promptBatchFieldValue(field) {
     if (field.inputKind === "array") {
         const hintParts = [];
         if (field.itemEnumValues && field.itemEnumValues.length > 0) {
-            hintParts.push(`Allowed items: ${field.itemEnumValues.join(", ")}`);
+            hintParts.push(localizer.t("input.batchArray.placeholder.allowedItems", {
+                values: field.itemEnumValues.join(", ")
+            }));
         }
 
         if (field.defaultValue) {
-            hintParts.push(`Default: ${field.defaultValue}`);
+            hintParts.push(localizer.t("input.batchArray.placeholder.default", {value: field.defaultValue}));
         }
 
         return vscode.window.showInputBox({
-            title: `Batch Edit Array: ${field.title || field.key}`,
-            prompt: `Enter comma-separated items for '${field.key}' (expected array<${field.itemType}>). Leave empty to clear the array.`,
+            title: localizer.t("input.batchArray.title", {field: field.title || field.key}),
+            prompt: localizer.t("input.batchArray.prompt", {
+                fieldKey: field.key,
+                itemType: field.itemType
+            }),
             placeHolder: hintParts.join(" | "),
             ignoreFocusOut: true
         });
@@ -1313,22 +1643,27 @@ async function promptBatchFieldValue(field) {
         const picked = await vscode.window.showQuickPick(
             field.enumValues.map((value) => ({
                 label: value,
-                description: value === field.defaultValue ? "default" : undefined
+                description: value === field.defaultValue
+                    ? localizer.t("detail.default")
+                    : undefined
             })),
             {
-                title: `Batch Edit Field: ${field.title || field.key}`,
-                placeHolder: `Select a value for '${field.key}'.`
+                title: localizer.t("quickPick.batchField.title", {field: field.title || field.key}),
+                placeHolder: localizer.t("quickPick.batchField.placeholder", {fieldKey: field.key})
             });
         return picked ? picked.label : undefined;
     }
 
     return vscode.window.showInputBox({
-        title: `Batch Edit Field: ${field.title || field.key}`,
-        prompt: `Enter the new value for '${field.key}' (expected ${field.type}).`,
+        title: localizer.t("input.batchField.title", {field: field.title || field.key}),
+        prompt: localizer.t("input.batchField.prompt", {
+            fieldKey: field.key,
+            type: field.type
+        }),
         placeHolder: [
             field.description || "",
-            field.defaultValue ? `Default: ${field.defaultValue}` : "",
-            field.refTable ? `Ref table: ${field.refTable}` : ""
+            field.defaultValue ? localizer.t("input.batchArray.placeholder.default", {value: field.defaultValue}) : "",
+            field.refTable ? localizer.t("input.batchField.placeholder.refTable", {refTable: field.refTable}) : ""
         ].filter((part) => part.length > 0).join(" | ") || undefined,
         ignoreFocusOut: true
     });
