@@ -174,6 +174,27 @@ reward:
     assert.match(diagnostics[0].message, /coin, gem/u);
 });
 
+test("validateParsedConfig should localize diagnostics when Chinese UI is requested", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+id: 1
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml, {isChinese: true});
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /缺少必填属性/u);
+    assert.match(diagnostics[1].message, /未在匹配的 schema 中声明/u);
+});
+
 test("applyFormUpdates should update nested scalar and scalar-array paths", () => {
     const updated = applyFormUpdates(
         [

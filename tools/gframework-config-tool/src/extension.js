@@ -10,6 +10,9 @@ const {
     unquoteScalar,
     validateParsedConfig
 } = require("./configValidation");
+const {createLocalizer} = require("./localization");
+
+const localizer = createLocalizer(vscode.env.language);
 
 /**
  * Activate the GFramework config extension.
@@ -132,11 +135,11 @@ class ConfigTreeDataProvider {
         if (!configRoot || !fs.existsSync(configRoot.fsPath)) {
             return [
                 new ConfigTreeItem(
-                    "No config directory",
+                    localizer.t("tree.noConfigDirectory.label"),
                     "info",
                     vscode.TreeItemCollapsibleState.None,
                     undefined,
-                    "Set gframeworkConfig.configPath or create the directory.")
+                    localizer.t("tree.noConfigDirectory.description"))
             ];
         }
 
@@ -171,8 +174,8 @@ class ConfigTreeDataProvider {
             const fileUri = vscode.Uri.joinPath(domainUri, entry.name);
             const schemaUri = getSchemaUriForConfigFile(fileUri, workspaceRoot);
             const description = schemaUri && fs.existsSync(schemaUri.fsPath)
-                ? "schema"
-                : "schema missing";
+                ? localizer.t("tree.fileDescription.schema")
+                : localizer.t("tree.fileDescription.schemaMissing");
             const item = new ConfigTreeItem(
                 entry.name,
                 "file",
@@ -183,7 +186,7 @@ class ConfigTreeDataProvider {
             item.contextValue = "gframeworkConfigFile";
             item.command = {
                 command: "gframeworkConfig.openRaw",
-                title: "Open Raw",
+                title: localizer.t("command.openRaw.title"),
                 arguments: [item]
             };
 
@@ -243,7 +246,7 @@ async function openSchemaFile(item) {
 
     const schemaUri = getSchemaUriForConfigFile(configUri, workspaceRoot);
     if (!schemaUri || !fs.existsSync(schemaUri.fsPath)) {
-        void vscode.window.showWarningMessage("Matching schema file was not found.");
+        void vscode.window.showWarningMessage(localizer.t("message.schemaNotFound"));
         return;
     }
 
@@ -273,7 +276,7 @@ async function openFormPreview(item, diagnostics) {
 
     const panel = vscode.window.createWebviewPanel(
         "gframeworkConfigFormPreview",
-        `Config Form: ${path.basename(configUri.fsPath)}`,
+        localizer.t("webview.panelTitle", {fileName: path.basename(configUri.fsPath)}),
         vscode.ViewColumn.Beside,
         {enableScripts: true});
 
@@ -294,7 +297,7 @@ async function openFormPreview(item, diagnostics) {
             const document = await vscode.workspace.openTextDocument(configUri);
             await document.save();
             await validateConfigFile(configUri, diagnostics);
-            void vscode.window.showInformationMessage("Config file saved from form preview.");
+            void vscode.window.showInformationMessage(localizer.t("message.formSaved"));
         }
 
         if (message.type === "openRaw") {
@@ -353,13 +356,13 @@ async function validateConfigFile(configUri, diagnostics) {
     if (!schemaInfo.exists) {
         fileDiagnostics.push(new vscode.Diagnostic(
             new vscode.Range(0, 0, 0, 1),
-            `Matching schema file not found: ${schemaInfo.schemaPath}`,
+            localizer.t("diagnostic.schemaMissing", {schemaPath: schemaInfo.schemaPath}),
             vscode.DiagnosticSeverity.Warning));
         diagnostics.set(configUri, fileDiagnostics);
         return;
     }
 
-    for (const diagnostic of validateParsedConfig(schemaInfo, parsedYaml)) {
+    for (const diagnostic of validateParsedConfig(schemaInfo, parsedYaml, localizer)) {
         fileDiagnostics.push(new vscode.Diagnostic(
             new vscode.Range(0, 0, 0, 1),
             diagnostic.message,
@@ -403,14 +406,14 @@ async function openBatchEdit(item, diagnostics, provider) {
         });
 
     if (fileItems.length === 0) {
-        void vscode.window.showWarningMessage("No YAML config files were found in the selected domain.");
+        void vscode.window.showWarningMessage(localizer.t("message.noYamlFilesInDomain"));
         return;
     }
 
     const selectedFiles = await vscode.window.showQuickPick(fileItems, {
         canPickMany: true,
-        title: `Batch Edit: ${path.basename(domainUri.fsPath)}`,
-        placeHolder: "Select the config files to update."
+        title: localizer.t("quickPick.batchEdit.title", {domain: path.basename(domainUri.fsPath)}),
+        placeHolder: localizer.t("quickPick.batchEdit.placeholder")
     });
     if (!selectedFiles || selectedFiles.length === 0) {
         return;
@@ -418,14 +421,13 @@ async function openBatchEdit(item, diagnostics, provider) {
 
     const schemaInfo = await loadSchemaInfoForConfig(selectedFiles[0].fileUri, workspaceRoot);
     if (!schemaInfo.exists) {
-        void vscode.window.showWarningMessage("Batch edit requires a matching schema file for the selected domain.");
+        void vscode.window.showWarningMessage(localizer.t("message.batchEditNeedsSchema"));
         return;
     }
 
     const editableFields = getEditableSchemaFields(schemaInfo);
     if (editableFields.length === 0) {
-        void vscode.window.showWarningMessage(
-            "No top-level scalar or scalar-array fields were found in the matching schema.");
+        void vscode.window.showWarningMessage(localizer.t("message.batchEditNoEditableFields"));
         return;
     }
 
@@ -433,19 +435,19 @@ async function openBatchEdit(item, diagnostics, provider) {
         editableFields.map((field) => ({
             label: field.title || field.key,
             description: field.inputKind === "array"
-                ? `array<${field.itemType}>`
+                ? localizer.t("detail.arrayType", {itemType: field.itemType})
                 : field.type,
             detail: [
-                field.required ? "required" : "",
+                field.required ? localizer.t("detail.required") : "",
                 field.description || "",
-                field.refTable ? `ref: ${field.refTable}` : ""
+                field.refTable ? localizer.t("detail.refTable", {refTable: field.refTable}) : ""
             ].filter((part) => part.length > 0).join(" · ") || undefined,
             field
         })),
         {
             canPickMany: true,
-            title: `Batch Edit Fields: ${path.basename(domainUri.fsPath)}`,
-            placeHolder: "Select the fields to apply across the chosen files."
+            title: localizer.t("quickPick.batchEditFields.title", {domain: path.basename(domainUri.fsPath)}),
+            placeHolder: localizer.t("quickPick.batchEditFields.placeholder")
         });
     if (!selectedFields || selectedFields.length === 0) {
         return;
@@ -492,13 +494,15 @@ async function openBatchEdit(item, diagnostics, provider) {
     }
 
     if (changedFileCount === 0) {
-        void vscode.window.showInformationMessage("Batch edit did not change any selected config files.");
+        void vscode.window.showInformationMessage(localizer.t("message.batchEditNoChanges"));
         return;
     }
 
     const applied = await vscode.workspace.applyEdit(edit);
     if (!applied) {
-        throw new Error("VS Code rejected the batch edit workspace update.");
+        throw new Error(localizer.isChinese
+            ? "VS Code 拒绝了这次批量编辑工作区更新。"
+            : "VS Code rejected the batch edit workspace update.");
     }
 
     for (const document of touchedDocuments) {
@@ -507,8 +511,10 @@ async function openBatchEdit(item, diagnostics, provider) {
     }
 
     provider.refresh();
-    void vscode.window.showInformationMessage(
-        `Batch updated ${changedFileCount} config file(s) in '${path.basename(domainUri.fsPath)}'.`);
+    void vscode.window.showInformationMessage(localizer.t("message.batchEditUpdated", {
+        count: changedFileCount,
+        domain: path.basename(domainUri.fsPath)
+    }));
 }
 
 /**
@@ -570,6 +576,9 @@ async function loadSchemaInfoForConfig(configUri, workspaceRoot) {
  */
 function renderFormHtml(fileName, schemaInfo, parsedYaml) {
     const formModel = buildFormModel(schemaInfo, parsedYaml);
+    const saveButtonLabel = escapeHtml(localizer.t("webview.button.save"));
+    const openRawButtonLabel = escapeHtml(localizer.t("webview.button.openRaw"));
+    const objectArrayItemLabel = localizer.t("webview.objectArray.item");
     const renderedFields = formModel.fields
         .map((field) => renderFormField(field))
         .join("\n");
@@ -583,8 +592,8 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
         .join("\n");
 
     const schemaStatus = schemaInfo.exists
-        ? `Schema: ${escapeHtml(schemaInfo.schemaPath)}`
-        : `Schema missing: ${escapeHtml(schemaInfo.schemaPath)}`;
+        ? escapeHtml(localizer.t("webview.meta.schema", {schemaPath: schemaInfo.schemaPath}))
+        : escapeHtml(localizer.t("webview.meta.schemaMissing", {schemaPath: schemaInfo.schemaPath}));
 
     const editableContent = renderedFields;
     const unsupportedSection = unsupportedFields.length > 0
@@ -592,10 +601,10 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
         : "";
     const emptyState = editableContent.length > 0
         ? `${editableContent}${unsupportedSection}`
-        : "<p>No editable schema-bound fields were detected. Use raw YAML for unsupported shapes.</p>";
+        : `<p>${escapeHtml(localizer.t("webview.emptyState"))}</p>`;
 
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${escapeHtml(localizer.languageTag)}">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -739,16 +748,17 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
 </head>
 <body>
     <div class="toolbar">
-        <button id="save">Save Form</button>
-        <button id="openRaw">Open Raw YAML</button>
+        <button id="save">${saveButtonLabel}</button>
+        <button id="openRaw">${openRawButtonLabel}</button>
     </div>
     <div class="meta">
-        <div>File: ${escapeHtml(fileName)}</div>
+        <div>${escapeHtml(localizer.t("webview.meta.file", {fileName}))}</div>
         <div>${schemaStatus}</div>
     </div>
     <div id="fields">${emptyState}</div>
     <script>
         const vscode = acquireVsCodeApi();
+        const objectArrayItemLabel = ${JSON.stringify(objectArrayItemLabel)};
         function parseArrayEditorValue(value) {
             return String(value)
                 .split(/\\r?\\n/u)
@@ -781,7 +791,7 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml) {
             items.forEach((item, index) => {
                 const title = item.querySelector(".object-array-item-title");
                 if (title) {
-                    title.textContent = "Item " + (index + 1);
+                    title.textContent = objectArrayItemLabel + " " + (index + 1);
                 }
             });
         }
@@ -858,7 +868,7 @@ function renderFormField(field) {
     if (field.kind === "section") {
         return `
             <div class="section depth-${field.depth}">
-                <div class="section-title">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</div>
+                <div class="section-title">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</div>
                 <div class="meta-key">${escapeHtml(field.displayPath || field.path)}</div>
                 ${field.description ? `<span class="hint">${escapeHtml(field.description)}</span>` : ""}
             </div>
@@ -870,34 +880,34 @@ function renderFormField(field) {
             .map((item) => renderObjectArrayItem(item))
             .join("\n");
         const renderedTemplate = renderObjectArrayItem({
-            title: "Item",
+            title: localizer.t("webview.objectArray.item"),
             fields: field.templateFields
         });
         return `
             <div class="object-array depth-${field.depth}" data-object-array-editor data-object-array-path="${escapeHtml(field.path)}">
-                <div class="label">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</div>
+                <div class="label">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</div>
                 <div class="meta-key">${escapeHtml(field.displayPath || field.path)}</div>
-                <span class="hint">Each item uses the object schema below.</span>
+                <span class="hint">${escapeHtml(localizer.t("webview.objectArray.hint"))}</span>
                 ${renderFieldHint(field.schema, true)}
                 <div class="object-array-items" data-object-array-items>${renderedItems}</div>
                 <template data-object-array-template>${renderedTemplate}</template>
-                <button type="button" class="secondary-button" data-add-object-array-item>Add Item</button>
+                <button type="button" class="secondary-button" data-add-object-array-item>${escapeHtml(localizer.t("webview.objectArray.add"))}</button>
             </div>
         `;
     }
 
     if (field.kind === "array") {
         const itemType = field.itemType
-            ? `array<${escapeHtml(field.itemType)}>`
+            ? `array<${field.itemType}>`
             : "array";
         const dataAttribute = field.itemMode
             ? `data-item-array-path="${escapeHtml(field.path)}"`
             : `data-array-path="${escapeHtml(field.path)}"`;
         return `
             <label class="field depth-${field.depth}">
-                <span class="label">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</span>
+                <span class="label">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</span>
                 <span class="meta-key">${escapeHtml(field.displayPath || field.path)}</span>
-                <span class="hint">One item per line. Expected type: ${itemType}</span>
+                <span class="hint">${escapeHtml(localizer.t("webview.array.hint", {itemType}))}</span>
                 ${renderFieldHint(field.schema, true)}
                 <textarea ${dataAttribute} rows="5">${escapeHtml(field.value.join("\n"))}</textarea>
             </label>
@@ -922,7 +932,7 @@ function renderFormField(field) {
 
     return `
         <label class="field depth-${field.depth}">
-            <span class="label">${escapeHtml(field.label)} ${field.required ? "<span class=\"badge\">required</span>" : ""}</span>
+            <span class="label">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</span>
             <span class="meta-key">${escapeHtml(field.displayPath || field.path)}</span>
             ${renderFieldHint(field.schema, false)}
             ${inputControl}
@@ -941,7 +951,7 @@ function renderObjectArrayItem(item) {
         <div class="object-array-item" data-object-array-item>
             <div class="object-array-item-header">
                 <span class="object-array-item-title">${escapeHtml(item.title)}</span>
-                <button type="button" class="secondary-button" data-remove-object-array-item>Remove</button>
+                <button type="button" class="secondary-button" data-remove-object-array-item>${escapeHtml(localizer.t("webview.objectArray.remove"))}</button>
             </div>
             ${item.fields.map((field) => renderFormField(field)).join("\n")}
         </div>
@@ -1062,8 +1072,8 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
         unsupported.push({
             path: propertyPath,
             message: propertySchema.type === "array"
-                ? "Unsupported array shapes are currently raw-YAML-only in the form preview."
-                : `${propertySchema.type} fields are currently raw-YAML-only.`
+                ? localizer.t("webview.unsupported.array")
+                : localizer.t("webview.unsupported.type", {type: propertySchema.type})
         });
     }
 }
@@ -1090,7 +1100,7 @@ function buildObjectArrayItemModels(itemSchema, yamlNode, propertyPath, depth, u
         if (!itemNode || itemNode.kind !== "object") {
             unsupported.push({
                 path: itemPath,
-                message: "Object-array items must be mappings. Use raw YAML if the current file mixes scalar and object items."
+                message: localizer.t("webview.unsupported.objectArrayMixed")
             });
             continue;
         }
@@ -1105,7 +1115,7 @@ function buildObjectArrayItemModels(itemSchema, yamlNode, propertyPath, depth, u
             fields,
             unsupported);
         items.push({
-            title: `Item ${index + 1}`,
+            title: localizer.t("webview.objectArray.itemNumber", {index: index + 1}),
             fields
         });
     }
@@ -1197,8 +1207,8 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
         unsupported.push({
             path: itemDisplayPath,
             message: propertySchema.type === "array"
-                ? "Nested object-array fields are currently raw-YAML-only inside the object-array editor."
-                : `${propertySchema.type} fields are currently raw-YAML-only.`
+                ? localizer.t("webview.unsupported.nestedObjectArray")
+                : localizer.t("webview.unsupported.type", {type: propertySchema.type})
         });
     }
 }
@@ -1261,7 +1271,7 @@ function renderFieldHint(propertySchema, isArrayField) {
     }
 
     if (propertySchema.defaultValue) {
-        hints.push(`Default: ${escapeHtml(propertySchema.defaultValue)}`);
+        hints.push(escapeHtml(localizer.t("webview.hint.default", {value: propertySchema.defaultValue})));
     }
 
     const enumValues = isArrayField
@@ -1270,11 +1280,11 @@ function renderFieldHint(propertySchema, isArrayField) {
             : []
         : propertySchema.enumValues;
     if (Array.isArray(enumValues) && enumValues.length > 0) {
-        hints.push(`Allowed: ${escapeHtml(enumValues.join(", "))}`);
+        hints.push(escapeHtml(localizer.t("webview.hint.allowed", {values: enumValues.join(", ")})));
     }
 
     if (propertySchema.refTable) {
-        hints.push(`Ref table: ${escapeHtml(propertySchema.refTable)}`);
+        hints.push(escapeHtml(localizer.t("webview.hint.refTable", {refTable: propertySchema.refTable})));
     }
 
     if (hints.length === 0) {
@@ -1294,16 +1304,21 @@ async function promptBatchFieldValue(field) {
     if (field.inputKind === "array") {
         const hintParts = [];
         if (field.itemEnumValues && field.itemEnumValues.length > 0) {
-            hintParts.push(`Allowed items: ${field.itemEnumValues.join(", ")}`);
+            hintParts.push(localizer.t("input.batchArray.placeholder.allowedItems", {
+                values: field.itemEnumValues.join(", ")
+            }));
         }
 
         if (field.defaultValue) {
-            hintParts.push(`Default: ${field.defaultValue}`);
+            hintParts.push(localizer.t("input.batchArray.placeholder.default", {value: field.defaultValue}));
         }
 
         return vscode.window.showInputBox({
-            title: `Batch Edit Array: ${field.title || field.key}`,
-            prompt: `Enter comma-separated items for '${field.key}' (expected array<${field.itemType}>). Leave empty to clear the array.`,
+            title: localizer.t("input.batchArray.title", {field: field.title || field.key}),
+            prompt: localizer.t("input.batchArray.prompt", {
+                fieldKey: field.key,
+                itemType: field.itemType
+            }),
             placeHolder: hintParts.join(" | "),
             ignoreFocusOut: true
         });
@@ -1313,22 +1328,27 @@ async function promptBatchFieldValue(field) {
         const picked = await vscode.window.showQuickPick(
             field.enumValues.map((value) => ({
                 label: value,
-                description: value === field.defaultValue ? "default" : undefined
+                description: value === field.defaultValue
+                    ? localizer.t("detail.default")
+                    : undefined
             })),
             {
-                title: `Batch Edit Field: ${field.title || field.key}`,
-                placeHolder: `Select a value for '${field.key}'.`
+                title: localizer.t("quickPick.batchField.title", {field: field.title || field.key}),
+                placeHolder: localizer.t("quickPick.batchField.placeholder", {fieldKey: field.key})
             });
         return picked ? picked.label : undefined;
     }
 
     return vscode.window.showInputBox({
-        title: `Batch Edit Field: ${field.title || field.key}`,
-        prompt: `Enter the new value for '${field.key}' (expected ${field.type}).`,
+        title: localizer.t("input.batchField.title", {field: field.title || field.key}),
+        prompt: localizer.t("input.batchField.prompt", {
+            fieldKey: field.key,
+            type: field.type
+        }),
         placeHolder: [
             field.description || "",
-            field.defaultValue ? `Default: ${field.defaultValue}` : "",
-            field.refTable ? `Ref table: ${field.refTable}` : ""
+            field.defaultValue ? localizer.t("input.batchArray.placeholder.default", {value: field.defaultValue}) : "",
+            field.refTable ? localizer.t("input.batchField.placeholder.refTable", {refTable: field.refTable}) : ""
         ].filter((part) => part.length > 0).join(" | ") || undefined,
         ignoreFocusOut: true
     });

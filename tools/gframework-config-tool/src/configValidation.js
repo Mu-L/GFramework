@@ -100,11 +100,12 @@ function parseTopLevelYaml(text) {
  *
  * @param {{type: "object", required: string[], properties: Record<string, SchemaNode>}} schemaInfo Parsed schema.
  * @param {YamlNode} parsedYaml Parsed YAML tree.
+ * @param {{isChinese?: boolean} | undefined} localizer Optional runtime localizer.
  * @returns {Array<{severity: "error" | "warning", message: string}>} Validation diagnostics.
  */
-function validateParsedConfig(schemaInfo, parsedYaml) {
+function validateParsedConfig(schemaInfo, parsedYaml, localizer) {
     const diagnostics = [];
-    validateNode(schemaInfo, parsedYaml, "", diagnostics);
+    validateNode(schemaInfo, parsedYaml, "", diagnostics, localizer);
     return diagnostics;
 }
 
@@ -353,10 +354,11 @@ function parseSchemaNode(rawNode, displayPath) {
  * @param {YamlNode} yamlNode YAML node.
  * @param {string} displayPath Current logical path.
  * @param {Array<{severity: "error" | "warning", message: string}>} diagnostics Diagnostic sink.
+ * @param {{isChinese?: boolean} | undefined} localizer Optional runtime localizer.
  */
-function validateNode(schemaNode, yamlNode, displayPath, diagnostics) {
+function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer) {
     if (schemaNode.type === "object") {
-        validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics);
+        validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, localizer);
         return;
     }
 
@@ -364,13 +366,15 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics) {
         if (!yamlNode || yamlNode.kind !== "array") {
             diagnostics.push({
                 severity: "error",
-                message: `Property '${displayPath}' is expected to be an array.`
+                message: localizeValidationMessage("expectedArray", localizer, {
+                    displayPath
+                })
             });
             return;
         }
 
         for (let index = 0; index < yamlNode.items.length; index += 1) {
-            validateNode(schemaNode.items, yamlNode.items[index], `${displayPath}[${index}]`, diagnostics);
+            validateNode(schemaNode.items, yamlNode.items[index], `${displayPath}[${index}]`, diagnostics, localizer);
         }
         return;
     }
@@ -378,7 +382,11 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics) {
     if (!yamlNode || yamlNode.kind !== "scalar") {
         diagnostics.push({
             severity: "error",
-            message: `Property '${displayPath}' is expected to be '${schemaNode.type}', but the current YAML shape is '${yamlNode ? yamlNode.kind : "missing"}'.`
+            message: localizeValidationMessage("expectedScalarShape", localizer, {
+                displayPath,
+                schemaType: schemaNode.type,
+                yamlKind: yamlNode ? yamlNode.kind : "missing"
+            })
         });
         return;
     }
@@ -386,7 +394,10 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics) {
     if (!isScalarCompatible(schemaNode.type, yamlNode.value)) {
         diagnostics.push({
             severity: "error",
-            message: `Property '${displayPath}' is expected to be '${schemaNode.type}', but the current scalar value is incompatible.`
+            message: localizeValidationMessage("expectedScalarValue", localizer, {
+                displayPath,
+                schemaType: schemaNode.type
+            })
         });
         return;
     }
@@ -396,7 +407,10 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics) {
         !schemaNode.enumValues.includes(unquoteScalar(yamlNode.value))) {
         diagnostics.push({
             severity: "error",
-            message: `Property '${displayPath}' must be one of: ${schemaNode.enumValues.join(", ")}.`
+            message: localizeValidationMessage("enumMismatch", localizer, {
+                displayPath,
+                values: schemaNode.enumValues.join(", ")
+            })
         });
     }
 }
@@ -408,13 +422,17 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics) {
  * @param {YamlNode} yamlNode YAML node.
  * @param {string} displayPath Current logical path.
  * @param {Array<{severity: "error" | "warning", message: string}>} diagnostics Diagnostic sink.
+ * @param {{isChinese?: boolean} | undefined} localizer Optional runtime localizer.
  */
-function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics) {
+function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, localizer) {
     if (!yamlNode || yamlNode.kind !== "object") {
         const subject = displayPath.length === 0 ? "Root object" : `Property '${displayPath}'`;
         diagnostics.push({
             severity: "error",
-            message: `${subject} is expected to be an object.`
+            message: localizeValidationMessage("expectedObject", localizer, {
+                subject,
+                displayPath
+            })
         });
         return;
     }
@@ -423,7 +441,9 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics) {
         if (!yamlNode.map.has(requiredProperty)) {
             diagnostics.push({
                 severity: "error",
-                message: `Required property '${combinePath(displayPath, requiredProperty)}' is missing.`
+                message: localizeValidationMessage("missingRequired", localizer, {
+                    displayPath: combinePath(displayPath, requiredProperty)
+                })
             });
         }
     }
@@ -432,7 +452,9 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics) {
         if (!Object.prototype.hasOwnProperty.call(schemaNode.properties, entry.key)) {
             diagnostics.push({
                 severity: "error",
-                message: `Property '${combinePath(displayPath, entry.key)}' is not declared in the matching schema.`
+                message: localizeValidationMessage("unknownProperty", localizer, {
+                    displayPath: combinePath(displayPath, entry.key)
+                })
             });
             continue;
         }
@@ -441,7 +463,60 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics) {
             schemaNode.properties[entry.key],
             entry.node,
             combinePath(displayPath, entry.key),
-            diagnostics);
+            diagnostics,
+            localizer);
+    }
+}
+
+/**
+ * Format one validation message in either English or Simplified Chinese.
+ *
+ * @param {"expectedArray" | "expectedScalarShape" | "expectedScalarValue" | "enumMismatch" | "expectedObject" | "missingRequired" | "unknownProperty"} key Message key.
+ * @param {{isChinese?: boolean} | undefined} localizer Optional runtime localizer.
+ * @param {Record<string, string>} params Message parameters.
+ * @returns {string} Localized validation message.
+ */
+function localizeValidationMessage(key, localizer, params) {
+    if (localizer && localizer.isChinese) {
+        switch (key) {
+            case "expectedArray":
+                return `属性“${params.displayPath}”应为数组。`;
+            case "expectedScalarShape":
+                return `属性“${params.displayPath}”应为“${params.schemaType}”，但当前 YAML 结构是“${params.yamlKind}”。`;
+            case "expectedScalarValue":
+                return `属性“${params.displayPath}”应为“${params.schemaType}”，但当前标量值不兼容。`;
+            case "enumMismatch":
+                return `属性“${params.displayPath}”必须是以下值之一：${params.values}。`;
+            case "expectedObject":
+                return params.displayPath && params.displayPath.length > 0
+                    ? `属性“${params.displayPath}”应为对象。`
+                    : "根对象应为对象。";
+            case "missingRequired":
+                return `缺少必填属性“${params.displayPath}”。`;
+            case "unknownProperty":
+                return `属性“${params.displayPath}”未在匹配的 schema 中声明。`;
+            default:
+                return key;
+        }
+    }
+
+    switch (key) {
+        case "expectedArray":
+            return `Property '${params.displayPath}' is expected to be an array.`;
+        case "expectedScalarShape":
+            return `Property '${params.displayPath}' is expected to be '${params.schemaType}', but the current YAML shape is '${params.yamlKind}'.`;
+        case "expectedScalarValue":
+            return `Property '${params.displayPath}' is expected to be '${params.schemaType}', but the current scalar value is incompatible.`;
+        case "enumMismatch":
+            return `Property '${params.displayPath}' must be one of: ${params.values}.`;
+        case "expectedObject":
+            return `${params.subject} is expected to be an object.`;
+        case "missingRequired":
+            return `Required property '${params.displayPath}' is missing.`;
+        case "unknownProperty":
+            return `Property '${params.displayPath}' is not declared in the matching schema.`;
+        default:
+            return key;
     }
 }
 

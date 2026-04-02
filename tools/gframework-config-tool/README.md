@@ -7,6 +7,7 @@ VS Code extension for the GFramework AI-First config workflow.
 - Browse config files from the workspace `config/` directory
 - Open raw YAML files
 - Open matching schema files from `schemas/`
+- Localize extension UI text in English and Simplified Chinese, including the form preview, prompts, and notifications
 - Run lightweight schema validation for nested required fields, unknown nested fields, scalar types, scalar arrays, and
   arrays of objects
 - Open a lightweight form preview for nested object fields, object arrays, top-level scalar fields, and scalar arrays
