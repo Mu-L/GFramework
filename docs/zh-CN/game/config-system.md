@@ -304,6 +304,23 @@ var hotReload = loader.EnableHotReload(
 - 热重载失败时应优先依赖 `ConfigLoadException.Diagnostic` 做稳定日志或 UI 提示
 - 如果你的项目已经有统一日志系统，建议在这里把诊断字段转成结构化日志，而不是拼接一整段字符串
 
+如果你后续还需要为热重载增加更多开关，推荐优先使用选项对象入口，而不是继续叠加位置参数：
+
+```csharp
+var hotReload = loader.EnableHotReload(
+    registry,
+    new YamlConfigHotReloadOptions
+    {
+        OnTableReloaded = tableName => Console.WriteLine($"Reloaded: {tableName}"),
+        OnTableReloadFailed = (tableName, exception) =>
+        {
+            var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
+            Console.WriteLine($"{tableName}: {diagnostic?.FailureKind}");
+        },
+        DebounceDelay = TimeSpan.FromMilliseconds(150)
+    });
+```
+
 ## 运行时接入
 
 当你希望加载后的配置在运行时以只读表形式暴露时，优先使用生成器产出的注册与访问辅助：
@@ -341,6 +358,20 @@ var schemaPath = MonsterConfigBindings.Metadata.SchemaRelativePath;
 ```
 
 如果你需要自定义目录、表名或 key selector，仍然可以直接调用 `YamlConfigLoader.RegisterTable(...)` 原始重载。
+
+如果你希望把 schema 路径、比较器以及未来扩展开关集中到一个对象里，推荐改用选项对象入口：
+
+```csharp
+var loader = new YamlConfigLoader("config-root")
+    .RegisterTable(
+        new YamlConfigTableRegistrationOptions<int, MonsterConfig>(
+            "monster",
+            "monster",
+            static config => config.Id)
+        {
+            SchemaRelativePath = "schemas/monster.schema.json"
+        });
+```
 
 ## 运行时校验行为
 

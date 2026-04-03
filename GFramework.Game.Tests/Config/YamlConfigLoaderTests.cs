@@ -1,5 +1,4 @@
 using System.IO;
-using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 
 namespace GFramework.Game.Tests.Config;
@@ -10,6 +9,8 @@ namespace GFramework.Game.Tests.Config;
 [TestFixture]
 public class YamlConfigLoaderTests
 {
+    private string _rootPath = null!;
+
     /// <summary>
     ///     为每个测试创建独立临时目录，避免文件系统状态互相污染。
     /// </summary>
@@ -31,8 +32,6 @@ public class YamlConfigLoaderTests
             Directory.Delete(_rootPath, true);
         }
     }
-
-    private string _rootPath = null!;
 
     /// <summary>
     ///     验证加载器能够扫描 YAML 文件并将结果写入注册表。
@@ -69,6 +68,68 @@ public class YamlConfigLoaderTests
             Assert.That(table.Get(1).Name, Is.EqualTo("Slime"));
             Assert.That(table.Get(2).Hp, Is.EqualTo(30));
         });
+    }
+
+    /// <summary>
+    ///     验证加载器支持通过选项对象注册带 schema 校验的配置表。
+    /// </summary>
+    [Test]
+    public async Task RegisterTable_Should_Support_Options_Object()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            hp: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "hp": { "type": "integer" }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable(
+                new YamlConfigTableRegistrationOptions<int, MonsterConfigStub>(
+                    "monster",
+                    "monster",
+                    static config => config.Id)
+                {
+                    SchemaRelativePath = "schemas/monster.schema.json"
+                });
+        var registry = new ConfigRegistry();
+
+        await loader.LoadAsync(registry);
+
+        var table = registry.GetTable<int, MonsterConfigStub>("monster");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(table.Count, Is.EqualTo(1));
+            Assert.That(table.Get(1).Name, Is.EqualTo("Slime"));
+            Assert.That(table.Get(1).Hp, Is.EqualTo(10));
+        });
+    }
+
+    /// <summary>
+    ///     验证加载器会拒绝空的配置表注册选项对象。
+    /// </summary>
+    [Test]
+    public void RegisterTable_Should_Throw_When_Options_Are_Null()
+    {
+        var loader = new YamlConfigLoader(_rootPath);
+
+        Assert.Throws<ArgumentNullException>(() =>
+            loader.RegisterTable<int, MonsterConfigStub>(null!));
     }
 
     /// <summary>
@@ -974,6 +1035,78 @@ public class YamlConfigLoaderTests
             registry,
             onTableReloaded: tableName => reloadTaskSource.TrySetResult(tableName),
             debounceDelay: TimeSpan.FromMilliseconds(150));
+
+        try
+        {
+            CreateConfigFile(
+                "monster/slime.yaml",
+                """
+                id: 1
+                name: Slime
+                hp: 25
+                """);
+
+            var tableName = await WaitForTaskWithinAsync(reloadTaskSource.Task, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(tableName, Is.EqualTo("monster"));
+                Assert.That(registry.GetTable<int, MonsterConfigStub>("monster").Get(1).Hp, Is.EqualTo(25));
+            });
+        }
+        finally
+        {
+            hotReload.UnRegister();
+        }
+    }
+
+    /// <summary>
+    ///     验证热重载支持通过选项对象配置回调和防抖延迟。
+    /// </summary>
+    [Test]
+    public async Task EnableHotReload_Should_Support_Options_Object()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            hp: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "hp": { "type": "integer" }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable(
+                new YamlConfigTableRegistrationOptions<int, MonsterConfigStub>(
+                    "monster",
+                    "monster",
+                    static config => config.Id)
+                {
+                    SchemaRelativePath = "schemas/monster.schema.json"
+                });
+        var registry = new ConfigRegistry();
+        await loader.LoadAsync(registry);
+
+        var reloadTaskSource = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hotReload = loader.EnableHotReload(
+            registry,
+            new YamlConfigHotReloadOptions
+            {
+                OnTableReloaded = tableName => reloadTaskSource.TrySetResult(tableName),
+                DebounceDelay = TimeSpan.FromMilliseconds(150)
+            });
 
         try
         {

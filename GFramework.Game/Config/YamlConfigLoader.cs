@@ -1,8 +1,5 @@
 using System.Diagnostics;
-using GFramework.Core.Abstractions.Events;
 using GFramework.Game.Abstractions.Config;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace GFramework.Game.Config;
 
@@ -19,6 +16,8 @@ public sealed class YamlConfigLoader : IConfigLoader
 
     private const string SchemaRelativePathCannotBeNullOrWhiteSpaceMessage =
         "Schema relative path cannot be null or whitespace.";
+
+    private static readonly TimeSpan DefaultHotReloadDebounceDelay = TimeSpan.FromMilliseconds(200);
 
     private readonly IDeserializer _deserializer;
 
@@ -101,7 +100,31 @@ public sealed class YamlConfigLoader : IConfigLoader
         Action<string, Exception>? onTableReloadFailed = null,
         TimeSpan? debounceDelay = null)
     {
+        return EnableHotReload(
+            registry,
+            new YamlConfigHotReloadOptions
+            {
+                OnTableReloaded = onTableReloaded,
+                OnTableReloadFailed = onTableReloadFailed,
+                DebounceDelay = debounceDelay ?? DefaultHotReloadDebounceDelay
+            });
+    }
+
+    /// <summary>
+    ///     启用开发期热重载，并通过选项对象集中配置回调和防抖行为。
+    ///     该入口用于减少继续堆叠位置参数重载的需要，
+    ///     也为未来扩展过滤策略或日志钩子预留稳定形态。
+    /// </summary>
+    /// <param name="registry">要被热重载更新的配置注册表。</param>
+    /// <param name="options">热重载配置选项；为空时使用默认选项。</param>
+    /// <returns>用于停止热重载监听的注销句柄。</returns>
+    /// <exception cref="ArgumentNullException">当 <paramref name="registry" /> 为空时抛出。</exception>
+    public IUnRegister EnableHotReload(
+        IConfigRegistry registry,
+        YamlConfigHotReloadOptions? options)
+    {
         ArgumentNullException.ThrowIfNull(registry);
+        options ??= new YamlConfigHotReloadOptions();
 
         return new HotReloadSession(
             _rootPath,
@@ -109,9 +132,9 @@ public sealed class YamlConfigLoader : IConfigLoader
             registry,
             _registrations,
             _lastSuccessfulDependencies,
-            onTableReloaded,
-            onTableReloadFailed,
-            debounceDelay ?? TimeSpan.FromMilliseconds(200));
+            options.OnTableReloaded,
+            options.OnTableReloadFailed,
+            options.DebounceDelay);
     }
 
     private void UpdateLastSuccessfulDependencies(IEnumerable<YamlTableLoadResult> loadedTables)
@@ -142,7 +165,11 @@ public sealed class YamlConfigLoader : IConfigLoader
         IEqualityComparer<TKey>? comparer = null)
         where TKey : notnull
     {
-        return RegisterTableCore(tableName, relativePath, null, keySelector, comparer);
+        return RegisterTable(
+            new YamlConfigTableRegistrationOptions<TKey, TValue>(tableName, relativePath, keySelector)
+            {
+                Comparer = comparer
+            });
     }
 
     /// <summary>
@@ -166,7 +193,35 @@ public sealed class YamlConfigLoader : IConfigLoader
         IEqualityComparer<TKey>? comparer = null)
         where TKey : notnull
     {
-        return RegisterTableCore(tableName, relativePath, schemaRelativePath, keySelector, comparer);
+        return RegisterTable(
+            new YamlConfigTableRegistrationOptions<TKey, TValue>(tableName, relativePath, keySelector)
+            {
+                SchemaRelativePath = schemaRelativePath,
+                Comparer = comparer
+            });
+    }
+
+    /// <summary>
+    ///     使用选项对象注册一个 YAML 配置表定义。
+    ///     该入口集中承载配置目录、schema 路径、主键提取器和比较器，
+    ///     以避免未来继续为新增开关叠加更多重载。
+    /// </summary>
+    /// <typeparam name="TKey">配置主键类型。</typeparam>
+    /// <typeparam name="TValue">配置值类型。</typeparam>
+    /// <param name="options">配置表注册选项。</param>
+    /// <returns>当前加载器实例，以便链式注册。</returns>
+    /// <exception cref="ArgumentNullException">当 <paramref name="options" /> 为空时抛出。</exception>
+    public YamlConfigLoader RegisterTable<TKey, TValue>(YamlConfigTableRegistrationOptions<TKey, TValue> options)
+        where TKey : notnull
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        return RegisterTableCore(
+            options.TableName,
+            options.RelativePath,
+            options.SchemaRelativePath,
+            options.KeySelector,
+            options.Comparer);
     }
 
     private YamlConfigLoader RegisterTableCore<TKey, TValue>(
