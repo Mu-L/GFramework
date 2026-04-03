@@ -132,7 +132,8 @@ public class SchemaConfigGeneratorSnapshotTests
                                           "type": "string",
                                           "description": "Monster reference id.",
                                           "minLength": 2,
-                                          "maxLength": 32
+                                          "maxLength": 32,
+                                          "x-gframework-ref-table": "monster"
                                         }
                                       }
                                     }

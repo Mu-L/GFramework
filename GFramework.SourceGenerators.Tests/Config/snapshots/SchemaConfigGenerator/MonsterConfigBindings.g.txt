@@ -10,6 +10,51 @@ namespace GFramework.Game.Config.Generated;
 public static class MonsterConfigBindings
 {
     /// <summary>
+    ///     Describes one schema property that declares <c>x-gframework-ref-table</c> metadata.
+    /// </summary>
+    public readonly struct ReferenceMetadata
+    {
+        /// <summary>
+        ///     Initializes one generated cross-table reference descriptor.
+        /// </summary>
+        /// <param name="displayPath">Schema property path.</param>
+        /// <param name="referencedTableName">Referenced runtime table name.</param>
+        /// <param name="valueSchemaType">Schema scalar type used by the reference value.</param>
+        /// <param name="isCollection">Whether the property stores multiple reference keys.</param>
+        public ReferenceMetadata(
+            string displayPath,
+            string referencedTableName,
+            string valueSchemaType,
+            bool isCollection)
+        {
+            DisplayPath = displayPath ?? throw new global::System.ArgumentNullException(nameof(displayPath));
+            ReferencedTableName = referencedTableName ?? throw new global::System.ArgumentNullException(nameof(referencedTableName));
+            ValueSchemaType = valueSchemaType ?? throw new global::System.ArgumentNullException(nameof(valueSchemaType));
+            IsCollection = isCollection;
+        }
+
+        /// <summary>
+        ///     Gets the schema property path such as <c>dropItems</c> or <c>phases[].monsterId</c>.
+        /// </summary>
+        public string DisplayPath { get; }
+
+        /// <summary>
+        ///     Gets the runtime registration name of the referenced config table.
+        /// </summary>
+        public string ReferencedTableName { get; }
+
+        /// <summary>
+        ///     Gets the schema scalar type used by the referenced key value.
+        /// </summary>
+        public string ValueSchemaType { get; }
+
+        /// <summary>
+        ///     Gets a value indicating whether the property stores multiple reference keys.
+        /// </summary>
+        public bool IsCollection { get; }
+    }
+
+    /// <summary>
     ///     Groups the schema-derived metadata constants so consumer code can reuse one stable entry point.
     /// </summary>
     public static class Metadata
@@ -54,6 +99,67 @@ public static class MonsterConfigBindings
     ///     Gets the schema file path expected by the generated registration helper.
     /// </summary>
     public const string SchemaRelativePath = Metadata.SchemaRelativePath;
+
+    /// <summary>
+    ///     Exposes generated metadata for schema properties that declare <c>x-gframework-ref-table</c>.
+    /// </summary>
+    public static class References
+    {
+        /// <summary>
+        ///     Gets generated reference metadata for schema property path 'dropItems'.
+        /// </summary>
+        public static readonly ReferenceMetadata DropItems = new(
+            "dropItems",
+            "item",
+            "string",
+            true);
+
+        /// <summary>
+        ///     Gets generated reference metadata for schema property path 'phases[].monsterId'.
+        /// </summary>
+        public static readonly ReferenceMetadata PhasesItemsMonsterId = new(
+            "phases[].monsterId",
+            "monster",
+            "string",
+            false);
+
+        /// <summary>
+        ///     Gets all generated cross-table reference descriptors for the current schema.
+        /// </summary>
+        public static global::System.Collections.Generic.IReadOnlyList<ReferenceMetadata> All { get; } = global::System.Array.AsReadOnly(new ReferenceMetadata[]
+        {
+            DropItems,
+            PhasesItemsMonsterId,
+        });
+
+        /// <summary>
+        ///     Tries to resolve generated reference metadata by schema property path.
+        /// </summary>
+        /// <param name="displayPath">Schema property path.</param>
+        /// <param name="metadata">Resolved generated reference metadata when the path is known; otherwise the default value.</param>
+        /// <returns>True when the schema property path has generated cross-table metadata; otherwise false.</returns>
+        public static bool TryGetByDisplayPath(string displayPath, out ReferenceMetadata metadata)
+        {
+            if (displayPath is null)
+            {
+                throw new global::System.ArgumentNullException(nameof(displayPath));
+            }
+
+            if (string.Equals(displayPath, "dropItems", global::System.StringComparison.Ordinal))
+            {
+                metadata = DropItems;
+                return true;
+            }
+            if (string.Equals(displayPath, "phases[].monsterId", global::System.StringComparison.Ordinal))
+            {
+                metadata = PhasesItemsMonsterId;
+                return true;
+            }
+
+            metadata = default;
+            return false;
+        }
+    }
 
     /// <summary>
     ///     Registers the generated config table using the schema-derived runtime conventions.

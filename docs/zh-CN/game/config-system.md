@@ -158,6 +158,21 @@ var schemaPath = MonsterConfigBindings.Metadata.SchemaRelativePath;
 - 引用目标表需要由同一个 `YamlConfigLoader` 注册，或已存在于当前 `IConfigRegistry`
 - 热重载中若目标表变更导致依赖表引用失效，会整体回滚受影响表，避免注册表进入不一致状态
 
+如果你希望在消费者代码里复用这些跨表约定，而不是继续手写字段路径或目标表名，生成的 `*ConfigBindings` 还会暴露引用元数据：
+
+```csharp
+var allReferences = MonsterConfigBindings.References.All;
+
+if (MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out var reference))
+{
+    Console.WriteLine(reference.ReferencedTableName);
+    Console.WriteLine(reference.ValueSchemaType);
+    Console.WriteLine(reference.IsCollection);
+}
+```
+
+当 schema 中存在具体引用字段时，还可以直接通过生成成员访问，例如 `MonsterConfigBindings.References.DropItems`。
+
 当前还支持以下“轻量元数据”：
 
 - `title`：供 VS Code 插件表单和批量编辑入口显示更友好的字段标题

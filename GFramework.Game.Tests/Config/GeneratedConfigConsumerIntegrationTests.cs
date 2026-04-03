@@ -101,6 +101,8 @@ public class GeneratedConfigConsumerIntegrationTests
                 Is.EqualTo(MonsterConfigBindings.ConfigRelativePath));
             Assert.That(MonsterConfigBindings.Metadata.SchemaRelativePath,
                 Is.EqualTo(MonsterConfigBindings.SchemaRelativePath));
+            Assert.That(MonsterConfigBindings.References.All, Is.Empty);
+            Assert.That(MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out _), Is.False);
             Assert.That(table.Count, Is.EqualTo(2));
             Assert.That(table.Get(1).Name, Is.EqualTo("Slime"));
             Assert.That(table.Get(2).Hp, Is.EqualTo(30));

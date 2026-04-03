@@ -117,6 +117,7 @@ public sealed partial class MonsterConfig
         /// <remarks>
         ///     Schema property path: 'phases[].monsterId'.
         ///     Constraints: minLength = 2, maxLength = 32.
+        ///     References config table: 'monster'.
         ///     Generated default initializer: = string.Empty;
         /// </remarks>
         public string MonsterId { get; set; } = string.Empty;
