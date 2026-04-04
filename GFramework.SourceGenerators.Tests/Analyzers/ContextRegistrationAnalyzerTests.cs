@@ -365,6 +365,107 @@ public sealed class ContextRegistrationAnalyzerTests
                 "0"));
     }
 
+    [Test]
+    public async Task Does_Not_Report_When_Inherited_OnInitialize_Calls_Virtual_Helper_Overridden_In_Derived_Architecture()
+    {
+        await AnalyzerTestDriver<ContextRegistrationAnalyzer>.RunAsync(
+            Wrap("""
+                 namespace TestApp
+                 {
+                     using GFramework.Core.Abstractions.Model;
+                     using GFramework.Core.Abstractions.Systems;
+                     using GFramework.Core.Architectures;
+                     using GFramework.SourceGenerators.Abstractions.Rule;
+                     
+                     public interface IInventoryModel : IModel { }
+                     
+                     public sealed class InventoryModel : IInventoryModel { }
+                     
+                     public abstract class ArchitectureBase : Architecture
+                     {
+                         protected override void OnInitialize()
+                         {
+                             RegisterComponents();
+                         }
+                     
+                         protected virtual void RegisterComponents()
+                         {
+                         }
+                     }
+                     
+                     public sealed class InventoryPanelSystem : ISystem
+                     {
+                         [GetModel]
+                         private IInventoryModel _model = null!;
+                     }
+                     
+                     public sealed class GameArchitecture : ArchitectureBase
+                     {
+                         protected override void RegisterComponents()
+                         {
+                             RegisterModel(new InventoryModel());
+                             RegisterSystem(new InventoryPanelSystem());
+                         }
+                     }
+                 }
+                 """));
+    }
+
+    [Test]
+    public async Task Does_Not_Report_When_Inherited_Module_Install_Calls_Virtual_Helper_Overridden_In_Derived_Module()
+    {
+        await AnalyzerTestDriver<ContextRegistrationAnalyzer>.RunAsync(
+            Wrap("""
+                 namespace TestApp
+                 {
+                     using GFramework.Core.Abstractions.Architectures;
+                     using GFramework.Core.Abstractions.Model;
+                     using GFramework.Core.Abstractions.Systems;
+                     using GFramework.Core.Architectures;
+                     using GFramework.SourceGenerators.Abstractions.Rule;
+                     
+                     public interface IInventoryModel : IModel { }
+                     
+                     public sealed class InventoryModel : IInventoryModel { }
+                     
+                     public abstract class ModuleBase : IArchitectureModule
+                     {
+                         public void Install(IArchitecture architecture)
+                         {
+                             RegisterComponents(architecture);
+                         }
+                     
+                         protected virtual void RegisterComponents(IArchitecture architecture)
+                         {
+                         }
+                     }
+                     
+                     public sealed class DerivedInventoryModule : ModuleBase
+                     {
+                         protected override void RegisterComponents(IArchitecture architecture)
+                         {
+                             architecture.RegisterModel(new InventoryModel());
+                         }
+                     }
+                     
+                     public sealed class InventoryPanelSystem : ISystem
+                     {
+                         [GetModel]
+                         private IInventoryModel _model = null!;
+                     }
+                     
+                     public sealed class GameArchitecture : Architecture
+                     {
+                         protected override void OnInitialize()
+                         {
+                             InstallModule(new DerivedInventoryModule());
+                             RegisterSystem(new InventoryPanelSystem());
+                         }
+                     }
+                 }
+                 """));
+    }
+
     private static string Wrap(string source)
     {
         return $"{TestPreamble}{Environment.NewLine}{Environment.NewLine}{source}";

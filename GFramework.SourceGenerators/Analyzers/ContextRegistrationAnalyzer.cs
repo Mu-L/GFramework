@@ -663,10 +663,8 @@ public sealed class ContextRegistrationAnalyzer : DiagnosticAnalyzer
             if (!SymbolHelpers.IsWithinTypeHierarchy(targetMethod.ContainingType, architectureType))
                 return false;
 
-            // 对已经具备源码的方法保留原始目标，避免把显式的 base 调用重新折回到当前 override。
-            helperMethod = targetMethod.DeclaringSyntaxReferences.Length > 0 && !targetMethod.IsAbstract
-                ? targetMethod
-                : SymbolHelpers.ResolveHierarchyMethodImplementation(targetMethod, architectureType) ?? targetMethod;
+            // 优先解析到当前具体架构类型上的 override，只有无法映射时才回退到原始目标方法。
+            helperMethod = SymbolHelpers.ResolveHierarchyMethodImplementation(targetMethod, architectureType) ?? targetMethod;
             return helperMethod.DeclaringSyntaxReferences.Length > 0;
         }
 
@@ -683,9 +681,8 @@ public sealed class ContextRegistrationAnalyzer : DiagnosticAnalyzer
             if (!SymbolHelpers.IsWithinTypeHierarchy(targetMethod.ContainingType, moduleType))
                 return false;
 
-            helperMethod = targetMethod.DeclaringSyntaxReferences.Length > 0 && !targetMethod.IsAbstract
-                ? targetMethod
-                : SymbolHelpers.ResolveHierarchyMethodImplementation(targetMethod, moduleType) ?? targetMethod;
+            // 模块安装路径与架构路径一致，也必须优先跟随派生模块上的 override。
+            helperMethod = SymbolHelpers.ResolveHierarchyMethodImplementation(targetMethod, moduleType) ?? targetMethod;
             return helperMethod.DeclaringSyntaxReferences.Length > 0;
         }
     }
