@@ -103,6 +103,11 @@ jobs:
       id-token: write
 
     steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
       - name: Download package artifacts
         uses: actions/download-artifact@v5
         with:
@@ -171,7 +176,7 @@ jobs:
           dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
             --name github \
             --username "${{ github.repository_owner }}" \
-            --password "${{ secrets.GITHUB_TOKEN }}" \
+            --password "${{ github.token }}" \
             --store-password-in-clear-text
 
       - name: Push all packages to GitHub Packages
@@ -241,4 +246,4 @@ jobs:
             sbom-spdx-validation.txt
             sbom-cyclonedx-validation.txt
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
