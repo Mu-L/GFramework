@@ -1,5 +1,8 @@
 ﻿using System.Reflection;
 using GFramework.Core.Abstractions.Coroutine;
+using GFramework.Core.Coroutine;
+using GFramework.Core.Coroutine.Instructions;
+using GFramework.Godot.Extensions;
 
 namespace GFramework.Godot.Coroutine;
 

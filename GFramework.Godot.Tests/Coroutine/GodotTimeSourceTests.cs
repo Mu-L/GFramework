@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using GFramework.Godot.Coroutine;
+using NUnit.Framework;
 
 namespace GFramework.Godot.Tests.Coroutine;
 
