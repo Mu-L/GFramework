@@ -1,5 +1,4 @@
 ﻿using GFramework.Core.Abstractions.Coroutine;
-using Godot;
 
 namespace GFramework.Godot.Coroutine;
 
@@ -47,9 +46,11 @@ public sealed class GodotTimeSource(Func<double> timeProvider, bool useAbsoluteT
                 return;
             }
 
-            DeltaTime = Math.Max(0, value - _lastAbsoluteTime);
-            _lastAbsoluteTime = value;
-            CurrentTime = value;
+            // 对绝对时间源做单调钳制，避免 provider 回拨后把 CurrentTime 也拉回去。
+            var nextTime = Math.Max(value, _lastAbsoluteTime);
+            DeltaTime = nextTime - _lastAbsoluteTime;
+            _lastAbsoluteTime = nextTime;
+            CurrentTime = nextTime;
             return;
         }
 

@@ -14,6 +14,12 @@ internal sealed class CoroutineSlot
     public CancellationTokenRegistration CancellationRegistration;
 
     /// <summary>
+    ///     创建该协程时传入的取消令牌。
+    ///     当协程启动子协程时，会把同一个取消令牌继续传递下去，以保持父子协程的取消语义一致。
+    /// </summary>
+    public CancellationToken CancellationToken;
+
+    /// <summary>
     ///     协程枚举器，包含协程的执行逻辑
     /// </summary>
     public required IEnumerator<IYieldInstruction> Enumerator;

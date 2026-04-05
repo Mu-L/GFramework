@@ -1,9 +1,5 @@
 ﻿using System.Reflection;
 using GFramework.Core.Abstractions.Coroutine;
-using GFramework.Core.Coroutine;
-using GFramework.Core.Coroutine.Instructions;
-using GFramework.Godot.Extensions;
-using Godot;
 
 namespace GFramework.Godot.Coroutine;
 
@@ -470,6 +466,11 @@ public partial class Timing : Node
             return handle;
         }
 
+        if (!GetScheduler(segment).IsCoroutineAlive(handle))
+        {
+            return handle;
+        }
+
         RegisterOwnedCoroutine(owner, handle);
         return handle;
     }
@@ -515,7 +516,13 @@ public partial class Timing : Node
     /// <returns>被终止的协程数量。</returns>
     public static int KillCoroutines(Node owner)
     {
-        return Instance.KillOwnedCoroutinesOnInstance(owner);
+        var count = 0;
+        foreach (var timing in EnumerateActiveInstances())
+        {
+            count += timing.KillOwnedCoroutinesOnInstance(owner);
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -562,7 +569,13 @@ public partial class Timing : Node
     /// <returns>该节点当前归属的活跃协程数量。</returns>
     public static int GetOwnedCoroutineCount(Node owner)
     {
-        return Instance.GetOwnedCoroutineCountOnInstance(owner);
+        var count = 0;
+        foreach (var timing in EnumerateActiveInstances())
+        {
+            count += timing.GetOwnedCoroutineCountOnInstance(owner);
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -681,6 +694,15 @@ public partial class Timing : Node
     public static Timing? GetInstance(byte id)
     {
         return id < ActiveInstances.Length ? ActiveInstances[id] : null;
+    }
+
+    /// <summary>
+    ///     枚举所有当前已注册的 Timing 实例。
+    /// </summary>
+    /// <returns>活跃 Timing 实例序列。</returns>
+    private static IEnumerable<Timing> EnumerateActiveInstances()
+    {
+        return ActiveInstances.Where(static timing => timing is not null).Select(static timing => timing!);
     }
 
     /// <summary>

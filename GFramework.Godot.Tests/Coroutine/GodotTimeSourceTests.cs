@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using GFramework.Godot.Coroutine;
-using NUnit.Framework;
 
 namespace GFramework.Godot.Tests.Coroutine;
 
@@ -48,5 +47,26 @@ public sealed class GodotTimeSourceTests
         timeSource.Update();
         Assert.That(timeSource.DeltaTime, Is.EqualTo(0.75).Within(0.0001));
         Assert.That(timeSource.CurrentTime, Is.EqualTo(2.0).Within(0.0001));
+    }
+
+    /// <summary>
+    ///     验证绝对时间源在回拨时仍保持单调，不会把 CurrentTime 拉回去。
+    /// </summary>
+    [Test]
+    public void Update_Should_Keep_Absolute_Time_Monotonic_When_Provider_Goes_Backwards()
+    {
+        var values = new Queue<double>([5.0, 4.0, 6.5]);
+        var timeSource = new GodotTimeSource(() => values.Dequeue(), useAbsoluteTime: true);
+
+        timeSource.Update();
+        timeSource.Update();
+
+        Assert.That(timeSource.DeltaTime, Is.EqualTo(0).Within(0.0001));
+        Assert.That(timeSource.CurrentTime, Is.EqualTo(5.0).Within(0.0001));
+
+        timeSource.Update();
+
+        Assert.That(timeSource.DeltaTime, Is.EqualTo(1.5).Within(0.0001));
+        Assert.That(timeSource.CurrentTime, Is.EqualTo(6.5).Within(0.0001));
     }
 }

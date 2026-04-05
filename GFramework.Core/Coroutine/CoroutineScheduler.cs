@@ -34,10 +34,13 @@ public sealed class CoroutineScheduler(
     ITimeSource? realtimeTimeSource = null,
     CoroutineExecutionStage executionStage = CoroutineExecutionStage.Update)
 {
+    private const int CompletionStatusHistoryLimit = 1024;
+
     private readonly Dictionary<CoroutineHandle, TaskCompletionSource<CoroutineCompletionStatus>> _completionSources =
         new();
 
     private readonly Dictionary<CoroutineHandle, CoroutineCompletionStatus> _completionStatuses = new();
+    private readonly Queue<CoroutineHandle> _completionStatusOrder = new();
     private readonly Dictionary<string, HashSet<CoroutineHandle>> _grouped = new();
     private readonly ILogger _logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(CoroutineScheduler));
     private readonly Dictionary<CoroutineHandle, CoroutineMetadata> _metadata = new();
@@ -218,6 +221,7 @@ public sealed class CoroutineScheduler(
 
         var slot = new CoroutineSlot
         {
+            CancellationToken = cancellationToken,
             Enumerator = coroutine,
             State = CoroutineState.Running,
             Handle = handle,
@@ -386,7 +390,14 @@ public sealed class CoroutineScheduler(
         {
             case WaitForCoroutine waitForCoroutine:
             {
-                var targetHandle = Run(waitForCoroutine.Coroutine);
+                var targetHandle = Run(waitForCoroutine.Coroutine, cancellationToken: slot.CancellationToken);
+                if (!targetHandle.IsValid)
+                {
+                    waitForCoroutine.Complete();
+                    slot.Waiting = null;
+                    break;
+                }
+
                 slot.Waiting = waitForCoroutine;
                 WaitForCoroutine(slot.Handle, targetHandle);
                 break;
@@ -596,6 +607,8 @@ public sealed class CoroutineScheduler(
         _tagged.Clear();
         _grouped.Clear();
         _waiting.Clear();
+        _completionStatuses.Clear();
+        _completionStatusOrder.Clear();
 
         _nextSlot = 0;
         ActiveCoroutineCount = 0;
@@ -629,7 +642,7 @@ public sealed class CoroutineScheduler(
             }
             else
             {
-                slot.Waiting = slot.Enumerator.Current;
+                HandleYieldInstruction(slot, slot.Enumerator.Current);
             }
         }
         catch (Exception ex)
@@ -712,7 +725,7 @@ public sealed class CoroutineScheduler(
             source.TrySetResult(completionStatus);
         }
 
-        _completionStatuses[handle] = completionStatus;
+        RecordCompletionStatus(handle, completionStatus);
         OnCoroutineFinished?.Invoke(handle, completionStatus, exception);
     }
 
@@ -890,6 +903,23 @@ public sealed class CoroutineScheduler(
 
         _statistics.ActiveCount = ActiveCoroutineCount;
         _statistics.PausedCount = _pausedCount;
+    }
+
+    /// <summary>
+    ///     记录协程最终状态，并对历史缓存施加固定上限，避免完成状态字典无限增长。
+    /// </summary>
+    /// <param name="handle">已结束的协程句柄。</param>
+    /// <param name="completionStatus">协程最终状态。</param>
+    private void RecordCompletionStatus(CoroutineHandle handle, CoroutineCompletionStatus completionStatus)
+    {
+        _completionStatuses[handle] = completionStatus;
+        _completionStatusOrder.Enqueue(handle);
+
+        while (_completionStatusOrder.Count > CompletionStatusHistoryLimit)
+        {
+            var expiredHandle = _completionStatusOrder.Dequeue();
+            _completionStatuses.Remove(expiredHandle);
+        }
     }
 
     /// <summary>

@@ -171,4 +171,63 @@ public sealed class CoroutineSchedulerAdvancedTests
 
         Assert.That(status, Is.EqualTo(CoroutineCompletionStatus.Faulted));
     }
+
+    /// <summary>
+    ///     验证完成状态缓存有固定上限，避免无限增长。
+    /// </summary>
+    [Test]
+    public void CompletionStatusHistory_Should_Be_Bounded()
+    {
+        var timeSource = new FakeTimeSource();
+        var scheduler = new CoroutineScheduler(timeSource);
+        var handles = new List<CoroutineHandle>();
+
+        IEnumerator<IYieldInstruction> ImmediateCoroutine()
+        {
+            yield break;
+        }
+
+        for (var i = 0; i < 1100; i++)
+        {
+            handles.Add(scheduler.Run(ImmediateCoroutine()));
+        }
+
+        Assert.That(scheduler.TryGetCompletionStatus(handles[0], out _), Is.False);
+        Assert.That(scheduler.TryGetCompletionStatus(handles[^1], out var latestStatus), Is.True);
+        Assert.That(latestStatus, Is.EqualTo(CoroutineCompletionStatus.Completed));
+    }
+
+    /// <summary>
+    ///     验证作为首个等待指令的 WaitForCoroutine 会立即启动子协程，并沿用父协程取消令牌。
+    /// </summary>
+    [Test]
+    public async Task WaitForCoroutine_Should_Start_Child_During_Prewarm_And_Propagate_Cancellation()
+    {
+        var timeSource = new FakeTimeSource();
+        var scheduler = new CoroutineScheduler(timeSource);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        IEnumerator<IYieldInstruction> ChildCoroutine()
+        {
+            yield return new Delay(10);
+        }
+
+        IEnumerator<IYieldInstruction> ParentCoroutine()
+        {
+            yield return new WaitForCoroutine(ChildCoroutine());
+        }
+
+        var handle = scheduler.Run(ParentCoroutine(), cancellationToken: cancellationTokenSource.Token);
+
+        Assert.That(scheduler.ActiveCoroutineCount, Is.EqualTo(2));
+
+        cancellationTokenSource.Cancel();
+        timeSource.Advance(0.1);
+        scheduler.Update();
+
+        var status = await scheduler.WaitForCompletionAsync(handle);
+
+        Assert.That(status, Is.EqualTo(CoroutineCompletionStatus.Cancelled));
+        Assert.That(scheduler.ActiveCoroutineCount, Is.EqualTo(0));
+    }
 }
