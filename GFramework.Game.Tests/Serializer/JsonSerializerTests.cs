@@ -83,6 +83,23 @@ public sealed class JsonSerializerTests
     }
 
     [Test]
+    public void Deserialize_With_Runtime_Type_Should_Throw_With_Target_Type_Context_When_Json_Is_Invalid()
+    {
+        var serializer = new GameJsonSerializer();
+
+        var exception =
+            Assert.Throws<InvalidOperationException>(() =>
+                serializer.Deserialize("{invalid json}", typeof(PlayerStateStub)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Message, Does.Contain(typeof(PlayerStateStub).FullName));
+            Assert.That(exception.InnerException, Is.Not.Null);
+        });
+    }
+
+    [Test]
     public void Deserialize_With_Runtime_Type_Should_Return_Target_Runtime_Type()
     {
         var serializer = new GameJsonSerializer();

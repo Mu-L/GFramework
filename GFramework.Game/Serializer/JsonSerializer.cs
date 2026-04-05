@@ -67,7 +67,7 @@ public sealed class JsonSerializer
         return (T)DeserializeCore(
             data,
             typeof(T),
-            static (json, type, settings) => JsonConvert.DeserializeObject<T>(json, settings));
+            static (json, _, settings) => JsonConvert.DeserializeObject<T>(json, settings));
     }
 
     /// <summary>
@@ -94,22 +94,25 @@ public sealed class JsonSerializer
         ArgumentNullException.ThrowIfNull(targetType);
         ArgumentNullException.ThrowIfNull(deserialize);
 
+        object? result;
+
         try
         {
-            var result = deserialize(data, targetType, _settings);
-            if (result == null)
-            {
-                throw new InvalidOperationException(
-                    $"Deserialization returned null for target type '{targetType.FullName}'.");
-            }
-
-            return result;
+            result = deserialize(data, targetType, _settings);
         }
-        catch (Exception ex) when (ex is InvalidCastException)
+        catch (Exception ex) when (ex is not ArgumentException)
         {
             throw new InvalidOperationException(
                 $"Failed to deserialize JSON to target type '{targetType.FullName}'.",
                 ex);
         }
+
+        if (result == null)
+        {
+            throw new InvalidOperationException(
+                $"Deserialization returned null for target type '{targetType.FullName}'.");
+        }
+
+        return result;
     }
 }
