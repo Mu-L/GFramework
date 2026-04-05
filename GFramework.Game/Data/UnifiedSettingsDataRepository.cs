@@ -80,11 +80,10 @@ public class UnifiedSettingsDataRepository(
     public async Task SaveAsync<T>(IDataLocation location, T data)
         where T : class, IData
     {
+        await EnsureLoadedAsync();
         await _lock.WaitAsync();
         try
         {
-            await EnsureLoadedAsync();
-
             var key = location.Key;
             var serialized = Serializer.Serialize(data);
 
@@ -211,7 +210,9 @@ public class UnifiedSettingsDataRepository(
 
             var key = UnifiedKey;
 
-            _file = await Storage.ExistsAsync(key) ? await Storage.ReadAsync<UnifiedSettingsFile>(key) : new UnifiedSettingsFile { Version = 1 };
+            _file = await Storage.ExistsAsync(key)
+                ? await Storage.ReadAsync<UnifiedSettingsFile>(key)
+                : new UnifiedSettingsFile { Version = 1 };
 
             _loaded = true;
         }

@@ -59,7 +59,9 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
     public T GetData<T>() where T : class, ISettingsData, new()
     {
         // 使用_data字典获取或添加指定类型的实例，确保唯一性
-        return (T)_data.GetOrAdd(typeof(T), _ => new T());
+        var data = (T)_data.GetOrAdd(typeof(T), _ => new T());
+        TryRegisterDataType(typeof(T));
+        return data;
     }
 
     /// <summary>
@@ -84,6 +86,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
     {
         _applicators[typeof(T)] = applicator;
         _data[applicator.DataType] = applicator.Data;
+        TryRegisterDataType(applicator.DataType);
         return this;
     }
 
@@ -114,6 +117,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
     public ISettingsModel RegisterMigration(ISettingsMigration migration)
     {
         _migrations[(migration.SettingsType, migration.FromVersion)] = migration;
+        _migrationCache.TryRemove(migration.SettingsType, out _);
         return this;
     }
 
@@ -258,9 +262,19 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
         // 遍历所有已知的数据类型，为其分配位置并注册到数据仓库中
         foreach (var type in _data.Keys)
         {
-            var location = _locationProvider.GetLocation(type);
-            DataRepository.RegisterDataType(location, type);
+            TryRegisterDataType(type);
         }
+    }
+
+    private void TryRegisterDataType(Type type)
+    {
+        if (_repository == null || _locationProvider == null)
+        {
+            return;
+        }
+
+        var location = _locationProvider.GetLocation(type);
+        _repository.RegisterDataType(location, type);
     }
 
     private ISettingsData MigrateIfNeeded(ISettingsData data)
