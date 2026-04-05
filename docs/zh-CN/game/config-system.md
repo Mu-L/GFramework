@@ -82,6 +82,245 @@ dropItems:
   - slime_gel
 ```
 
+## 推荐接入模板
+
+如果你准备在一个真实游戏项目里首次接入这套配置系统，建议直接采用下面这套目录与启动模板，而不是零散拼装。
+
+### 目录模板
+
+```text
+GameProject/
+├─ GameProject.csproj
+├─ Config/
+│  ├─ GameConfigBootstrap.cs
+│  └─ GameConfigRuntime.cs
+├─ config/
+│  ├─ monster/
+│  │  ├─ slime.yaml
+│  │  └─ goblin.yaml
+│  └─ item/
+│     └─ potion.yaml
+└─ schemas/
+   ├─ monster.schema.json
+   └─ item.schema.json
+```
+
+推荐约定如下：
+
+- `schemas/` 放所有 `*.schema.json`，由 Source Generator 自动拾取
+- `config/` 放运行时加载的 YAML 数据，一对象一文件
+- `Config/` 放你自己的接入代码，例如启动注册、热重载句柄和对外读取入口
+
+### `csproj` 模板
+
+如果你在仓库内直接用项目引用，最小模板可以写成下面这样：
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GFramework.Game\GFramework.Game.csproj" />
+    <ProjectReference Include="..\GFramework.SourceGenerators.Abstractions\GFramework.SourceGenerators.Abstractions.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\GFramework.SourceGenerators.Common\GFramework.SourceGenerators.Common.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\GFramework.SourceGenerators\GFramework.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Import Project="..\GFramework.SourceGenerators\GeWuYou.GFramework.SourceGenerators.targets" />
+</Project>
+```
+
+这段配置的作用：
+
+- `GFramework.Game` 提供运行时 `YamlConfigLoader`、`ConfigRegistry` 和只读表实现
+- 三个 `ProjectReference(... OutputItemType="Analyzer")` 把生成器接进当前消费者项目
+- `GeWuYou.GFramework.SourceGenerators.targets` 自动把 `schemas/**/*.schema.json` 加入 `AdditionalFiles`
+
+如果你使用打包后的 NuGet，而不是仓库内项目引用，原则保持不变：
+
+- 运行时项目需要引用 `GeWuYou.GFramework.Game`
+- 生成器项目需要引用 `GeWuYou.GFramework.SourceGenerators`
+- schema 目录默认仍然是 `schemas/`
+
+如果你的 schema 不放在默认目录，可以在项目文件里覆盖：
+
+```xml
+<PropertyGroup>
+  <GFrameworkConfigSchemaDirectory>GameSchemas</GFrameworkConfigSchemaDirectory>
+</PropertyGroup>
+```
+
+### 启动引导模板
+
+推荐把配置系统的初始化收敛到一个单独入口，避免把 `YamlConfigLoader` 注册逻辑散落到多个启动脚本中：
+
+```csharp
+using GFramework.Core.Abstractions.Events;
+using GFramework.Game.Abstractions.Config;
+using GFramework.Game.Config;
+using GFramework.Game.Config.Generated;
+
+namespace GameProject.Config;
+
+/// <summary>
+///     负责初始化游戏内容配置运行时入口。
+/// </summary>
+public sealed class GameConfigBootstrap : IDisposable
+{
+    private readonly ConfigRegistry _registry = new();
+    private IUnRegister? _hotReload;
+
+    /// <summary>
+    ///     获取当前游戏进程共享的配置注册表。
+    /// </summary>
+    public IConfigRegistry Registry => _registry;
+
+    /// <summary>
+    ///     从指定配置根目录加载所有已注册配置表。
+    /// </summary>
+    /// <param name="configRootPath">配置根目录。</param>
+    /// <param name="enableHotReload">是否启用开发期热重载。</param>
+    public async Task InitializeAsync(string configRootPath, bool enableHotReload = false)
+    {
+        var loader = new YamlConfigLoader(configRootPath)
+            .RegisterMonsterTable()
+            .RegisterItemTable();
+
+        await loader.LoadAsync(_registry);
+
+        if (enableHotReload)
+        {
+            _hotReload = loader.EnableHotReload(
+                _registry,
+                onTableReloaded: tableName => Console.WriteLine($"Reloaded config table: {tableName}"),
+                onTableReloadFailed: static (_, exception) =>
+                {
+                    var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
+                    Console.WriteLine($"Config reload failed: {diagnostic?.FailureKind}");
+                });
+        }
+    }
+
+    /// <summary>
+    ///     停止开发期热重载并释放相关资源。
+    /// </summary>
+    public void Dispose()
+    {
+        _hotReload?.UnRegister();
+    }
+}
+```
+
+这段模板刻意遵循几个约定：
+
+- 优先使用生成器产出的 `Register*Table()`，避免手写表名、路径和 key selector
+- 由一个长生命周期对象持有 `ConfigRegistry`
+- 热重载句柄和配置生命周期绑在一起，避免监听器泄漏
+
+### 运行时读取模板
+
+推荐不要在业务代码里直接散落字符串表名查询，而是统一依赖生成的强类型入口：
+
+```csharp
+using GFramework.Game.Config.Generated;
+
+namespace GameProject.Config;
+
+/// <summary>
+///     封装游戏内容配置读取入口。
+/// </summary>
+public sealed class GameConfigRuntime
+{
+    private readonly IConfigRegistry _registry;
+
+    /// <summary>
+    ///     使用已初始化的配置注册表创建读取入口。
+    /// </summary>
+    /// <param name="registry">配置注册表。</param>
+    public GameConfigRuntime(IConfigRegistry registry)
+    {
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+    }
+
+    /// <summary>
+    ///     获取指定怪物配置。
+    /// </summary>
+    /// <param name="monsterId">怪物主键。</param>
+    /// <returns>强类型怪物配置。</returns>
+    public MonsterConfig GetMonster(int monsterId)
+    {
+        return _registry.GetMonsterTable().Get(monsterId);
+    }
+
+    /// <summary>
+    ///     获取怪物配置表。
+    /// </summary>
+    /// <returns>生成的强类型表包装。</returns>
+    public MonsterTable GetMonsterTable()
+    {
+        return _registry.GetMonsterTable();
+    }
+}
+```
+
+这样做的收益：
+
+- 配置系统对业务层暴露的是强类型表，而不是 `"monster"` 这类 magic string
+- 后续如果你要复用配置域、schema 路径或引用元数据，可以继续依赖 `MonsterConfigBindings.Metadata` 和
+  `MonsterConfigBindings.References`
+- 如果未来把配置初始化接入 `Architecture` 或 `Module`，迁移成本也更低
+
+### 热重载模板
+
+如果你希望把开发期热重载显式收敛为一个可选能力，建议把失败诊断一起写进模板，而不是只打印异常文本：
+
+```csharp
+var hotReload = loader.EnableHotReload(
+    registry,
+    onTableReloaded: tableName => Console.WriteLine($"Reloaded: {tableName}"),
+    onTableReloadFailed: (tableName, exception) =>
+    {
+        var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
+        Console.WriteLine($"Reload failed: {tableName}");
+        Console.WriteLine($"Failure kind: {diagnostic?.FailureKind}");
+        Console.WriteLine($"Yaml path: {diagnostic?.YamlPath}");
+        Console.WriteLine($"Display path: {diagnostic?.DisplayPath}");
+    });
+```
+
+建议只在开发期启用这项能力：
+
+- 生产环境默认更适合静态加载和固定生命周期
+- 热重载失败时应优先依赖 `ConfigLoadException.Diagnostic` 做稳定日志或 UI 提示
+- 如果你的项目已经有统一日志系统，建议在这里把诊断字段转成结构化日志，而不是拼接一整段字符串
+
+如果你后续还需要为热重载增加更多开关，推荐优先使用选项对象入口，而不是继续叠加位置参数：
+
+```csharp
+var hotReload = loader.EnableHotReload(
+    registry,
+    new YamlConfigHotReloadOptions
+    {
+        OnTableReloaded = tableName => Console.WriteLine($"Reloaded: {tableName}"),
+        OnTableReloadFailed = (tableName, exception) =>
+        {
+            var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
+            Console.WriteLine($"{tableName}: {diagnostic?.FailureKind}");
+        },
+        DebounceDelay = TimeSpan.FromMilliseconds(150)
+    });
+```
+
 ## 运行时接入
 
 当你希望加载后的配置在运行时以只读表形式暴露时，优先使用生成器产出的注册与访问辅助：
@@ -103,12 +342,36 @@ var slime = monsterTable.Get(1);
 
 这组辅助会把以下约定固化到生成代码里：
 
+- 配置域常量，例如 `MonsterConfigBindings.ConfigDomain`
 - 表注册名，例如 `monster`
 - 配置目录相对路径，例如 `monster`
 - schema 相对路径，例如 `schemas/monster.schema.json`
 - 主键提取逻辑，例如 `config => config.Id`
 
+如果你希望把这些约定作为一个统一入口传递或复用，也可以优先读取 `MonsterConfigBindings.Metadata` 下的常量：
+
+```csharp
+var domain = MonsterConfigBindings.Metadata.ConfigDomain;
+var tableName = MonsterConfigBindings.Metadata.TableName;
+var configPath = MonsterConfigBindings.Metadata.ConfigRelativePath;
+var schemaPath = MonsterConfigBindings.Metadata.SchemaRelativePath;
+```
+
 如果你需要自定义目录、表名或 key selector，仍然可以直接调用 `YamlConfigLoader.RegisterTable(...)` 原始重载。
+
+如果你希望把 schema 路径、比较器以及未来扩展开关集中到一个对象里，推荐改用选项对象入口：
+
+```csharp
+var loader = new YamlConfigLoader("config-root")
+    .RegisterTable(
+        new YamlConfigTableRegistrationOptions<int, MonsterConfig>(
+            "monster",
+            "monster",
+            static config => config.Id)
+        {
+            SchemaRelativePath = "schemas/monster.schema.json"
+        });
+```
 
 ## 运行时校验行为
 
@@ -147,6 +410,21 @@ var slime = monsterTable.Get(1);
 - 仅支持 `string`、`integer` 及其标量数组声明跨表引用
 - 引用目标表需要由同一个 `YamlConfigLoader` 注册，或已存在于当前 `IConfigRegistry`
 - 热重载中若目标表变更导致依赖表引用失效，会整体回滚受影响表，避免注册表进入不一致状态
+
+如果你希望在消费者代码里复用这些跨表约定，而不是继续手写字段路径或目标表名，生成的 `*ConfigBindings` 还会暴露引用元数据：
+
+```csharp
+var allReferences = MonsterConfigBindings.References.All;
+
+if (MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out var reference))
+{
+    Console.WriteLine(reference.ReferencedTableName);
+    Console.WriteLine(reference.ValueSchemaType);
+    Console.WriteLine(reference.IsCollection);
+}
+```
+
+当 schema 中存在具体引用字段时，还可以直接通过生成成员访问，例如 `MonsterConfigBindings.References.DropItems`。
 
 当前还支持以下“轻量元数据”：
 
@@ -195,14 +473,11 @@ catch (ConfigLoadException exception)
 ```csharp
 using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
+using GFramework.Game.Config.Generated;
 
 var registry = new ConfigRegistry();
 var loader = new YamlConfigLoader("config-root")
-    .RegisterTable<int, MonsterConfig>(
-        "monster",
-        "monster",
-        "schemas/monster.schema.json",
-        static config => config.Id);
+    .RegisterMonsterTable();
 
 await loader.LoadAsync(registry);
 

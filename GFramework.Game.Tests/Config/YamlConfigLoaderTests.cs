@@ -72,6 +72,68 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证加载器支持通过选项对象注册带 schema 校验的配置表。
+    /// </summary>
+    [Test]
+    public async Task RegisterTable_Should_Support_Options_Object()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            hp: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "hp": { "type": "integer" }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable(
+                new YamlConfigTableRegistrationOptions<int, MonsterConfigStub>(
+                    "monster",
+                    "monster",
+                    static config => config.Id)
+                {
+                    SchemaRelativePath = "schemas/monster.schema.json"
+                });
+        var registry = new ConfigRegistry();
+
+        await loader.LoadAsync(registry);
+
+        var table = registry.GetTable<int, MonsterConfigStub>("monster");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(table.Count, Is.EqualTo(1));
+            Assert.That(table.Get(1).Name, Is.EqualTo("Slime"));
+            Assert.That(table.Get(1).Hp, Is.EqualTo(10));
+        });
+    }
+
+    /// <summary>
+    ///     验证加载器会拒绝空的配置表注册选项对象。
+    /// </summary>
+    [Test]
+    public void RegisterTable_Should_Throw_When_Options_Are_Null()
+    {
+        var loader = new YamlConfigLoader(_rootPath);
+
+        Assert.Throws<ArgumentNullException>(() =>
+            loader.RegisterTable<int, MonsterConfigStub>(null!));
+    }
+
+    /// <summary>
     ///     验证注册的配置目录不存在时会抛出清晰错误。
     /// </summary>
     [Test]
@@ -997,6 +1059,98 @@ public class YamlConfigLoaderTests
         {
             hotReload.UnRegister();
         }
+    }
+
+    /// <summary>
+    ///     验证热重载支持通过选项对象配置回调和防抖延迟。
+    /// </summary>
+    [Test]
+    public async Task EnableHotReload_Should_Support_Options_Object()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            hp: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "hp": { "type": "integer" }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable(
+                new YamlConfigTableRegistrationOptions<int, MonsterConfigStub>(
+                    "monster",
+                    "monster",
+                    static config => config.Id)
+                {
+                    SchemaRelativePath = "schemas/monster.schema.json"
+                });
+        var registry = new ConfigRegistry();
+        await loader.LoadAsync(registry);
+
+        var reloadTaskSource = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hotReload = loader.EnableHotReload(
+            registry,
+            new YamlConfigHotReloadOptions
+            {
+                OnTableReloaded = tableName => reloadTaskSource.TrySetResult(tableName),
+                DebounceDelay = TimeSpan.FromMilliseconds(150)
+            });
+
+        try
+        {
+            CreateConfigFile(
+                "monster/slime.yaml",
+                """
+                id: 1
+                name: Slime
+                hp: 25
+                """);
+
+            var tableName = await WaitForTaskWithinAsync(reloadTaskSource.Task, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(tableName, Is.EqualTo("monster"));
+                Assert.That(registry.GetTable<int, MonsterConfigStub>("monster").Get(1).Hp, Is.EqualTo(25));
+            });
+        }
+        finally
+        {
+            hotReload.UnRegister();
+        }
+    }
+
+    /// <summary>
+    ///     验证热重载会在启动前拒绝负的防抖延迟，避免后台延迟任务才暴露参数错误。
+    /// </summary>
+    [Test]
+    public void EnableHotReload_Should_Throw_When_Debounce_Delay_Is_Negative()
+    {
+        var loader = new YamlConfigLoader(_rootPath);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            loader.EnableHotReload(
+                registry,
+                new YamlConfigHotReloadOptions
+                {
+                    DebounceDelay = TimeSpan.FromMilliseconds(-1)
+                }));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("options"));
     }
 
     /// <summary>

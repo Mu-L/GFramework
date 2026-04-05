@@ -20,6 +20,8 @@ public sealed class YamlConfigLoader : IConfigLoader
     private const string SchemaRelativePathCannotBeNullOrWhiteSpaceMessage =
         "Schema relative path cannot be null or whitespace.";
 
+    private static readonly TimeSpan DefaultHotReloadDebounceDelay = TimeSpan.FromMilliseconds(200);
+
     private readonly IDeserializer _deserializer;
 
     private readonly Dictionary<string, IReadOnlyCollection<string>> _lastSuccessfulDependencies =
@@ -95,13 +97,50 @@ public sealed class YamlConfigLoader : IConfigLoader
     /// <param name="debounceDelay">防抖延迟；为空时默认使用 200 毫秒。</param>
     /// <returns>用于停止热重载监听的注销句柄。</returns>
     /// <exception cref="ArgumentNullException">当 <paramref name="registry" /> 为空时抛出。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     当显式提供的 <paramref name="debounceDelay" /> 小于 <see cref="TimeSpan.Zero" /> 时抛出。
+    /// </exception>
     public IUnRegister EnableHotReload(
         IConfigRegistry registry,
         Action<string>? onTableReloaded = null,
         Action<string, Exception>? onTableReloadFailed = null,
         TimeSpan? debounceDelay = null)
     {
+        return EnableHotReload(
+            registry,
+            new YamlConfigHotReloadOptions
+            {
+                OnTableReloaded = onTableReloaded,
+                OnTableReloadFailed = onTableReloadFailed,
+                DebounceDelay = debounceDelay ?? DefaultHotReloadDebounceDelay
+            });
+    }
+
+    /// <summary>
+    ///     启用开发期热重载，并通过选项对象集中配置回调和防抖行为。
+    ///     该入口用于减少继续堆叠位置参数重载的需要，
+    ///     也为未来扩展过滤策略或日志钩子预留稳定形态。
+    /// </summary>
+    /// <param name="registry">要被热重载更新的配置注册表。</param>
+    /// <param name="options">热重载配置选项；为空时使用默认选项。</param>
+    /// <returns>用于停止热重载监听的注销句柄。</returns>
+    /// <exception cref="ArgumentNullException">当 <paramref name="registry" /> 为空时抛出。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     当 <paramref name="options" /> 的 <see cref="YamlConfigHotReloadOptions.DebounceDelay" /> 小于
+    ///     <see cref="TimeSpan.Zero" /> 时抛出。
+    /// </exception>
+    public IUnRegister EnableHotReload(
+        IConfigRegistry registry,
+        YamlConfigHotReloadOptions? options)
+    {
         ArgumentNullException.ThrowIfNull(registry);
+        options ??= new YamlConfigHotReloadOptions();
+        if (options.DebounceDelay < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "DebounceDelay must be greater than or equal to zero.");
+        }
 
         return new HotReloadSession(
             _rootPath,
@@ -109,9 +148,9 @@ public sealed class YamlConfigLoader : IConfigLoader
             registry,
             _registrations,
             _lastSuccessfulDependencies,
-            onTableReloaded,
-            onTableReloadFailed,
-            debounceDelay ?? TimeSpan.FromMilliseconds(200));
+            options.OnTableReloaded,
+            options.OnTableReloadFailed,
+            options.DebounceDelay);
     }
 
     private void UpdateLastSuccessfulDependencies(IEnumerable<YamlTableLoadResult> loadedTables)
@@ -135,6 +174,10 @@ public sealed class YamlConfigLoader : IConfigLoader
     /// <param name="keySelector">配置项主键提取器。</param>
     /// <param name="comparer">可选主键比较器。</param>
     /// <returns>当前加载器实例，以便链式注册。</returns>
+    /// <exception cref="ArgumentException">
+    ///     当 <paramref name="tableName" /> 或 <paramref name="relativePath" /> 为 null、空字符串或空白字符串时抛出。
+    /// </exception>
+    /// <exception cref="ArgumentNullException">当 <paramref name="keySelector" /> 为 null 时抛出。</exception>
     public YamlConfigLoader RegisterTable<TKey, TValue>(
         string tableName,
         string relativePath,
@@ -142,7 +185,11 @@ public sealed class YamlConfigLoader : IConfigLoader
         IEqualityComparer<TKey>? comparer = null)
         where TKey : notnull
     {
-        return RegisterTableCore(tableName, relativePath, null, keySelector, comparer);
+        return RegisterTable(
+            new YamlConfigTableRegistrationOptions<TKey, TValue>(tableName, relativePath, keySelector)
+            {
+                Comparer = comparer
+            });
     }
 
     /// <summary>
@@ -158,6 +205,11 @@ public sealed class YamlConfigLoader : IConfigLoader
     /// <param name="keySelector">配置项主键提取器。</param>
     /// <param name="comparer">可选主键比较器。</param>
     /// <returns>当前加载器实例，以便链式注册。</returns>
+    /// <exception cref="ArgumentException">
+    ///     当 <paramref name="tableName" />、<paramref name="relativePath" /> 或 <paramref name="schemaRelativePath" />
+    ///     为 null、空字符串或空白字符串时抛出。
+    /// </exception>
+    /// <exception cref="ArgumentNullException">当 <paramref name="keySelector" /> 为 null 时抛出。</exception>
     public YamlConfigLoader RegisterTable<TKey, TValue>(
         string tableName,
         string relativePath,
@@ -166,7 +218,40 @@ public sealed class YamlConfigLoader : IConfigLoader
         IEqualityComparer<TKey>? comparer = null)
         where TKey : notnull
     {
-        return RegisterTableCore(tableName, relativePath, schemaRelativePath, keySelector, comparer);
+        return RegisterTable(
+            new YamlConfigTableRegistrationOptions<TKey, TValue>(tableName, relativePath, keySelector)
+            {
+                SchemaRelativePath = schemaRelativePath,
+                Comparer = comparer
+            });
+    }
+
+    /// <summary>
+    ///     使用选项对象注册一个 YAML 配置表定义。
+    ///     该入口集中承载配置目录、schema 路径、主键提取器和比较器，
+    ///     以避免未来继续为新增开关叠加更多重载。
+    /// </summary>
+    /// <typeparam name="TKey">配置主键类型。</typeparam>
+    /// <typeparam name="TValue">配置值类型。</typeparam>
+    /// <param name="options">配置表注册选项。</param>
+    /// <returns>当前加载器实例，以便链式注册。</returns>
+    /// <exception cref="ArgumentNullException">当 <paramref name="options" /> 为空时抛出。</exception>
+    /// <exception cref="ArgumentException">
+    ///     当 <paramref name="options" /> 内的 <see cref="YamlConfigTableRegistrationOptions{TKey, TValue}.TableName" />、
+    ///     <see cref="YamlConfigTableRegistrationOptions{TKey, TValue}.RelativePath" /> 或
+    ///     <see cref="YamlConfigTableRegistrationOptions{TKey, TValue}.SchemaRelativePath" /> 为 null、空字符串或空白字符串时抛出。
+    /// </exception>
+    public YamlConfigLoader RegisterTable<TKey, TValue>(YamlConfigTableRegistrationOptions<TKey, TValue> options)
+        where TKey : notnull
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        return RegisterTableCore(
+            options.TableName,
+            options.RelativePath,
+            options.SchemaRelativePath,
+            options.KeySelector,
+            options.Comparer);
     }
 
     private YamlConfigLoader RegisterTableCore<TKey, TValue>(
