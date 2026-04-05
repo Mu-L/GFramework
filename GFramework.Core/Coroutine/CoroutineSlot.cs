@@ -8,6 +8,18 @@ namespace GFramework.Core.Coroutine;
 internal sealed class CoroutineSlot
 {
     /// <summary>
+    ///     由外部取消令牌创建的注册。
+    ///     调度器在协程结束时必须释放该注册，避免泄漏取消回调。
+    /// </summary>
+    public CancellationTokenRegistration CancellationRegistration;
+
+    /// <summary>
+    ///     创建该协程时传入的取消令牌。
+    ///     当协程启动子协程时，会把同一个取消令牌继续传递下去，以保持父子协程的取消语义一致。
+    /// </summary>
+    public CancellationToken CancellationToken;
+
+    /// <summary>
     ///     协程枚举器，包含协程的执行逻辑
     /// </summary>
     public required IEnumerator<IYieldInstruction> Enumerator;

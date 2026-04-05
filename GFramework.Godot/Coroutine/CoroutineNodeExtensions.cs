@@ -36,6 +36,25 @@ public static class CoroutineNodeExtensions
     }
 
     /// <summary>
+    ///     以指定节点作为生命周期所有者运行协程。
+    /// </summary>
+    /// <param name="owner">拥有该协程生命周期的节点。</param>
+    /// <param name="coroutine">要启动的协程枚举器。</param>
+    /// <param name="segment">协程运行的时间段。</param>
+    /// <param name="tag">协程标签。</param>
+    /// <param name="cancellationToken">可选取消令牌。</param>
+    /// <returns>返回协程句柄。</returns>
+    public static CoroutineHandle RunCoroutine(
+        this Node owner,
+        IEnumerator<IYieldInstruction> coroutine,
+        Segment segment = Segment.Process,
+        string? tag = null,
+        CancellationToken cancellationToken = default)
+    {
+        return Timing.RunOwnedCoroutine(owner, coroutine, segment, tag, cancellationToken);
+    }
+
+    /// <summary>
     /// 让协程在指定节点被销毁时自动取消。
     /// </summary>
     /// <param name="coroutine">要包装的协程枚举器。</param>

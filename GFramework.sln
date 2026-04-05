@@ -36,6 +36,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GFramework.Game.Tests", "GF
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GFramework.Godot.SourceGenerators.Tests", "GFramework.Godot.SourceGenerators.Tests\GFramework.Godot.SourceGenerators.Tests.csproj", "{E315489C-248A-4ABB-BD92-96F9F3AFE2C1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GFramework.Godot.Tests", "GFramework.Godot.Tests\GFramework.Godot.Tests.csproj", "{576119E2-13D0-4ACF-A012-D01C320E8BF3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -262,6 +264,18 @@ Global
 		{E315489C-248A-4ABB-BD92-96F9F3AFE2C1}.Release|x64.Build.0 = Release|Any CPU
 		{E315489C-248A-4ABB-BD92-96F9F3AFE2C1}.Release|x86.ActiveCfg = Release|Any CPU
 		{E315489C-248A-4ABB-BD92-96F9F3AFE2C1}.Release|x86.Build.0 = Release|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Debug|x64.Build.0 = Debug|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Debug|x86.Build.0 = Debug|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Release|x64.ActiveCfg = Release|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Release|x64.Build.0 = Release|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Release|x86.ActiveCfg = Release|Any CPU
+		{576119E2-13D0-4ACF-A012-D01C320E8BF3}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

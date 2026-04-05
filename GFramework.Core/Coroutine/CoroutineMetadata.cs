@@ -8,6 +8,12 @@ namespace GFramework.Core.Coroutine;
 internal class CoroutineMetadata
 {
     /// <summary>
+    ///     协程所属调度器的执行阶段。
+    ///     该值用于诊断等待语义是否与当前宿主阶段匹配。
+    /// </summary>
+    public CoroutineExecutionStage ExecutionStage;
+
+    /// <summary>
     ///     协程的分组标识符，用于批量管理协程
     /// </summary>
     public string? Group;
