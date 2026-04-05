@@ -466,6 +466,127 @@ public sealed class ContextRegistrationAnalyzerTests
                  """));
     }
 
+    [Test]
+    public async Task Reports_Warning_When_Derived_Architecture_Explicitly_Calls_Base_Helper()
+    {
+        var markup = MarkupTestSource.Parse(
+            Wrap("""
+                 namespace TestApp
+                 {
+                     using GFramework.Core.Abstractions.Model;
+                     using GFramework.Core.Abstractions.Systems;
+                     using GFramework.Core.Architectures;
+                     using GFramework.SourceGenerators.Abstractions.Rule;
+                     
+                     public interface IInventoryModel : IModel { }
+                     
+                     public sealed class InventoryModel : IInventoryModel { }
+                     
+                     public sealed class InventoryPanelSystem : ISystem
+                     {
+                         [GetModel]
+                         private IInventoryModel {|#0:_model|} = null!;
+                     }
+                     
+                     public abstract class ArchitectureBase : Architecture
+                     {
+                         protected virtual void RegisterComponents()
+                         {
+                             RegisterSystem(new InventoryPanelSystem());
+                         }
+                     }
+                     
+                     public sealed class GameArchitecture : ArchitectureBase
+                     {
+                         protected override void OnInitialize()
+                         {
+                             base.RegisterComponents();
+                         }
+                     
+                         protected override void RegisterComponents()
+                         {
+                             RegisterModel(new InventoryModel());
+                             RegisterSystem(new InventoryPanelSystem());
+                         }
+                     }
+                 }
+                 """));
+
+        await AnalyzerTestDriver<ContextRegistrationAnalyzer>.RunAsync(
+            markup.Source,
+            markup.WithSpan(
+                new DiagnosticResult("GF_ContextRegistration_001", DiagnosticSeverity.Warning)
+                    .WithArguments("IInventoryModel", "InventoryPanelSystem", "GameArchitecture"),
+                "0"));
+    }
+
+    [Test]
+    public async Task Reports_Warning_When_Derived_Module_Explicitly_Calls_Base_Helper()
+    {
+        var markup = MarkupTestSource.Parse(
+            Wrap("""
+                 namespace TestApp
+                 {
+                     using GFramework.Core.Abstractions.Architectures;
+                     using GFramework.Core.Abstractions.Model;
+                     using GFramework.Core.Abstractions.Systems;
+                     using GFramework.Core.Architectures;
+                     using GFramework.SourceGenerators.Abstractions.Rule;
+                     
+                     public interface IInventoryModel : IModel { }
+                     
+                     public sealed class InventoryModel : IInventoryModel { }
+                     
+                     public sealed class InventoryPanelSystem : ISystem
+                     {
+                         [GetModel]
+                         private IInventoryModel {|#0:_model|} = null!;
+                     }
+                     
+                     public abstract class ModuleBase : IArchitectureModule
+                     {
+                         public virtual void Install(IArchitecture architecture)
+                         {
+                         }
+                     
+                         protected virtual void RegisterComponents(IArchitecture architecture)
+                         {
+                             architecture.RegisterSystem(new InventoryPanelSystem());
+                         }
+                     }
+                     
+                     public sealed class DerivedInventoryModule : ModuleBase
+                     {
+                         public override void Install(IArchitecture architecture)
+                         {
+                             base.RegisterComponents(architecture);
+                         }
+                     
+                         protected override void RegisterComponents(IArchitecture architecture)
+                         {
+                             architecture.RegisterModel(new InventoryModel());
+                             architecture.RegisterSystem(new InventoryPanelSystem());
+                         }
+                     }
+                     
+                     public sealed class GameArchitecture : Architecture
+                     {
+                         protected override void OnInitialize()
+                         {
+                             InstallModule(new DerivedInventoryModule());
+                         }
+                     }
+                 }
+                 """));
+
+        await AnalyzerTestDriver<ContextRegistrationAnalyzer>.RunAsync(
+            markup.Source,
+            markup.WithSpan(
+                new DiagnosticResult("GF_ContextRegistration_001", DiagnosticSeverity.Warning)
+                    .WithArguments("IInventoryModel", "InventoryPanelSystem", "GameArchitecture"),
+                "0"));
+    }
+
     private static string Wrap(string source)
     {
         return $"{TestPreamble}{Environment.NewLine}{Environment.NewLine}{source}";
