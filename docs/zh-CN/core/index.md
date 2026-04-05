@@ -319,7 +319,7 @@ public class PlayerController : IController
 
 ### Architecture 内部结构 (v1.1.0+)
 
-从 v1.1.0 开始,Architecture 类采用模块化设计,将原本 708 行的单一类拆分为 4 个职责清晰的类:
+从 v1.1.0 开始,Architecture 类采用模块化设计,将原本 708 行的单一类拆分为多个职责清晰的协作者:
 
 #### 1. Architecture (核心协调器)
 
@@ -338,7 +338,18 @@ public class PlayerController : IController
 
 - `PhaseChanged` - 阶段变更事件
 
-#### 2. ArchitectureLifecycle (生命周期管理器)
+#### 2. ArchitectureBootstrapper (初始化基础设施编排器)
+
+**职责**: 在用户 `OnInitialize()` 执行前准备环境、服务和上下文
+
+**核心功能**:
+
+- 初始化环境对象
+- 注册内置服务模块
+- 绑定架构上下文到 `GameContext`
+- 执行服务钩子并冻结 IoC 容器
+
+#### 3. ArchitectureLifecycle (生命周期管理器)
 
 **职责**: 管理架构的生命周期和阶段转换
 
@@ -357,7 +368,7 @@ public class PlayerController : IController
 - `InitializeAllComponentsAsync()` - 初始化所有组件
 - `DestroyAsync()` - 异步销毁
 
-#### 3. ArchitectureComponentRegistry (组件注册管理器)
+#### 4. ArchitectureComponentRegistry (组件注册管理器)
 
 **职责**: 管理 System、Model、Utility 的注册
 
@@ -374,7 +385,10 @@ public class PlayerController : IController
 - `RegisterModel<T>()` - 注册模型
 - `RegisterUtility<T>()` - 注册工具
 
-#### 4. ArchitectureModules (模块管理器)
+> 命名提醒: 公开的 `ArchitectureServices` 负责容器和基础服务,并不承担组件注册职责。
+> `ArchitectureComponentRegistry` 才是内部的 System / Model / Utility 注册器。
+
+#### 5. ArchitectureModules (模块管理器)
 
 **职责**: 管理架构模块和中介行为
 
@@ -432,10 +446,12 @@ public class PlayerController : IController
 创建 Architecture 实例
     └─> 构造函数
         ├─> 初始化 Logger
+        ├─> 创建 ArchitectureBootstrapper
         ├─> 创建 ArchitectureLifecycle
         ├─> 创建 ArchitectureComponentRegistry
         └─> 创建 ArchitectureModules
     └─> InitializeAsync()
+        ├─> Bootstrapper 准备环境/服务/上下文
         ├─> OnInitialize() (用户注册组件)
         │   ├─> RegisterModel → Model.SetContext()
         │   ├─> RegisterSystem → System.SetContext()

@@ -15,7 +15,12 @@
 ## 概述
 
 Architecture 是 GFramework 的核心类,负责管理整个应用的生命周期、组件注册和模块管理。从 v1.1.0 开始,Architecture
-采用模块化设计,将职责分离到专门的管理器中。
+采用模块化设计,将职责分离到专门的协作者中。
+
+> 命名约定:
+> - `ArchitectureServices` 是公开的基础服务入口,负责容器、事件总线、命令执行器、查询执行器和服务模块管理
+> - `ArchitectureComponentRegistry` 是内部组件注册器,专门负责 System / Model / Utility 的注册与生命周期接入
+> - 两者不是同一层职责,不要混用
 
 ### 设计目标
 
@@ -29,6 +34,7 @@ Architecture 是 GFramework 的核心类,负责管理整个应用的生命周期
 
 ```
 Architecture (核心协调器)
+    ├── ArchitectureBootstrapper (初始化基础设施编排)
     ├── ArchitectureLifecycle (生命周期管理)
     ├── ArchitectureComponentRegistry (组件注册)
     └── ArchitectureModules (模块管理)
@@ -40,7 +46,7 @@ Architecture (核心协调器)
 
 Architecture 采用以下设计模式:
 
-1. **组合模式 (Composition)**: Architecture 组合三个管理器
+1. **组合模式 (Composition)**: Architecture 组合多个内部协作者
 2. **委托模式 (Delegation)**: 方法调用委托给专门的管理器
 3. **协调器模式 (Coordinator)**: Architecture 作为协调器统一对外接口
 
@@ -49,6 +55,7 @@ Architecture 采用以下设计模式:
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   Architecture                       │
+│  - _bootstrapper: ArchitectureBootstrapper          │
 │  - _lifecycle: ArchitectureLifecycle                │
 │  - _componentRegistry: ArchitectureComponentRegistry│
 │  - _modules: ArchitectureModules                    │
@@ -62,17 +69,17 @@ Architecture 采用以下设计模式:
 │  + DestroyAsync()                                   │
 │  + event PhaseChanged                               │
 └─────────────────────────────────────────────────────┘
-         │                    │                    │
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌──────────────┐   ┌──────────────────┐   ┌──────────────┐
-│ Lifecycle    │   │ ComponentRegistry│   │   Modules    │
-│              │   │                  │   │              │
-│ - 阶段管理    │   │ - System 注册    │   │ - 模块安装    │
-│ - 钩子管理    │   │ - Model 注册     │   │ - 行为注册    │
-│ - 初始化      │   │ - Utility 注册   │   │              │
-│ - 销毁        │   │ - 生命周期注册   │   │              │
-└──────────────┘   └──────────────────┘   └──────────────┘
+         │                    │                    │                    │
+         │                    │                    │                    │
+         ▼                    ▼                    ▼                    ▼
+┌──────────────┐   ┌──────────────────┐   ┌──────────────┐   ┌──────────────┐
+│ Bootstrapper │   │ Lifecycle        │   │ComponentReg. │   │   Modules    │
+│              │   │                  │   │              │   │              │
+│ - 环境初始化  │   │ - 阶段管理        │   │ - System 注册│   │ - 模块安装    │
+│ - 服务准备    │   │ - 钩子管理        │   │ - Model 注册 │   │ - 行为注册    │
+│ - 上下文绑定  │   │ - 组件初始化      │   │ - Utility 注册│   │              │
+│ - 容器冻结    │   │ - 就绪/销毁协调   │   │ - 生命周期接入│   │              │
+└──────────────┘   └──────────────────┘   └──────────────┘   └──────────────┘
 ```
 
 ### 构造函数初始化
@@ -86,19 +93,20 @@ protected Architecture(
     IArchitectureServices? services = null,
     IArchitectureContext? context = null)
 {
-    Configuration = configuration ?? new ArchitectureConfiguration();
-    Environment = environment ?? new DefaultEnvironment();
-    Services = services ?? new ArchitectureServices();
+    var resolvedConfiguration = configuration ?? new ArchitectureConfiguration();
+    var resolvedEnvironment = environment ?? new DefaultEnvironment();
+    var resolvedServices = services ?? new ArchitectureServices();
     _context = context;
 
     // 初始化 Logger
-    LoggerFactoryResolver.Provider = Configuration.LoggerProperties.LoggerFactoryProvider;
+    LoggerFactoryResolver.Provider = resolvedConfiguration.LoggerProperties.LoggerFactoryProvider;
     _logger = LoggerFactoryResolver.Provider.CreateLogger(GetType().Name);
 
-    // 初始化管理器
-    _lifecycle = new ArchitectureLifecycle(this, Configuration, Services, _logger);
-    _componentRegistry = new ArchitectureComponentRegistry(this, Configuration, Services, _lifecycle, _logger);
-    _modules = new ArchitectureModules(this, Services, _logger);
+    // 初始化协作者
+    _bootstrapper = new ArchitectureBootstrapper(GetType(), resolvedEnvironment, resolvedServices, _logger);
+    _lifecycle = new ArchitectureLifecycle(this, resolvedConfiguration, resolvedServices, _logger);
+    _componentRegistry = new ArchitectureComponentRegistry(this, resolvedConfiguration, resolvedServices, _lifecycle, _logger);
+    _modules = new ArchitectureModules(this, resolvedServices, _logger);
 }
 ```
 
@@ -190,11 +198,12 @@ architecture.RegisterLifecycleHook(new MyLifecycleHook());
    └─> 构造函数初始化管理器
 
 2. 调用 InitializeAsync() 或 Initialize()
-   ├─> 初始化环境 (Environment.Initialize())
-   ├─> 注册内置服务模块
-   ├─> 初始化架构上下文
-   ├─> 执行服务钩子
-   ├─> 初始化服务模块
+   ├─> ArchitectureBootstrapper 准备基础设施
+   │   ├─> 初始化环境 (Environment.Initialize())
+   │   ├─> 注册内置服务模块
+   │   ├─> 初始化架构上下文并绑定 GameContext
+   │   ├─> 执行服务钩子
+   │   └─> 初始化服务模块
    ├─> 调用 OnInitialize() (用户注册组件)
    ├─> 初始化所有组件
    │   ├─> BeforeUtilityInit → 初始化 Utility → AfterUtilityInit
