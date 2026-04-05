@@ -1,21 +1,21 @@
 ---
 title: 数据与存档系统
-description: 数据与存档系统提供了完整的数据持久化解决方案，支持多槽位存档、版本管理和数据迁移。
+description: 数据与存档系统提供统一的数据持久化基础能力，支持多槽位存档、版本化数据和仓库抽象。
 ---
 
 # 数据与存档系统
 
 ## 概述
 
-数据与存档系统是 GFramework.Game 中用于管理游戏数据持久化的核心组件。它提供了统一的数据加载和保存接口，支持多槽位存档管理、数据版本控制和自动迁移，让你可以轻松实现游戏存档、设置保存等功能。
+数据与存档系统是 GFramework.Game 中用于管理游戏数据持久化的核心组件。它提供了统一的数据加载和保存接口，支持多槽位存档管理、版本化数据模式，以及与存储系统、序列化系统的组合使用。
 
-通过数据系统，你可以将游戏数据保存到本地存储，支持多个存档槽位，并在数据结构变化时自动进行版本迁移。
+通过数据系统，你可以将游戏数据保存到本地存储，支持多个存档槽位，并在需要时于应用层实现版本迁移。
 
 **主要特性**：
 
 - 统一的数据持久化接口
 - 多槽位存档管理
-- 数据版本控制和迁移
+- 数据版本控制模式
 - 异步加载和保存
 - 批量数据操作
 - 与存储系统集成
@@ -71,7 +71,8 @@ public interface ISaveRepository<TSaveData> : IUtility
 ```csharp
 public interface IVersionedData : IData
 {
-    int Version { get; set; }
+    int Version { get; }
+    DateTime LastModified { get; }
 }
 ```
 
@@ -264,6 +265,10 @@ public partial class AutoSaveController : IController
 
 ### 数据版本迁移
 
+`SaveRepository<TSaveData>` 当前负责槽位存档的读取、写入、删除和列举，并没有内建“注册迁移器后自动升级存档”的统一迁移管线。
+
+下面示例展示的是应用层迁移策略：加载后检查版本，调用你自己的迁移逻辑，再决定是否回写新版本数据。
+
 ```csharp
 // 版本 1 的数据
 public class SaveDataV1 : IVersionedData
@@ -299,7 +304,7 @@ public class SaveDataMigrator
     }
 }
 
-// 加载时自动迁移
+// 加载后由应用层决定是否迁移
 public async Task<SaveDataV2> LoadWithMigration(int slot)
 {
     var saveRepo = this.GetUtility<ISaveRepository<SaveDataV2>>();
@@ -307,7 +312,7 @@ public async Task<SaveDataV2> LoadWithMigration(int slot)
 
     if (data.Version < 2)
     {
-        // 需要迁移
+        // 需要迁移：此处调用应用层迁移器
         var oldData = data as SaveDataV1;
         var migrator = new SaveDataMigrator();
         var newData = migrator.Migrate(oldData);
@@ -509,7 +514,7 @@ await saveRepo.SaveAsync(3, saveData);  // 槽位 3
 ### 问题：如何处理数据版本升级？
 
 **解答**：
-实现 `IVersionedData` 并在加载时检查版本：
+实现 `IVersionedData` 并在加载后检查版本。当前框架不会自动为 `ISaveRepository<T>` 执行迁移，需要由业务层决定迁移规则与回写时机：
 
 ```csharp
 var data = await saveRepo.LoadAsync(slot);

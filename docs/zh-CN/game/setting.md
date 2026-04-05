@@ -1,192 +1,199 @@
-# 设置系统 (Settings System)
+# 设置系统
 
-## 概述
+设置系统负责管理 `ISettingsData`、持久化加载/保存，以及把设置真正应用到运行时环境。
 
-设置系统是 GFramework.Game 的核心组件之一，负责管理游戏中各种设置配置。该系统采用了模型-系统分离的设计模式，支持设置部分（Section）的管理和设置应用器模式。
+当前实现以 `SettingsModel<TRepository>` 和 `SettingsSystem` 为核心，已经不是旧文档中的
+`Get<T>() / Register(IApplyAbleSettings)` 接口模型。
 
-## 核心类
+## 核心概念
 
-### SettingsModel
+### ISettingsData
 
-设置模型类，继承自 `AbstractModel` 并实现 `ISettingsModel` 接口。
-
-**主要功能：**
-
-- 管理不同类型的设置部分（Settings Section）
-- 提供类型安全的设置访问
-- 支持可应用设置对象的注册
-
-**关键方法：**
-
-- `Get<T>()` - 获取或创建指定类型的设置部分
-- `TryGet(Type, out ISettingsSection)` - 尝试获取设置部分
-- `Register(IApplyAbleSettings)` - 注册可应用的设置对象
-- `All()` - 获取所有设置部分
-
-### SettingsSystem
-
-设置系统类，继承自 `AbstractSystem` 并实现 `ISettingsSystem` 接口。
-
-**主要功能：**
-
-- 应用设置配置到相应系统
-- 支持单个或批量设置应用
-- 自动识别可应用设置类型
-
-**关键方法：**
-
-- `ApplyAll()` - 应用所有设置配置
-- `Apply<T>()` - 应用指定类型的设置
-- `Apply(IEnumerable<Type>)` - 应用指定类型集合的设置
-
-## 架构设计
-
-```mermaid
-graph TD
-    A[ISettingsModel] --> B[SettingsModel]
-    C[ISettingsSystem] --> D[SettingsSystem]
-    
-    B --> E[Dictionary<Type, ISettingsSection>]
-    D --> B
-    
-    F[ISettingsSection] --> G[IApplyAbleSettings]
-    H[AudioSettings] --> G
-    I[GraphicsSettings] --> G
-    
-    E --> H
-    E --> I
-    
-    J[Application] --> D
-    D --> G
-```
-
-## 使用示例
-
-### 基本使用
+设置数据对象负责保存设置值、提供默认值，并在加载后把外部数据回填到当前实例。
 
 ```csharp
-// 获取设置模型
-var settingsModel = this.GetModel<ISettingsModel>();
-
-// 获取或创建音频设置
-var audioSettings = settingsModel.Get<GodotAudioSettings>();
-audioSettings.MasterVolume = 0.8f;
-audioSettings.BgmVolume = 0.6f;
-audioSettings.SfxVolume = 0.9f;
-
-// 注册设置到模型
-settingsModel.Register(audioSettings);
+public interface ISettingsData : IResettable, IVersionedData, ILoadableFrom<ISettingsData>;
 ```
 
-### 应用设置
+这意味着一个设置数据类型通常需要实现：
+
+- `Reset()`：恢复默认值
+- `Version` / `LastModified`：暴露版本化信息
+- `LoadFrom(ISettingsData)`：把已加载或迁移后的数据复制到当前实例
+
+### IResetApplyAbleSettings
+
+应用器负责把设置数据作用到引擎或运行时环境：
 
 ```csharp
-// 获取设置系统
-var settingsSystem = this.GetSystem<ISettingsSystem>();
-
-// 应用所有设置
-await settingsSystem.ApplyAll();
-
-// 应用特定类型设置
-await settingsSystem.Apply<GodotAudioSettings>();
-
-// 应用多个类型设置
-var types = new[] { typeof(GodotAudioSettings), typeof(GodotGraphicsSettings) };
-await settingsSystem.Apply(types);
-```
-
-### 创建自定义设置
-
-```csharp
-public class GameSettings : ISettingsSection
+public interface IResetApplyAbleSettings : IResettable, IApplyAbleSettings
 {
-    public float GameSpeed { get; set; } = 1.0f;
-    public int Difficulty { get; set; } = 1;
-    public bool AutoSave { get; set; } = true;
+    ISettingsData Data { get; }
+    Type DataType { get; }
 }
-
-// 使用自定义设置
-var gameSettings = settingsModel.Get<GameSettings>();
-gameSettings.GameSpeed = 1.5f;
 ```
 
-### 创建可应用设置
+常见用途包括：
+
+- 把音量设置同步到音频总线
+- 把图形设置同步到窗口系统
+- 把语言设置同步到本地化管理器
+
+## ISettingsModel
+
+当前 `ISettingsModel` 的主要 API 如下：
 
 ```csharp
-public class GameSettings : ISettingsSection, IApplyAbleSettings
+public interface ISettingsModel : IModel
+{
+    bool IsInitialized { get; }
+
+    T GetData<T>() where T : class, ISettingsData, new();
+    IEnumerable<ISettingsData> AllData();
+
+    ISettingsModel RegisterApplicator<T>(T applicator)
+        where T : class, IResetApplyAbleSettings;
+    T? GetApplicator<T>() where T : class, IResetApplyAbleSettings;
+    IEnumerable<IResetApplyAbleSettings> AllApplicators();
+
+    ISettingsModel RegisterMigration(ISettingsMigration migration);
+
+    Task InitializeAsync();
+    Task SaveAllAsync();
+    Task ApplyAllAsync();
+    void Reset<T>() where T : class, ISettingsData, new();
+    void ResetAll();
+}
+```
+
+行为说明：
+
+- `GetData<T>()` 返回某个设置数据的唯一实例
+- `RegisterApplicator<T>()` 注册应用器，并把其 `Data` 纳入模型管理
+- `InitializeAsync()` 从 `ISettingsDataRepository` 读取所有已注册设置，并在需要时执行迁移
+- `SaveAllAsync()` 持久化当前所有设置数据
+- `ApplyAllAsync()` 依次调用所有 applicator 的 `Apply()`
+
+## SettingsSystem
+
+`SettingsSystem` 是对模型的系统级封装，面向业务代码提供更直接的入口：
+
+```csharp
+public interface ISettingsSystem : ISystem
+{
+    Task ApplyAll();
+    Task Apply<T>() where T : class, IResetApplyAbleSettings;
+    Task SaveAll();
+    Task Reset<T>() where T : class, ISettingsData, IResetApplyAbleSettings, new();
+    Task ResetAll();
+}
+```
+
+它不会自己保存数据，而是把保存、重置和应用逻辑委托给 `ISettingsModel`。
+
+## 基本用法
+
+### 定义设置数据
+
+```csharp
+public sealed class GameplaySettings : ISettingsData
 {
     public float GameSpeed { get; set; } = 1.0f;
-    public int Difficulty { get; set; } = 1;
-    
+
+    public int Version { get; private set; } = 1;
+    public DateTime LastModified { get; } = DateTime.UtcNow;
+
+    public void Reset()
+    {
+        GameSpeed = 1.0f;
+    }
+
+    public void LoadFrom(ISettingsData source)
+    {
+        if (source is not GameplaySettings settings)
+        {
+            return;
+        }
+
+        GameSpeed = settings.GameSpeed;
+        Version = settings.Version;
+    }
+}
+```
+
+### 定义 applicator
+
+```csharp
+public sealed class GameplaySettingsApplicator : IResetApplyAbleSettings
+{
+    public GameplaySettingsApplicator(GameplaySettings data)
+    {
+        Data = data;
+    }
+
+    public ISettingsData Data { get; }
+    public Type DataType => typeof(GameplaySettings);
+
+    public void Reset()
+    {
+        Data.Reset();
+    }
+
     public Task Apply()
     {
-        // 应用游戏速度
-        Time.timeScale = GameSpeed;
-        
-        // 应用难度设置
-        GameDifficulty.Current = Difficulty;
-        
+        var settings = (GameplaySettings)Data;
+        TimeScale.Current = settings.GameSpeed;
         return Task.CompletedTask;
     }
 }
 ```
 
-## 接口定义
-
-### ISettingsSection
+### 使用模型和系统
 
 ```csharp
-public interface ISettingsSection
+var settingsModel = this.GetModel<ISettingsModel>();
+
+var gameplayData = settingsModel.GetData<GameplaySettings>();
+gameplayData.GameSpeed = 1.25f;
+
+settingsModel.RegisterApplicator(new GameplaySettingsApplicator(gameplayData));
+
+await settingsModel.InitializeAsync();
+await settingsModel.SaveAllAsync();
+
+var settingsSystem = this.GetSystem<ISettingsSystem>();
+await settingsSystem.ApplyAll();
+```
+
+## 迁移
+
+设置系统内建了迁移注册入口：
+
+```csharp
+public interface ISettingsMigration
 {
-    // 设置部分的标识接口
+    Type SettingsType { get; }
+    int FromVersion { get; }
+    int ToVersion { get; }
+    ISettingsSection Migrate(ISettingsSection oldData);
 }
 ```
 
-### IApplyAbleSettings
+当 `InitializeAsync()` 读取到旧版本设置时，会按已注册迁移链逐步升级，再通过 `LoadFrom` 回填到当前实例。
 
-```csharp
-public interface IApplyAbleSettings : ISettingsSection
-{
-    Task Apply();
-}
-```
+## 依赖项
 
-### ISettingsModel
+要让设置系统完整工作，通常需要准备：
 
-```csharp
-public interface ISettingsModel
-{
-    T Get<T>() where T : class, ISettingsSection, new();
-    bool TryGet(Type type, out ISettingsSection section);
-    IEnumerable<ISettingsSection> All();
-    void Register(IApplyAbleSettings applyAble);
-}
-```
+- `ISettingsDataRepository`
+- `IDataLocationProvider`
+- 一个具体的存储实现和序列化器
 
-### ISettingsSystem
+如果使用 `UnifiedSettingsDataRepository`，多个设置节会被合并到单个设置文件中统一保存。
 
-```csharp
-public interface ISettingsSystem
-{
-    Task ApplyAll();
-    Task Apply<T>() where T : class, ISettingsSection;
-    Task Apply(Type settingsType);
-    Task Apply(IEnumerable<Type> settingsTypes);
-}
-```
+## 当前边界
 
-## 设计模式
-
-该系统使用了以下设计模式：
-
-1. **Repository Pattern** - SettingsModel 作为设置数据的仓库
-2. **Command Pattern** - IApplyAbleSettings 的 Apply 方法作为命令
-3. **Factory Pattern** - Get`<T>`() 方法创建设置实例
-4. **Template Method** - AbstractSystem 提供初始化模板
-
-## 最佳实践
-
-1. **设置分类** - 将相关设置组织到同一个设置类中
-2. **延迟应用** - 批量修改后再应用，而不是每次修改都应用
-3. **类型安全** - 使用泛型方法确保类型安全
-4. **可测试性** - 通过接口实现便于单元测试
+- 设置迁移是内建能力
+- 设置持久化是内建能力
+- 设置如何应用到具体引擎由 applicator 决定
+- 存档系统的迁移能力不等同于设置系统；`ISaveRepository<T>` 当前仍需要业务层自己实现迁移策略

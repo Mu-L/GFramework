@@ -675,6 +675,7 @@ public class CachedStorage : IStorage
 
 ```csharp
 using GFramework.Game.Serializer;
+using Newtonsoft.Json;
 
 public class GameDataSerializer
 {
