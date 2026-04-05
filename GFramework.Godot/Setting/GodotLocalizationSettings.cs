@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using GFramework.Core.Abstractions.Localization;
+using GFramework.Core.Architectures;
 using GFramework.Game.Abstractions.Setting;
 using GFramework.Game.Abstractions.Setting.Data;
 using GFramework.Godot.Setting.Data;
