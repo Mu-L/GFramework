@@ -38,7 +38,6 @@ public sealed class CoroutineScheduler(
         new();
 
     private readonly Dictionary<CoroutineHandle, CoroutineCompletionStatus> _completionStatuses = new();
-    private readonly CoroutineExecutionStage _executionStage = executionStage;
     private readonly Dictionary<string, HashSet<CoroutineHandle>> _grouped = new();
     private readonly ILogger _logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(CoroutineScheduler));
     private readonly Dictionary<CoroutineHandle, CoroutineMetadata> _metadata = new();
@@ -69,7 +68,7 @@ public sealed class CoroutineScheduler(
     /// <summary>
     ///     获取当前调度器代表的执行阶段。
     /// </summary>
-    public CoroutineExecutionStage ExecutionStage => _executionStage;
+    public CoroutineExecutionStage ExecutionStage => executionStage;
 
     /// <summary>
     ///     获取活跃协程数量。
@@ -234,7 +233,7 @@ public sealed class CoroutineScheduler(
         _slots[slotIndex] = slot;
         _metadata[handle] = new CoroutineMetadata
         {
-            ExecutionStage = _executionStage,
+            ExecutionStage = executionStage,
             Group = group,
             Priority = priority,
             SlotIndex = slotIndex,
@@ -756,8 +755,8 @@ public sealed class CoroutineScheduler(
     {
         return instruction switch
         {
-            WaitForFixedUpdate => _executionStage == CoroutineExecutionStage.FixedUpdate,
-            WaitForEndOfFrame => _executionStage == CoroutineExecutionStage.EndOfFrame,
+            WaitForFixedUpdate => executionStage == CoroutineExecutionStage.FixedUpdate,
+            WaitForEndOfFrame => executionStage == CoroutineExecutionStage.EndOfFrame,
             _ => true
         };
     }
