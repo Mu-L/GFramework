@@ -465,10 +465,36 @@ var loader = new YamlConfigLoader("config-root")
         });
 ```
 
+如果项目已经生成了多张表，但当前场景只想注册其中一部分，也可以直接在聚合入口上加筛选，而不必退回手写逐表注册：
+
+```csharp
+var loader = new YamlConfigLoader("config-root")
+    .RegisterAllGeneratedConfigTables(
+        new GeneratedConfigRegistrationOptions
+        {
+            IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+        });
+```
+
+如果你更习惯按表名白名单或自定义谓词裁剪启动集，也可以继续在同一个 options 对象里完成：
+
+```csharp
+var loader = new YamlConfigLoader("config-root")
+    .RegisterAllGeneratedConfigTables(
+        new GeneratedConfigRegistrationOptions
+        {
+            IncludedTableNames = new[] { MonsterConfigBindings.TableName, ItemConfigBindings.TableName },
+            TableFilter = static metadata => metadata.SchemaRelativePath.EndsWith(".schema.json", StringComparison.Ordinal)
+        });
+```
+
 这里的规则是：
 
+- `IncludedConfigDomains` 与 `IncludedTableNames` 都按 `StringComparison.Ordinal` 做白名单匹配；传 `null` 或空集合表示“不限制”
+- `TableFilter` 会在上述白名单通过后执行，适合继续按 schema 路径、配置目录等元数据做更细的启动裁剪
 - 未显式配置 comparer 的表，仍然使用各自 `Register{Entity}Table()` 的默认行为
 - 需要自定义 comparer 的表，可以通过 `GeneratedConfigRegistrationOptions` 按表覆盖
+- 当前 `ConfigDomain` 约定仍与生成表名保持一致，但建议优先引用 `*ConfigBindings.ConfigDomain`，为后续更细的分组策略保留稳定入口
 - 如果项目希望继续完全手写某张表的注册流程，逐表 `Register*Table(...)` 入口仍然保留，作为兼容逃生通道
 
 如果你需要自定义目录、表名或 key selector，仍然可以直接调用 `YamlConfigLoader.RegisterTable(...)` 原始重载。

@@ -42,6 +42,7 @@ public class ArchitectureConfigIntegrationTests
                 Assert.That(architecture.Registry.TryGetMonsterTable(out var retrieved), Is.True);
                 Assert.That(retrieved, Is.Not.Null);
                 Assert.That(retrieved!.Get(1).Name, Is.EqualTo("Slime"));
+                Assert.That(architecture.Registry.TryGetItemTable(out _), Is.False);
                 Assert.That(architecture.Context.GetUtility<ConfigRegistry>(), Is.SameAs(architecture.Registry));
             });
         }
@@ -147,7 +148,11 @@ public class ArchitectureConfigIntegrationTests
             RegisterUtility(Registry);
 
             var loader = new YamlConfigLoader(_configRoot)
-                .RegisterAllGeneratedConfigTables();
+                .RegisterAllGeneratedConfigTables(
+                    new GeneratedConfigRegistrationOptions
+                    {
+                        IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+                    });
             loader.LoadAsync(Registry).GetAwaiter().GetResult();
             MonsterTable = Registry.GetMonsterTable();
         }

@@ -452,15 +452,22 @@ public class SchemaConfigGeneratorTests
             Assert.That(catalogSource, Does.Contain("public static class GeneratedConfigCatalog"));
             Assert.That(catalogSource, Does.Contain("public sealed class GeneratedConfigRegistrationOptions"));
             Assert.That(catalogSource, Does.Contain("public static class GeneratedConfigRegistrationExtensions"));
+            Assert.That(catalogSource, Does.Contain("public global::System.Collections.Generic.IReadOnlyCollection<string>? IncludedConfigDomains { get; init; }"));
+            Assert.That(catalogSource, Does.Contain("public global::System.Collections.Generic.IReadOnlyCollection<string>? IncludedTableNames { get; init; }"));
+            Assert.That(catalogSource, Does.Contain("public global::System.Predicate<GeneratedConfigCatalog.TableMetadata>? TableFilter { get; init; }"));
             Assert.That(catalogSource, Does.Contain("public global::System.Collections.Generic.IEqualityComparer<string>? ItemComparer { get; init; }"));
             Assert.That(catalogSource, Does.Contain("public global::System.Collections.Generic.IEqualityComparer<int>? MonsterComparer { get; init; }"));
             Assert.That(catalogSource, Does.Contain("return RegisterAllGeneratedConfigTables(loader, options: null);"));
             Assert.That(catalogSource, Does.Contain("GeneratedConfigRegistrationOptions? options"));
+            Assert.That(catalogSource, Does.Contain("if (ShouldRegisterTable(GeneratedConfigCatalog.Tables[0], options))"));
             Assert.That(catalogSource, Does.Contain("loader.RegisterItemTable(options.ItemComparer);"));
+            Assert.That(catalogSource, Does.Contain("if (ShouldRegisterTable(GeneratedConfigCatalog.Tables[1], options))"));
             Assert.That(catalogSource, Does.Contain("loader.RegisterMonsterTable(options.MonsterComparer);"));
             Assert.That(catalogSource, Does.Contain("ItemConfigBindings.Metadata.TableName"));
             Assert.That(catalogSource, Does.Contain("MonsterConfigBindings.Metadata.TableName"));
             Assert.That(catalogSource, Does.Contain("public static bool TryGetByTableName(string tableName, out TableMetadata metadata)"));
+            Assert.That(catalogSource, Does.Contain("private static bool ShouldRegisterTable("));
+            Assert.That(catalogSource, Does.Contain("private static bool MatchesOptionalAllowList("));
         });
     }
 }

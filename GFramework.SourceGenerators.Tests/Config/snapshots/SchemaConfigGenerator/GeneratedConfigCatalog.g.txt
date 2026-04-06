@@ -96,6 +96,21 @@ public static class GeneratedConfigCatalog
 public sealed class GeneratedConfigRegistrationOptions
 {
     /// <summary>
+    ///     Gets or sets the optional allow-list of generated config domains that aggregate registration should include. When null or empty, every generated domain remains eligible.
+    /// </summary>
+    public global::System.Collections.Generic.IReadOnlyCollection<string>? IncludedConfigDomains { get; init; }
+
+    /// <summary>
+    ///     Gets or sets the optional allow-list of runtime table names that aggregate registration should include. When null or empty, every generated table remains eligible.
+    /// </summary>
+    public global::System.Collections.Generic.IReadOnlyCollection<string>? IncludedTableNames { get; init; }
+
+    /// <summary>
+    ///     Gets or sets the optional predicate that can reject individual generated table metadata entries after allow-list filtering has passed.
+    /// </summary>
+    public global::System.Predicate<GeneratedConfigCatalog.TableMetadata>? TableFilter { get; init; }
+
+    /// <summary>
     ///     Gets or sets the optional key comparer forwarded to MonsterConfigBindings.RegisterMonsterTable(global::GFramework.Game.Config.YamlConfigLoader, global::System.Collections.Generic.IEqualityComparer<int>?) when aggregate registration runs.
     /// </summary>
     public global::System.Collections.Generic.IEqualityComparer<int>? MonsterComparer { get; init; }
@@ -141,7 +156,62 @@ public static class GeneratedConfigRegistrationExtensions
 
         options ??= new GeneratedConfigRegistrationOptions();
 
-        loader.RegisterMonsterTable(options.MonsterComparer);
+        if (ShouldRegisterTable(GeneratedConfigCatalog.Tables[0], options))
+        {
+            loader.RegisterMonsterTable(options.MonsterComparer);
+        }
+
         return loader;
+    }
+
+    /// <summary>
+    ///     Applies the generated registration filters in a deterministic order so bootstrap code can narrow aggregate registration without hand-writing per-table calls.
+    /// </summary>
+    /// <param name="metadata">Generated table metadata under consideration.</param>
+    /// <param name="options">Aggregate registration options supplied by the caller.</param>
+    /// <returns><see langword="true" /> when the generated table should be registered; otherwise <see langword="false" />.</returns>
+    private static bool ShouldRegisterTable(
+        GeneratedConfigCatalog.TableMetadata metadata,
+        GeneratedConfigRegistrationOptions options)
+    {
+        // Apply cheap generated allow-lists before invoking the optional caller predicate so startup filtering stays predictable.
+        if (!MatchesOptionalAllowList(options.IncludedConfigDomains, metadata.ConfigDomain))
+        {
+            return false;
+        }
+
+        if (!MatchesOptionalAllowList(options.IncludedTableNames, metadata.TableName))
+        {
+            return false;
+        }
+
+        return options.TableFilter?.Invoke(metadata) ?? true;
+    }
+
+    /// <summary>
+    ///     Treats a null or empty allow-list as an unrestricted match, and otherwise performs ordinal string comparison against the generated metadata value.
+    /// </summary>
+    /// <param name="allowedValues">Optional caller-supplied allow-list.</param>
+    /// <param name="candidate">Generated metadata value being evaluated.</param>
+    /// <returns><see langword="true" /> when the value should remain eligible for registration; otherwise <see langword="false" />.</returns>
+    private static bool MatchesOptionalAllowList(
+        global::System.Collections.Generic.IReadOnlyCollection<string>? allowedValues,
+        string candidate)
+    {
+        if (allowedValues is null || allowedValues.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var allowedValue in allowedValues)
+        {
+            if (allowedValue is not null &&
+                string.Equals(allowedValue, candidate, global::System.StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

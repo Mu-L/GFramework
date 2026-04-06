@@ -1,0 +1,24 @@
+{
+  "title": "Item Config",
+  "description": "Defines one item entry for aggregate registration filtering integration tests.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "category"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Item identifier."
+    },
+    "name": {
+      "type": "string",
+      "description": "Item display name."
+    },
+    "category": {
+      "type": "string",
+      "description": "Used by integration tests to validate generated non-unique queries."
+    }
+  }
+}
