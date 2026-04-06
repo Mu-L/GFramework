@@ -231,6 +231,83 @@ tags:
     assert.match(diagnostics[2].message, /tags\[1\]|shield/u);
 });
 
+test("validateParsedConfig should report exclusive bounds, pattern, and array item-count mismatches", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Z][a-z]+$"
+            },
+            "hp": {
+              "type": "integer",
+              "exclusiveMinimum": 10,
+              "exclusiveMaximum": 20
+            },
+            "tags": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 3,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+name: slime
+hp: 10
+tags:
+  - onlyOne
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 3);
+    assert.match(diagnostics[0].message, /pattern|正则模式/u);
+    assert.match(diagnostics[1].message, /greater than 10|大于 10/u);
+    assert.match(diagnostics[2].message, /at least 2 items|至少需要包含 2 个元素/u);
+});
+
+test("validateParsedConfig should report exclusive maximum and maxItems violations", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "hp": {
+              "type": "integer",
+              "exclusiveMinimum": 10,
+              "exclusiveMaximum": 20
+            },
+            "tags": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+hp: 20
+tags:
+  - a
+  - b
+  - c
+  - d
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /less than 20|小于 20/u);
+    assert.match(diagnostics[1].message, /at most 3 items|最多只能包含 3 个元素/u);
+});
+
 test("parseSchemaContent should capture scalar range and length metadata", () => {
     const schema = parseSchemaContent(`
         {
@@ -264,6 +341,58 @@ test("parseSchemaContent should capture scalar range and length metadata", () =>
     assert.equal(schema.properties.hp.maximum, 99);
     assert.equal(schema.properties.tags.items.minLength, 2);
     assert.equal(schema.properties.tags.items.maxLength, 6);
+});
+
+test("parseSchemaContent should capture exclusive bounds, pattern, and array item-count metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Z][a-z]+$"
+            },
+            "hp": {
+              "type": "integer",
+              "exclusiveMinimum": 1,
+              "exclusiveMaximum": 99
+            },
+            "tags": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z]+$"
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.properties.name.pattern, "^[A-Z][a-z]+$");
+    assert.equal(schema.properties.hp.exclusiveMinimum, 1);
+    assert.equal(schema.properties.hp.exclusiveMaximum, 99);
+    assert.equal(schema.properties.tags.minItems, 2);
+    assert.equal(schema.properties.tags.maxItems, 4);
+    assert.equal(schema.properties.tags.items.pattern, "^[a-z]+$");
+});
+
+test("parseSchemaContent should reject invalid pattern declarations instead of dropping them", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "["
+                }
+              }
+            }
+        `),
+        /invalid 'pattern' regular expression/u
+    );
 });
 
 test("parseSchemaContent should ignore mismatched constraint metadata on unsupported scalar types", () => {

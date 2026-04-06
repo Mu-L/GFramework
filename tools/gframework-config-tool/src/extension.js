@@ -1574,7 +1574,7 @@ function getScalarArrayValue(yamlNode) {
 /**
  * Render human-facing metadata hints for one schema field.
  *
- * @param {{description?: string, defaultValue?: string, minimum?: number, maximum?: number, minLength?: number, maxLength?: number, enumValues?: string[], items?: {enumValues?: string[], minimum?: number, maximum?: number, minLength?: number, maxLength?: number}, refTable?: string}} propertySchema Property schema metadata.
+ * @param {{description?: string, defaultValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, minLength?: number, maxLength?: number, pattern?: string, minItems?: number, maxItems?: number, enumValues?: string[], items?: {enumValues?: string[], minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, minLength?: number, maxLength?: number, pattern?: string}, refTable?: string}} propertySchema Property schema metadata.
  * @param {boolean} isArrayField Whether the field is an array.
  * @returns {string} HTML fragment.
  */
@@ -1602,8 +1602,16 @@ function renderFieldHint(propertySchema, isArrayField) {
         hints.push(escapeHtml(localizer.t("webview.hint.minimum", {value: propertySchema.minimum})));
     }
 
+    if (!isArrayField && typeof propertySchema.exclusiveMinimum === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.exclusiveMinimum", {value: propertySchema.exclusiveMinimum})));
+    }
+
     if (!isArrayField && typeof propertySchema.maximum === "number") {
         hints.push(escapeHtml(localizer.t("webview.hint.maximum", {value: propertySchema.maximum})));
+    }
+
+    if (!isArrayField && typeof propertySchema.exclusiveMaximum === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.exclusiveMaximum", {value: propertySchema.exclusiveMaximum})));
     }
 
     if (!isArrayField && typeof propertySchema.minLength === "number") {
@@ -1614,12 +1622,32 @@ function renderFieldHint(propertySchema, isArrayField) {
         hints.push(escapeHtml(localizer.t("webview.hint.maxLength", {value: propertySchema.maxLength})));
     }
 
+    if (!isArrayField && propertySchema.pattern) {
+        hints.push(escapeHtml(localizer.t("webview.hint.pattern", {value: propertySchema.pattern})));
+    }
+
+    if (isArrayField && typeof propertySchema.minItems === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.minItems", {value: propertySchema.minItems})));
+    }
+
+    if (isArrayField && typeof propertySchema.maxItems === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.maxItems", {value: propertySchema.maxItems})));
+    }
+
     if (isArrayField && propertySchema.items && typeof propertySchema.items.minimum === "number") {
         hints.push(escapeHtml(localizer.t("webview.hint.itemMinimum", {value: propertySchema.items.minimum})));
     }
 
+    if (isArrayField && propertySchema.items && typeof propertySchema.items.exclusiveMinimum === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.itemExclusiveMinimum", {value: propertySchema.items.exclusiveMinimum})));
+    }
+
     if (isArrayField && propertySchema.items && typeof propertySchema.items.maximum === "number") {
         hints.push(escapeHtml(localizer.t("webview.hint.itemMaximum", {value: propertySchema.items.maximum})));
+    }
+
+    if (isArrayField && propertySchema.items && typeof propertySchema.items.exclusiveMaximum === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.itemExclusiveMaximum", {value: propertySchema.items.exclusiveMaximum})));
     }
 
     if (isArrayField && propertySchema.items && typeof propertySchema.items.minLength === "number") {
@@ -1628,6 +1656,10 @@ function renderFieldHint(propertySchema, isArrayField) {
 
     if (isArrayField && propertySchema.items && typeof propertySchema.items.maxLength === "number") {
         hints.push(escapeHtml(localizer.t("webview.hint.itemMaxLength", {value: propertySchema.items.maxLength})));
+    }
+
+    if (isArrayField && propertySchema.items && propertySchema.items.pattern) {
+        hints.push(escapeHtml(localizer.t("webview.hint.itemPattern", {value: propertySchema.items.pattern})));
     }
 
     if (propertySchema.refTable) {

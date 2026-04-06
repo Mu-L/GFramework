@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using GFramework.Game.Abstractions.Config;
 
 namespace GFramework.Game.Config;
@@ -9,6 +10,10 @@ namespace GFramework.Game.Config;
 /// </summary>
 internal static class YamlConfigSchemaValidator
 {
+    // The runtime intentionally uses the same culture-invariant regex semantics as the
+    // JS tooling so grouping and backreferences behave consistently across environments.
+    private const RegexOptions SupportedPatternRegexOptions = RegexOptions.CultureInvariant;
+
     /// <summary>
     ///     从磁盘加载并解析一个 JSON Schema 文件。
     /// </summary>
@@ -297,6 +302,7 @@ internal static class YamlConfigSchemaValidator
             referenceTableName: null,
             allowedValues: null,
             constraints: null,
+            arrayConstraints: null,
             schemaPath);
     }
 
@@ -365,6 +371,7 @@ internal static class YamlConfigSchemaValidator
             referenceTableName: null,
             allowedValues: null,
             constraints: null,
+            arrayConstraints: ParseArrayConstraints(tableName, schemaPath, propertyPath, element),
             schemaPath);
     }
 
@@ -395,6 +402,7 @@ internal static class YamlConfigSchemaValidator
             referenceTableName,
             ParseEnumValues(tableName, schemaPath, propertyPath, element, nodeType, "enum"),
             ParseScalarConstraints(tableName, schemaPath, propertyPath, element, nodeType),
+            arrayConstraints: null,
             schemaPath);
     }
 
@@ -580,6 +588,11 @@ internal static class YamlConfigSchemaValidator
                 displayPath: GetDiagnosticPath(displayPath));
         }
 
+        if (schemaNode.ArrayConstraints is not null)
+        {
+            ValidateArrayConstraints(tableName, yamlPath, displayPath, sequenceNode.Children.Count, schemaNode);
+        }
+
         for (var itemIndex = 0; itemIndex < sequenceNode.Children.Count; itemIndex++)
         {
             ValidateNode(
@@ -739,8 +752,10 @@ internal static class YamlConfigSchemaValidator
     }
 
     /// <summary>
-    ///     解析标量字段支持的范围与长度约束。
-    ///     当前共享子集只支持 `integer/number` 上的 `minimum/maximum` 和 `string` 上的 `minLength/maxLength`。
+    ///     解析标量字段支持的范围、长度与模式约束。
+    ///     当前共享子集支持：
+    ///     `integer/number` 上的 `minimum/maximum/exclusiveMinimum/exclusiveMaximum`，
+    ///     以及 `string` 上的 `minLength/maxLength/pattern`。
     /// </summary>
     /// <param name="tableName">所属配置表名称。</param>
     /// <param name="schemaPath">Schema 文件路径。</param>
@@ -757,8 +772,13 @@ internal static class YamlConfigSchemaValidator
     {
         var minimum = TryParseNumericConstraint(tableName, schemaPath, propertyPath, element, nodeType, "minimum");
         var maximum = TryParseNumericConstraint(tableName, schemaPath, propertyPath, element, nodeType, "maximum");
+        var exclusiveMinimum =
+            TryParseNumericConstraint(tableName, schemaPath, propertyPath, element, nodeType, "exclusiveMinimum");
+        var exclusiveMaximum =
+            TryParseNumericConstraint(tableName, schemaPath, propertyPath, element, nodeType, "exclusiveMaximum");
         var minLength = TryParseLengthConstraint(tableName, schemaPath, propertyPath, element, nodeType, "minLength");
         var maxLength = TryParseLengthConstraint(tableName, schemaPath, propertyPath, element, nodeType, "maxLength");
+        var pattern = TryParsePatternConstraint(tableName, schemaPath, propertyPath, element, nodeType);
 
         if (minimum.HasValue && maximum.HasValue && minimum.Value > maximum.Value)
         {
@@ -770,6 +790,15 @@ internal static class YamlConfigSchemaValidator
                 displayPath: GetDiagnosticPath(propertyPath));
         }
 
+        ValidateNumericConstraintRange(
+            tableName,
+            schemaPath,
+            propertyPath,
+            minimum,
+            maximum,
+            exclusiveMinimum,
+            exclusiveMaximum);
+
         if (minLength.HasValue && maxLength.HasValue && minLength.Value > maxLength.Value)
         {
             throw ConfigLoadExceptionFactory.Create(
@@ -780,12 +809,62 @@ internal static class YamlConfigSchemaValidator
                 displayPath: GetDiagnosticPath(propertyPath));
         }
 
-        if (!minimum.HasValue && !maximum.HasValue && !minLength.HasValue && !maxLength.HasValue)
+        if (!minimum.HasValue &&
+            !maximum.HasValue &&
+            !exclusiveMinimum.HasValue &&
+            !exclusiveMaximum.HasValue &&
+            !minLength.HasValue &&
+            !maxLength.HasValue &&
+            pattern is null)
         {
             return null;
         }
 
-        return new YamlConfigScalarConstraints(minimum, maximum, minLength, maxLength);
+        return new YamlConfigScalarConstraints(
+            minimum,
+            maximum,
+            exclusiveMinimum,
+            exclusiveMaximum,
+            minLength,
+            maxLength,
+            pattern,
+            pattern is null
+                ? null
+                : new Regex(
+                    pattern,
+                    SupportedPatternRegexOptions));
+    }
+
+    /// <summary>
+    ///     解析数组节点支持的元素数量约束。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">数组字段路径。</param>
+    /// <param name="element">Schema 节点。</param>
+    /// <returns>数组约束模型；未声明时返回空。</returns>
+    private static YamlConfigArrayConstraints? ParseArrayConstraints(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element)
+    {
+        var minItems = TryParseArrayLengthConstraint(tableName, schemaPath, propertyPath, element, "minItems");
+        var maxItems = TryParseArrayLengthConstraint(tableName, schemaPath, propertyPath, element, "maxItems");
+
+        if (minItems.HasValue && maxItems.HasValue && minItems.Value > maxItems.Value)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' declares 'minItems' greater than 'maxItems'.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        return !minItems.HasValue && !maxItems.HasValue
+            ? null
+            : new YamlConfigArrayConstraints(minItems, maxItems);
     }
 
     /// <summary>
@@ -887,6 +966,180 @@ internal static class YamlConfigSchemaValidator
     }
 
     /// <summary>
+    ///     读取字符串正则约束。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">字段路径。</param>
+    /// <param name="element">Schema 节点。</param>
+    /// <param name="nodeType">字段类型。</param>
+    /// <returns>正则模式；未声明时返回空。</returns>
+    private static string? TryParsePatternConstraint(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element,
+        YamlConfigSchemaPropertyType nodeType)
+    {
+        if (!element.TryGetProperty("pattern", out var patternElement))
+        {
+            return null;
+        }
+
+        if (nodeType != YamlConfigSchemaPropertyType.String)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' uses 'pattern', but only 'string' scalar types support regular-expression constraints.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        if (patternElement.ValueKind != JsonValueKind.String)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' must declare 'pattern' as a string.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        var pattern = patternElement.GetString() ?? string.Empty;
+        try
+        {
+            _ = new Regex(pattern, SupportedPatternRegexOptions);
+        }
+        catch (ArgumentException exception)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' declares an invalid 'pattern' regular expression.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath),
+                rawValue: pattern,
+                innerException: exception);
+        }
+
+        return pattern;
+    }
+
+    /// <summary>
+    ///     读取数组元素数量约束。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">字段路径。</param>
+    /// <param name="element">Schema 节点。</param>
+    /// <param name="keywordName">关键字名称。</param>
+    /// <returns>数组元素数量约束；未声明时返回空。</returns>
+    private static int? TryParseArrayLengthConstraint(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element,
+        string keywordName)
+    {
+        if (!element.TryGetProperty(keywordName, out var constraintElement))
+        {
+            return null;
+        }
+
+        if (constraintElement.ValueKind != JsonValueKind.Number ||
+            !constraintElement.TryGetInt32(out var constraintValue) ||
+            constraintValue < 0)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' must declare '{keywordName}' as a non-negative integer.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        return constraintValue;
+    }
+
+    /// <summary>
+    ///     校验数值上下界组合不会形成空区间。
+    ///     这里把闭区间与开区间统一折算为最强边界，避免 schema 进入“无任何合法值”的状态。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">字段路径。</param>
+    /// <param name="minimum">闭区间最小值。</param>
+    /// <param name="maximum">闭区间最大值。</param>
+    /// <param name="exclusiveMinimum">开区间最小值。</param>
+    /// <param name="exclusiveMaximum">开区间最大值。</param>
+    private static void ValidateNumericConstraintRange(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        double? minimum,
+        double? maximum,
+        double? exclusiveMinimum,
+        double? exclusiveMaximum)
+    {
+        var hasLowerBound = false;
+        var lowerBound = double.MinValue;
+        var isLowerBoundExclusive = false;
+
+        if (minimum.HasValue)
+        {
+            hasLowerBound = true;
+            lowerBound = minimum.Value;
+        }
+
+        if (exclusiveMinimum.HasValue &&
+            (!hasLowerBound ||
+             exclusiveMinimum.Value > lowerBound ||
+             (exclusiveMinimum.Value.Equals(lowerBound) && !isLowerBoundExclusive)))
+        {
+            hasLowerBound = true;
+            lowerBound = exclusiveMinimum.Value;
+            isLowerBoundExclusive = true;
+        }
+
+        var hasUpperBound = false;
+        var upperBound = double.MaxValue;
+        var isUpperBoundExclusive = false;
+
+        if (maximum.HasValue)
+        {
+            hasUpperBound = true;
+            upperBound = maximum.Value;
+        }
+
+        if (exclusiveMaximum.HasValue &&
+            (!hasUpperBound ||
+             exclusiveMaximum.Value < upperBound ||
+             (exclusiveMaximum.Value.Equals(upperBound) && !isUpperBoundExclusive)))
+        {
+            hasUpperBound = true;
+            upperBound = exclusiveMaximum.Value;
+            isUpperBoundExclusive = true;
+        }
+
+        if (!hasLowerBound || !hasUpperBound)
+        {
+            return;
+        }
+
+        if (lowerBound > upperBound ||
+            (lowerBound.Equals(upperBound) && (isLowerBoundExclusive || isUpperBoundExclusive)))
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' declares numeric constraints that do not leave any valid value range.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+    }
+
+    /// <summary>
     ///     校验标量值是否满足范围与长度约束。
     /// </summary>
     /// <param name="tableName">所属配置表名称。</param>
@@ -943,6 +1196,20 @@ internal static class YamlConfigSchemaValidator
                         $"Minimum allowed value: {constraints.Minimum.Value.ToString(CultureInfo.InvariantCulture)}.");
                 }
 
+                if (constraints.ExclusiveMinimum.HasValue && numericValue <= constraints.ExclusiveMinimum.Value)
+                {
+                    throw ConfigLoadExceptionFactory.Create(
+                        ConfigLoadFailureKind.ConstraintViolation,
+                        tableName,
+                        $"Property '{displayPath}' in config file '{yamlPath}' must be greater than {constraints.ExclusiveMinimum.Value.ToString(CultureInfo.InvariantCulture)}, but the current YAML scalar value is '{rawValue}'.",
+                        yamlPath: yamlPath,
+                        schemaPath: schemaNode.SchemaPathHint,
+                        displayPath: GetDiagnosticPath(displayPath),
+                        rawValue: rawValue,
+                        detail:
+                        $"Exclusive minimum allowed value: {constraints.ExclusiveMinimum.Value.ToString(CultureInfo.InvariantCulture)}.");
+                }
+
                 if (constraints.Maximum.HasValue && numericValue > constraints.Maximum.Value)
                 {
                     throw ConfigLoadExceptionFactory.Create(
@@ -955,6 +1222,20 @@ internal static class YamlConfigSchemaValidator
                         rawValue: rawValue,
                         detail:
                         $"Maximum allowed value: {constraints.Maximum.Value.ToString(CultureInfo.InvariantCulture)}.");
+                }
+
+                if (constraints.ExclusiveMaximum.HasValue && numericValue >= constraints.ExclusiveMaximum.Value)
+                {
+                    throw ConfigLoadExceptionFactory.Create(
+                        ConfigLoadFailureKind.ConstraintViolation,
+                        tableName,
+                        $"Property '{displayPath}' in config file '{yamlPath}' must be less than {constraints.ExclusiveMaximum.Value.ToString(CultureInfo.InvariantCulture)}, but the current YAML scalar value is '{rawValue}'.",
+                        yamlPath: yamlPath,
+                        schemaPath: schemaNode.SchemaPathHint,
+                        displayPath: GetDiagnosticPath(displayPath),
+                        rawValue: rawValue,
+                        detail:
+                        $"Exclusive maximum allowed value: {constraints.ExclusiveMaximum.Value.ToString(CultureInfo.InvariantCulture)}.");
                 }
 
                 return;
@@ -988,6 +1269,20 @@ internal static class YamlConfigSchemaValidator
                         detail: $"Maximum length: {constraints.MaxLength.Value}.");
                 }
 
+                if (constraints.PatternRegex is not null &&
+                    !constraints.PatternRegex.IsMatch(rawValue))
+                {
+                    throw ConfigLoadExceptionFactory.Create(
+                        ConfigLoadFailureKind.ConstraintViolation,
+                        tableName,
+                        $"Property '{displayPath}' in config file '{yamlPath}' must match regular expression '{constraints.Pattern}', but the current YAML scalar value is '{rawValue}'.",
+                        yamlPath: yamlPath,
+                        schemaPath: schemaNode.SchemaPathHint,
+                        displayPath: GetDiagnosticPath(displayPath),
+                        rawValue: rawValue,
+                        detail: $"Expected pattern: {constraints.Pattern}.");
+                }
+
                 return;
 
             default:
@@ -999,6 +1294,54 @@ internal static class YamlConfigSchemaValidator
                     schemaPath: schemaNode.SchemaPathHint,
                     displayPath: GetDiagnosticPath(displayPath),
                     rawValue: schemaNode.NodeType.ToString());
+        }
+    }
+
+    /// <summary>
+    ///     校验数组值是否满足元素数量约束。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="yamlPath">YAML 文件路径。</param>
+    /// <param name="displayPath">字段路径。</param>
+    /// <param name="itemCount">当前数组元素数量。</param>
+    /// <param name="schemaNode">数组 schema 节点。</param>
+    private static void ValidateArrayConstraints(
+        string tableName,
+        string yamlPath,
+        string displayPath,
+        int itemCount,
+        YamlConfigSchemaNode schemaNode)
+    {
+        var constraints = schemaNode.ArrayConstraints;
+        if (constraints is null)
+        {
+            return;
+        }
+
+        if (constraints.MinItems.HasValue && itemCount < constraints.MinItems.Value)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.ConstraintViolation,
+                tableName,
+                $"Property '{displayPath}' in config file '{yamlPath}' must contain at least {constraints.MinItems.Value} items, but the current YAML sequence contains {itemCount}.",
+                yamlPath: yamlPath,
+                schemaPath: schemaNode.SchemaPathHint,
+                displayPath: GetDiagnosticPath(displayPath),
+                rawValue: itemCount.ToString(CultureInfo.InvariantCulture),
+                detail: $"Minimum item count: {constraints.MinItems.Value}.");
+        }
+
+        if (constraints.MaxItems.HasValue && itemCount > constraints.MaxItems.Value)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.ConstraintViolation,
+                tableName,
+                $"Property '{displayPath}' in config file '{yamlPath}' must contain at most {constraints.MaxItems.Value} items, but the current YAML sequence contains {itemCount}.",
+                yamlPath: yamlPath,
+                schemaPath: schemaNode.SchemaPathHint,
+                displayPath: GetDiagnosticPath(displayPath),
+                rawValue: itemCount.ToString(CultureInfo.InvariantCulture),
+                detail: $"Maximum item count: {constraints.MaxItems.Value}.");
         }
     }
 
@@ -1323,6 +1666,7 @@ internal sealed class YamlConfigSchemaNode
     /// <param name="referenceTableName">目标引用表名称。</param>
     /// <param name="allowedValues">标量允许值集合。</param>
     /// <param name="constraints">标量范围与长度约束。</param>
+    /// <param name="arrayConstraints">数组元素数量约束。</param>
     /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
     public YamlConfigSchemaNode(
         YamlConfigSchemaPropertyType nodeType,
@@ -1332,6 +1676,7 @@ internal sealed class YamlConfigSchemaNode
         string? referenceTableName,
         IReadOnlyCollection<string>? allowedValues,
         YamlConfigScalarConstraints? constraints,
+        YamlConfigArrayConstraints? arrayConstraints,
         string schemaPathHint)
     {
         NodeType = nodeType;
@@ -1341,6 +1686,7 @@ internal sealed class YamlConfigSchemaNode
         ReferenceTableName = referenceTableName;
         AllowedValues = allowedValues;
         Constraints = constraints;
+        ArrayConstraints = arrayConstraints;
         SchemaPathHint = schemaPathHint;
     }
 
@@ -1380,6 +1726,11 @@ internal sealed class YamlConfigSchemaNode
     public YamlConfigScalarConstraints? Constraints { get; }
 
     /// <summary>
+    ///     获取数组元素数量约束；未声明时返回空。
+    /// </summary>
+    public YamlConfigArrayConstraints? ArrayConstraints { get; }
+
+    /// <summary>
     ///     获取用于诊断显示的 schema 路径提示。
     ///     当前节点本身不记录独立路径，因此对象校验会回退到所属根 schema 路径。
     /// </summary>
@@ -1401,6 +1752,7 @@ internal sealed class YamlConfigSchemaNode
             referenceTableName,
             AllowedValues,
             Constraints,
+            ArrayConstraints,
             SchemaPathHint);
     }
 }
@@ -1416,18 +1768,30 @@ internal sealed class YamlConfigScalarConstraints
     /// </summary>
     /// <param name="minimum">最小值约束。</param>
     /// <param name="maximum">最大值约束。</param>
+    /// <param name="exclusiveMinimum">开区间最小值约束。</param>
+    /// <param name="exclusiveMaximum">开区间最大值约束。</param>
     /// <param name="minLength">最小长度约束。</param>
     /// <param name="maxLength">最大长度约束。</param>
+    /// <param name="pattern">正则模式约束。</param>
+    /// <param name="patternRegex">已编译的正则表达式。</param>
     public YamlConfigScalarConstraints(
         double? minimum,
         double? maximum,
+        double? exclusiveMinimum,
+        double? exclusiveMaximum,
         int? minLength,
-        int? maxLength)
+        int? maxLength,
+        string? pattern,
+        Regex? patternRegex)
     {
         Minimum = minimum;
         Maximum = maximum;
+        ExclusiveMinimum = exclusiveMinimum;
+        ExclusiveMaximum = exclusiveMaximum;
         MinLength = minLength;
         MaxLength = maxLength;
+        Pattern = pattern;
+        PatternRegex = patternRegex;
     }
 
     /// <summary>
@@ -1441,6 +1805,16 @@ internal sealed class YamlConfigScalarConstraints
     public double? Maximum { get; }
 
     /// <summary>
+    ///     获取开区间最小值约束。
+    /// </summary>
+    public double? ExclusiveMinimum { get; }
+
+    /// <summary>
+    ///     获取开区间最大值约束。
+    /// </summary>
+    public double? ExclusiveMaximum { get; }
+
+    /// <summary>
     ///     获取最小长度约束。
     /// </summary>
     public int? MinLength { get; }
@@ -1449,6 +1823,44 @@ internal sealed class YamlConfigScalarConstraints
     ///     获取最大长度约束。
     /// </summary>
     public int? MaxLength { get; }
+
+    /// <summary>
+    ///     获取正则模式约束原文。
+    /// </summary>
+    public string? Pattern { get; }
+
+    /// <summary>
+    ///     获取已编译的正则表达式。
+    /// </summary>
+    public Regex? PatternRegex { get; }
+}
+
+/// <summary>
+///     表示一个数组节点上声明的元素数量约束。
+///     该模型与标量约束拆分保存，避免数组节点继续共享不适用的标量字段。
+/// </summary>
+internal sealed class YamlConfigArrayConstraints
+{
+    /// <summary>
+    ///     初始化数组约束模型。
+    /// </summary>
+    /// <param name="minItems">最小元素数量约束。</param>
+    /// <param name="maxItems">最大元素数量约束。</param>
+    public YamlConfigArrayConstraints(int? minItems, int? maxItems)
+    {
+        MinItems = minItems;
+        MaxItems = maxItems;
+    }
+
+    /// <summary>
+    ///     获取最小元素数量约束。
+    /// </summary>
+    public int? MinItems { get; }
+
+    /// <summary>
+    ///     获取最大元素数量约束。
+    /// </summary>
+    public int? MaxItems { get; }
 }
 
 /// <summary>

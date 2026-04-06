@@ -12,6 +12,7 @@ const {ValidationMessageKeys} = require("./localizationKeys");
  * runtime validator and source generator so tooling diagnostics stay aligned.
  *
  * @param {string} content Raw schema JSON text.
+ * @throws {Error} Thrown when the schema declares one unsupported or invalid pattern string.
  * @returns {{
  *   type: "object",
  *   required: string[],
@@ -380,6 +381,28 @@ function normalizeSchemaNonNegativeInteger(value) {
 }
 
 /**
+ * Normalize one schema pattern string when the regular expression can be
+ * compiled by the local tooling runtime.
+ *
+ * @param {unknown} value Raw schema value.
+ * @param {string} displayPath Logical property path used in diagnostics.
+ * @throws {Error} Thrown when the pattern string cannot be compiled.
+ * @returns {string | undefined} Normalized pattern string.
+ */
+function normalizeSchemaPattern(value, displayPath) {
+    if (typeof value !== "string") {
+        return undefined;
+    }
+
+    try {
+        void new RegExp(value);
+        return value;
+    } catch (error) {
+        throw new Error(`Schema property '${displayPath}' declares an invalid 'pattern' regular expression: ${error.message}`);
+    }
+}
+
+/**
  * Convert a schema default value into a compact string that can be shown in UI
  * metadata hints.
  *
@@ -408,6 +431,27 @@ function formatSchemaDefaultValue(value) {
     }
 
     return undefined;
+}
+
+/**
+ * Test one scalar value against one schema pattern string.
+ *
+ * @param {string} scalarValue Scalar value from YAML.
+ * @param {string | undefined} pattern Schema pattern string.
+ * @param {string} displayPath Logical property path used in diagnostics.
+ * @throws {Error} Thrown when the pattern string cannot be compiled.
+ * @returns {boolean} True when the value matches or no pattern is declared.
+ */
+function matchesSchemaPattern(scalarValue, pattern, displayPath) {
+    if (typeof pattern !== "string") {
+        return true;
+    }
+
+    try {
+        return new RegExp(pattern).test(scalarValue);
+    } catch (error) {
+        throw new Error(`Schema property '${displayPath}' declares an invalid 'pattern' regular expression: ${error.message}`);
+    }
 }
 
 /**
@@ -458,9 +502,14 @@ function parseSchemaNode(rawNode, displayPath) {
         description: typeof value.description === "string" ? value.description : undefined,
         defaultValue: formatSchemaDefaultValue(value.default),
         minimum: normalizeSchemaNumber(value.minimum),
+        exclusiveMinimum: normalizeSchemaNumber(value.exclusiveMinimum),
         maximum: normalizeSchemaNumber(value.maximum),
+        exclusiveMaximum: normalizeSchemaNumber(value.exclusiveMaximum),
         minLength: normalizeSchemaNonNegativeInteger(value.minLength),
         maxLength: normalizeSchemaNonNegativeInteger(value.maxLength),
+        pattern: normalizeSchemaPattern(value.pattern, displayPath),
+        minItems: normalizeSchemaNonNegativeInteger(value.minItems),
+        maxItems: normalizeSchemaNonNegativeInteger(value.maxItems),
         refTable: typeof value["x-gframework-ref-table"] === "string"
             ? value["x-gframework-ref-table"]
             : undefined
@@ -494,6 +543,8 @@ function parseSchemaNode(rawNode, displayPath) {
             title: metadata.title,
             description: metadata.description,
             defaultValue: metadata.defaultValue,
+            minItems: metadata.minItems,
+            maxItems: metadata.maxItems,
             refTable: metadata.refTable,
             items: itemNode
         };
@@ -508,14 +559,23 @@ function parseSchemaNode(rawNode, displayPath) {
         minimum: type === "integer" || type === "number"
             ? metadata.minimum
             : undefined,
+        exclusiveMinimum: type === "integer" || type === "number"
+            ? metadata.exclusiveMinimum
+            : undefined,
         maximum: type === "integer" || type === "number"
             ? metadata.maximum
+            : undefined,
+        exclusiveMaximum: type === "integer" || type === "number"
+            ? metadata.exclusiveMaximum
             : undefined,
         minLength: type === "string"
             ? metadata.minLength
             : undefined,
         maxLength: type === "string"
             ? metadata.maxLength
+            : undefined,
+        pattern: type === "string"
+            ? metadata.pattern
             : undefined,
         enumValues: normalizeSchemaEnumValues(value.enum),
         refTable: metadata.refTable
@@ -546,6 +606,28 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
                 })
             });
             return;
+        }
+
+        if (typeof schemaNode.minItems === "number" &&
+            yamlNode.items.length < schemaNode.minItems) {
+            diagnostics.push({
+                severity: "error",
+                message: localizeValidationMessage(ValidationMessageKeys.minItemsViolation, localizer, {
+                    displayPath,
+                    value: String(schemaNode.minItems)
+                })
+            });
+        }
+
+        if (typeof schemaNode.maxItems === "number" &&
+            yamlNode.items.length > schemaNode.maxItems) {
+            diagnostics.push({
+                severity: "error",
+                message: localizeValidationMessage(ValidationMessageKeys.maxItemsViolation, localizer, {
+                    displayPath,
+                    value: String(schemaNode.maxItems)
+                })
+            });
         }
 
         for (let index = 0; index < yamlNode.items.length; index += 1) {
@@ -597,6 +679,7 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
     const scalarValue = unquoteScalar(yamlNode.value);
     const supportsNumericConstraints = schemaNode.type === "integer" || schemaNode.type === "number";
     const supportsLengthConstraints = schemaNode.type === "string";
+    const supportsPatternConstraints = schemaNode.type === "string";
 
     if (supportsNumericConstraints &&
         typeof schemaNode.minimum === "number" &&
@@ -611,6 +694,18 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
     }
 
     if (supportsNumericConstraints &&
+        typeof schemaNode.exclusiveMinimum === "number" &&
+        Number(scalarValue) <= schemaNode.exclusiveMinimum) {
+        diagnostics.push({
+            severity: "error",
+            message: localizeValidationMessage(ValidationMessageKeys.exclusiveMinimumViolation, localizer, {
+                displayPath,
+                value: String(schemaNode.exclusiveMinimum)
+            })
+        });
+    }
+
+    if (supportsNumericConstraints &&
         typeof schemaNode.maximum === "number" &&
         Number(scalarValue) > schemaNode.maximum) {
         diagnostics.push({
@@ -618,6 +713,18 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
             message: localizeValidationMessage(ValidationMessageKeys.maximumViolation, localizer, {
                 displayPath,
                 value: String(schemaNode.maximum)
+            })
+        });
+    }
+
+    if (supportsNumericConstraints &&
+        typeof schemaNode.exclusiveMaximum === "number" &&
+        Number(scalarValue) >= schemaNode.exclusiveMaximum) {
+        diagnostics.push({
+            severity: "error",
+            message: localizeValidationMessage(ValidationMessageKeys.exclusiveMaximumViolation, localizer, {
+                displayPath,
+                value: String(schemaNode.exclusiveMaximum)
             })
         });
     }
@@ -642,6 +749,17 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
             message: localizeValidationMessage(ValidationMessageKeys.maxLengthViolation, localizer, {
                 displayPath,
                 value: String(schemaNode.maxLength)
+            })
+        });
+    }
+
+    if (supportsPatternConstraints &&
+        !matchesSchemaPattern(scalarValue, schemaNode.pattern, schemaNode.displayPath)) {
+        diagnostics.push({
+            severity: "error",
+            message: localizeValidationMessage(ValidationMessageKeys.patternViolation, localizer, {
+                displayPath,
+                value: schemaNode.pattern
             })
         });
     }
@@ -729,14 +847,24 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”应为“${params.schemaType}”，但当前标量值不兼容。`;
             case ValidationMessageKeys.enumMismatch:
                 return `属性“${params.displayPath}”必须是以下值之一：${params.values}。`;
+            case ValidationMessageKeys.exclusiveMaximumViolation:
+                return `属性“${params.displayPath}”必须小于 ${params.value}。`;
+            case ValidationMessageKeys.exclusiveMinimumViolation:
+                return `属性“${params.displayPath}”必须大于 ${params.value}。`;
             case ValidationMessageKeys.maximumViolation:
                 return `属性“${params.displayPath}”必须小于或等于 ${params.value}。`;
+            case ValidationMessageKeys.maxItemsViolation:
+                return `属性“${params.displayPath}”最多只能包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.maxLengthViolation:
                 return `属性“${params.displayPath}”长度必须不超过 ${params.value} 个字符。`;
             case ValidationMessageKeys.minimumViolation:
                 return `属性“${params.displayPath}”必须大于或等于 ${params.value}。`;
+            case ValidationMessageKeys.minItemsViolation:
+                return `属性“${params.displayPath}”至少需要包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.minLengthViolation:
                 return `属性“${params.displayPath}”长度必须至少为 ${params.value} 个字符。`;
+            case ValidationMessageKeys.patternViolation:
+                return `属性“${params.displayPath}”必须匹配正则模式“${params.value}”。`;
             case ValidationMessageKeys.expectedObject:
                 return params.subject;
             case ValidationMessageKeys.missingRequired:
@@ -757,14 +885,24 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' is expected to be '${params.schemaType}', but the current scalar value is incompatible.`;
         case ValidationMessageKeys.enumMismatch:
             return `Property '${params.displayPath}' must be one of: ${params.values}.`;
+        case ValidationMessageKeys.exclusiveMaximumViolation:
+            return `Property '${params.displayPath}' must be less than ${params.value}.`;
+        case ValidationMessageKeys.exclusiveMinimumViolation:
+            return `Property '${params.displayPath}' must be greater than ${params.value}.`;
         case ValidationMessageKeys.maximumViolation:
             return `Property '${params.displayPath}' must be less than or equal to ${params.value}.`;
+        case ValidationMessageKeys.maxItemsViolation:
+            return `Property '${params.displayPath}' must contain at most ${params.value} items.`;
         case ValidationMessageKeys.maxLengthViolation:
             return `Property '${params.displayPath}' must be at most ${params.value} characters long.`;
         case ValidationMessageKeys.minimumViolation:
             return `Property '${params.displayPath}' must be greater than or equal to ${params.value}.`;
+        case ValidationMessageKeys.minItemsViolation:
+            return `Property '${params.displayPath}' must contain at least ${params.value} items.`;
         case ValidationMessageKeys.minLengthViolation:
             return `Property '${params.displayPath}' must be at least ${params.value} characters long.`;
+        case ValidationMessageKeys.patternViolation:
+            return `Property '${params.displayPath}' must match pattern '${params.value}'.`;
         case ValidationMessageKeys.expectedObject:
             return params.subject;
         case ValidationMessageKeys.missingRequired:
@@ -1418,6 +1556,8 @@ module.exports = {
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string,
+ *   minItems?: number,
+ *   maxItems?: number,
  *   refTable?: string,
  *   items: SchemaNode
  * } | {
@@ -1426,6 +1566,13 @@ module.exports = {
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string,
+ *   minimum?: number,
+ *   exclusiveMinimum?: number,
+ *   maximum?: number,
+ *   exclusiveMaximum?: number,
+ *   minLength?: number,
+ *   maxLength?: number,
+ *   pattern?: string,
  *   enumValues?: string[],
  *   refTable?: string
  * }} SchemaNode

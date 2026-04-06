@@ -477,7 +477,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                         TryBuildArrayInitializer(property.Value, itemType, itemClrType) ??
                         $" = global::System.Array.Empty<{itemClrType}>();",
                         TryBuildEnumDocumentation(itemsElement, itemType),
-                        null,
+                        TryBuildConstraintDocumentation(property.Value, "array"),
                         refTableName,
                         null,
                         new SchemaTypeSpec(
@@ -527,7 +527,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                         $"global::System.Collections.Generic.IReadOnlyList<{objectSpec.ClassName}>",
                         $" = global::System.Array.Empty<{objectSpec.ClassName}>();",
                         null,
-                        null,
+                        TryBuildConstraintDocumentation(property.Value, "array"),
                         null,
                         null,
                         new SchemaTypeSpec(
@@ -1876,7 +1876,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    ///     将 shared schema 子集中的范围与长度约束整理成 XML 文档可读字符串。
+    ///     将 shared schema 子集中的范围、长度、模式与数组数量约束整理成 XML 文档可读字符串。
     /// </summary>
     /// <param name="element">Schema 节点。</param>
     /// <param name="schemaType">标量类型。</param>
@@ -1892,9 +1892,21 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         if ((schemaType == "integer" || schemaType == "number") &&
+            TryGetFiniteNumber(element, "exclusiveMinimum", out var exclusiveMinimum))
+        {
+            parts.Add($"exclusiveMinimum = {exclusiveMinimum.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if ((schemaType == "integer" || schemaType == "number") &&
             TryGetFiniteNumber(element, "maximum", out var maximum))
         {
             parts.Add($"maximum = {maximum.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if ((schemaType == "integer" || schemaType == "number") &&
+            TryGetFiniteNumber(element, "exclusiveMaximum", out var exclusiveMaximum))
+        {
+            parts.Add($"exclusiveMaximum = {exclusiveMaximum.ToString(CultureInfo.InvariantCulture)}");
         }
 
         if (schemaType == "string" &&
@@ -1907,6 +1919,25 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             TryGetNonNegativeInt32(element, "maxLength", out var maxLength))
         {
             parts.Add($"maxLength = {maxLength.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (schemaType == "string" &&
+            element.TryGetProperty("pattern", out var patternElement) &&
+            patternElement.ValueKind == JsonValueKind.String)
+        {
+            parts.Add($"pattern = '{patternElement.GetString() ?? string.Empty}'");
+        }
+
+        if (schemaType == "array" &&
+            TryGetNonNegativeInt32(element, "minItems", out var minItems))
+        {
+            parts.Add($"minItems = {minItems.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (schemaType == "array" &&
+            TryGetNonNegativeInt32(element, "maxItems", out var maxItems))
+        {
+            parts.Add($"maxItems = {maxItems.ToString(CultureInfo.InvariantCulture)}");
         }
 
         return parts.Count > 0 ? string.Join(", ", parts) : null;

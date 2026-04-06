@@ -12,7 +12,7 @@
 - JSON Schema 作为结构描述
 - 一对象一文件的目录组织
 - 运行时只读查询
-- Runtime / Generator / Tooling 共享支持 `minimum`、`maximum`、`minLength`、`maxLength`
+- Runtime / Generator / Tooling 共享支持 `minimum`、`maximum`、`exclusiveMinimum`、`exclusiveMaximum`、`minLength`、`maxLength`、`pattern`、`minItems`、`maxItems`
 - Source Generator 生成配置类型、表包装、单表注册/访问辅助，以及项目级聚合注册目录
 - VS Code 插件提供配置浏览、raw 编辑、schema 打开、递归轻量校验和嵌套对象表单入口
 
@@ -92,7 +92,7 @@ dropItems:
 GameProject/
 ├─ GameProject.csproj
 ├─ Config/
-│  ├─ GameConfigBootstrap.cs
+│  ├─ GameConfigHost.cs
 │  └─ GameConfigRuntime.cs
 ├─ config/
 │  ├─ monster/
@@ -142,7 +142,7 @@ GameProject/
 
 这段配置的作用：
 
-- `GFramework.Game` 提供运行时 `YamlConfigLoader`、`ConfigRegistry` 和只读表实现
+- `GFramework.Game` 提供运行时 `YamlConfigLoader`、`ConfigRegistry`、`GameConfigBootstrap` 和只读表实现
 - 三个 `ProjectReference(... OutputItemType="Analyzer")` 把生成器接进当前消费者项目
 - `GeWuYou.GFramework.SourceGenerators.targets` 自动把 `schemas/**/*.schema.json` 加入 `AdditionalFiles`
 
@@ -160,12 +160,51 @@ GameProject/
 </PropertyGroup>
 ```
 
-### 启动引导模板
+### 官方启动帮助器
 
-推荐把配置系统的初始化收敛到一个单独入口，避免把 `YamlConfigLoader` 注册逻辑散落到多个启动脚本中：
+`GFramework.Game` 现在内置 `GameConfigBootstrap` 与 `GameConfigBootstrapOptions`，用于把 `ConfigRegistry`、`YamlConfigLoader`、`LoadAsync` 和热重载句柄收敛到一个正式的 C# 入口中。
+
+推荐直接组合这个帮助器，而不是继续在消费者项目里复制文档模板：
 
 ```csharp
-using GFramework.Core.Abstractions.Events;
+using GFramework.Game.Abstractions.Config;
+using GFramework.Game.Config;
+using GFramework.Game.Config.Generated;
+
+var bootstrap = new GameConfigBootstrap(
+    new GameConfigBootstrapOptions
+    {
+        RootPath = configRootPath,
+        ConfigureLoader = static loader => loader.RegisterAllGeneratedConfigTables(),
+        EnableHotReload = true,
+        HotReloadOptions = new YamlConfigHotReloadOptions
+        {
+            OnTableReloaded = tableName => Console.WriteLine($"Reloaded config table: {tableName}"),
+            OnTableReloadFailed = static (_, exception) =>
+            {
+                var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
+                Console.WriteLine($"Config reload failed: {diagnostic?.FailureKind}");
+            }
+        }
+    });
+
+await bootstrap.InitializeAsync();
+
+var registry = bootstrap.Registry;
+var monsterTable = registry.GetMonsterTable();
+var slime = monsterTable.Get(1);
+
+bootstrap.Dispose();
+```
+
+如果你希望把它继续包装进自己的进程级入口，也建议只包一层生命周期壳，而不是重新拼装底层加载器。为了避免和后面的“运行时读取模板”冲突，推荐明确拆成两类文件：
+
+- `GameConfigHost.cs` 负责生命周期管理、初始化和热重载
+- `GameConfigRuntime.cs` 负责把已初始化的 `IConfigRegistry` 封装成业务层读取入口
+
+如果你采用这套双层模板，建议把上面的生命周期壳文件命名为 `GameConfigHost.cs`，并把类型名同步改成 `GameConfigHost`：
+
+```csharp
 using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 using GFramework.Game.Config.Generated;
@@ -173,64 +212,71 @@ using GFramework.Game.Config.Generated;
 namespace GameProject.Config;
 
 /// <summary>
-///     负责初始化游戏内容配置运行时入口。
+///     封装当前游戏进程的配置启动生命周期。
 /// </summary>
-public sealed class GameConfigBootstrap : IDisposable
+public sealed class GameConfigHost : IDisposable
 {
-    private readonly ConfigRegistry _registry = new();
-    private IUnRegister? _hotReload;
+    private readonly GameConfigBootstrap _bootstrap;
 
     /// <summary>
-    ///     获取当前游戏进程共享的配置注册表。
-    /// </summary>
-    public IConfigRegistry Registry => _registry;
-
-    /// <summary>
-    ///     从指定配置根目录加载所有已注册配置表。
+    ///     使用指定配置根目录创建运行时入口。
     /// </summary>
     /// <param name="configRootPath">配置根目录。</param>
-    /// <param name="enableHotReload">是否启用开发期热重载。</param>
-    public async Task InitializeAsync(string configRootPath, bool enableHotReload = false)
+    public GameConfigHost(string configRootPath)
     {
-        var loader = new YamlConfigLoader(configRootPath)
-            .RegisterAllGeneratedConfigTables();
-
-        await loader.LoadAsync(_registry);
-
-        if (enableHotReload)
-        {
-            _hotReload = loader.EnableHotReload(
-                _registry,
-                onTableReloaded: tableName => Console.WriteLine($"Reloaded config table: {tableName}"),
-                onTableReloadFailed: static (_, exception) =>
-                {
-                    var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
-                    Console.WriteLine($"Config reload failed: {diagnostic?.FailureKind}");
-                });
-        }
+        _bootstrap = new GameConfigBootstrap(
+            new GameConfigBootstrapOptions
+            {
+                RootPath = configRootPath,
+                ConfigureLoader = static loader => loader.RegisterAllGeneratedConfigTables()
+            });
     }
 
     /// <summary>
-    ///     停止开发期热重载并释放相关资源。
+    ///     获取共享配置注册表。
+    /// </summary>
+    public IConfigRegistry Registry => _bootstrap.Registry;
+
+    /// <summary>
+    ///     执行初次配置加载。
+    /// </summary>
+    public Task InitializeAsync()
+    {
+        return _bootstrap.InitializeAsync();
+    }
+
+    /// <summary>
+    ///     创建业务层使用的只读配置入口。
+    /// </summary>
+    /// <returns>封装强类型表访问的读取入口。</returns>
+    public GameConfigRuntime CreateRuntime()
+    {
+        return new GameConfigRuntime(_bootstrap.Registry);
+    }
+
+    /// <summary>
+    ///     释放底层热重载句柄等资源。
     /// </summary>
     public void Dispose()
     {
-        _hotReload?.UnRegister();
+        _bootstrap.Dispose();
     }
 }
 ```
 
-这段模板刻意遵循几个约定：
+这个官方帮助器刻意遵循几个约定：
 
-- 优先使用生成器产出的 `RegisterAllGeneratedConfigTables()`，把多表注册收敛为一个稳定入口
-- 由一个长生命周期对象持有 `ConfigRegistry`
-- 热重载句柄和配置生命周期绑在一起，避免监听器泄漏
+- 优先通过 `ConfigureLoader` 调用生成器产出的 `RegisterAllGeneratedConfigTables()`，把多表注册收敛为一个稳定入口
+- 由 `GameConfigBootstrap` 持有 `ConfigRegistry`、`YamlConfigLoader` 和热重载句柄
+- `InitializeAsync()` 只在首次加载完整成功后才公开运行时状态，避免半初始化对象泄漏到业务层
+- 热重载既可以在初始化时自动启用，也可以在初次加载后显式调用 `StartHotReload(...)`
 
 ### 运行时读取模板
 
 推荐不要在业务代码里直接散落字符串表名查询，而是统一依赖生成的强类型入口：
 
 ```csharp
+using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config.Generated;
 
 namespace GameProject.Config;
@@ -272,6 +318,16 @@ public sealed class GameConfigRuntime
 }
 ```
 
+它通常与上面的 `GameConfigHost` 配合使用：
+
+```csharp
+var configHost = new GameConfigHost("config-root");
+await configHost.InitializeAsync();
+
+var runtime = configHost.CreateRuntime();
+var slime = runtime.GetMonster(1);
+```
+
 这样做的收益：
 
 - 配置系统对业务层暴露的是强类型表，而不是 `"monster"` 这类 magic string
@@ -309,30 +365,38 @@ if (monsterTable.TryFindFirstByFaction("dungeon", out var firstDungeonMonster))
 
 ### Architecture 推荐接入模板
 
-如果你的项目已经基于 `GFramework.Core.Architectures.Architecture` 组织初始化流程，推荐把配置系统接到 `OnInitialize()` 阶段，并把 `ConfigRegistry` 注册为 utility：
+如果你的项目已经基于 `GFramework.Core.Architectures.Architecture` 组织初始化流程，推荐把配置系统接到 `OnInitialize()` 阶段，并把 `GameConfigBootstrap.Registry` 注册为 utility：
 
 ```csharp
 using GFramework.Core.Architectures;
+using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 using GFramework.Game.Config.Generated;
 
 public sealed class GameArchitecture : Architecture
 {
-    private readonly string _configRootPath;
+    private readonly GameConfigBootstrap _configBootstrap;
 
     public GameArchitecture(string configRootPath)
     {
-        _configRootPath = configRootPath ?? throw new ArgumentNullException(nameof(configRootPath));
+        _configBootstrap = new GameConfigBootstrap(
+            new GameConfigBootstrapOptions
+            {
+                RootPath = configRootPath,
+                ConfigureLoader = static loader => loader.RegisterAllGeneratedConfigTables()
+            });
     }
 
     protected override void OnInitialize()
     {
-        var registry = RegisterUtility(new ConfigRegistry());
+        RegisterUtility(_configBootstrap.Registry);
+        _configBootstrap.InitializeAsync().GetAwaiter().GetResult();
+    }
 
-        var loader = new YamlConfigLoader(_configRootPath)
-            .RegisterAllGeneratedConfigTables();
-
-        loader.LoadAsync(registry).GetAwaiter().GetResult();
+    public override async ValueTask DestroyAsync()
+    {
+        _configBootstrap.Dispose();
+        await base.DestroyAsync();
     }
 }
 ```
@@ -340,35 +404,40 @@ public sealed class GameArchitecture : Architecture
 初始化完成后，业务组件可以继续通过架构上下文读取 utility，再走生成的强类型入口：
 
 ```csharp
-var registry = Context.GetUtility<ConfigRegistry>();
+var registry = Context.GetUtility<IConfigRegistry>();
 var monsterTable = registry.GetMonsterTable();
 var slime = monsterTable.Get(1);
 ```
 
 推荐遵循以下顺序：
 
-- 先注册 `ConfigRegistry`
-- 再构造并配置 `YamlConfigLoader`
-- 在 `OnInitialize()` 内完成首次 `LoadAsync`
+- 先构造 `GameConfigBootstrap`
+- 在 `OnInitialize()` 里注册 `bootstrap.Registry`
+- 再调用 `bootstrap.InitializeAsync()` 完成首次加载
+- 架构销毁时释放 `GameConfigBootstrap`
 - 初始化完成后只通过注册表和生成表包装访问配置
 
-当前阶段不建议为了配置系统额外引入新的 `IArchitectureModule` 或 service module 抽象；现有 `Architecture + ConfigRegistry + YamlConfigLoader + RegisterAllGeneratedConfigTables()` 组合已经足够作为官方推荐接入路径。
+当前阶段不建议为了配置系统额外引入新的 `IArchitectureModule` 或 service module 抽象；现有 `Architecture + GameConfigBootstrap + RegisterAllGeneratedConfigTables()` 组合已经足够作为官方推荐接入路径。
 
 ### 热重载模板
 
-如果你希望把开发期热重载显式收敛为一个可选能力，建议把失败诊断一起写进模板，而不是只打印异常文本：
+如果你希望把开发期热重载显式收敛为一个可选能力，推荐直接通过 `GameConfigBootstrap.StartHotReload(...)` 管理，而不是让监听句柄散落在启动层之外：
 
 ```csharp
-var hotReload = loader.EnableHotReload(
-    registry,
-    onTableReloaded: tableName => Console.WriteLine($"Reloaded: {tableName}"),
-    onTableReloadFailed: (tableName, exception) =>
+await bootstrap.InitializeAsync();
+
+bootstrap.StartHotReload(
+    new YamlConfigHotReloadOptions
     {
-        var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
-        Console.WriteLine($"Reload failed: {tableName}");
-        Console.WriteLine($"Failure kind: {diagnostic?.FailureKind}");
-        Console.WriteLine($"Yaml path: {diagnostic?.YamlPath}");
-        Console.WriteLine($"Display path: {diagnostic?.DisplayPath}");
+        OnTableReloaded = tableName => Console.WriteLine($"Reloaded: {tableName}"),
+        OnTableReloadFailed = (tableName, exception) =>
+        {
+            var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
+            Console.WriteLine($"Reload failed: {tableName}");
+            Console.WriteLine($"Failure kind: {diagnostic?.FailureKind}");
+            Console.WriteLine($"Yaml path: {diagnostic?.YamlPath}");
+            Console.WriteLine($"Display path: {diagnostic?.DisplayPath}");
+        }
     });
 ```
 
@@ -378,22 +447,7 @@ var hotReload = loader.EnableHotReload(
 - 热重载失败时应优先依赖 `ConfigLoadException.Diagnostic` 做稳定日志或 UI 提示
 - 如果你的项目已经有统一日志系统，建议在这里把诊断字段转成结构化日志，而不是拼接一整段字符串
 
-如果你后续还需要为热重载增加更多开关，推荐优先使用选项对象入口，而不是继续叠加位置参数：
-
-```csharp
-var hotReload = loader.EnableHotReload(
-    registry,
-    new YamlConfigHotReloadOptions
-    {
-        OnTableReloaded = tableName => Console.WriteLine($"Reloaded: {tableName}"),
-        OnTableReloadFailed = (tableName, exception) =>
-        {
-            var diagnostic = (exception as ConfigLoadException)?.Diagnostic;
-            Console.WriteLine($"{tableName}: {diagnostic?.FailureKind}");
-        },
-        DebounceDelay = TimeSpan.FromMilliseconds(150)
-    });
-```
+如果你确实需要直接控制底层加载器，`YamlConfigLoader.EnableHotReload(...)` 仍然保留；但在一般启动路径下，优先让 `GameConfigBootstrap` 持有并停止监听句柄。
 
 ## 运行时接入
 
@@ -524,7 +578,10 @@ var loader = new YamlConfigLoader("config-root")
 - 嵌套对象字段类型不匹配
 - 对象数组元素结构不匹配
 - 数值字段违反 `minimum` / `maximum`
+- 数值字段违反 `exclusiveMinimum` / `exclusiveMaximum`
 - 字符串字段违反 `minLength` / `maxLength`
+- 字符串字段违反 `pattern`
+- 数组字段违反 `minItems` / `maxItems`
 - 标量 `enum` 不匹配
 - 标量数组元素 `enum` 不匹配
 - 通过 `x-gframework-ref-table` 声明的跨表引用缺失目标行
@@ -573,7 +630,10 @@ if (MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out var re
 - `default`：供生成类型属性初始值和工具提示复用
 - `enum`：供运行时校验、VS Code 校验和表单枚举选择复用
 - `minimum` / `maximum`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
+- `exclusiveMinimum` / `exclusiveMaximum`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
 - `minLength` / `maxLength`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
+- `pattern`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用；当前按 C# `CultureInvariant` 与 JS 默认分组语义解释，非法模式会在 schema 解析阶段直接报错
+- `minItems` / `maxItems`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用
 
 这样可以避免错误配置被默认值或 `IgnoreUnmatchedProperties` 静默吞掉。
 
