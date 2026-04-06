@@ -81,6 +81,7 @@ public class SchemaConfigGeneratorSnapshotTests
                                     "description": "Localized monster display name.",
                                     "minLength": 3,
                                     "maxLength": 16,
+                                    "pattern": "^[A-Z][a-z]+$",
                                     "default": "Slime",
                                     "enum": ["Slime", "Goblin"]
                                   },
@@ -88,11 +89,15 @@ public class SchemaConfigGeneratorSnapshotTests
                                     "type": "integer",
                                     "minimum": 1,
                                     "maximum": 999,
+                                    "exclusiveMinimum": 0,
+                                    "exclusiveMaximum": 1000,
                                     "default": 10
                                   },
                                   "dropItems": {
                                     "description": "Referenced drop ids.",
                                     "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 3,
                                     "items": {
                                       "type": "string",
                                       "minLength": 3,
