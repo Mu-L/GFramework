@@ -86,6 +86,10 @@ public class ArchitectureConfigIntegrationTests
         {
             // Ignored: cleanup is best effort and should not fail the test.
         }
+        catch (UnauthorizedAccessException)
+        {
+            // Ignored: cleanup is best effort and can transiently fail when files are still being released.
+        }
     }
 
     private const string MonsterSchemaJson = @"{

@@ -1043,7 +1043,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine();
         builder.AppendLine(
             "        // Scan the current table snapshot on demand so generated helpers stay aligned with reloadable runtime data.");
-        builder.AppendLine($"        foreach (var candidate in All())");
+        builder.AppendLine("        foreach (var candidate in All())");
         builder.AppendLine("        {");
         builder.AppendLine(
             $"            if (global::System.Collections.Generic.EqualityComparer<{property.TypeSpec.ClrType}>.Default.Equals(candidate.{property.PropertyName}, value))");

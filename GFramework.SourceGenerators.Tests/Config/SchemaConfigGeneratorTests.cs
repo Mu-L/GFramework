@@ -345,6 +345,10 @@ public class SchemaConfigGeneratorTests
             Assert.That(tableSource, Does.Not.Contain("FindByDropItems("));
             Assert.That(tableSource, Does.Not.Contain("FindByTargetId("));
             Assert.That(tableSource, Does.Not.Contain("FindByReward("));
+            Assert.That(tableSource, Does.Not.Contain("TryFindFirstById("));
+            Assert.That(tableSource, Does.Not.Contain("TryFindFirstByDropItems("));
+            Assert.That(tableSource, Does.Not.Contain("TryFindFirstByTargetId("));
+            Assert.That(tableSource, Does.Not.Contain("TryFindFirstByReward("));
         });
     }
 }
