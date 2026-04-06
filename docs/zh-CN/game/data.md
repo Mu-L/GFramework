@@ -48,6 +48,20 @@ public interface IDataRepository : IUtility
 }
 ```
 
+`IDataRepository` 描述的是“仓库语义”，不是固定的落盘格式。实现可以选择每个数据项独立成文件，也可以把多个 section 聚合到同一个文件里。
+
+当前内建实现里：
+
+- `DataRepository` 采用“每个 location 一份持久化对象”的模型
+- `UnifiedSettingsDataRepository` 采用“所有设置聚合到一个统一文件”的模型
+
+两者对外遵守同一套约定：
+
+- `SaveAllAsync(...)` 视为一次批量提交，只发送 `DataBatchSavedEvent`，不会再为每个条目重复发送 `DataSavedEvent<T>`
+- `DeleteAsync(...)` 只有在目标数据真实存在并被删除时才会发送删除事件
+- 当 `DataRepositoryOptions.AutoBackup = true` 时，覆盖已有数据前会先保留上一份快照
+- 对 `UnifiedSettingsDataRepository` 来说，备份粒度是整个统一文件，而不是单个设置 section
+
 ### 存档仓库
 
 `ISaveRepository<T>` 专门用于管理游戏存档：
@@ -412,6 +426,74 @@ public async Task SaveAllGameData()
     Console.WriteLine("所有数据已保存");
 }
 ```
+
+`SaveAllAsync(...)` 的事件语义和逐项调用 `SaveAsync(...)` 不同。它代表一次显式的批量提交，因此适合让监听器在收到 `DataBatchSavedEvent` 时统一刷新 UI、缓存或元数据，而不是对每个条目单独响应。
+
+### 聚合设置仓库
+
+如果你希望把设置统一保存到单个文件中，可以使用 `UnifiedSettingsDataRepository`：
+
+```csharp
+using GFramework.Game.Data;
+using GFramework.Game.Serializer;
+
+public sealed class GameArchitecture : Architecture
+{
+    protected override void Init()
+    {
+        var storage = this.GetUtility<IStorage>();
+        var serializer = new JsonSerializer();
+
+        var settingsRepo = new UnifiedSettingsDataRepository(
+            storage,
+            serializer,
+            new DataRepositoryOptions
+            {
+                AutoBackup = true,
+                EnableEvents = true
+            },
+            "settings.json");
+
+        settingsRepo.RegisterDataType(new DataLocation("settings", "graphics"), typeof(GraphicsSettings));
+        settingsRepo.RegisterDataType(new DataLocation("settings", "audio"), typeof(AudioSettings));
+
+        RegisterUtility<ISettingsDataRepository>(settingsRepo);
+    }
+}
+```
+
+这个实现依然满足 `IDataRepository` 的通用契约，但有两个实现层面的差异需要明确：
+
+- 它把所有设置 section 缓存在内存中，并在保存或删除时整文件回写
+- 开启自动备份时，备份的是整个 `settings.json` 文件，因此适合做“上一次完整设置快照”的恢复，而不是 section 级别回滚
+
+如果你需要 `LoadAllAsync()`，或者希望在同一个统一文件里混合反序列化多个 section，必须先为每个 section 注册类型：
+
+```csharp
+public async Task PrintSettingsSnapshot()
+{
+    var repo = this.GetUtility<ISettingsDataRepository>();
+
+    var all = await repo.LoadAllAsync();
+
+    var graphics = (GraphicsSettings)all["graphics"];
+    var audio = (AudioSettings)all["audio"];
+
+    Console.WriteLine($"Resolution: {graphics.ResolutionWidth}x{graphics.ResolutionHeight}");
+    Console.WriteLine($"MasterVolume: {audio.MasterVolume}");
+}
+```
+
+最小采用要求：
+
+- 项目需要可用的 `IStorage`
+- 项目需要一个可用的序列化器实例，例如 `GFramework.Game.Serializer.JsonSerializer`
+- 在注册仓库时，把所有需要参与 `LoadAllAsync()` 或混合 section 反序列化的 location/type 对显式调用一次 `RegisterDataType(...)`
+
+兼容性说明：
+
+- 现在 `UnifiedSettingsDataRepository.LoadAsync<T>()` 发送的是 `DataLoadedEvent<T>`，而不是 `DataLoadedEvent<IData>`
+- 如果你之前监听的是 `DataLoadedEvent<IData>`，需要改成订阅具体类型，例如 `DataLoadedEvent<GraphicsSettings>` 或 `DataLoadedEvent<AudioSettings>`
 
 ### 存档备份
 

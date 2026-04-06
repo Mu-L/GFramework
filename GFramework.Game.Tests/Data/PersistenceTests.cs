@@ -1,5 +1,12 @@
 using System.IO;
+using GFramework.Core.Abstractions.Events;
+using GFramework.Core.Abstractions.Rule;
+using GFramework.Core.Abstractions.Storage;
+using GFramework.Core.Architectures;
+using GFramework.Core.Events;
+using GFramework.Core.Ioc;
 using GFramework.Game.Abstractions.Data;
+using GFramework.Game.Abstractions.Data.Events;
 using GFramework.Game.Data;
 using GFramework.Game.Serializer;
 using GFramework.Game.Storage;
@@ -194,8 +201,7 @@ public class PersistenceTests
         var repo = new UnifiedSettingsDataRepository(
             storage,
             serializer,
-            new DataRepositoryOptions { EnableEvents = false },
-            "settings.json");
+            new DataRepositoryOptions { EnableEvents = false });
 
         var location = new TestDataLocation("settings/choice");
         repo.RegisterDataType(location, typeof(TestSimpleData));
@@ -207,8 +213,7 @@ public class PersistenceTests
         var repo2 = new UnifiedSettingsDataRepository(
             storage2,
             serializer,
-            new DataRepositoryOptions { EnableEvents = false },
-            "settings.json");
+            new DataRepositoryOptions { EnableEvents = false });
         repo2.RegisterDataType(location, typeof(TestSimpleData));
 
         var loaded = await repo2.LoadAsync<TestSimpleData>(location);
@@ -217,6 +222,432 @@ public class PersistenceTests
         var all = await repo2.LoadAllAsync();
         Assert.That(all.Keys, Contains.Item(location.Key));
         Assert.That(all[location.Key], Is.TypeOf<TestSimpleData>());
+    }
+
+    /// <summary>
+    ///     验证通用数据仓库在覆盖已有数据时会创建备份文件，并保留覆盖前的旧值。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task DataRepository_SaveAsync_Should_Create_Backup_When_Overwriting_Existing_Data()
+    {
+        var root = CreateTempRoot();
+        using var storage = new FileStorage(root, new JsonSerializer(), ".json");
+        var repository = new DataRepository(
+            storage,
+            new DataRepositoryOptions
+            {
+                AutoBackup = true,
+                EnableEvents = false
+            });
+        var location = new TestDataLocation("options", namespaceValue: "profile");
+
+        await repository.SaveAsync(location, new TestSimpleData { Value = 1 });
+        await repository.SaveAsync(location, new TestSimpleData { Value = 2 });
+
+        var current = await repository.LoadAsync<TestSimpleData>(location);
+        var backup = await storage.ReadAsync<TestSimpleData>("profile/options.backup");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(current.Value, Is.EqualTo(2));
+            Assert.That(backup.Value, Is.EqualTo(1));
+        });
+    }
+
+    /// <summary>
+    ///     验证通用数据仓库的批量保存只发送批量事件，不重复发送单项保存事件。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task DataRepository_SaveAllAsync_Should_Emit_Only_Batch_Event()
+    {
+        var root = CreateTempRoot();
+        using var storage = new FileStorage(root, new JsonSerializer(), ".json");
+        var repository = new DataRepository(
+            storage,
+            new DataRepositoryOptions
+            {
+                AutoBackup = false,
+                EnableEvents = true
+            });
+        var context = CreateEventContext();
+        ((IContextAware)repository).SetContext(context);
+
+        var location1 = new TestDataLocation("graphics", namespaceValue: "settings");
+        var location2 = new TestDataLocation("audio", namespaceValue: "settings");
+        var savedEventCount = 0;
+        var batchEventCount = 0;
+
+        context.RegisterEvent<DataSavedEvent<TestSimpleData>>(_ => savedEventCount++);
+        context.RegisterEvent<DataBatchSavedEvent>(_ => batchEventCount++);
+
+        await repository.SaveAllAsync(
+        [
+            (location1, new TestSimpleData { Value = 10 }),
+            (location2, new TestSimpleData { Value = 20 })
+        ]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(savedEventCount, Is.Zero);
+            Assert.That(batchEventCount, Is.EqualTo(1));
+        });
+    }
+
+    /// <summary>
+    ///     验证批量覆盖已有数据时仍会按每个条目的运行时类型执行备份与回写，而不会退化为 <see cref="IData" />。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task DataRepository_SaveAllAsync_Should_Preserve_Runtime_Types_When_Overwriting_Existing_Data()
+    {
+        var root = CreateTempRoot();
+        using var storage = new FileStorage(root, new JsonSerializer(), ".json");
+        var repository = new DataRepository(
+            storage,
+            new DataRepositoryOptions
+            {
+                AutoBackup = true,
+                EnableEvents = false
+            });
+        var numberLocation = new TestDataLocation("graphics", namespaceValue: "settings");
+        var textLocation = new TestDataLocation("profile", namespaceValue: "settings");
+
+        await repository.SaveAllAsync(
+        [
+            (numberLocation, new TestSimpleData { Value = 1 }),
+            (textLocation, new TestNamedData { Name = "old-name" })
+        ]);
+
+        await repository.SaveAllAsync(
+        [
+            (numberLocation, new TestSimpleData { Value = 2 }),
+            (textLocation, new TestNamedData { Name = "new-name" })
+        ]);
+
+        var currentNumber = await repository.LoadAsync<TestSimpleData>(numberLocation);
+        var currentText = await repository.LoadAsync<TestNamedData>(textLocation);
+        var backupNumber = await storage.ReadAsync<TestSimpleData>("settings/graphics.backup");
+        var backupText = await storage.ReadAsync<TestNamedData>("settings/profile.backup");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(currentNumber.Value, Is.EqualTo(2));
+            Assert.That(currentText.Name, Is.EqualTo("new-name"));
+            Assert.That(backupNumber.Value, Is.EqualTo(1));
+            Assert.That(backupText.Name, Is.EqualTo("old-name"));
+        });
+    }
+
+    /// <summary>
+    ///     验证统一设置仓库在批量覆盖时会为整个聚合文件创建备份，并只发送批量事件。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task UnifiedSettingsDataRepository_SaveAllAsync_Should_Create_Backup_And_Emit_Only_Batch_Event()
+    {
+        var root = CreateTempRoot();
+        var location1 = new TestDataLocation("settings/graphics");
+        var location2 = new TestDataLocation("settings/audio");
+
+        using (var seedStorage = new FileStorage(root, new JsonSerializer(), ".json"))
+        {
+            var seedRepository = new UnifiedSettingsDataRepository(
+                seedStorage,
+                new JsonSerializer(),
+                new DataRepositoryOptions
+                {
+                    AutoBackup = true,
+                    EnableEvents = false
+                });
+            seedRepository.RegisterDataType(location1, typeof(TestSimpleData));
+            seedRepository.RegisterDataType(location2, typeof(TestSimpleData));
+
+            await seedRepository.SaveAsync(location1, new TestSimpleData { Value = 1 });
+        }
+
+        using var storage = new FileStorage(root, new JsonSerializer(), ".json");
+        var repository = new UnifiedSettingsDataRepository(
+            storage,
+            new JsonSerializer(),
+            new DataRepositoryOptions
+            {
+                AutoBackup = true,
+                EnableEvents = true
+            });
+        repository.RegisterDataType(location1, typeof(TestSimpleData));
+        repository.RegisterDataType(location2, typeof(TestSimpleData));
+
+        var context = CreateEventContext();
+        ((IContextAware)repository).SetContext(context);
+
+        var savedEventCount = 0;
+        var batchEventCount = 0;
+
+        context.RegisterEvent<DataSavedEvent<TestSimpleData>>(_ => savedEventCount++);
+        context.RegisterEvent<DataBatchSavedEvent>(_ => batchEventCount++);
+
+        await repository.SaveAllAsync(
+        [
+            (location1, new TestSimpleData { Value = 2 }),
+            (location2, new TestSimpleData { Value = 3 })
+        ]);
+
+        var current = await repository.LoadAsync<TestSimpleData>(location1);
+        var backupJson = await File.ReadAllTextAsync(Path.Combine(root, "settings.json.backup.json"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(current.Value, Is.EqualTo(2));
+            Assert.That(savedEventCount, Is.Zero);
+            Assert.That(batchEventCount, Is.EqualTo(1));
+            Assert.That(backupJson, Does.Contain("settings/graphics"));
+            Assert.That(backupJson, Does.Contain("\\\"Value\\\":1"));
+        });
+    }
+
+    /// <summary>
+    ///     验证统一设置仓库在删除某个 section 时会回写聚合文件，并保留删除前的统一文件备份。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task UnifiedSettingsDataRepository_DeleteAsync_Should_Persist_Deletion_And_Create_Backup()
+    {
+        var root = CreateTempRoot();
+        var location1 = new TestDataLocation("settings/graphics");
+        var location2 = new TestDataLocation("settings/audio");
+
+        using (var storage = new FileStorage(root, new JsonSerializer(), ".json"))
+        {
+            var repository = new UnifiedSettingsDataRepository(
+                storage,
+                new JsonSerializer(),
+                new DataRepositoryOptions
+                {
+                    AutoBackup = true,
+                    EnableEvents = false
+                });
+            repository.RegisterDataType(location1, typeof(TestSimpleData));
+            repository.RegisterDataType(location2, typeof(TestSimpleData));
+
+            await repository.SaveAllAsync(
+            [
+                (location1, new TestSimpleData { Value = 7 }),
+                (location2, new TestSimpleData { Value = 11 })
+            ]);
+        }
+
+        using var verifyStorage = new FileStorage(root, new JsonSerializer(), ".json");
+        var verifyRepository = new UnifiedSettingsDataRepository(
+            verifyStorage,
+            new JsonSerializer(),
+            new DataRepositoryOptions
+            {
+                AutoBackup = true,
+                EnableEvents = false
+            });
+        verifyRepository.RegisterDataType(location1, typeof(TestSimpleData));
+        verifyRepository.RegisterDataType(location2, typeof(TestSimpleData));
+
+        await verifyRepository.DeleteAsync(location2);
+
+        var remaining = await verifyRepository.LoadAsync<TestSimpleData>(location1);
+        var removedExists = await verifyRepository.ExistsAsync(location2);
+        var backupJson = await File.ReadAllTextAsync(Path.Combine(root, "settings.json.backup.json"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(remaining.Value, Is.EqualTo(7));
+            Assert.That(removedExists, Is.False);
+            Assert.That(backupJson, Does.Contain("settings/audio"));
+            Assert.That(backupJson, Does.Contain("\\\"Value\\\":11"));
+        });
+    }
+
+    /// <summary>
+    ///     验证统一设置仓库在保存提交失败时不会污染内存缓存，并且失败修改不会泄漏到后续无关保存。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task UnifiedSettingsDataRepository_SaveAsync_When_Persist_Fails_Should_Keep_Cache_Consistent()
+    {
+        var root = CreateTempRoot();
+        var primaryLocation = new TestDataLocation("settings/graphics");
+        var secondaryLocation = new TestDataLocation("settings/audio");
+
+        using (var seedStorage = new FileStorage(root, new JsonSerializer(), ".json"))
+        {
+            var seedRepository = new UnifiedSettingsDataRepository(
+                seedStorage,
+                new JsonSerializer(),
+                new DataRepositoryOptions { EnableEvents = false });
+            seedRepository.RegisterDataType(primaryLocation, typeof(TestSimpleData));
+            seedRepository.RegisterDataType(secondaryLocation, typeof(TestSimpleData));
+            await seedRepository.SaveAsync(primaryLocation, new TestSimpleData { Value = 1 });
+        }
+
+        using var innerStorage = new FileStorage(root, new JsonSerializer(), ".json");
+        var throwingStorage = new ToggleWriteFailureStorage(innerStorage, "settings.json");
+        var repository = new UnifiedSettingsDataRepository(
+            throwingStorage,
+            new JsonSerializer(),
+            new DataRepositoryOptions { EnableEvents = false });
+        repository.RegisterDataType(primaryLocation, typeof(TestSimpleData));
+        repository.RegisterDataType(secondaryLocation, typeof(TestSimpleData));
+
+        throwingStorage.ThrowOnWrite = true;
+        Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await repository.SaveAsync(primaryLocation, new TestSimpleData { Value = 99 }));
+
+        var cachedAfterFailure = await repository.LoadAsync<TestSimpleData>(primaryLocation);
+        Assert.That(cachedAfterFailure.Value, Is.EqualTo(1));
+
+        throwingStorage.ThrowOnWrite = false;
+        await repository.SaveAsync(secondaryLocation, new TestSimpleData { Value = 7 });
+
+        using var verifyStorage = new FileStorage(root, new JsonSerializer(), ".json");
+        var verifyRepository = new UnifiedSettingsDataRepository(
+            verifyStorage,
+            new JsonSerializer(),
+            new DataRepositoryOptions { EnableEvents = false });
+        verifyRepository.RegisterDataType(primaryLocation, typeof(TestSimpleData));
+        verifyRepository.RegisterDataType(secondaryLocation, typeof(TestSimpleData));
+
+        var persistedPrimary = await verifyRepository.LoadAsync<TestSimpleData>(primaryLocation);
+        var persistedSecondary = await verifyRepository.LoadAsync<TestSimpleData>(secondaryLocation);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(persistedPrimary.Value, Is.EqualTo(1));
+            Assert.That(persistedSecondary.Value, Is.EqualTo(7));
+        });
+    }
+
+    /// <summary>
+    ///     验证统一设置仓库在删除提交失败时不会把未提交删除留在缓存里，也不会泄漏到后续保存。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task UnifiedSettingsDataRepository_DeleteAsync_When_Persist_Fails_Should_Keep_Cache_Consistent()
+    {
+        var root = CreateTempRoot();
+        var primaryLocation = new TestDataLocation("settings/graphics");
+        var secondaryLocation = new TestDataLocation("settings/audio");
+
+        using (var seedStorage = new FileStorage(root, new JsonSerializer(), ".json"))
+        {
+            var seedRepository = new UnifiedSettingsDataRepository(
+                seedStorage,
+                new JsonSerializer(),
+                new DataRepositoryOptions { EnableEvents = false });
+            seedRepository.RegisterDataType(primaryLocation, typeof(TestSimpleData));
+            seedRepository.RegisterDataType(secondaryLocation, typeof(TestSimpleData));
+            await seedRepository.SaveAllAsync(
+            [
+                (primaryLocation, new TestSimpleData { Value = 3 }),
+                (secondaryLocation, new TestSimpleData { Value = 5 })
+            ]);
+        }
+
+        using var innerStorage = new FileStorage(root, new JsonSerializer(), ".json");
+        var throwingStorage = new ToggleWriteFailureStorage(innerStorage, "settings.json");
+        var repository = new UnifiedSettingsDataRepository(
+            throwingStorage,
+            new JsonSerializer(),
+            new DataRepositoryOptions { EnableEvents = false });
+        repository.RegisterDataType(primaryLocation, typeof(TestSimpleData));
+        repository.RegisterDataType(secondaryLocation, typeof(TestSimpleData));
+
+        throwingStorage.ThrowOnWrite = true;
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await repository.DeleteAsync(secondaryLocation));
+
+        Assert.That(await repository.ExistsAsync(secondaryLocation), Is.True);
+
+        throwingStorage.ThrowOnWrite = false;
+        await repository.SaveAsync(primaryLocation, new TestSimpleData { Value = 9 });
+
+        using var verifyStorage = new FileStorage(root, new JsonSerializer(), ".json");
+        var verifyRepository = new UnifiedSettingsDataRepository(
+            verifyStorage,
+            new JsonSerializer(),
+            new DataRepositoryOptions { EnableEvents = false });
+        verifyRepository.RegisterDataType(primaryLocation, typeof(TestSimpleData));
+        verifyRepository.RegisterDataType(secondaryLocation, typeof(TestSimpleData));
+
+        var persistedPrimary = await verifyRepository.LoadAsync<TestSimpleData>(primaryLocation);
+        var persistedSecondary = await verifyRepository.LoadAsync<TestSimpleData>(secondaryLocation);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(persistedPrimary.Value, Is.EqualTo(9));
+            Assert.That(persistedSecondary.Value, Is.EqualTo(5));
+        });
+    }
+
+    /// <summary>
+    ///     验证统一设置仓库在启用事件时，只为显式仓库操作发送加载、保存、批量保存和删除事件。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    [Test]
+    public async Task UnifiedSettingsDataRepository_WithEvents_Should_Emit_Only_Public_Operation_Events()
+    {
+        var root = CreateTempRoot();
+        using var storage = new FileStorage(root, new JsonSerializer(), ".json");
+        var repository = new UnifiedSettingsDataRepository(
+            storage,
+            new JsonSerializer(),
+            new DataRepositoryOptions
+            {
+                AutoBackup = true,
+                EnableEvents = true
+            });
+        var context = CreateEventContext();
+        ((IContextAware)repository).SetContext(context);
+
+        var location1 = new TestDataLocation("settings/graphics");
+        var location2 = new TestDataLocation("settings/audio");
+        repository.RegisterDataType(location1, typeof(TestSimpleData));
+        repository.RegisterDataType(location2, typeof(TestSimpleData));
+
+        var loadedEventCount = 0;
+        var savedEventCount = 0;
+        var batchEventCount = 0;
+        var deletedEventCount = 0;
+
+        context.RegisterEvent<DataLoadedEvent<TestSimpleData>>(_ => loadedEventCount++);
+        context.RegisterEvent<DataSavedEvent<TestSimpleData>>(_ => savedEventCount++);
+        context.RegisterEvent<DataBatchSavedEvent>(_ => batchEventCount++);
+        context.RegisterEvent<DataDeletedEvent>(_ => deletedEventCount++);
+
+        _ = await repository.LoadAsync<TestSimpleData>(location1);
+        await repository.SaveAsync(location1, new TestSimpleData { Value = 5 });
+        await repository.SaveAllAsync(
+        [
+            (location1, new TestSimpleData { Value = 6 }),
+            (location2, new TestSimpleData { Value = 7 })
+        ]);
+        await repository.DeleteAsync(location2);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(loadedEventCount, Is.EqualTo(1));
+            Assert.That(savedEventCount, Is.EqualTo(1));
+            Assert.That(batchEventCount, Is.EqualTo(1));
+            Assert.That(deletedEventCount, Is.EqualTo(1));
+        });
+    }
+
+    /// <summary>
+    ///     创建带事件总线的真实架构上下文，供上下文感知仓库测试使用。
+    /// </summary>
+    /// <returns>可用于发送和监听事件的架构上下文。</returns>
+    private static ArchitectureContext CreateEventContext()
+    {
+        var container = new MicrosoftDiContainer();
+        container.Register<IEventBus>(new EventBus());
+        container.Freeze();
+        return new ArchitectureContext(container);
     }
 
     private sealed class TestSaveMigrationV1ToV2 : ISaveMigration<TestVersionedSaveData>
@@ -288,6 +719,109 @@ public class PersistenceTests
             {
                 Name = oldData.Name
             };
+        }
+    }
+
+    /// <summary>
+    ///     为统一设置仓库失败场景测试提供可切换的写入失败包装器。
+    /// </summary>
+    private sealed class ToggleWriteFailureStorage(IStorage innerStorage, string failingKey) : IStorage
+    {
+        /// <summary>
+        ///     获取或设置是否在目标键写入时主动抛出异常。
+        /// </summary>
+        public bool ThrowOnWrite { get; set; }
+
+        /// <inheritdoc />
+        public bool Exists(string key)
+        {
+            return innerStorage.Exists(key);
+        }
+
+        /// <inheritdoc />
+        public Task<bool> ExistsAsync(string key)
+        {
+            return innerStorage.ExistsAsync(key);
+        }
+
+        /// <inheritdoc />
+        public T Read<T>(string key)
+        {
+            return innerStorage.Read<T>(key);
+        }
+
+        /// <inheritdoc />
+        public T Read<T>(string key, T defaultValue)
+        {
+            return innerStorage.Read(key, defaultValue);
+        }
+
+        /// <inheritdoc />
+        public Task<T> ReadAsync<T>(string key)
+        {
+            return innerStorage.ReadAsync<T>(key);
+        }
+
+        /// <inheritdoc />
+        public void Write<T>(string key, T value)
+        {
+            ThrowIfNeeded(key);
+            innerStorage.Write(key, value);
+        }
+
+        /// <inheritdoc />
+        public Task WriteAsync<T>(string key, T value)
+        {
+            ThrowIfNeeded(key);
+            return innerStorage.WriteAsync(key, value);
+        }
+
+        /// <inheritdoc />
+        public void Delete(string key)
+        {
+            innerStorage.Delete(key);
+        }
+
+        /// <inheritdoc />
+        public Task DeleteAsync(string key)
+        {
+            return innerStorage.DeleteAsync(key);
+        }
+
+        /// <inheritdoc />
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path = "")
+        {
+            return innerStorage.ListDirectoriesAsync(path);
+        }
+
+        /// <inheritdoc />
+        public Task<IReadOnlyList<string>> ListFilesAsync(string path = "")
+        {
+            return innerStorage.ListFilesAsync(path);
+        }
+
+        /// <inheritdoc />
+        public Task<bool> DirectoryExistsAsync(string path)
+        {
+            return innerStorage.DirectoryExistsAsync(path);
+        }
+
+        /// <inheritdoc />
+        public Task CreateDirectoryAsync(string path)
+        {
+            return innerStorage.CreateDirectoryAsync(path);
+        }
+
+        /// <summary>
+        ///     在启用失败开关且命中目标键时抛出一致的写入失败异常。
+        /// </summary>
+        /// <param name="key">当前正在写入的存储键。</param>
+        private void ThrowIfNeeded(string key)
+        {
+            if (ThrowOnWrite && string.Equals(key, failingKey, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Simulated unified settings write failure.");
+            }
         }
     }
 }
