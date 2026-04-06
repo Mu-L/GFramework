@@ -351,4 +351,111 @@ public class SchemaConfigGeneratorTests
             Assert.That(tableSource, Does.Not.Contain("TryFindFirstByReward("));
         });
     }
+
+    /// <summary>
+    ///     验证生成器会为当前消费者项目内的全部 schema 额外产出聚合注册入口，
+    ///     让 C# 启动代码可以一行注册所有生成表。
+    /// </summary>
+    [Test]
+    public void Run_Should_Generate_Project_Level_Registration_Catalog()
+    {
+        const string source = """
+                              using System;
+                              using System.Collections.Generic;
+
+                              namespace GFramework.Game.Abstractions.Config
+                              {
+                                  public interface IConfigTable
+                                  {
+                                      Type KeyType { get; }
+                                      Type ValueType { get; }
+                                      int Count { get; }
+                                  }
+
+                                  public interface IConfigTable<TKey, TValue> : IConfigTable
+                                      where TKey : notnull
+                                  {
+                                      TValue Get(TKey key);
+                                      bool TryGet(TKey key, out TValue? value);
+                                      bool ContainsKey(TKey key);
+                                      IReadOnlyCollection<TValue> All();
+                                  }
+
+                                  public interface IConfigRegistry
+                                  {
+                                      IConfigTable<TKey, TValue> GetTable<TKey, TValue>(string name)
+                                          where TKey : notnull;
+
+                                      bool TryGetTable<TKey, TValue>(string name, out IConfigTable<TKey, TValue>? table)
+                                          where TKey : notnull;
+                                  }
+                              }
+
+                              namespace GFramework.Game.Config
+                              {
+                                  public sealed class YamlConfigLoader
+                                  {
+                                      public YamlConfigLoader RegisterTable<TKey, TValue>(
+                                          string tableName,
+                                          string relativePath,
+                                          string schemaRelativePath,
+                                          Func<TValue, TKey> keySelector,
+                                          IEqualityComparer<TKey>? comparer = null)
+                                          where TKey : notnull
+                                      {
+                                          return this;
+                                      }
+                                  }
+                              }
+                              """;
+
+        const string monsterSchema = """
+                                     {
+                                       "type": "object",
+                                       "required": ["id"],
+                                       "properties": {
+                                         "id": { "type": "integer" },
+                                         "name": { "type": "string" }
+                                       }
+                                     }
+                                     """;
+
+        const string itemSchema = """
+                                  {
+                                    "type": "object",
+                                    "required": ["id"],
+                                    "properties": {
+                                      "id": { "type": "string" },
+                                      "rarity": { "type": "string" }
+                                    }
+                                  }
+                                  """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", monsterSchema),
+            ("item.schema.json", itemSchema));
+
+        var generatedSources = result.Results
+            .Single()
+            .GeneratedSources
+            .ToDictionary(
+                static sourceResult => sourceResult.HintName,
+                static sourceResult => sourceResult.SourceText.ToString(),
+                StringComparer.Ordinal);
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        Assert.That(generatedSources.TryGetValue("GeneratedConfigCatalog.g.cs", out var catalogSource), Is.True);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(catalogSource, Does.Contain("public static class GeneratedConfigCatalog"));
+            Assert.That(catalogSource, Does.Contain("public static class GeneratedConfigRegistrationExtensions"));
+            Assert.That(catalogSource, Does.Contain("loader.RegisterItemTable();"));
+            Assert.That(catalogSource, Does.Contain("loader.RegisterMonsterTable();"));
+            Assert.That(catalogSource, Does.Contain("ItemConfigBindings.Metadata.TableName"));
+            Assert.That(catalogSource, Does.Contain("MonsterConfigBindings.Metadata.TableName"));
+            Assert.That(catalogSource, Does.Contain("public static bool TryGetByTableName(string tableName, out TableMetadata metadata)"));
+        });
+    }
 }

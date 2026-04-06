@@ -168,6 +168,8 @@ public class SchemaConfigGeneratorSnapshotTests
         await AssertSnapshotAsync(generatedSources, snapshotFolder, "MonsterTable.g.cs", "MonsterTable.g.txt");
         await AssertSnapshotAsync(generatedSources, snapshotFolder, "MonsterConfigBindings.g.cs",
             "MonsterConfigBindings.g.txt");
+        await AssertSnapshotAsync(generatedSources, snapshotFolder, "GeneratedConfigCatalog.g.cs",
+            "GeneratedConfigCatalog.g.txt");
     }
 
     /// <summary>

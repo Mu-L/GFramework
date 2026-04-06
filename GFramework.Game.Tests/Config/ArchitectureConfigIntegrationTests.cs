@@ -10,13 +10,13 @@ using NUnit.Framework;
 namespace GFramework.Game.Tests.Config;
 
 /// <summary>
-///     验证在 <see cref="Architecture" /> 初始化流程中可以注册配置注册表、执行加载并通过生成的表访问器读取数据。
+///     验证在 <see cref="Architecture" /> 初始化流程中可以通过聚合注册入口加载生成配置表，并通过表访问器读取数据。
 /// </summary>
 [TestFixture]
 public class ArchitectureConfigIntegrationTests
 {
     /// <summary>
-    ///     架构初始化期间，通过 <see cref="YamlConfigLoader" /> 注册生成表，
+    ///     架构初始化期间，通过 <see cref="YamlConfigLoader" /> 的聚合注册入口注册生成表，
     ///     并将 <see cref="ConfigRegistry" /> 作为 utility 暴露给架构上下文读取。
     /// </summary>
     [Test]
@@ -147,7 +147,7 @@ public class ArchitectureConfigIntegrationTests
             RegisterUtility(Registry);
 
             var loader = new YamlConfigLoader(_configRoot)
-                .RegisterMonsterTable();
+                .RegisterAllGeneratedConfigTables();
             loader.LoadAsync(Registry).GetAwaiter().GetResult();
             MonsterTable = Registry.GetMonsterTable();
         }
