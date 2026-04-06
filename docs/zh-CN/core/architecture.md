@@ -209,7 +209,7 @@ architecture.RegisterLifecycleHook(new MyLifecycleHook());
    │   ├─> BeforeUtilityInit → 初始化 Utility → AfterUtilityInit
    │   ├─> BeforeModelInit → 初始化 Model → AfterModelInit
    │   └─> BeforeSystemInit → 初始化 System → AfterSystemInit
-   ├─> 冻结 IoC 容器
+   ├─> CompleteInitialization() 冻结 IoC 容器
    └─> 进入 Ready 阶段
 
 3. 等待就绪 (可选)
@@ -226,8 +226,8 @@ architecture.RegisterLifecycleHook(new MyLifecycleHook());
    │   ├─> 优先调用 IAsyncDestroyable.DestroyAsync()
    │   └─> 否则调用 IDestroyable.Destroy()
    ├─> 销毁服务模块
-   ├─> 清空 IoC 容器
-   └─> 进入 Destroyed 阶段
+   ├─> 进入 Destroyed 阶段
+   └─> 清空 IoC 容器
 ```
 
 ---

@@ -43,9 +43,14 @@ internal sealed class ArchitectureLifecycle(
         if (component is IInitializable initializable)
         {
             if (_initialized)
-                throw new InvalidOperationException("Cannot initialize component after Architecture is Ready");
+            {
+                if (!configuration.ArchitectureProperties.AllowLateRegistration)
+                    throw new InvalidOperationException("Cannot initialize component after Architecture is Ready");
 
-            if (_pendingInitializableSet.Add(initializable))
+                InitializeLateRegisteredComponent(initializable);
+            }
+
+            else if (_pendingInitializableSet.Add(initializable))
             {
                 _pendingInitializableList.Add(initializable);
                 logger.Trace($"Added {component.GetType().Name} to pending initialization queue");
@@ -216,6 +221,18 @@ internal sealed class ArchitectureLifecycle(
             await asyncInit.InitializeAsync();
         else
             component.Initialize();
+    }
+
+    /// <summary>
+    ///     立即初始化在常规初始化批次完成后新增的组件。
+    ///     当启用 <c>AllowLateRegistration</c> 时，生命周期层需要和注册层保持一致，
+    ///     让新增组件在注册当下完成同步初始化，而不是停留在未初始化状态。
+    /// </summary>
+    /// <param name="component">后注册的可初始化组件。</param>
+    private void InitializeLateRegisteredComponent(IInitializable component)
+    {
+        logger.Debug($"Initializing late-registered component: {component.GetType().Name}");
+        component.Initialize();
     }
 
     #endregion

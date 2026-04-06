@@ -50,7 +50,7 @@ internal sealed class ArchitectureDisposer(
     /// <param name="enterPhase">用于推进架构阶段的回调。</param>
     public async ValueTask DestroyAsync(ArchitecturePhase currentPhase, Action<ArchitecturePhase> enterPhase)
     {
-        if (currentPhase >= ArchitecturePhase.Destroying)
+        if (currentPhase is ArchitecturePhase.Destroying or ArchitecturePhase.Destroyed)
         {
             logger.Warn("Architecture destroy called but already in destroying/destroyed state");
             return;
@@ -68,9 +68,10 @@ internal sealed class ArchitectureDisposer(
 
         await CleanupComponentsAsync();
         await services.ModuleManager.DestroyAllAsync();
-        services.Container.Clear();
 
+        // Destroyed 广播依赖容器中的阶段监听器，必须在清空容器前完成。
         enterPhase(ArchitecturePhase.Destroyed);
+        services.Container.Clear();
         logger.Info("Architecture destruction completed");
     }
 

@@ -340,14 +340,15 @@ public class PlayerController : IController
 
 #### 2. ArchitectureBootstrapper (初始化基础设施编排器)
 
-**职责**: 在用户 `OnInitialize()` 执行前准备环境、服务和上下文
+**职责**: 在用户 `OnInitialize()` 执行前准备环境、服务和上下文，并在组件初始化完成后执行初始化收尾
 
 **核心功能**:
 
 - 初始化环境对象
 - 注册内置服务模块
 - 绑定架构上下文到 `GameContext`
-- 执行服务钩子并冻结 IoC 容器
+- 执行服务钩子
+- 在 `InitializeAllComponentsAsync()` 完成后通过 `CompleteInitialization()` 冻结 IoC 容器
 
 #### 3. ArchitectureLifecycle (生命周期管理器)
 
@@ -456,11 +457,12 @@ public class PlayerController : IController
         │   ├─> RegisterModel → Model.SetContext()
         │   ├─> RegisterSystem → System.SetContext()
         │   └─> RegisterUtility → 注册到容器
-        └─> InitializeAllComponentsAsync()
-            ├─> BeforeUtilityInit → Utility.Initialize()
-            ├─> BeforeModelInit → Model.Initialize()
-            ├─> BeforeSystemInit → System.Initialize()
-            └─> Ready
+        ├─> InitializeAllComponentsAsync()
+        │   ├─> BeforeUtilityInit → Utility.Initialize()
+        │   ├─> BeforeModelInit → Model.Initialize()
+        │   └─> BeforeSystemInit → System.Initialize()
+        ├─> CompleteInitialization() → 冻结 IoC 容器
+        └─> 进入 Ready
 ```
 
 **重要变更 (v1.1.0)**: 管理器现在在构造函数中初始化,而不是在 InitializeAsync 中。这消除了 `null!` 断言,提高了代码安全性。

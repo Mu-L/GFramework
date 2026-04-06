@@ -180,6 +180,77 @@ public class ArchitectureComponentRegistryBehaviorTests
     }
 
     /// <summary>
+    ///     验证预冻结阶段通过实现类型注册的单例依赖会在同一轮组件激活中复用同一个实例。
+    ///     该回归测试用于保护 <see cref="ArchitectureComponentActivator" /> 的共享单例缓存，避免系统和模型分别创建重复单例。
+    /// </summary>
+    [Test]
+    public async Task RegisterSystem_And_Model_Type_Should_Reuse_ImplementationType_Singleton_During_Activation()
+    {
+        var counter = new DependencyConstructionCounter();
+        var architecture = new RegistryTestArchitecture(
+            target =>
+            {
+                target.RegisterSystem<ImplementationTypeDependencySystem>();
+                target.RegisterModel<ImplementationTypeDependencyModel>();
+            },
+            services =>
+            {
+                services.AddSingleton(counter);
+                services.AddSingleton<ImplementationTypeSharedDependency>();
+            });
+
+        await architecture.InitializeAsync();
+
+        var system = architecture.Context.GetSystem<ImplementationTypeDependencySystem>();
+        var model = architecture.Context.GetModel<ImplementationTypeDependencyModel>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(counter.CreationCount, Is.EqualTo(1));
+            Assert.That(system.Dependency, Is.SameAs(model.Dependency));
+        });
+
+        await architecture.DestroyAsync();
+    }
+
+    /// <summary>
+    ///     验证预冻结阶段通过工厂注册的单例依赖会在同一轮组件激活中复用同一个实例。
+    ///     该回归测试覆盖 <c>ImplementationFactory</c> 描述符路径，避免用户工厂在初始化时被重复调用。
+    /// </summary>
+    [Test]
+    public async Task RegisterSystem_And_Model_Type_Should_Reuse_Factory_Singleton_During_Activation()
+    {
+        var creationCount = 0;
+        var architecture = new RegistryTestArchitecture(
+            target =>
+            {
+                target.RegisterSystem<FactoryDependencySystem>();
+                target.RegisterModel<FactoryDependencyModel>();
+            },
+            services =>
+            {
+                services.AddSingleton(_ =>
+                {
+                    creationCount++;
+                    return new FactorySharedDependency();
+                });
+            });
+
+        await architecture.InitializeAsync();
+
+        var system = architecture.Context.GetSystem<FactoryDependencySystem>();
+        var model = architecture.Context.GetModel<FactoryDependencyModel>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(creationCount, Is.EqualTo(1));
+            Assert.That(system.Dependency, Is.SameAs(model.Dependency));
+        });
+
+        await architecture.DestroyAsync();
+    }
+
+    /// <summary>
     ///     验证 Ready 阶段后不允许继续注册 Utility，保持与系统和模型一致的约束。
     /// </summary>
     [Test]
@@ -454,6 +525,179 @@ public class ArchitectureComponentRegistryBehaviorTests
         public void Initialize()
         {
             InitializeCallCount++;
+        }
+
+        public void OnArchitecturePhase(ArchitecturePhase phase)
+        {
+        }
+
+        public void SetContext(IArchitectureContext context)
+        {
+            _context = context;
+        }
+
+        public IArchitectureContext GetContext()
+        {
+            return _context;
+        }
+    }
+
+    /// <summary>
+    ///     统计实现类型单例在预冻结激活阶段的构造次数。
+    /// </summary>
+    private sealed class DependencyConstructionCounter
+    {
+        /// <summary>
+        ///     获取共享依赖被构造的次数。
+        /// </summary>
+        public int CreationCount { get; private set; }
+
+        /// <summary>
+        ///     记录一次新的依赖构造。
+        /// </summary>
+        public void RecordCreation()
+        {
+            CreationCount++;
+        }
+    }
+
+    /// <summary>
+    ///     用于覆盖 ImplementationType 单例描述符路径的共享依赖。
+    /// </summary>
+    private sealed class ImplementationTypeSharedDependency
+    {
+        /// <summary>
+        ///     创建共享依赖并记录构造次数。
+        /// </summary>
+        /// <param name="counter">用于统计构造次数的计数器。</param>
+        public ImplementationTypeSharedDependency(DependencyConstructionCounter counter)
+        {
+            counter.RecordCreation();
+        }
+    }
+
+    /// <summary>
+    ///     用于覆盖 ImplementationType 单例复用路径的测试系统。
+    /// </summary>
+    private sealed class ImplementationTypeDependencySystem(ImplementationTypeSharedDependency dependency) : ISystem
+    {
+        private IArchitectureContext _context = null!;
+
+        /// <summary>
+        ///     获取构造函数注入的共享依赖。
+        /// </summary>
+        public ImplementationTypeSharedDependency Dependency { get; } = dependency;
+
+        public void Initialize()
+        {
+        }
+
+        public void Destroy()
+        {
+        }
+
+        public void OnArchitecturePhase(ArchitecturePhase phase)
+        {
+        }
+
+        public void SetContext(IArchitectureContext context)
+        {
+            _context = context;
+        }
+
+        public IArchitectureContext GetContext()
+        {
+            return _context;
+        }
+    }
+
+    /// <summary>
+    ///     用于覆盖 ImplementationType 单例复用路径的测试模型。
+    /// </summary>
+    private sealed class ImplementationTypeDependencyModel(ImplementationTypeSharedDependency dependency) : IModel
+    {
+        private IArchitectureContext _context = null!;
+
+        /// <summary>
+        ///     获取构造函数注入的共享依赖。
+        /// </summary>
+        public ImplementationTypeSharedDependency Dependency { get; } = dependency;
+
+        public void Initialize()
+        {
+        }
+
+        public void OnArchitecturePhase(ArchitecturePhase phase)
+        {
+        }
+
+        public void SetContext(IArchitectureContext context)
+        {
+            _context = context;
+        }
+
+        public IArchitectureContext GetContext()
+        {
+            return _context;
+        }
+    }
+
+    /// <summary>
+    ///     用于覆盖 ImplementationFactory 单例描述符路径的共享依赖。
+    /// </summary>
+    private sealed class FactorySharedDependency
+    {
+    }
+
+    /// <summary>
+    ///     用于覆盖 ImplementationFactory 单例复用路径的测试系统。
+    /// </summary>
+    private sealed class FactoryDependencySystem(FactorySharedDependency dependency) : ISystem
+    {
+        private IArchitectureContext _context = null!;
+
+        /// <summary>
+        ///     获取构造函数注入的共享依赖。
+        /// </summary>
+        public FactorySharedDependency Dependency { get; } = dependency;
+
+        public void Initialize()
+        {
+        }
+
+        public void Destroy()
+        {
+        }
+
+        public void OnArchitecturePhase(ArchitecturePhase phase)
+        {
+        }
+
+        public void SetContext(IArchitectureContext context)
+        {
+            _context = context;
+        }
+
+        public IArchitectureContext GetContext()
+        {
+            return _context;
+        }
+    }
+
+    /// <summary>
+    ///     用于覆盖 ImplementationFactory 单例复用路径的测试模型。
+    /// </summary>
+    private sealed class FactoryDependencyModel(FactorySharedDependency dependency) : IModel
+    {
+        private IArchitectureContext _context = null!;
+
+        /// <summary>
+        ///     获取构造函数注入的共享依赖。
+        /// </summary>
+        public FactorySharedDependency Dependency { get; } = dependency;
+
+        public void Initialize()
+        {
         }
 
         public void OnArchitecturePhase(ArchitecturePhase phase)
