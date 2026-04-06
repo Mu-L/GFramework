@@ -216,14 +216,19 @@ public class GameArchitecture : Architecture
 {
     protected override void Init()
     {
-        // 注册 Mediator 行为
-        RegisterMediatorBehavior<LoggingBehavior>();
-        RegisterMediatorBehavior<PerformanceBehavior>();
+        // 注册通用开放泛型行为
+        RegisterMediatorBehavior<LoggingBehavior<,>>();
+        RegisterMediatorBehavior<PerformanceBehavior<,>>();
 
         // 处理器会自动通过依赖注入注册
     }
 }
 ```
+
+`RegisterMediatorBehavior<TBehavior>()` 同时支持两种形式：
+
+- 开放泛型行为，例如 `LoggingBehavior<,>`，用于匹配所有请求
+- 封闭行为类型，例如某个只服务于单一请求的 `SpecialBehavior`
 
 ## 高级用法
 
