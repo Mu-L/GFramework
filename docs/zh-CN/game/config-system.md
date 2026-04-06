@@ -92,7 +92,7 @@ dropItems:
 GameProject/
 ├─ GameProject.csproj
 ├─ Config/
-│  ├─ GameConfigBootstrap.cs
+│  ├─ GameConfigHost.cs
 │  └─ GameConfigRuntime.cs
 ├─ config/
 │  ├─ monster/
@@ -197,7 +197,12 @@ var slime = monsterTable.Get(1);
 bootstrap.Dispose();
 ```
 
-如果你希望把它继续包装进自己的进程级入口，也建议只包一层生命周期壳，而不是重新拼装底层加载器：
+如果你希望把它继续包装进自己的进程级入口，也建议只包一层生命周期壳，而不是重新拼装底层加载器。为了避免和后面的“运行时读取模板”冲突，推荐明确拆成两类文件：
+
+- `GameConfigHost.cs` 负责生命周期管理、初始化和热重载
+- `GameConfigRuntime.cs` 负责把已初始化的 `IConfigRegistry` 封装成业务层读取入口
+
+如果你采用这套双层模板，建议把上面的生命周期壳文件命名为 `GameConfigHost.cs`，并把类型名同步改成 `GameConfigHost`：
 
 ```csharp
 using GFramework.Game.Abstractions.Config;
@@ -209,7 +214,7 @@ namespace GameProject.Config;
 /// <summary>
 ///     封装当前游戏进程的配置启动生命周期。
 /// </summary>
-public sealed class GameConfigRuntime : IDisposable
+public sealed class GameConfigHost : IDisposable
 {
     private readonly GameConfigBootstrap _bootstrap;
 
@@ -217,7 +222,7 @@ public sealed class GameConfigRuntime : IDisposable
     ///     使用指定配置根目录创建运行时入口。
     /// </summary>
     /// <param name="configRootPath">配置根目录。</param>
-    public GameConfigRuntime(string configRootPath)
+    public GameConfigHost(string configRootPath)
     {
         _bootstrap = new GameConfigBootstrap(
             new GameConfigBootstrapOptions
@@ -238,6 +243,15 @@ public sealed class GameConfigRuntime : IDisposable
     public Task InitializeAsync()
     {
         return _bootstrap.InitializeAsync();
+    }
+
+    /// <summary>
+    ///     创建业务层使用的只读配置入口。
+    /// </summary>
+    /// <returns>封装强类型表访问的读取入口。</returns>
+    public GameConfigRuntime CreateRuntime()
+    {
+        return new GameConfigRuntime(_bootstrap.Registry);
     }
 
     /// <summary>
@@ -262,6 +276,7 @@ public sealed class GameConfigRuntime : IDisposable
 推荐不要在业务代码里直接散落字符串表名查询，而是统一依赖生成的强类型入口：
 
 ```csharp
+using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config.Generated;
 
 namespace GameProject.Config;
@@ -301,6 +316,16 @@ public sealed class GameConfigRuntime
         return _registry.GetMonsterTable();
     }
 }
+```
+
+它通常与上面的 `GameConfigHost` 配合使用：
+
+```csharp
+var configHost = new GameConfigHost("config-root");
+await configHost.InitializeAsync();
+
+var runtime = configHost.CreateRuntime();
+var slime = runtime.GetMonster(1);
 ```
 
 这样做的收益：
