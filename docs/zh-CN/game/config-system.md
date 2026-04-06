@@ -607,7 +607,7 @@ if (MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out var re
 - `minimum` / `maximum`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
 - `exclusiveMinimum` / `exclusiveMaximum`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
 - `minLength` / `maxLength`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
-- `pattern`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用
+- `pattern`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用；当前按 C# `CultureInvariant` 与 JS 默认分组语义解释，非法模式会在 schema 解析阶段直接报错
 - `minItems` / `maxItems`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用
 
 这样可以避免错误配置被默认值或 `IgnoreUnmatchedProperties` 静默吞掉。

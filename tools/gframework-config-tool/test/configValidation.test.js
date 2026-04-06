@@ -271,6 +271,43 @@ tags:
     assert.match(diagnostics[2].message, /at least 2 items|至少需要包含 2 个元素/u);
 });
 
+test("validateParsedConfig should report exclusive maximum and maxItems violations", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "hp": {
+              "type": "integer",
+              "exclusiveMinimum": 10,
+              "exclusiveMaximum": 20
+            },
+            "tags": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+hp: 20
+tags:
+  - a
+  - b
+  - c
+  - d
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /less than 20|小于 20/u);
+    assert.match(diagnostics[1].message, /at most 3 items|最多只能包含 3 个元素/u);
+});
+
 test("parseSchemaContent should capture scalar range and length metadata", () => {
     const schema = parseSchemaContent(`
         {
@@ -339,6 +376,23 @@ test("parseSchemaContent should capture exclusive bounds, pattern, and array ite
     assert.equal(schema.properties.tags.minItems, 2);
     assert.equal(schema.properties.tags.maxItems, 4);
     assert.equal(schema.properties.tags.items.pattern, "^[a-z]+$");
+});
+
+test("parseSchemaContent should reject invalid pattern declarations instead of dropping them", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "["
+                }
+              }
+            }
+        `),
+        /invalid 'pattern' regular expression/u
+    );
 });
 
 test("parseSchemaContent should ignore mismatched constraint metadata on unsupported scalar types", () => {

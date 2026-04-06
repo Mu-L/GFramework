@@ -10,6 +10,10 @@ namespace GFramework.Game.Config;
 /// </summary>
 internal static class YamlConfigSchemaValidator
 {
+    // The runtime intentionally uses the same culture-invariant regex semantics as the
+    // JS tooling so grouping and backreferences behave consistently across environments.
+    private const RegexOptions SupportedPatternRegexOptions = RegexOptions.CultureInvariant;
+
     /// <summary>
     ///     从磁盘加载并解析一个 JSON Schema 文件。
     /// </summary>
@@ -828,7 +832,7 @@ internal static class YamlConfigSchemaValidator
                 ? null
                 : new Regex(
                     pattern,
-                    RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture));
+                    SupportedPatternRegexOptions));
     }
 
     /// <summary>
@@ -1005,7 +1009,7 @@ internal static class YamlConfigSchemaValidator
         var pattern = patternElement.GetString() ?? string.Empty;
         try
         {
-            _ = new Regex(pattern, RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
+            _ = new Regex(pattern, SupportedPatternRegexOptions);
         }
         catch (ArgumentException exception)
         {

@@ -123,6 +123,24 @@ jobs:
       # 恢复.NET本地工具
       - name: Restore .NET tools
         run: dotnet tool restore
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.15
+
+      - name: Install config tool dependencies
+        working-directory: tools/gframework-config-tool
+        run: bun install
+
+      - name: Run config tool tests
+        working-directory: tools/gframework-config-tool
+        run: bun run test
         
       # 构建项目，使用Release配置且跳过恢复步骤
       - name: Build

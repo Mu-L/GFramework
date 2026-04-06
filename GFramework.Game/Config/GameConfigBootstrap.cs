@@ -8,15 +8,25 @@ namespace GFramework.Game.Config;
 ///     该类型负责把配置注册表、YAML 加载器与开发期热重载句柄收敛到一个长生命周期对象中，
 ///     让消费者项目可以通过一个稳定入口完成配置启动，而不是在多个脚本里重复拼装运行时细节。
 /// </summary>
+/// <remarks>
+///     生命周期转换会串行化执行，因此并发调用只会观察到已经提交完成的加载器与热重载句柄。
+///     如果初始化或热重载启动在中途失败，当前实例会保留失败前的稳定状态，而不会公开半初始化对象。
+/// </remarks>
 public sealed class GameConfigBootstrap : IDisposable
 {
     private const string ConfigureLoaderCannotBeNullMessage = "ConfigureLoader must be provided.";
     private const string RootPathCannotBeNullOrWhiteSpaceMessage = "Root path cannot be null or whitespace.";
 
+    // All lifecycle transitions share one gate so initialization, hot-reload startup,
+    // stop, and disposal never publish half-finished state to concurrent callers.
+    private readonly object _stateGate = new();
     private readonly GameConfigBootstrapOptions _options;
     private IUnRegister? _hotReload;
     private YamlConfigLoader? _loader;
     private bool _disposed;
+    private bool _isInitializing;
+    private bool _isStartingHotReload;
+    private bool _stopHotReloadAfterStart;
 
     /// <summary>
     ///     使用指定选项创建配置启动帮助器。
@@ -35,14 +45,14 @@ public sealed class GameConfigBootstrap : IDisposable
         {
             throw new ArgumentException(
                 RootPathCannotBeNullOrWhiteSpaceMessage,
-                nameof(options.RootPath));
+                nameof(options));
         }
 
         if (options.ConfigureLoader == null)
         {
             throw new ArgumentException(
                 ConfigureLoaderCannotBeNullMessage,
-                nameof(options.ConfigureLoader));
+                nameof(options));
         }
 
         _options = options;
@@ -63,13 +73,34 @@ public sealed class GameConfigBootstrap : IDisposable
 
     /// <summary>
     ///     获取一个值，指示启动帮助器是否已经成功完成初次加载。
+    ///     该状态只会在完整初始化链路（包括可选热重载启动）成功后才对外可见，
+    ///     避免并发调用观察到半初始化生命周期。
     /// </summary>
-    public bool IsInitialized => _loader != null;
+    public bool IsInitialized
+    {
+        get
+        {
+            lock (_stateGate)
+            {
+                return _loader != null;
+            }
+        }
+    }
 
     /// <summary>
     ///     获取一个值，指示开发期热重载是否已启用。
+    ///     只有当监听句柄已经成功创建并提交到当前生命周期后，该属性才会返回 <see langword="true" />。
     /// </summary>
-    public bool IsHotReloadEnabled => _hotReload != null;
+    public bool IsHotReloadEnabled
+    {
+        get
+        {
+            lock (_stateGate)
+            {
+                return _hotReload != null;
+            }
+        }
+    }
 
     /// <summary>
     ///     获取当前生效的 YAML 配置加载器。
@@ -81,10 +112,13 @@ public sealed class GameConfigBootstrap : IDisposable
     {
         get
         {
-            ThrowIfDisposed();
+            lock (_stateGate)
+            {
+                ThrowIfDisposedCore();
 
-            return _loader ?? throw new InvalidOperationException(
-                "The config bootstrap has not been initialized yet.");
+                return _loader ?? throw new InvalidOperationException(
+                    "The config bootstrap has not been initialized yet.");
+            }
         }
     }
 
@@ -99,24 +133,59 @@ public sealed class GameConfigBootstrap : IDisposable
     /// <exception cref="ConfigLoadException">当配置加载失败时抛出。</exception>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-
-        if (_loader != null)
+        lock (_stateGate)
         {
-            throw new InvalidOperationException(
-                "The config bootstrap can only be initialized once per instance.");
+            ThrowIfDisposedCore();
+
+            if (_isInitializing || _loader != null)
+            {
+                throw new InvalidOperationException(
+                    "The config bootstrap can only be initialized once per instance.");
+            }
+
+            _isInitializing = true;
         }
 
-        var loader = new YamlConfigLoader(RootPath);
-        _options.ConfigureLoader!(loader);
-        await loader.LoadAsync(Registry, cancellationToken);
+        IUnRegister? hotReload = null;
 
-        // 仅在初次加载完全成功后才公开加载器实例，避免上层观察到半初始化状态。
-        _loader = loader;
-
-        if (_options.EnableHotReload)
+        try
         {
-            StartHotReload(_options.HotReloadOptions);
+            var loader = new YamlConfigLoader(RootPath);
+            _options.ConfigureLoader!(loader);
+            await loader.LoadAsync(Registry, cancellationToken);
+
+            if (_options.EnableHotReload)
+            {
+                hotReload = loader.EnableHotReload(Registry, _options.HotReloadOptions);
+            }
+
+            lock (_stateGate)
+            {
+                try
+                {
+                    ThrowIfDisposedCore();
+
+                    // 仅在初次加载与可选热重载都完整成功后才提交结果，
+                    // 避免 IsInitialized / Loader 暴露半初始化生命周期。
+                    _loader = loader;
+                    _hotReload = hotReload;
+                    hotReload = null;
+                }
+                finally
+                {
+                    _isInitializing = false;
+                }
+            }
+        }
+        catch
+        {
+            lock (_stateGate)
+            {
+                _isInitializing = false;
+            }
+
+            hotReload?.UnRegister();
+            throw;
         }
     }
 
@@ -135,17 +204,70 @@ public sealed class GameConfigBootstrap : IDisposable
     /// </exception>
     public void StartHotReload(YamlConfigHotReloadOptions? options = null)
     {
-        ThrowIfDisposed();
-
-        var loader = _loader ?? throw new InvalidOperationException(
-            "Hot reload can only be started after the initial config load succeeds.");
-
-        if (_hotReload != null)
+        YamlConfigLoader loader;
+        lock (_stateGate)
         {
-            throw new InvalidOperationException("Hot reload is already enabled.");
+            ThrowIfDisposedCore();
+
+            loader = _loader ?? throw new InvalidOperationException(
+                "Hot reload can only be started after the initial config load succeeds.");
+
+            if (_isStartingHotReload || _hotReload != null)
+            {
+                throw new InvalidOperationException("Hot reload is already enabled.");
+            }
+
+            _isStartingHotReload = true;
+            _stopHotReloadAfterStart = false;
         }
 
-        _hotReload = loader.EnableHotReload(Registry, options);
+        IUnRegister? hotReload = null;
+        try
+        {
+            hotReload = loader.EnableHotReload(Registry, options);
+
+            var shouldStop = false;
+            lock (_stateGate)
+            {
+                try
+                {
+                    ThrowIfDisposedCore();
+
+                    // Stop/Dispose may arrive while the watcher is being created. In that
+                    // case, release the new handle immediately instead of publishing it.
+                    if (_stopHotReloadAfterStart)
+                    {
+                        shouldStop = true;
+                        _stopHotReloadAfterStart = false;
+                    }
+                    else
+                    {
+                        _hotReload = hotReload;
+                        hotReload = null;
+                    }
+                }
+                finally
+                {
+                    _isStartingHotReload = false;
+                }
+            }
+
+            if (shouldStop)
+            {
+                hotReload?.UnRegister();
+            }
+        }
+        catch
+        {
+            lock (_stateGate)
+            {
+                _isStartingHotReload = false;
+                _stopHotReloadAfterStart = false;
+            }
+
+            hotReload?.UnRegister();
+            throw;
+        }
     }
 
     /// <summary>
@@ -154,8 +276,19 @@ public sealed class GameConfigBootstrap : IDisposable
     /// </summary>
     public void StopHotReload()
     {
-        var hotReload = _hotReload;
-        _hotReload = null;
+        IUnRegister? hotReload;
+        lock (_stateGate)
+        {
+            if (_isStartingHotReload && _hotReload == null)
+            {
+                _stopHotReloadAfterStart = true;
+                return;
+            }
+
+            hotReload = _hotReload;
+            _hotReload = null;
+        }
+
         hotReload?.UnRegister();
     }
 
@@ -164,16 +297,29 @@ public sealed class GameConfigBootstrap : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed)
+        IUnRegister? hotReload;
+        lock (_stateGate)
         {
-            return;
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            if (_isStartingHotReload && _hotReload == null)
+            {
+                _stopHotReloadAfterStart = true;
+            }
+
+            hotReload = _hotReload;
+            _hotReload = null;
         }
 
-        _disposed = true;
-        StopHotReload();
+        hotReload?.UnRegister();
     }
 
-    private void ThrowIfDisposed()
+    private void ThrowIfDisposedCore()
     {
         if (_disposed)
         {

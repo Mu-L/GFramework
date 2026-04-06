@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
@@ -124,6 +125,92 @@ public class GameConfigBootstrapTests
                 }));
 
         Assert.That(exception!.ParamName, Is.EqualTo("ConfigureLoader"));
+    }
+
+    /// <summary>
+    ///     验证初始化链路进行中时，第二个调用者不会再次进入并发初始化流程。
+    /// </summary>
+    [Test]
+    public void InitializeAsync_Should_Reject_Concurrent_Caller_While_Initialization_Is_In_Progress()
+    {
+        CreateMonsterFiles();
+
+        using ManualResetEventSlim initializeEntered = new(false);
+        using ManualResetEventSlim continueInitialization = new(false);
+        using var bootstrap = new GameConfigBootstrap(
+            new GameConfigBootstrapOptions
+            {
+                RootPath = _rootPath,
+                ConfigureLoader = loader =>
+                {
+                    initializeEntered.Set();
+                    Assert.That(
+                        continueInitialization.Wait(TimeSpan.FromSeconds(5)),
+                        Is.True,
+                        "The first initialization attempt did not resume within the expected timeout.");
+                    loader.RegisterAllGeneratedConfigTables(
+                        new GeneratedConfigRegistrationOptions
+                        {
+                            IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+                        });
+                }
+            });
+
+        var firstInitializeTask = Task.Run(() => bootstrap.InitializeAsync());
+
+        Assert.That(
+            initializeEntered.Wait(TimeSpan.FromSeconds(5)),
+            Is.True,
+            "The first initialization attempt did not reach the guarded lifecycle section.");
+
+        var secondCallerException = Assert.ThrowsAsync<InvalidOperationException>(async () => await bootstrap.InitializeAsync());
+
+        continueInitialization.Set();
+
+        Assert.DoesNotThrowAsync(async () => await firstInitializeTask);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(secondCallerException, Is.Not.Null);
+            Assert.That(secondCallerException!.Message, Does.Contain("only be initialized once"));
+            Assert.That(bootstrap.IsInitialized, Is.True);
+        });
+    }
+
+    /// <summary>
+    ///     验证在可选热重载启动失败时，不会提前公开加载器与初始化成功状态。
+    /// </summary>
+    [Test]
+    public void InitializeAsync_Should_Not_Publish_State_When_HotReload_Enable_Fails()
+    {
+        CreateMonsterFiles();
+
+        using var bootstrap = new GameConfigBootstrap(
+            new GameConfigBootstrapOptions
+            {
+                RootPath = _rootPath,
+                EnableHotReload = true,
+                HotReloadOptions = new YamlConfigHotReloadOptions
+                {
+                    DebounceDelay = TimeSpan.FromMilliseconds(-1)
+                },
+                ConfigureLoader = static loader =>
+                    loader.RegisterAllGeneratedConfigTables(
+                        new GeneratedConfigRegistrationOptions
+                        {
+                            IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+                        })
+            });
+
+        var exception = Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => await bootstrap.InitializeAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(bootstrap.IsInitialized, Is.False);
+            Assert.That(bootstrap.IsHotReloadEnabled, Is.False);
+            Assert.Throws<InvalidOperationException>(() => _ = bootstrap.Loader);
+        });
     }
 
     /// <summary>

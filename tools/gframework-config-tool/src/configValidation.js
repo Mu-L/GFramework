@@ -12,6 +12,7 @@ const {ValidationMessageKeys} = require("./localizationKeys");
  * runtime validator and source generator so tooling diagnostics stay aligned.
  *
  * @param {string} content Raw schema JSON text.
+ * @throws {Error} Thrown when the schema declares one unsupported or invalid pattern string.
  * @returns {{
  *   type: "object",
  *   required: string[],
@@ -384,9 +385,11 @@ function normalizeSchemaNonNegativeInteger(value) {
  * compiled by the local tooling runtime.
  *
  * @param {unknown} value Raw schema value.
+ * @param {string} displayPath Logical property path used in diagnostics.
+ * @throws {Error} Thrown when the pattern string cannot be compiled.
  * @returns {string | undefined} Normalized pattern string.
  */
-function normalizeSchemaPattern(value) {
+function normalizeSchemaPattern(value, displayPath) {
     if (typeof value !== "string") {
         return undefined;
     }
@@ -394,8 +397,8 @@ function normalizeSchemaPattern(value) {
     try {
         void new RegExp(value);
         return value;
-    } catch {
-        return undefined;
+    } catch (error) {
+        throw new Error(`Schema property '${displayPath}' declares an invalid 'pattern' regular expression: ${error.message}`);
     }
 }
 
@@ -435,17 +438,19 @@ function formatSchemaDefaultValue(value) {
  *
  * @param {string} scalarValue Scalar value from YAML.
  * @param {string | undefined} pattern Schema pattern string.
+ * @param {string} displayPath Logical property path used in diagnostics.
+ * @throws {Error} Thrown when the pattern string cannot be compiled.
  * @returns {boolean} True when the value matches or no pattern is declared.
  */
-function matchesSchemaPattern(scalarValue, pattern) {
+function matchesSchemaPattern(scalarValue, pattern, displayPath) {
     if (typeof pattern !== "string") {
         return true;
     }
 
     try {
         return new RegExp(pattern).test(scalarValue);
-    } catch {
-        return true;
+    } catch (error) {
+        throw new Error(`Schema property '${displayPath}' declares an invalid 'pattern' regular expression: ${error.message}`);
     }
 }
 
@@ -502,7 +507,7 @@ function parseSchemaNode(rawNode, displayPath) {
         exclusiveMaximum: normalizeSchemaNumber(value.exclusiveMaximum),
         minLength: normalizeSchemaNonNegativeInteger(value.minLength),
         maxLength: normalizeSchemaNonNegativeInteger(value.maxLength),
-        pattern: normalizeSchemaPattern(value.pattern),
+        pattern: normalizeSchemaPattern(value.pattern, displayPath),
         minItems: normalizeSchemaNonNegativeInteger(value.minItems),
         maxItems: normalizeSchemaNonNegativeInteger(value.maxItems),
         refTable: typeof value["x-gframework-ref-table"] === "string"
@@ -749,7 +754,7 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
     }
 
     if (supportsPatternConstraints &&
-        !matchesSchemaPattern(scalarValue, schemaNode.pattern)) {
+        !matchesSchemaPattern(scalarValue, schemaNode.pattern, schemaNode.displayPath)) {
         diagnostics.push({
             severity: "error",
             message: localizeValidationMessage(ValidationMessageKeys.patternViolation, localizer, {
