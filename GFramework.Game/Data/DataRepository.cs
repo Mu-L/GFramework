@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System.Reflection;
 using GFramework.Core.Abstractions.Storage;
 using GFramework.Core.Extensions;
 using GFramework.Core.Utility;
@@ -21,13 +22,17 @@ using GFramework.Game.Extensions;
 namespace GFramework.Game.Data;
 
 /// <summary>
-///     数据仓库类，用于管理游戏数据的存储和读取
+///     数据仓库类，用于管理游戏数据的存储和读取。
 /// </summary>
 /// <param name="storage">存储接口实例</param>
 /// <param name="options">数据仓库配置选项</param>
 public class DataRepository(IStorage? storage, DataRepositoryOptions? options = null)
     : AbstractContextUtility, IDataRepository
 {
+    private static readonly MethodInfo SaveCoreGenericMethod =
+        typeof(DataRepository).GetMethod(nameof(SaveCoreAsync), BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Method {nameof(SaveCoreAsync)} not found.");
+
     private readonly DataRepositoryOptions _options = options ?? new DataRepositoryOptions();
     private IStorage? _storage = storage;
 
@@ -65,20 +70,7 @@ public class DataRepository(IStorage? storage, DataRepositoryOptions? options = 
     public async Task SaveAsync<T>(IDataLocation location, T data)
         where T : class, IData
     {
-        var key = location.ToStorageKey();
-
-        // 自动备份
-        if (_options.AutoBackup && await Storage.ExistsAsync(key))
-        {
-            var backupKey = $"{key}.backup";
-            var existing = await Storage.ReadAsync<T>(key);
-            await Storage.WriteAsync(backupKey, existing);
-        }
-
-        await Storage.WriteAsync(key, data);
-
-        if (_options.EnableEvents)
-            this.SendEvent(new DataSavedEvent<T>(data));
+        await SaveCoreAsync(location, data, emitSavedEvent: true);
     }
 
     /// <summary>
@@ -98,6 +90,12 @@ public class DataRepository(IStorage? storage, DataRepositoryOptions? options = 
     public async Task DeleteAsync(IDataLocation location)
     {
         var key = location.ToStorageKey();
+
+        if (!await Storage.ExistsAsync(key))
+        {
+            return;
+        }
+
         await Storage.DeleteAsync(key);
         if (_options.EnableEvents)
             this.SendEvent(new DataDeletedEvent(location));
@@ -110,7 +108,13 @@ public class DataRepository(IStorage? storage, DataRepositoryOptions? options = 
     public async Task SaveAllAsync(IEnumerable<(IDataLocation location, IData data)> dataList)
     {
         var valueTuples = dataList.ToList();
-        foreach (var (location, data) in valueTuples) await SaveAsync(location, data);
+
+        // 批量保存对订阅者而言应视为一次显式提交，因此这里复用底层保存逻辑，
+        // 但抑制逐项 DataSavedEvent，避免监听器对同一批次收到重复语义的事件。
+        foreach (var (location, data) in valueTuples)
+        {
+            await SaveCoreUntypedAsync(location, data, emitSavedEvent: false);
+        }
 
         if (_options.EnableEvents)
             this.SendEvent(new DataBatchSavedEvent(valueTuples));
@@ -122,5 +126,57 @@ public class DataRepository(IStorage? storage, DataRepositoryOptions? options = 
     protected override void OnInit()
     {
         _storage ??= this.GetUtility<IStorage>()!;
+    }
+
+    /// <summary>
+    ///     执行单项保存的共享流程，并根据调用入口决定是否发送单项保存事件。
+    /// </summary>
+    /// <typeparam name="T">数据类型。</typeparam>
+    /// <param name="location">目标数据位置。</param>
+    /// <param name="data">要保存的数据对象。</param>
+    /// <param name="emitSavedEvent">是否在成功写入后发送单项保存事件。</param>
+    private async Task SaveCoreAsync<T>(IDataLocation location, T data, bool emitSavedEvent)
+        where T : class, IData
+    {
+        var key = location.ToStorageKey();
+
+        await BackupIfNeededAsync<T>(key);
+        await Storage.WriteAsync(key, data);
+
+        if (emitSavedEvent && _options.EnableEvents)
+        {
+            this.SendEvent(new DataSavedEvent<T>(data));
+        }
+    }
+
+    /// <summary>
+    ///     在覆盖旧值前为当前存储键创建备份。
+    /// </summary>
+    /// <param name="key">即将被覆盖的存储键。</param>
+    private async Task BackupIfNeededAsync<T>(string key)
+        where T : class, IData
+    {
+        if (!_options.AutoBackup || !await Storage.ExistsAsync(key))
+        {
+            return;
+        }
+
+        var backupKey = $"{key}.backup";
+        var existing = await Storage.ReadAsync<T>(key);
+        await Storage.WriteAsync(backupKey, existing);
+    }
+
+    /// <summary>
+    ///     使用数据对象的运行时类型执行保存流程，避免批量保存时因为编译期类型退化为 <see cref="IData" /> 而破坏备份反序列化。
+    /// </summary>
+    /// <param name="location">目标数据位置。</param>
+    /// <param name="data">要保存的数据对象。</param>
+    /// <param name="emitSavedEvent">是否发送单项保存事件。</param>
+    private Task SaveCoreUntypedAsync(IDataLocation location, IData data, bool emitSavedEvent)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        var closedMethod = SaveCoreGenericMethod.MakeGenericMethod(data.GetType());
+        return (Task)closedMethod.Invoke(this, [location, data, emitSavedEvent])!;
     }
 }

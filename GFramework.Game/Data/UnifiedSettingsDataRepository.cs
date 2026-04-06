@@ -21,8 +21,13 @@ using GFramework.Game.Abstractions.Data.Events;
 namespace GFramework.Game.Data;
 
 /// <summary>
-///     使用单一文件存储所有设置数据的仓库实现
+///     使用单一文件存储所有设置数据的仓库实现。
 /// </summary>
+/// <remarks>
+///     该仓库通过内存缓存聚合所有设置 section，并在公开的保存或删除操作发生时整文件回写。
+///     虽然底层不是“一项一个文件”，但它仍遵循 <see cref="DataRepositoryOptions" /> 定义的统一契约：
+///     启用自动备份时，覆盖写入前会为整个统一文件创建单份备份；批量保存只发出批量事件，不重复发出单项保存事件。
+/// </remarks>
 public class UnifiedSettingsDataRepository(
     IStorage? storage,
     IRuntimeTypeSerializer? serializer,
@@ -66,7 +71,7 @@ public class UnifiedSettingsDataRepository(
         var key = location.Key;
         var result = _file!.Sections.TryGetValue(key, out var raw) ? Serializer.Deserialize<T>(raw) : new T();
         if (_options.EnableEvents)
-            this.SendEvent(new DataLoadedEvent<IData>(result));
+            this.SendEvent(new DataLoadedEvent<T>(result));
         return result;
     }
 
@@ -81,21 +86,11 @@ public class UnifiedSettingsDataRepository(
         where T : class, IData
     {
         await EnsureLoadedAsync();
-        await _lock.WaitAsync();
-        try
-        {
-            var key = location.Key;
-            var serialized = Serializer.Serialize(data);
+        await MutateAndPersistAsync(file => file.Sections[location.Key] = Serializer.Serialize(data));
 
-            _file!.Sections[key] = serialized;
-
-            await Storage.WriteAsync(UnifiedKey, _file);
-            if (_options.EnableEvents)
-                this.SendEvent(new DataSavedEvent<T>(data));
-        }
-        finally
+        if (_options.EnableEvents)
         {
-            _lock.Release();
+            this.SendEvent(new DataSavedEvent<T>(data));
         }
     }
 
@@ -118,13 +113,27 @@ public class UnifiedSettingsDataRepository(
     public async Task DeleteAsync(IDataLocation location)
     {
         await EnsureLoadedAsync();
+        var removed = false;
 
-        if (File.Sections.Remove(location.Key))
+        await _lock.WaitAsync();
+        try
         {
-            await SaveUnifiedFileAsync();
+            removed = File.Sections.Remove(location.Key);
+            if (!removed)
+            {
+                return;
+            }
 
-            if (_options.EnableEvents)
-                this.SendEvent(new DataDeletedEvent(location));
+            await WriteUnifiedFileCoreAsync();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+
+        if (removed && _options.EnableEvents)
+        {
+            this.SendEvent(new DataDeletedEvent(location));
         }
     }
 
@@ -139,16 +148,17 @@ public class UnifiedSettingsDataRepository(
         await EnsureLoadedAsync();
 
         var valueTuples = dataList.ToList();
-        foreach (var (location, data) in valueTuples)
-        {
-            var serialized = Serializer.Serialize(data);
-            File.Sections[location.Key] = serialized;
-        }
 
-        await SaveUnifiedFileAsync();
+        await MutateAndPersistAsync(file =>
+        {
+            foreach (var (location, data) in valueTuples)
+            {
+                file.Sections[location.Key] = Serializer.Serialize(data);
+            }
+        });
 
         if (_options.EnableEvents)
-            this.SendEvent(new DataBatchSavedEvent(valueTuples.ToList()));
+            this.SendEvent(new DataBatchSavedEvent(valueTuples));
     }
 
     /// <summary>
@@ -226,12 +236,13 @@ public class UnifiedSettingsDataRepository(
     /// <summary>
     ///     将缓存中的所有数据保存到统一文件
     /// </summary>
-    private async Task SaveUnifiedFileAsync()
+    private async Task MutateAndPersistAsync(Action<UnifiedSettingsFile> mutation)
     {
         await _lock.WaitAsync();
         try
         {
-            await Storage.WriteAsync(UnifiedKey, _file);
+            mutation(File);
+            await WriteUnifiedFileCoreAsync();
         }
         finally
         {
@@ -240,9 +251,27 @@ public class UnifiedSettingsDataRepository(
     }
 
     /// <summary>
-    ///     获取统一文件的存储键名
+    ///     将当前缓存中的统一文件写回底层存储，并在需要时创建整个文件的备份。
     /// </summary>
-    /// <returns>完整的存储键名</returns>
+    /// <remarks>
+    ///     该方法要求调用方已经持有 <see cref="_lock" />，以保证“修改缓存 -> 备份旧文件 -> 写入新文件”观察到的是同一份一致状态。
+    /// </remarks>
+    private async Task WriteUnifiedFileCoreAsync()
+    {
+        if (_options.AutoBackup && await Storage.ExistsAsync(UnifiedKey))
+        {
+            var backupKey = $"{UnifiedKey}.backup";
+            var existing = await Storage.ReadAsync<UnifiedSettingsFile>(UnifiedKey);
+            await Storage.WriteAsync(backupKey, existing);
+        }
+
+        await Storage.WriteAsync(UnifiedKey, File);
+    }
+
+    /// <summary>
+    ///     获取统一文件的存储键名。
+    /// </summary>
+    /// <returns>完整的存储键名。</returns>
     protected virtual string GetUnifiedKey()
     {
         return string.IsNullOrEmpty(_options.BasePath) ? fileName : $"{_options.BasePath}/{fileName}";
