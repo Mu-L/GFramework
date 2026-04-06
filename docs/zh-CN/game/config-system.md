@@ -13,7 +13,7 @@
 - 一对象一文件的目录组织
 - 运行时只读查询
 - Runtime / Generator / Tooling 共享支持 `minimum`、`maximum`、`minLength`、`maxLength`
-- Source Generator 生成配置类型、表包装和注册/访问辅助
+- Source Generator 生成配置类型、表包装、单表注册/访问辅助，以及项目级聚合注册目录
 - VS Code 插件提供配置浏览、raw 编辑、schema 打开、递归轻量校验和嵌套对象表单入口
 
 ## 推荐目录结构
@@ -193,8 +193,7 @@ public sealed class GameConfigBootstrap : IDisposable
     public async Task InitializeAsync(string configRootPath, bool enableHotReload = false)
     {
         var loader = new YamlConfigLoader(configRootPath)
-            .RegisterMonsterTable()
-            .RegisterItemTable();
+            .RegisterAllGeneratedConfigTables();
 
         await loader.LoadAsync(_registry);
 
@@ -223,7 +222,7 @@ public sealed class GameConfigBootstrap : IDisposable
 
 这段模板刻意遵循几个约定：
 
-- 优先使用生成器产出的 `Register*Table()`，避免手写表名、路径和 key selector
+- 优先使用生成器产出的 `RegisterAllGeneratedConfigTables()`，把多表注册收敛为一个稳定入口
 - 由一个长生命周期对象持有 `ConfigRegistry`
 - 热重载句柄和配置生命周期绑在一起，避免监听器泄漏
 
@@ -331,8 +330,7 @@ public sealed class GameArchitecture : Architecture
         var registry = RegisterUtility(new ConfigRegistry());
 
         var loader = new YamlConfigLoader(_configRootPath)
-            .RegisterMonsterTable()
-            .RegisterItemTable();
+            .RegisterAllGeneratedConfigTables();
 
         loader.LoadAsync(registry).GetAwaiter().GetResult();
     }
@@ -354,7 +352,7 @@ var slime = monsterTable.Get(1);
 - 在 `OnInitialize()` 内完成首次 `LoadAsync`
 - 初始化完成后只通过注册表和生成表包装访问配置
 
-当前阶段不建议为了配置系统额外引入新的 `IArchitectureModule` 或 service module 抽象；现有 `Architecture + ConfigRegistry + YamlConfigLoader + Register*Table()` 组合已经足够作为官方推荐接入路径。
+当前阶段不建议为了配置系统额外引入新的 `IArchitectureModule` 或 service module 抽象；现有 `Architecture + ConfigRegistry + YamlConfigLoader + RegisterAllGeneratedConfigTables()` 组合已经足够作为官方推荐接入路径。
 
 ### 热重载模板
 
@@ -408,13 +406,18 @@ using GFramework.Game.Config.Generated;
 var registry = new ConfigRegistry();
 
 var loader = new YamlConfigLoader("config-root")
-    .RegisterMonsterTable();
+    .RegisterAllGeneratedConfigTables();
 
 await loader.LoadAsync(registry);
 
 var monsterTable = registry.GetMonsterTable();
 var slime = monsterTable.Get(1);
 ```
+
+这里推荐把“注册全部已生成配置表”和“读取单表强类型元数据”分成两层：
+
+- 启动层优先走 `RegisterAllGeneratedConfigTables()`，避免每新增一个 schema 都要回到启动代码继续补链式调用
+- 消费层继续通过 `GetMonsterTable()`、`MonsterConfigBindings.Metadata` 这类单表入口读取强类型信息
 
 这组辅助会把以下约定固化到生成代码里：
 
@@ -432,6 +435,41 @@ var tableName = MonsterConfigBindings.Metadata.TableName;
 var configPath = MonsterConfigBindings.Metadata.ConfigRelativePath;
 var schemaPath = MonsterConfigBindings.Metadata.SchemaRelativePath;
 ```
+
+如果你需要在启动或诊断代码里枚举当前消费者项目里有哪些生成表，也可以直接读取项目级目录：
+
+```csharp
+foreach (var metadata in GeneratedConfigCatalog.Tables)
+{
+    Console.WriteLine($"{metadata.TableName} -> {metadata.SchemaRelativePath}");
+}
+```
+
+也可以按表名回查：
+
+```csharp
+if (GeneratedConfigCatalog.TryGetByTableName("monster", out var metadata))
+{
+    Console.WriteLine(metadata.ConfigRelativePath);
+}
+```
+
+如果你需要为某些表保留自定义 key comparer，也可以继续走聚合注册入口，而不是被迫退回逐表手写：
+
+```csharp
+var loader = new YamlConfigLoader("config-root")
+    .RegisterAllGeneratedConfigTables(
+        new GeneratedConfigRegistrationOptions
+        {
+            ItemComparer = StringComparer.OrdinalIgnoreCase
+        });
+```
+
+这里的规则是：
+
+- 未显式配置 comparer 的表，仍然使用各自 `Register{Entity}Table()` 的默认行为
+- 需要自定义 comparer 的表，可以通过 `GeneratedConfigRegistrationOptions` 按表覆盖
+- 如果项目希望继续完全手写某张表的注册流程，逐表 `Register*Table(...)` 入口仍然保留，作为兼容逃生通道
 
 如果你需要自定义目录、表名或 key selector，仍然可以直接调用 `YamlConfigLoader.RegisterTable(...)` 原始重载。
 
@@ -553,7 +591,7 @@ using GFramework.Game.Config.Generated;
 
 var registry = new ConfigRegistry();
 var loader = new YamlConfigLoader("config-root")
-    .RegisterMonsterTable();
+    .RegisterAllGeneratedConfigTables();
 
 await loader.LoadAsync(registry);
 

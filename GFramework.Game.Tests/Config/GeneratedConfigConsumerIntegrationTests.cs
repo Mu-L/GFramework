@@ -8,7 +8,7 @@ namespace GFramework.Game.Tests.Config;
 
 /// <summary>
 ///     验证消费者项目通过 `schemas/**/*.schema.json` 自动拾取 schema 后，
-///     可以直接编译并使用生成的注册辅助、强类型访问入口、查询辅助与运行时加载链路。
+///     可以直接编译并使用生成的聚合注册辅助、强类型访问入口、查询辅助与运行时加载链路。
 /// </summary>
 [TestFixture]
 public class GeneratedConfigConsumerIntegrationTests
@@ -39,7 +39,7 @@ public class GeneratedConfigConsumerIntegrationTests
 
     /// <summary>
     ///     验证生成器自动拾取消费者项目的 schema 后，
-    ///     可以用生成的注册辅助完成加载，并通过强类型表包装访问运行时数据与查询辅助。
+    ///     可以用生成的聚合注册辅助完成加载，并通过强类型表包装访问运行时数据与查询辅助。
     /// </summary>
     [Test]
     public async Task LoadAsync_Should_Support_Generated_Bindings_In_Consumer_Project()
@@ -91,7 +91,7 @@ public class GeneratedConfigConsumerIntegrationTests
 
         var registry = new ConfigRegistry();
         var loader = new YamlConfigLoader(_rootPath)
-            .RegisterMonsterTable();
+            .RegisterAllGeneratedConfigTables();
 
         await loader.LoadAsync(registry);
 
@@ -100,6 +100,13 @@ public class GeneratedConfigConsumerIntegrationTests
 
         Assert.Multiple(() =>
         {
+            Assert.That(
+                GeneratedConfigCatalog.Tables.Select(static metadata => metadata.TableName),
+                Does.Contain("monster"));
+            Assert.That(GeneratedConfigCatalog.TryGetByTableName("monster", out var catalogEntry), Is.True);
+            Assert.That(catalogEntry.ConfigDomain, Is.EqualTo("monster"));
+            Assert.That(catalogEntry.ConfigRelativePath, Is.EqualTo("monster"));
+            Assert.That(catalogEntry.SchemaRelativePath, Is.EqualTo("schemas/monster.schema.json"));
             Assert.That(MonsterConfigBindings.ConfigDomain, Is.EqualTo("monster"));
             Assert.That(MonsterConfigBindings.TableName, Is.EqualTo("monster"));
             Assert.That(MonsterConfigBindings.ConfigRelativePath, Is.EqualTo("monster"));
