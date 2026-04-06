@@ -124,7 +124,7 @@ public class GameConfigBootstrapTests
                     RootPath = _rootPath
                 }));
 
-        Assert.That(exception!.ParamName, Is.EqualTo("ConfigureLoader"));
+        Assert.That(exception!.ParamName, Is.EqualTo("options"));
     }
 
     /// <summary>
