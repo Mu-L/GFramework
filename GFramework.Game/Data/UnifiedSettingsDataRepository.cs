@@ -118,13 +118,16 @@ public class UnifiedSettingsDataRepository(
         await _lock.WaitAsync();
         try
         {
-            removed = File.Sections.Remove(location.Key);
+            var currentFile = File;
+            var nextFile = CloneFile(currentFile);
+            removed = nextFile.Sections.Remove(location.Key);
             if (!removed)
             {
                 return;
             }
 
-            await WriteUnifiedFileCoreAsync();
+            await WriteUnifiedFileCoreAsync(currentFile, nextFile);
+            _file = nextFile;
         }
         finally
         {
@@ -241,8 +244,14 @@ public class UnifiedSettingsDataRepository(
         await _lock.WaitAsync();
         try
         {
-            mutation(File);
-            await WriteUnifiedFileCoreAsync();
+            var currentFile = File;
+            var nextFile = CloneFile(currentFile);
+
+            // 先在副本上计算“下一份已提交状态”，只有底层持久化成功后才交换缓存，
+            // 这样即使备份或写入失败，也不会把未提交修改留在内存快照里。
+            mutation(nextFile);
+            await WriteUnifiedFileCoreAsync(currentFile, nextFile);
+            _file = nextFile;
         }
         finally
         {
@@ -251,21 +260,39 @@ public class UnifiedSettingsDataRepository(
     }
 
     /// <summary>
-    ///     将当前缓存中的统一文件写回底层存储，并在需要时创建整个文件的备份。
+    ///     将当前缓存快照写回底层存储，并在需要时创建整个文件的备份。
     /// </summary>
     /// <remarks>
-    ///     该方法要求调用方已经持有 <see cref="_lock" />，以保证“修改缓存 -> 备份旧文件 -> 写入新文件”观察到的是同一份一致状态。
+    ///     该方法要求调用方已经持有 <see cref="_lock" />，以保证“读取当前快照 -> 写入备份 -> 提交新快照”的原子提交顺序。
+    ///     只有在该方法成功返回后，调用方才应交换内存中的 <see cref="_file" /> 引用。
     /// </remarks>
-    private async Task WriteUnifiedFileCoreAsync()
+    /// <param name="currentFile">当前已提交的统一文件快照。</param>
+    /// <param name="nextFile">即将提交的新统一文件快照。</param>
+    private async Task WriteUnifiedFileCoreAsync(UnifiedSettingsFile currentFile, UnifiedSettingsFile nextFile)
     {
         if (_options.AutoBackup && await Storage.ExistsAsync(UnifiedKey))
         {
             var backupKey = $"{UnifiedKey}.backup";
-            var existing = await Storage.ReadAsync<UnifiedSettingsFile>(UnifiedKey);
-            await Storage.WriteAsync(backupKey, existing);
+            await Storage.WriteAsync(backupKey, currentFile);
         }
 
-        await Storage.WriteAsync(UnifiedKey, File);
+        await Storage.WriteAsync(UnifiedKey, nextFile);
+    }
+
+    /// <summary>
+    ///     复制当前统一文件快照，确保未提交修改不会污染内存中的已提交状态。
+    /// </summary>
+    /// <param name="source">要复制的统一文件快照。</param>
+    /// <returns>包含独立 section 字典的新快照。</returns>
+    private static UnifiedSettingsFile CloneFile(UnifiedSettingsFile source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return new UnifiedSettingsFile
+        {
+            Version = source.Version,
+            Sections = new Dictionary<string, string>(source.Sections, source.Sections.Comparer)
+        };
     }
 
     /// <summary>

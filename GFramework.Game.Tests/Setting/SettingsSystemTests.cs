@@ -78,8 +78,9 @@ public sealed class SettingsSystemTests
     [Test]
     public async Task ResetAll_Should_Reset_Model_And_Reapply_All_Applicators()
     {
-        var applicator = new PrimaryTestSettings();
-        var model = new FakeSettingsModel(applicator);
+        var primaryApplicator = new PrimaryTestSettings();
+        var secondaryApplicator = new SecondaryTestSettings();
+        var model = new FakeSettingsModel(primaryApplicator, secondaryApplicator);
         var system = CreateSystem(CreateContext(model));
 
         await system.ResetAll();
@@ -87,7 +88,8 @@ public sealed class SettingsSystemTests
         Assert.Multiple(() =>
         {
             Assert.That(model.ResetAllCallCount, Is.EqualTo(1));
-            Assert.That(applicator.ApplyCount, Is.EqualTo(1));
+            Assert.That(primaryApplicator.ApplyCount, Is.EqualTo(1));
+            Assert.That(secondaryApplicator.ApplyCount, Is.EqualTo(1));
         });
     }
 
@@ -98,8 +100,9 @@ public sealed class SettingsSystemTests
     [Test]
     public async Task Reset_Should_Reset_Target_Data_And_Reapply_Target_Applicator()
     {
-        var applicator = new PrimaryTestSettings();
-        var model = new FakeSettingsModel(applicator);
+        var primaryApplicator = new PrimaryTestSettings();
+        var secondaryApplicator = new SecondaryTestSettings();
+        var model = new FakeSettingsModel(primaryApplicator, secondaryApplicator);
         var system = CreateSystem(CreateContext(model));
 
         await system.Reset<PrimaryTestSettings>();
@@ -107,7 +110,8 @@ public sealed class SettingsSystemTests
         Assert.Multiple(() =>
         {
             Assert.That(model.ResetTypes, Is.EquivalentTo(new[] { typeof(PrimaryTestSettings) }));
-            Assert.That(applicator.ApplyCount, Is.EqualTo(1));
+            Assert.That(primaryApplicator.ApplyCount, Is.EqualTo(1));
+            Assert.That(secondaryApplicator.ApplyCount, Is.Zero);
         });
     }
 

@@ -434,21 +434,66 @@ public async Task SaveAllGameData()
 如果你希望把设置统一保存到单个文件中，可以使用 `UnifiedSettingsDataRepository`：
 
 ```csharp
-var settingsRepo = new UnifiedSettingsDataRepository(
-    storage,
-    serializer,
-    new DataRepositoryOptions
+using GFramework.Game.Data;
+using GFramework.Game.Serializer;
+
+public sealed class GameArchitecture : Architecture
+{
+    protected override void Init()
     {
-        AutoBackup = true,
-        EnableEvents = true
-    },
-    "settings.json");
+        var storage = this.GetUtility<IStorage>();
+        var serializer = new JsonSerializer();
+
+        var settingsRepo = new UnifiedSettingsDataRepository(
+            storage,
+            serializer,
+            new DataRepositoryOptions
+            {
+                AutoBackup = true,
+                EnableEvents = true
+            },
+            "settings.json");
+
+        settingsRepo.RegisterDataType(new DataLocation("settings", "graphics"), typeof(GraphicsSettings));
+        settingsRepo.RegisterDataType(new DataLocation("settings", "audio"), typeof(AudioSettings));
+
+        RegisterUtility<ISettingsDataRepository>(settingsRepo);
+    }
+}
 ```
 
 这个实现依然满足 `IDataRepository` 的通用契约，但有两个实现层面的差异需要明确：
 
 - 它把所有设置 section 缓存在内存中，并在保存或删除时整文件回写
 - 开启自动备份时，备份的是整个 `settings.json` 文件，因此适合做“上一次完整设置快照”的恢复，而不是 section 级别回滚
+
+如果你需要 `LoadAllAsync()`，或者希望在同一个统一文件里混合反序列化多个 section，必须先为每个 section 注册类型：
+
+```csharp
+public async Task PrintSettingsSnapshot()
+{
+    var repo = this.GetUtility<ISettingsDataRepository>();
+
+    var all = await repo.LoadAllAsync();
+
+    var graphics = (GraphicsSettings)all["graphics"];
+    var audio = (AudioSettings)all["audio"];
+
+    Console.WriteLine($"Resolution: {graphics.ResolutionWidth}x{graphics.ResolutionHeight}");
+    Console.WriteLine($"MasterVolume: {audio.MasterVolume}");
+}
+```
+
+最小采用要求：
+
+- 项目需要可用的 `IStorage`
+- 项目需要一个可用的序列化器实例，例如 `GFramework.Game.Serializer.JsonSerializer`
+- 在注册仓库时，把所有需要参与 `LoadAllAsync()` 或混合 section 反序列化的 location/type 对显式调用一次 `RegisterDataType(...)`
+
+兼容性说明：
+
+- 现在 `UnifiedSettingsDataRepository.LoadAsync<T>()` 发送的是 `DataLoadedEvent<T>`，而不是 `DataLoadedEvent<IData>`
+- 如果你之前监听的是 `DataLoadedEvent<IData>`，需要改成订阅具体类型，例如 `DataLoadedEvent<GraphicsSettings>` 或 `DataLoadedEvent<AudioSettings>`
 
 ### 存档备份
 
