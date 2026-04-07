@@ -9,6 +9,10 @@ reviews:
   review_status: true # review 结果状态
   review_details: true # 展示具体问题
   poem: false # 关闭诗歌（基本没人用）
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 90000
   auto_review:
     enabled: true
     drafts: false # draft PR 不 review
