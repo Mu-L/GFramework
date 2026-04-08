@@ -94,7 +94,7 @@ public sealed partial class MonsterTable : global::GFramework.Game.Abstractions.
         var materialized = new global::System.Collections.Generic.Dictionary<TProperty, global::System.Collections.Generic.IReadOnlyList<MonsterConfig>>(buckets.Count, buckets.Comparer);
         foreach (var pair in buckets)
         {
-            materialized.Add(pair.Key, global::System.Array.AsReadOnly(pair.Value.ToArray()));
+            materialized.Add(pair.Key, pair.Value.AsReadOnly());
         }
 
         return new global::System.Collections.ObjectModel.ReadOnlyDictionary<TProperty, global::System.Collections.Generic.IReadOnlyList<MonsterConfig>>(materialized);
@@ -110,6 +110,11 @@ public sealed partial class MonsterTable : global::GFramework.Game.Abstractions.
     /// </remarks>
     public global::System.Collections.Generic.IReadOnlyList<MonsterConfig> FindByName(string value)
     {
+        if (value is null)
+        {
+            return global::System.Array.Empty<MonsterConfig>();
+        }
+
         if (_nameIndex.Value.TryGetValue(value, out var matches))
         {
             return matches;
@@ -129,6 +134,12 @@ public sealed partial class MonsterTable : global::GFramework.Game.Abstractions.
     /// </remarks>
     public bool TryFindFirstByName(string value, out MonsterConfig? result)
     {
+        if (value is null)
+        {
+            result = null;
+            return false;
+        }
+
         if (_nameIndex.Value.TryGetValue(value, out var matches) && matches.Count > 0)
         {
             result = matches[0];

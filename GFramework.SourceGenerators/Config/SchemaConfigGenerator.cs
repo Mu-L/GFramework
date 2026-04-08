@@ -13,6 +13,14 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     private const string ConfigPathMetadataKey = "x-gframework-config-path";
     private const string LookupIndexMetadataKey = "x-gframework-index";
     private const string GeneratedNamespace = "GFramework.Game.Config.Generated";
+    private const string LookupIndexTopLevelScalarOnlyMessage =
+        "Only top-level required non-key scalar properties can declare a generated lookup index.";
+    private const string LookupIndexRequiresRequiredScalarMessage =
+        "Generated lookup indexes currently require a required scalar property so dictionary keys remain non-null.";
+    private const string LookupIndexPrimaryKeyMessage =
+        "The primary key already has Get/TryGet lookup semantics and should not declare a generated lookup index.";
+    private const string LookupIndexReferencePropertyMessage =
+        "Reference properties are excluded from generated lookup indexes because they already carry cross-table semantics.";
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -233,7 +241,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                 filePath,
                 property,
                 requiredProperties.Contains(property.Name),
-                CombinePath(displayPath, property.Name));
+                CombinePath(displayPath, property.Name),
+                isDirectChildOfRoot: isRoot);
             if (parsedProperty.Diagnostic is not null)
             {
                 return ParsedObjectResult.FromDiagnostic(parsedProperty.Diagnostic);
@@ -262,7 +271,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         string filePath,
         JsonProperty property,
         bool isRequired,
-        string displayPath)
+        string displayPath,
+        bool isDirectChildOfRoot)
     {
         if (!property.Value.TryGetProperty("type", out var typeElement) ||
             typeElement.ValueKind != JsonValueKind.String)
@@ -300,7 +310,13 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         if (isIndexedLookup &&
-            !TryValidateIndexedLookupEligibility(filePath, property.Name, displayPath, isRequired, refTableName,
+            !TryValidateIndexedLookupEligibility(
+                filePath,
+                property.Name,
+                displayPath,
+                isDirectChildOfRoot,
+                isRequired,
+                refTableName,
                 out diagnostic))
         {
             return ParsedPropertyResult.FromDiagnostic(diagnostic!);
@@ -393,13 +409,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                 if (isIndexedLookup)
                 {
                     return ParsedPropertyResult.FromDiagnostic(
-                        Diagnostic.Create(
-                            ConfigSchemaDiagnostics.InvalidLookupIndexMetadata,
-                            CreateFileLocation(filePath),
-                            Path.GetFileName(filePath),
-                            displayPath,
-                            LookupIndexMetadataKey,
-                            "Only top-level required non-key scalar properties can declare a generated lookup index."));
+                        CreateInvalidLookupIndexDiagnostic(filePath, displayPath, LookupIndexTopLevelScalarOnlyMessage));
                 }
 
                 if (!string.IsNullOrWhiteSpace(refTableName))
@@ -472,56 +482,45 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         string filePath,
         string schemaName,
         string displayPath,
+        bool isDirectChildOfRoot,
         bool isRequired,
         string? refTableName,
         out Diagnostic? diagnostic)
     {
         diagnostic = null;
-        if (!IsTopLevelPropertyDisplayPath(displayPath))
+        if (!isDirectChildOfRoot)
         {
-            diagnostic = Diagnostic.Create(
-                ConfigSchemaDiagnostics.InvalidLookupIndexMetadata,
-                CreateFileLocation(filePath),
-                Path.GetFileName(filePath),
+            diagnostic = CreateInvalidLookupIndexDiagnostic(
+                filePath,
                 displayPath,
-                LookupIndexMetadataKey,
-                "Only top-level required non-key scalar properties can declare a generated lookup index.");
+                LookupIndexTopLevelScalarOnlyMessage);
             return false;
         }
 
         if (!isRequired)
         {
-            diagnostic = Diagnostic.Create(
-                ConfigSchemaDiagnostics.InvalidLookupIndexMetadata,
-                CreateFileLocation(filePath),
-                Path.GetFileName(filePath),
+            diagnostic = CreateInvalidLookupIndexDiagnostic(
+                filePath,
                 displayPath,
-                LookupIndexMetadataKey,
-                "Generated lookup indexes currently require a required scalar property so dictionary keys remain non-null.");
+                LookupIndexRequiresRequiredScalarMessage);
             return false;
         }
 
         if (string.Equals(schemaName, "id", StringComparison.OrdinalIgnoreCase))
         {
-            diagnostic = Diagnostic.Create(
-                ConfigSchemaDiagnostics.InvalidLookupIndexMetadata,
-                CreateFileLocation(filePath),
-                Path.GetFileName(filePath),
+            diagnostic = CreateInvalidLookupIndexDiagnostic(
+                filePath,
                 displayPath,
-                LookupIndexMetadataKey,
-                "The primary key already has Get/TryGet lookup semantics and should not declare a generated lookup index.");
+                LookupIndexPrimaryKeyMessage);
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(refTableName))
         {
-            diagnostic = Diagnostic.Create(
-                ConfigSchemaDiagnostics.InvalidLookupIndexMetadata,
-                CreateFileLocation(filePath),
-                Path.GetFileName(filePath),
+            diagnostic = CreateInvalidLookupIndexDiagnostic(
+                filePath,
                 displayPath,
-                LookupIndexMetadataKey,
-                "Reference properties are excluded from generated lookup indexes because they already carry cross-table semantics.");
+                LookupIndexReferencePropertyMessage);
             return false;
         }
 
@@ -554,13 +553,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         if (isIndexedLookup)
         {
             return ParsedPropertyResult.FromDiagnostic(
-                Diagnostic.Create(
-                    ConfigSchemaDiagnostics.InvalidLookupIndexMetadata,
-                    CreateFileLocation(filePath),
-                    Path.GetFileName(filePath),
-                    displayPath,
-                    LookupIndexMetadataKey,
-                    "Only top-level required non-key scalar properties can declare a generated lookup index."));
+                CreateInvalidLookupIndexDiagnostic(filePath, displayPath, LookupIndexTopLevelScalarOnlyMessage));
         }
 
         if (!property.Value.TryGetProperty("items", out var itemsElement) ||
@@ -1569,7 +1562,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("        foreach (var pair in buckets)");
         builder.AppendLine("        {");
         builder.AppendLine(
-            $"            materialized.Add(pair.Key, global::System.Array.AsReadOnly(pair.Value.ToArray()));");
+            $"            materialized.Add(pair.Key, pair.Value.AsReadOnly());");
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine(
@@ -1612,6 +1605,15 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("    {");
         if (property.IsIndexedLookup)
         {
+            if (IsReferenceType(property.TypeSpec.ClrType))
+            {
+                builder.AppendLine("        if (value is null)");
+                builder.AppendLine("        {");
+                builder.AppendLine($"            return global::System.Array.Empty<{schema.ClassName}>();");
+                builder.AppendLine("        }");
+                builder.AppendLine();
+            }
+
             builder.AppendLine(
                 $"        if (_{ToCamelCase(property.PropertyName)}Index.Value.TryGetValue(value, out var matches))");
             builder.AppendLine("        {");
@@ -1681,6 +1683,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("    {");
         if (property.IsIndexedLookup)
         {
+            if (IsReferenceType(property.TypeSpec.ClrType))
+            {
+                builder.AppendLine("        if (value is null)");
+                builder.AppendLine("        {");
+                builder.AppendLine("            result = null;");
+                builder.AppendLine("            return false;");
+                builder.AppendLine("        }");
+                builder.AppendLine();
+            }
+
             builder.AppendLine(
                 $"        if (_{ToCamelCase(property.PropertyName)}Index.Value.TryGetValue(value, out var matches) && matches.Count > 0)");
             builder.AppendLine("        {");
@@ -1993,17 +2005,6 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    ///     判断字段路径是否表示根对象的直接子字段。
-    /// </summary>
-    /// <param name="displayPath">逻辑字段路径。</param>
-    /// <returns>根对象直接子字段时返回 <c>true</c>；否则返回 <c>false</c>。</returns>
-    private static bool IsTopLevelPropertyDisplayPath(string displayPath)
-    {
-        return displayPath.IndexOf('.') < 0 &&
-               displayPath.IndexOf('[') < 0;
-    }
-
-    /// <summary>
     ///     将 schema 名称转换为 PascalCase 标识符。
     /// </summary>
     /// <param name="value">原始名称。</param>
@@ -2093,6 +2094,27 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     创建统一格式的无效查询索引元数据诊断。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="reason">具体失败原因。</param>
+    /// <returns>稳定的查询索引诊断。</returns>
+    private static Diagnostic CreateInvalidLookupIndexDiagnostic(
+        string filePath,
+        string displayPath,
+        string reason)
+    {
+        return Diagnostic.Create(
+            ConfigSchemaDiagnostics.InvalidLookupIndexMetadata,
+            CreateFileLocation(filePath),
+            Path.GetFileName(filePath),
+            displayPath,
+            LookupIndexMetadataKey,
+            reason);
+    }
+
+    /// <summary>
     ///     读取布尔元数据。
     /// </summary>
     /// <param name="element">Schema 节点。</param>
@@ -2112,6 +2134,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         return (metadataElement.GetBoolean(), null);
+    }
+
+    /// <summary>
+    ///     判断生成字段类型是否为引用类型。
+    /// </summary>
+    /// <param name="clrType">生成的 CLR 类型名。</param>
+    /// <returns>引用类型时返回 <c>true</c>；否则返回 <c>false</c>。</returns>
+    private static bool IsReferenceType(string clrType)
+    {
+        return string.Equals(clrType, "string", StringComparison.Ordinal);
     }
 
     /// <summary>

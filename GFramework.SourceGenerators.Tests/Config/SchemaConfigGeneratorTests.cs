@@ -362,6 +362,93 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证根对象直接字段即使 schema key 本身包含点号，也不会被错误识别为嵌套字段。
+    /// </summary>
+    [Test]
+    public void Run_Should_Allow_Lookup_Index_For_Direct_Root_Property_With_Dotted_Schema_Key()
+    {
+        const string source = """
+                              using System;
+                              using System.Collections.Generic;
+
+                              namespace GFramework.Game.Abstractions.Config
+                              {
+                                  public interface IConfigTable
+                                  {
+                                      Type KeyType { get; }
+                                      Type ValueType { get; }
+                                      int Count { get; }
+                                  }
+
+                                  public interface IConfigTable<TKey, TValue> : IConfigTable
+                                      where TKey : notnull
+                                  {
+                                      TValue Get(TKey key);
+                                      bool TryGet(TKey key, out TValue? value);
+                                      bool ContainsKey(TKey key);
+                                      IReadOnlyCollection<TValue> All();
+                                  }
+
+                                  public interface IConfigRegistry
+                                  {
+                                      IConfigTable<TKey, TValue> GetTable<TKey, TValue>(string name)
+                                          where TKey : notnull;
+
+                                      bool TryGetTable<TKey, TValue>(string name, out IConfigTable<TKey, TValue>? table)
+                                          where TKey : notnull;
+                                  }
+                              }
+
+                              namespace GFramework.Game.Config
+                              {
+                                  public sealed class YamlConfigLoader
+                                  {
+                                      public YamlConfigLoader RegisterTable<TKey, TValue>(
+                                          string tableName,
+                                          string relativePath,
+                                          string schemaRelativePath,
+                                          Func<TValue, TKey> keySelector,
+                                          IEqualityComparer<TKey>? comparer = null)
+                                          where TKey : notnull
+                                      {
+                                          return this;
+                                      }
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "display.name"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "display.name": {
+                                    "type": "string",
+                                    "x-gframework-index": true
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var generatedSources = result.Results
+            .Single()
+            .GeneratedSources
+            .ToDictionary(
+                static sourceResult => sourceResult.HintName,
+                static sourceResult => sourceResult.SourceText.ToString(),
+                StringComparer.Ordinal);
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        Assert.That(generatedSources["MonsterTable.g.cs"], Does.Contain("FindByDisplayName(string value)"));
+        Assert.That(generatedSources["MonsterTable.g.cs"], Does.Contain("_displayNameIndex"));
+    }
+
+    /// <summary>
     ///     验证引用元数据成员名在不同路径规范化后发生碰撞时，生成器仍会分配全局唯一的成员名。
     /// </summary>
     [Test]
@@ -567,7 +654,10 @@ public class SchemaConfigGeneratorTests
             Assert.That(tableSource, Does.Contain("TryFindFirstByName(string value, out MonsterConfig? result)"));
             Assert.That(tableSource, Does.Contain("_nameIndex"));
             Assert.That(tableSource, Does.Contain("BuildNameIndex"));
+            Assert.That(tableSource, Does.Contain("if (value is null)"));
             Assert.That(tableSource, Does.Contain("_nameIndex.Value.TryGetValue(value, out var matches)"));
+            Assert.That(tableSource, Does.Contain("materialized.Add(pair.Key, pair.Value.AsReadOnly());"));
+            Assert.That(tableSource, Does.Not.Contain("pair.Value.ToArray()"));
             Assert.That(tableSource, Does.Contain("FindByHp(int? value)"));
             Assert.That(tableSource, Does.Contain("TryFindFirstByHp(int? value, out MonsterConfig? result)"));
             Assert.That(tableSource, Does.Not.Contain("_hpIndex"));
