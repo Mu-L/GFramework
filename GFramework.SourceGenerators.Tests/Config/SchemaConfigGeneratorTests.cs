@@ -227,6 +227,94 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证生成的索引构建逻辑会跳过运行时空 key，避免 Lazy 索引因格式错误数据永久失效。
+    /// </summary>
+    [Test]
+    public void Run_Should_Skip_Runtime_Null_Keys_When_Generating_Indexed_Lookups()
+    {
+        const string source = """
+                              using System;
+                              using System.Collections.Generic;
+
+                              namespace GFramework.Game.Abstractions.Config
+                              {
+                                  public interface IConfigTable
+                                  {
+                                      Type KeyType { get; }
+                                      Type ValueType { get; }
+                                      int Count { get; }
+                                  }
+
+                                  public interface IConfigTable<TKey, TValue> : IConfigTable
+                                      where TKey : notnull
+                                  {
+                                      TValue Get(TKey key);
+                                      bool TryGet(TKey key, out TValue? value);
+                                      bool ContainsKey(TKey key);
+                                      IReadOnlyCollection<TValue> All();
+                                  }
+
+                                  public interface IConfigRegistry
+                                  {
+                                      IConfigTable<TKey, TValue> GetTable<TKey, TValue>(string name)
+                                          where TKey : notnull;
+
+                                      bool TryGetTable<TKey, TValue>(string name, out IConfigTable<TKey, TValue>? table)
+                                          where TKey : notnull;
+                                  }
+                              }
+
+                              namespace GFramework.Game.Config
+                              {
+                                  public sealed class YamlConfigLoader
+                                  {
+                                      public YamlConfigLoader RegisterTable<TKey, TValue>(
+                                          string tableName,
+                                          string relativePath,
+                                          string schemaRelativePath,
+                                          Func<TValue, TKey> keySelector,
+                                          IEqualityComparer<TKey>? comparer = null)
+                                          where TKey : notnull
+                                      {
+                                          return this;
+                                      }
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "name"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "name": {
+                                    "type": "string",
+                                    "x-gframework-index": true
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var generatedSources = result.Results
+            .Single()
+            .GeneratedSources
+            .ToDictionary(
+                static sourceResult => sourceResult.HintName,
+                static sourceResult => sourceResult.SourceText.ToString(),
+                StringComparer.Ordinal);
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        Assert.That(generatedSources["MonsterTable.g.cs"], Does.Contain("if (key is null)"));
+        Assert.That(generatedSources["MonsterTable.g.cs"],
+            Does.Contain("Throwing here would permanently poison the cached index for this wrapper instance."));
+    }
+
+    /// <summary>
     ///     验证 schema 顶层自定义配置目录元数据不能逃逸配置根目录。
     /// </summary>
     [Test]
@@ -265,6 +353,187 @@ public class SchemaConfigGeneratorTests
             Assert.That(diagnostic.GetMessage(), Does.Contain("x-gframework-config-path"));
             Assert.That(diagnostic.GetMessage(), Does.Contain("relative"));
         });
+    }
+
+    /// <summary>
+    ///     验证查询索引元数据必须是布尔值，避免 schema 作者误以为字符串或数字也会被解释为开关。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_Lookup_Index_Metadata_Is_Not_Boolean()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "name"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "name": {
+                                    "type": "string",
+                                    "x-gframework-index": "yes"
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_008"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("x-gframework-index"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("boolean"));
+        });
+    }
+
+    /// <summary>
+    ///     验证查询索引元数据不能绑定到不满足约束的字段上，避免为嵌套字段生成误导性 API。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_Lookup_Index_Metadata_Target_Is_Not_Eligible()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "reward"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "reward": {
+                                    "type": "object",
+                                    "required": ["rarity"],
+                                    "properties": {
+                                      "rarity": {
+                                        "type": "string",
+                                        "x-gframework-index": true
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_008"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("reward.rarity"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("top-level required non-key scalar"));
+        });
+    }
+
+    /// <summary>
+    ///     验证根对象直接字段即使 schema key 本身包含点号，也不会被错误识别为嵌套字段。
+    /// </summary>
+    [Test]
+    public void Run_Should_Allow_Lookup_Index_For_Direct_Root_Property_With_Dotted_Schema_Key()
+    {
+        const string source = """
+                              using System;
+                              using System.Collections.Generic;
+
+                              namespace GFramework.Game.Abstractions.Config
+                              {
+                                  public interface IConfigTable
+                                  {
+                                      Type KeyType { get; }
+                                      Type ValueType { get; }
+                                      int Count { get; }
+                                  }
+
+                                  public interface IConfigTable<TKey, TValue> : IConfigTable
+                                      where TKey : notnull
+                                  {
+                                      TValue Get(TKey key);
+                                      bool TryGet(TKey key, out TValue? value);
+                                      bool ContainsKey(TKey key);
+                                      IReadOnlyCollection<TValue> All();
+                                  }
+
+                                  public interface IConfigRegistry
+                                  {
+                                      IConfigTable<TKey, TValue> GetTable<TKey, TValue>(string name)
+                                          where TKey : notnull;
+
+                                      bool TryGetTable<TKey, TValue>(string name, out IConfigTable<TKey, TValue>? table)
+                                          where TKey : notnull;
+                                  }
+                              }
+
+                              namespace GFramework.Game.Config
+                              {
+                                  public sealed class YamlConfigLoader
+                                  {
+                                      public YamlConfigLoader RegisterTable<TKey, TValue>(
+                                          string tableName,
+                                          string relativePath,
+                                          string schemaRelativePath,
+                                          Func<TValue, TKey> keySelector,
+                                          IEqualityComparer<TKey>? comparer = null)
+                                          where TKey : notnull
+                                      {
+                                          return this;
+                                      }
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "display.name"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "display.name": {
+                                    "type": "string",
+                                    "x-gframework-index": true
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var generatedSources = result.Results
+            .Single()
+            .GeneratedSources
+            .ToDictionary(
+                static sourceResult => sourceResult.HintName,
+                static sourceResult => sourceResult.SourceText.ToString(),
+                StringComparer.Ordinal);
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        Assert.That(generatedSources["MonsterTable.g.cs"], Does.Contain("FindByDisplayName(string value)"));
+        Assert.That(generatedSources["MonsterTable.g.cs"], Does.Contain("_displayNameIndex"));
     }
 
     /// <summary>
@@ -429,7 +698,10 @@ public class SchemaConfigGeneratorTests
                                 "required": ["id", "name"],
                                 "properties": {
                                   "id": { "type": "integer" },
-                                  "name": { "type": "string" },
+                                  "name": {
+                                    "type": "string",
+                                    "x-gframework-index": true
+                                  },
                                   "hp": { "type": "integer" },
                                   "dropItems": {
                                     "type": "array",
@@ -468,8 +740,15 @@ public class SchemaConfigGeneratorTests
         {
             Assert.That(tableSource, Does.Contain("FindByName(string value)"));
             Assert.That(tableSource, Does.Contain("TryFindFirstByName(string value, out MonsterConfig? result)"));
+            Assert.That(tableSource, Does.Contain("_nameIndex"));
+            Assert.That(tableSource, Does.Contain("BuildNameIndex"));
+            Assert.That(tableSource, Does.Contain("if (value is null)"));
+            Assert.That(tableSource, Does.Contain("_nameIndex.Value.TryGetValue(value, out var matches)"));
+            Assert.That(tableSource, Does.Contain("materialized.Add(pair.Key, pair.Value.AsReadOnly());"));
+            Assert.That(tableSource, Does.Not.Contain("pair.Value.ToArray()"));
             Assert.That(tableSource, Does.Contain("FindByHp(int? value)"));
             Assert.That(tableSource, Does.Contain("TryFindFirstByHp(int? value, out MonsterConfig? result)"));
+            Assert.That(tableSource, Does.Not.Contain("_hpIndex"));
             Assert.That(tableSource, Does.Not.Contain("FindById("));
             Assert.That(tableSource, Does.Not.Contain("FindByDropItems("));
             Assert.That(tableSource, Does.Not.Contain("FindByTargetId("));
