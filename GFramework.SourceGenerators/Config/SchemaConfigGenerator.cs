@@ -1240,6 +1240,125 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("        metadata = default;");
         builder.AppendLine("        return false;");
         builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Resolves the generated table metadata entries that belong to the specified logical config domain.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("    /// <param name=\"configDomain\">Logical config domain derived from the schema base name.</param>");
+        builder.AppendLine(
+            "    /// <returns>A deterministic metadata snapshot for the requested config domain, or an empty list when no generated table belongs to that domain.</returns>");
+        builder.AppendLine(
+            "    /// <exception cref=\"global::System.ArgumentNullException\">When <paramref name=\"configDomain\"/> is null.</exception>");
+        builder.AppendLine(
+            "    public static global::System.Collections.Generic.IReadOnlyList<TableMetadata> GetTablesInConfigDomain(string configDomain)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (configDomain is null)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(configDomain));");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        var matchedTables = new global::System.Collections.Generic.List<TableMetadata>();");
+        builder.AppendLine("        foreach (var metadata in Tables)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            if (string.Equals(metadata.ConfigDomain, configDomain, global::System.StringComparison.Ordinal))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                matchedTables.Add(metadata);");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        return matchedTables.Count == 0 ? global::System.Array.Empty<TableMetadata>() : matchedTables.ToArray();");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Resolves the generated table metadata entries that aggregate registration would currently include under the supplied filters.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <param name=\"options\">Optional aggregate registration filters and comparer overrides. When null, every generated table remains eligible.</param>");
+        builder.AppendLine(
+            "    /// <returns>A deterministic metadata snapshot in the same order used by <see cref=\"GeneratedConfigRegistrationExtensions.RegisterAllGeneratedConfigTables(global::GFramework.Game.Config.YamlConfigLoader, GeneratedConfigRegistrationOptions?)\" />.</returns>");
+        builder.AppendLine(
+            "    public static global::System.Collections.Generic.IReadOnlyList<TableMetadata> GetTablesForRegistration(GeneratedConfigRegistrationOptions? options = null)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        var matchedTables = new global::System.Collections.Generic.List<TableMetadata>();");
+        builder.AppendLine("        foreach (var metadata in Tables)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (MatchesRegistrationOptions(metadata, options))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                matchedTables.Add(metadata);");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        return matchedTables.Count == 0 ? global::System.Array.Empty<TableMetadata>() : matchedTables.ToArray();");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Evaluates whether one generated table metadata entry remains eligible under the supplied aggregate registration filters.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("    /// <param name=\"metadata\">Generated table metadata under evaluation.</param>");
+        builder.AppendLine(
+            "    /// <param name=\"options\">Optional aggregate registration filters and comparer overrides. When null, the metadata entry is always eligible.</param>");
+        builder.AppendLine(
+            "    /// <returns><see langword=\"true\" /> when the generated table would be included by aggregate registration; otherwise <see langword=\"false\" />.</returns>");
+        builder.AppendLine("    public static bool MatchesRegistrationOptions(");
+        builder.AppendLine("        TableMetadata metadata,");
+        builder.AppendLine("        GeneratedConfigRegistrationOptions? options)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (options is null)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return true;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        // Apply cheap generated allow-lists before invoking the optional caller predicate so startup diagnostics stay aligned with real registration.");
+        builder.AppendLine(
+            "        if (!MatchesOptionalAllowList(options.IncludedConfigDomains, metadata.ConfigDomain))");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return false;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        if (!MatchesOptionalAllowList(options.IncludedTableNames, metadata.TableName))");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return false;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return options.TableFilter?.Invoke(metadata) ?? true;");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Treats a null or empty allow-list as an unrestricted match, and otherwise performs ordinal string comparison against the generated metadata value.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("    /// <param name=\"allowedValues\">Optional caller-supplied allow-list.</param>");
+        builder.AppendLine("    /// <param name=\"candidate\">Generated metadata value being evaluated.</param>");
+        builder.AppendLine(
+            "    /// <returns><see langword=\"true\" /> when the value should remain eligible for registration; otherwise <see langword=\"false\" />.</returns>");
+        builder.AppendLine("    private static bool MatchesOptionalAllowList(");
+        builder.AppendLine("        global::System.Collections.Generic.IReadOnlyCollection<string>? allowedValues,");
+        builder.AppendLine("        string candidate)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (allowedValues is null || allowedValues.Count == 0)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return true;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        foreach (var allowedValue in allowedValues)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (allowedValue is not null &&");
+        builder.AppendLine(
+            "                string.Equals(allowedValue, candidate, global::System.StringComparison.Ordinal))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                return true;");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return false;");
+        builder.AppendLine("    }");
         builder.AppendLine("}");
         builder.AppendLine();
         builder.AppendLine("/// <summary>");
@@ -1340,82 +1459,22 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(loader));");
         builder.AppendLine("        }");
         builder.AppendLine();
-        builder.AppendLine("        options ??= new GeneratedConfigRegistrationOptions();");
+        builder.AppendLine("        var effectiveOptions = options ?? new GeneratedConfigRegistrationOptions();");
         builder.AppendLine();
 
         for (var index = 0; index < schemas.Count; index++)
         {
             var schema = schemas[index];
             builder.AppendLine(
-                $"        if (ShouldRegisterTable(GeneratedConfigCatalog.Tables[{index.ToString(CultureInfo.InvariantCulture)}], options))");
+                $"        if (GeneratedConfigCatalog.MatchesRegistrationOptions(GeneratedConfigCatalog.Tables[{index.ToString(CultureInfo.InvariantCulture)}], effectiveOptions))");
             builder.AppendLine("        {");
             builder.AppendLine(
-                $"            loader.Register{schema.EntityName}Table(options.{schema.EntityName}Comparer);");
+                $"            loader.Register{schema.EntityName}Table(effectiveOptions.{schema.EntityName}Comparer);");
             builder.AppendLine("        }");
             builder.AppendLine();
         }
 
         builder.AppendLine("        return loader;");
-        builder.AppendLine("    }");
-        builder.AppendLine();
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            "    ///     Applies the generated registration filters in a deterministic order so bootstrap code can narrow aggregate registration without hand-writing per-table calls.");
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    /// <param name=\"metadata\">Generated table metadata under consideration.</param>");
-        builder.AppendLine(
-            "    /// <param name=\"options\">Aggregate registration options supplied by the caller.</param>");
-        builder.AppendLine(
-            "    /// <returns><see langword=\"true\" /> when the generated table should be registered; otherwise <see langword=\"false\" />.</returns>");
-        builder.AppendLine(
-            "    private static bool ShouldRegisterTable(");
-        builder.AppendLine("        GeneratedConfigCatalog.TableMetadata metadata,");
-        builder.AppendLine("        GeneratedConfigRegistrationOptions options)");
-        builder.AppendLine("    {");
-        builder.AppendLine(
-            "        // Apply cheap generated allow-lists before invoking the optional caller predicate so startup filtering stays predictable.");
-        builder.AppendLine(
-            "        if (!MatchesOptionalAllowList(options.IncludedConfigDomains, metadata.ConfigDomain))");
-        builder.AppendLine("        {");
-        builder.AppendLine("            return false;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        if (!MatchesOptionalAllowList(options.IncludedTableNames, metadata.TableName))");
-        builder.AppendLine("        {");
-        builder.AppendLine("            return false;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        return options.TableFilter?.Invoke(metadata) ?? true;");
-        builder.AppendLine("    }");
-        builder.AppendLine();
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            "    ///     Treats a null or empty allow-list as an unrestricted match, and otherwise performs ordinal string comparison against the generated metadata value.");
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    /// <param name=\"allowedValues\">Optional caller-supplied allow-list.</param>");
-        builder.AppendLine("    /// <param name=\"candidate\">Generated metadata value being evaluated.</param>");
-        builder.AppendLine(
-            "    /// <returns><see langword=\"true\" /> when the value should remain eligible for registration; otherwise <see langword=\"false\" />.</returns>");
-        builder.AppendLine("    private static bool MatchesOptionalAllowList(");
-        builder.AppendLine("        global::System.Collections.Generic.IReadOnlyCollection<string>? allowedValues,");
-        builder.AppendLine("        string candidate)");
-        builder.AppendLine("    {");
-        builder.AppendLine("        if (allowedValues is null || allowedValues.Count == 0)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            return true;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        foreach (var allowedValue in allowedValues)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            if (allowedValue is not null &&");
-        builder.AppendLine(
-            "                string.Equals(allowedValue, candidate, global::System.StringComparison.Ordinal))");
-        builder.AppendLine("            {");
-        builder.AppendLine("                return true;");
-        builder.AppendLine("            }");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        return false;");
         builder.AppendLine("    }");
         builder.AppendLine("}");
         return builder.ToString().TrimEnd();

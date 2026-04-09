@@ -404,7 +404,7 @@ if (monsterTable.TryFindFirstByFaction("dungeon", out var firstDungeonMonster))
 
 ### Architecture 推荐接入模板
 
-如果你的项目已经基于 `GFramework.Core.Architectures.Architecture` 组织初始化流程，推荐把配置系统接到 `OnInitialize()` 阶段，并把 `GameConfigBootstrap.Registry` 注册为 utility：
+如果你的项目已经基于 `GFramework.Core.Architectures.Architecture` 组织初始化流程，并且当前宿主没有提供更上层的异步启动入口，可以把配置系统接到 `OnInitialize()` 阶段，并把 `GameConfigBootstrap.Registry` 注册为 utility：
 
 ```csharp
 using GFramework.Core.Architectures;
@@ -439,6 +439,12 @@ public sealed class GameArchitecture : Architecture
     }
 }
 ```
+
+这个模板里的 `.GetAwaiter().GetResult()` 只是“同步 `OnInitialize()` 到异步配置加载”的桥接写法，不应被理解为无条件推荐：
+
+- 如果宿主已经提供异步组合根、启动器或更早的异步初始化阶段，优先在那里直接 `await _configBootstrap.InitializeAsync()`
+- 只有在 `Architecture` 只暴露同步 `OnInitialize()`，且当前线程不存在需要恢复的 `SynchronizationContext` 时，才适合使用这类同步桥接
+- 在 UI 线程、ASP.NET Classic 等存在活动 `SynchronizationContext` 的环境中，不要直接阻塞等待异步初始化；应把配置初始化前移到异步入口，或改为由不受该上下文约束的启动线程完成
 
 初始化完成后，业务组件可以继续通过架构上下文读取 utility，再走生成的强类型入口：
 
@@ -547,6 +553,15 @@ if (GeneratedConfigCatalog.TryGetByTableName("monster", out var metadata))
 }
 ```
 
+如果你希望先按配置域聚合出一组候选表，再决定是否进入启动链路，也可以直接查询目录：
+
+```csharp
+foreach (var metadata in GeneratedConfigCatalog.GetTablesInConfigDomain(MonsterConfigBindings.ConfigDomain))
+{
+    Console.WriteLine(metadata.TableName);
+}
+```
+
 如果你需要为某些表保留自定义 key comparer，也可以继续走聚合注册入口，而不是被迫退回逐表手写：
 
 ```csharp
@@ -581,10 +596,28 @@ var loader = new YamlConfigLoader("config-root")
         });
 ```
 
+如果你想在真正调用 `RegisterAllGeneratedConfigTables(...)` 之前，先把“这次会注册哪些表”输出到日志中，推荐直接复用同一份 options 做启动诊断，而不是手写一套平行筛选逻辑：
+
+```csharp
+var registrationOptions = new GeneratedConfigRegistrationOptions
+{
+    IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+};
+
+foreach (var metadata in GeneratedConfigCatalog.GetTablesForRegistration(registrationOptions))
+{
+    Console.WriteLine($"Registering {metadata.TableName}");
+}
+
+var loader = new YamlConfigLoader("config-root")
+    .RegisterAllGeneratedConfigTables(registrationOptions);
+```
+
 这里的规则是：
 
 - `IncludedConfigDomains` 与 `IncludedTableNames` 都按 `StringComparison.Ordinal` 做白名单匹配；传 `null` 或空集合表示“不限制”
-- `TableFilter` 会在上述白名单通过后执行，适合继续按 schema 路径、配置目录等元数据做更细的启动裁剪
+- `TableFilter` 会在上述白名单通过后执行，适合继续按 schema 路径、配置目录等元数据做更细粒度的启动裁剪
+- `GeneratedConfigCatalog.GetTablesForRegistration(...)` 与 `RegisterAllGeneratedConfigTables(...)` 复用同一套筛选规则，便于在启动日志和真实注册之间保持一致
 - 未显式配置 comparer 的表，仍然使用各自 `Register{Entity}Table()` 的默认行为
 - 需要自定义 comparer 的表，可以通过 `GeneratedConfigRegistrationOptions` 按表覆盖
 - 当前 `ConfigDomain` 约定仍与生成表名保持一致，但建议优先引用 `*ConfigBindings.ConfigDomain`，为后续更细的分组策略保留稳定入口
