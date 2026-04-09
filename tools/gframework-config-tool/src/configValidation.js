@@ -6,6 +6,10 @@ const {
 } = require("./configPath");
 const {ValidationMessageKeys} = require("./localizationKeys");
 
+const IntegerScalarPattern = /^[+-]?\d+$/u;
+const NumberScalarPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
+const BooleanScalarPattern = /^(true|false)$/iu;
+
 /**
  * Parse the repository's minimal config-schema subset into a recursive tree.
  * The parser intentionally mirrors the same high-level contract used by the
@@ -262,11 +266,11 @@ function isScalarCompatible(expectedType, scalarValue) {
     const value = unquoteScalar(String(scalarValue));
     switch (expectedType) {
         case "integer":
-            return /^-?\d+$/u.test(value);
+            return IntegerScalarPattern.test(value);
         case "number":
-            return /^-?\d+(?:\.\d+)?$/u.test(value);
+            return NumberScalarPattern.test(value);
         case "boolean":
-            return /^(true|false)$/iu.test(value);
+            return BooleanScalarPattern.test(value);
         case "string":
             return true;
         default:
@@ -407,7 +411,7 @@ function normalizeSchemaBoolean(value) {
  * @param {unknown} value Raw schema value.
  * @param {string} displayPath Logical property path used in diagnostics.
  * @throws {Error} Thrown when the pattern string cannot be compiled.
- * @returns {string | undefined} Normalized pattern string.
+ * @returns {{source: string, regex: RegExp} | undefined} Normalized pattern metadata.
  */
 function normalizeSchemaPattern(value, displayPath) {
     if (typeof value !== "string") {
@@ -415,8 +419,10 @@ function normalizeSchemaPattern(value, displayPath) {
     }
 
     try {
-        void new RegExp(value);
-        return value;
+        return {
+            source: value,
+            regex: new RegExp(value, "u")
+        };
     } catch (error) {
         throw new Error(`Schema property '${displayPath}' declares an invalid 'pattern' regular expression: ${error.message}`);
     }
@@ -454,24 +460,18 @@ function formatSchemaDefaultValue(value) {
 }
 
 /**
- * Test one scalar value against one schema pattern string.
+ * Test one scalar value against one compiled schema pattern.
  *
  * @param {string} scalarValue Scalar value from YAML.
- * @param {string | undefined} pattern Schema pattern string.
- * @param {string} displayPath Logical property path used in diagnostics.
- * @throws {Error} Thrown when the pattern string cannot be compiled.
+ * @param {RegExp | undefined} patternRegex Compiled schema pattern.
  * @returns {boolean} True when the value matches or no pattern is declared.
  */
-function matchesSchemaPattern(scalarValue, pattern, displayPath) {
-    if (typeof pattern !== "string") {
+function matchesSchemaPattern(scalarValue, patternRegex) {
+    if (!(patternRegex instanceof RegExp)) {
         return true;
     }
 
-    try {
-        return new RegExp(pattern).test(scalarValue);
-    } catch (error) {
-        throw new Error(`Schema property '${displayPath}' declares an invalid 'pattern' regular expression: ${error.message}`);
-    }
+    return patternRegex.test(scalarValue);
 }
 
 /**
@@ -500,7 +500,7 @@ function matchesSchemaMultipleOf(scalarValue, multipleOf) {
  * @returns {string} YAML-ready scalar.
  */
 function formatYamlScalar(value) {
-    if (/^-?\d+(?:\.\d+)?$/u.test(value) || /^(true|false)$/iu.test(value)) {
+    if (NumberScalarPattern.test(value) || BooleanScalarPattern.test(value)) {
         return value;
     }
 
@@ -536,6 +536,7 @@ function unquoteScalar(value) {
 function parseSchemaNode(rawNode, displayPath) {
     const value = rawNode && typeof rawNode === "object" ? rawNode : {};
     const type = typeof value.type === "string" ? value.type : "object";
+    const patternMetadata = normalizeSchemaPattern(value.pattern, displayPath);
     const metadata = {
         title: typeof value.title === "string" ? value.title : undefined,
         description: typeof value.description === "string" ? value.description : undefined,
@@ -547,7 +548,8 @@ function parseSchemaNode(rawNode, displayPath) {
         multipleOf: normalizeSchemaPositiveNumber(value.multipleOf),
         minLength: normalizeSchemaNonNegativeInteger(value.minLength),
         maxLength: normalizeSchemaNonNegativeInteger(value.maxLength),
-        pattern: normalizeSchemaPattern(value.pattern, displayPath),
+        pattern: patternMetadata ? patternMetadata.source : undefined,
+        patternRegex: patternMetadata ? patternMetadata.regex : undefined,
         minItems: normalizeSchemaNonNegativeInteger(value.minItems),
         maxItems: normalizeSchemaNonNegativeInteger(value.maxItems),
         uniqueItems: normalizeSchemaBoolean(value.uniqueItems),
@@ -622,6 +624,9 @@ function parseSchemaNode(rawNode, displayPath) {
         pattern: type === "string"
             ? metadata.pattern
             : undefined,
+        patternRegex: type === "string"
+            ? metadata.patternRegex
+            : undefined,
         enumValues: normalizeSchemaEnumValues(value.enum),
         refTable: metadata.refTable
     };
@@ -675,19 +680,27 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
             });
         }
 
+        const comparableItems = [];
         for (let index = 0; index < yamlNode.items.length; index += 1) {
+            const diagnosticsBeforeValidation = diagnostics.length;
             validateNode(
                 schemaNode.items,
                 yamlNode.items[index],
                 joinArrayIndexPath(displayPath, index),
                 diagnostics,
                 localizer);
+
+            // Keep uniqueItems focused on values that are otherwise valid so a
+            // shape/type error does not also surface as a misleading duplicate.
+            if (diagnostics.length === diagnosticsBeforeValidation) {
+                comparableItems.push({index, node: yamlNode.items[index]});
+            }
         }
 
         if (schemaNode.uniqueItems === true) {
             const seenItems = new Map();
-            for (let index = 0; index < yamlNode.items.length; index += 1) {
-                const comparableValue = buildComparableNodeValue(schemaNode.items, yamlNode.items[index]);
+            for (const {index, node} of comparableItems) {
+                const comparableValue = buildComparableNodeValue(schemaNode.items, node);
                 if (seenItems.has(comparableValue)) {
                     diagnostics.push({
                         severity: "error",
@@ -696,7 +709,7 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
                             duplicatePath: joinArrayIndexPath(displayPath, seenItems.get(comparableValue))
                         })
                     });
-                    break;
+                    continue;
                 }
 
                 seenItems.set(comparableValue, index);
@@ -830,7 +843,7 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
     }
 
     if (supportsPatternConstraints &&
-        !matchesSchemaPattern(scalarValue, schemaNode.pattern, schemaNode.displayPath)) {
+        !matchesSchemaPattern(scalarValue, schemaNode.patternRegex)) {
         diagnostics.push({
             severity: "error",
             message: localizeValidationMessage(ValidationMessageKeys.patternViolation, localizer, {
@@ -920,7 +933,10 @@ function buildComparableNodeValue(schemaNode, yamlNode) {
         return Object.keys(schemaNode.properties)
             .filter((key) => yamlNode.map.has(key))
             .sort((left, right) => left.localeCompare(right))
-            .map((key) => `${key.length}:${key}=${buildComparableNodeValue(schemaNode.properties[key], yamlNode.map.get(key))}`)
+            .map((key) => {
+                const valueKey = buildComparableNodeValue(schemaNode.properties[key], yamlNode.map.get(key));
+                return `${key.length}:${key}=${valueKey.length}:${valueKey}`;
+            })
             .join("|");
     }
 
@@ -929,7 +945,10 @@ function buildComparableNodeValue(schemaNode, yamlNode) {
             return yamlNode.kind;
         }
 
-        return `[${yamlNode.items.map((item) => buildComparableNodeValue(schemaNode.items, item)).join(",")}]`;
+        return `[${yamlNode.items.map((item) => {
+            const valueKey = buildComparableNodeValue(schemaNode.items, item);
+            return `${valueKey.length}:${valueKey}`;
+        }).join(",")}]`;
     }
 
     if (yamlNode.kind !== "scalar") {
@@ -942,7 +961,7 @@ function buildComparableNodeValue(schemaNode, yamlNode) {
         : schemaNode.type === "boolean"
             ? String(/^true$/iu.test(scalarValue))
             : scalarValue;
-    return `${schemaNode.type}:${normalizedScalar}`;
+    return `${schemaNode.type}:${normalizedScalar.length}:${normalizedScalar}`;
 }
 
 /**
@@ -1704,6 +1723,7 @@ module.exports = {
  *   minLength?: number,
  *   maxLength?: number,
  *   pattern?: string,
+ *   patternRegex?: RegExp,
  *   enumValues?: string[],
  *   refTable?: string
  * }} SchemaNode

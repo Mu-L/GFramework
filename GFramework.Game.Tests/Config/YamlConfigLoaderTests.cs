@@ -559,6 +559,47 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证科学计数法数值会按 <c>number</c> 类型被运行时接受。
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_Should_Accept_Scientific_Notation_Number()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            dropRate: 1.5e10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "dropRate"],
+              "properties": {
+                "id": { "type": "integer" },
+                "dropRate": { "type": "number" }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterNumberConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        await loader.LoadAsync(registry);
+
+        var table = registry.GetTable<int, MonsterNumberConfigStub>("monster");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(table.Count, Is.EqualTo(1));
+            Assert.That(table.Get(1).DropRate, Is.EqualTo(1.5e10));
+        });
+    }
+
+    /// <summary>
     ///     验证字符串最小长度与最大长度约束会在运行时被统一拒绝。
     /// </summary>
     [Test]
@@ -861,6 +902,68 @@ public class YamlConfigLoaderTests
             Assert.That(exception.Diagnostic.RawValue, Is.EqualTo("5"));
             Assert.That(exception.Message, Does.Contain("unique array items"));
             Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证 <c>uniqueItems</c> 的归一化键不会把带分隔符的不同对象值误判为重复项。
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_Should_Accept_Distinct_Object_Items_When_Comparable_Values_Contain_Separators()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            entries:
+              -
+                a: "x|1:b=string:yz"
+              -
+                a: x
+                b: yz
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "entries"],
+              "properties": {
+                "id": { "type": "integer" },
+                "entries": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "a": { "type": "string" },
+                      "b": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterComparableEntryArrayConfigStub>(
+                "monster",
+                "monster",
+                "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        await loader.LoadAsync(registry);
+
+        var table = registry.GetTable<int, MonsterComparableEntryArrayConfigStub>("monster");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(table.Count, Is.EqualTo(1));
+            Assert.That(table.Get(1).Entries.Count, Is.EqualTo(2));
+            Assert.That(table.Get(1).Entries[0].A, Is.EqualTo("x|1:b=string:yz"));
+            Assert.That(table.Get(1).Entries[1].A, Is.EqualTo("x"));
+            Assert.That(table.Get(1).Entries[1].B, Is.EqualTo("yz"));
         });
     }
 
@@ -1802,6 +1905,22 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     用于浮点数 schema 校验测试的最小怪物配置类型。
+    /// </summary>
+    private sealed class MonsterNumberConfigStub
+    {
+        /// <summary>
+        ///     获取或设置主键。
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        ///     获取或设置浮点掉落率。
+        /// </summary>
+        public double DropRate { get; set; }
+    }
+
+    /// <summary>
     ///     用于数组 schema 校验测试的最小怪物配置类型。
     /// </summary>
     private sealed class MonsterConfigIntegerArrayStub
@@ -1881,6 +2000,22 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     用于 <c>uniqueItems</c> 比较键碰撞回归测试的最小配置类型。
+    /// </summary>
+    private sealed class MonsterComparableEntryArrayConfigStub
+    {
+        /// <summary>
+        ///     获取或设置主键。
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        ///     获取或设置待比较对象数组。
+        /// </summary>
+        public List<ComparableEntryConfigStub> Entries { get; set; } = new();
+    }
+
+    /// <summary>
     ///     表示对象数组中的阶段元素。
     /// </summary>
     private sealed class PhaseConfigStub
@@ -1894,6 +2029,22 @@ public class YamlConfigLoaderTests
         ///     获取或设置怪物主键。
         /// </summary>
         public string MonsterId { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    ///     表示用于比较键碰撞回归测试的对象数组元素。
+    /// </summary>
+    private sealed class ComparableEntryConfigStub
+    {
+        /// <summary>
+        ///     获取或设置字段 A。
+        /// </summary>
+        public string A { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     获取或设置字段 B。
+        /// </summary>
+        public string B { get; set; } = string.Empty;
     }
 
     /// <summary>

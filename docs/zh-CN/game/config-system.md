@@ -708,7 +708,7 @@ if (MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out var re
 - `exclusiveMinimum` / `exclusiveMaximum`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
 - `multipleOf`：供运行时校验、VS Code 校验、表单 hint 和生成代码 XML 文档复用；当前按运行时与 JS 共用的浮点容差策略判断十进制步进
 - `minLength` / `maxLength`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
-- `pattern`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用；当前按 C# `CultureInvariant` 与 JS 默认分组语义解释，非法模式会在 schema 解析阶段直接报错
+- `pattern`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用；当前按 C# `CultureInvariant` 与 JS Unicode `u` 模式解释，非法模式会在 schema 解析阶段直接报错
 - `minItems` / `maxItems`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用
 - `uniqueItems`：供运行时校验、VS Code 校验、表单 hint 和生成代码 XML 文档复用；对象数组会按 schema 归一化后的结构比较重复项，而不是依赖 YAML 字段顺序
 
@@ -807,7 +807,7 @@ var hotReload = loader.EnableHotReload(
 - 对带 `x-gframework-ref-table` 的字段提供引用 schema / 配置域 / 引用文件跳转入口
 - 对空配置文件提供基于 schema 的示例 YAML 初始化入口
 - 对同一配置域内的多份 YAML 文件执行批量字段更新
-- 在表单和批量编辑入口中显示 `title / description / default / enum / ref-table / multipleOf / uniqueItems` 元数据
+- 在表单入口中显示 `title / description / default / enum / ref-table / multipleOf / uniqueItems` 元数据；批量编辑入口当前只暴露顶层可批量改写字段所需的基础信息
 
 当前表单入口适合编辑嵌套对象中的标量字段、标量数组，以及对象数组中的对象项。
 

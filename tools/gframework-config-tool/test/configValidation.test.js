@@ -349,6 +349,135 @@ phases:
     assert.match(diagnostics[1].message, /phases\[1\]|uniqueItems|元素唯一/u);
 });
 
+test("validateParsedConfig should accept scientific-notation numbers", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "dropRate": {
+              "type": "number"
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+dropRate: 1.5e10
+`);
+
+    assert.deepEqual(validateParsedConfig(schema, yaml), []);
+});
+
+test("validateParsedConfig should apply schema patterns with Unicode semantics", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^\\\\p{L}+$"
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+name: 测试
+`);
+
+    assert.deepEqual(validateParsedConfig(schema, yaml), []);
+});
+
+test("validateParsedConfig should skip uniqueItems checks for invalid array items", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "values": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+values:
+  -
+    id: 1
+  -
+    id: 2
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /values\[0\]/u);
+    assert.match(diagnostics[1].message, /values\[1\]/u);
+    assert.ok(diagnostics.every((diagnostic) => !/uniqueItems|元素唯一/u.test(diagnostic.message)));
+});
+
+test("validateParsedConfig should report every uniqueItems duplicate in one pass", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+tags:
+  - alpha
+  - beta
+  - alpha
+  - beta
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /tags\[2\]/u);
+    assert.match(diagnostics[1].message, /tags\[3\]/u);
+});
+
+test("validateParsedConfig should avoid uniqueItems comparable-key collisions for distinct objects", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "entries": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "a": { "type": "string" },
+                  "b": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+entries:
+  -
+    a: "x|1:b=string:yz"
+  -
+    a: x
+    b: yz
+`);
+
+    assert.deepEqual(validateParsedConfig(schema, yaml), []);
+});
+
 test("parseSchemaContent should capture scalar range and length metadata", () => {
     const schema = parseSchemaContent(`
         {
