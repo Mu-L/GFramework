@@ -397,6 +397,11 @@ public class ArchitectureConfigIntegrationTests
         private readonly GameConfigModule _configModule;
         private readonly ConfigAwareProbeUtility _probeUtility = new();
 
+        /// <summary>
+        ///     使用指定配置根目录创建一个消费者测试架构。
+        /// </summary>
+        /// <param name="configRoot">测试配置根目录。</param>
+        /// <exception cref="ArgumentNullException">当 <paramref name="configRoot" /> 为空时抛出。</exception>
         public ConsumerArchitecture(string configRoot)
         {
             if (configRoot == null)
@@ -407,12 +412,43 @@ public class ArchitectureConfigIntegrationTests
             _configModule = CreateModule(configRoot);
         }
 
+        /// <summary>
+        ///     获取当前架构安装的配置模块。
+        /// </summary>
+        /// <remarks>
+        ///     该模块会在 <see cref="OnInitialize" /> 中安装，并在架构进入
+        ///     <see cref="GFramework.Core.Abstractions.Enums.ArchitecturePhase.BeforeUtilityInit" /> 时完成首次加载。
+        ///     调用方可通过该属性观察模块初始化状态，但不应在架构初始化完成前假定加载已经成功。
+        /// </remarks>
         public GameConfigModule ConfigModule => _configModule;
 
+        /// <summary>
+        ///     获取由配置模块暴露到架构上下文中的注册表。
+        /// </summary>
+        /// <remarks>
+        ///     该属性在模块安装后即可访问同一个注册表实例，但只有在模块首次加载完成后，
+        ///     其中的生成配置表读取才具备成功契约。
+        /// </remarks>
         public IConfigRegistry Registry => _configModule.Registry;
 
+        /// <summary>
+        ///     获取测试使用的怪物配置表。
+        /// </summary>
+        /// <returns>已经从 <see cref="Registry" /> 中解析出的怪物表包装。</returns>
+        /// <exception cref="InvalidOperationException">当模块首次加载尚未完成时抛出。</exception>
+        /// <remarks>
+        ///     该属性用于断言生成访问器在架构初始化完成后可直接读取；
+        ///     它依赖模块在 utility 初始化阶段之前已经完成首次加载。
+        /// </remarks>
         public MonsterTable MonsterTable => Registry.GetMonsterTable();
 
+        /// <summary>
+        ///     获取用于观测 utility 初始化阶段配置可见性的探针 utility。
+        /// </summary>
+        /// <remarks>
+        ///     该 utility 会在 <see cref="OnInitialize" /> 中注册，并在 utility 初始化阶段读取配置表，
+        ///     用于验证配置模块是否按约定在更早的生命周期阶段完成首载。
+        /// </remarks>
         public ConfigAwareProbeUtility ProbeUtility => _probeUtility;
 
         /// <summary>
@@ -431,8 +467,21 @@ public class ArchitectureConfigIntegrationTests
     /// </summary>
     private sealed class ModuleOnlyArchitecture(GameConfigModule configModule) : Architecture
     {
+        /// <summary>
+        ///     获取安装到当前测试架构中的配置模块。
+        /// </summary>
+        /// <remarks>
+        ///     该属性直接暴露传入的模块实例，便于测试验证同一模块实例跨架构复用时的生命周期约束。
+        /// </remarks>
         public GameConfigModule ConfigModule => configModule;
 
+        /// <summary>
+        ///     获取当前模块共享的配置注册表。
+        /// </summary>
+        /// <remarks>
+        ///     该注册表实例在模块安装后即与架构绑定，但只有在架构完成配置首载后，
+        ///     其中的强类型配置表访问才应被视为可用。
+        /// </remarks>
         public IConfigRegistry Registry => configModule.Registry;
 
         /// <summary>
