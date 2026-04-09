@@ -547,6 +547,15 @@ if (GeneratedConfigCatalog.TryGetByTableName("monster", out var metadata))
 }
 ```
 
+如果你希望先按配置域聚合出一组候选表，再决定是否进入启动链路，也可以直接查询目录：
+
+```csharp
+foreach (var metadata in GeneratedConfigCatalog.GetTablesInConfigDomain(MonsterConfigBindings.ConfigDomain))
+{
+    Console.WriteLine(metadata.TableName);
+}
+```
+
 如果你需要为某些表保留自定义 key comparer，也可以继续走聚合注册入口，而不是被迫退回逐表手写：
 
 ```csharp
@@ -581,10 +590,28 @@ var loader = new YamlConfigLoader("config-root")
         });
 ```
 
+如果你想在真正调用 `RegisterAllGeneratedConfigTables(...)` 之前，先把“这次会注册哪些表”打到日志里，推荐直接复用同一份 options 做启动诊断，而不是手写一套平行筛选逻辑：
+
+```csharp
+var registrationOptions = new GeneratedConfigRegistrationOptions
+{
+    IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+};
+
+foreach (var metadata in GeneratedConfigCatalog.GetTablesForRegistration(registrationOptions))
+{
+    Console.WriteLine($"Registering {metadata.TableName}");
+}
+
+var loader = new YamlConfigLoader("config-root")
+    .RegisterAllGeneratedConfigTables(registrationOptions);
+```
+
 这里的规则是：
 
 - `IncludedConfigDomains` 与 `IncludedTableNames` 都按 `StringComparison.Ordinal` 做白名单匹配；传 `null` 或空集合表示“不限制”
 - `TableFilter` 会在上述白名单通过后执行，适合继续按 schema 路径、配置目录等元数据做更细的启动裁剪
+- `GeneratedConfigCatalog.GetTablesForRegistration(...)` 与 `RegisterAllGeneratedConfigTables(...)` 复用同一套筛选规则，便于在启动日志和真实注册之间保持一致
 - 未显式配置 comparer 的表，仍然使用各自 `Register{Entity}Table()` 的默认行为
 - 需要自定义 comparer 的表，可以通过 `GeneratedConfigRegistrationOptions` 按表覆盖
 - 当前 `ConfigDomain` 约定仍与生成表名保持一致，但建议优先引用 `*ConfigBindings.ConfigDomain`，为后续更细的分组策略保留稳定入口

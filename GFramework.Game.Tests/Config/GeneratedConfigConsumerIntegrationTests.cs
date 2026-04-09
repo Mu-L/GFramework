@@ -112,6 +112,42 @@ public class GeneratedConfigConsumerIntegrationTests
     }
 
     /// <summary>
+    ///     验证项目级生成目录既能按配置域枚举元数据，也能直接复用聚合注册筛选规则产出启动诊断视图。
+    /// </summary>
+    [Test]
+    public void GeneratedConfigCatalog_Should_Expose_Domain_And_Registration_Diagnostic_Views()
+    {
+        Assert.That(GeneratedConfigCatalog.TryGetByTableName("monster", out var monsterMetadata), Is.True);
+        Assert.That(GeneratedConfigCatalog.TryGetByTableName("item", out var itemMetadata), Is.True);
+
+        var monsterDomainTables = GeneratedConfigCatalog.GetTablesInConfigDomain(MonsterConfigBindings.ConfigDomain);
+        var missingDomainTables = GeneratedConfigCatalog.GetTablesInConfigDomain("missing");
+        var itemOnlyRegistrationTables = GeneratedConfigCatalog.GetTablesForRegistration(
+            new GeneratedConfigRegistrationOptions
+            {
+                IncludedTableNames = new[] { ItemConfigBindings.TableName }
+            });
+        var monsterOnlyOptions = new GeneratedConfigRegistrationOptions
+        {
+            IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(monsterDomainTables.Select(static metadata => metadata.TableName),
+                Is.EqualTo(new[] { MonsterConfigBindings.TableName }));
+            Assert.That(missingDomainTables, Is.Empty);
+            Assert.That(itemOnlyRegistrationTables.Select(static metadata => metadata.TableName),
+                Is.EqualTo(new[] { ItemConfigBindings.TableName }));
+            Assert.That(GeneratedConfigCatalog.GetTablesForRegistration().Select(static metadata => metadata.TableName),
+                Is.SupersetOf(new[] { ItemConfigBindings.TableName, MonsterConfigBindings.TableName }));
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, monsterOnlyOptions), Is.True);
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(itemMetadata, monsterOnlyOptions), Is.False);
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, options: null), Is.True);
+        });
+    }
+
+    /// <summary>
     ///     验证聚合注册入口可以通过生成配置域、表名集合和自定义谓词收敛多表项目的启动粒度。
     /// </summary>
     [Test]

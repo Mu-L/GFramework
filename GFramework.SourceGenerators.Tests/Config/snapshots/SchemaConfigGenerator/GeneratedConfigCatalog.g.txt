@@ -88,6 +88,106 @@ public static class GeneratedConfigCatalog
         metadata = default;
         return false;
     }
+
+    /// <summary>
+    ///     Resolves the generated table metadata entries that belong to the specified logical config domain.
+    /// </summary>
+    /// <param name="configDomain">Logical config domain derived from the schema base name.</param>
+    /// <returns>A deterministic metadata snapshot for the requested config domain, or an empty list when no generated table belongs to that domain.</returns>
+    /// <exception cref="global::System.ArgumentNullException">When <paramref name="configDomain"/> is null.</exception>
+    public static global::System.Collections.Generic.IReadOnlyList<TableMetadata> GetTablesInConfigDomain(string configDomain)
+    {
+        if (configDomain is null)
+        {
+            throw new global::System.ArgumentNullException(nameof(configDomain));
+        }
+
+        var matchedTables = new global::System.Collections.Generic.List<TableMetadata>();
+        foreach (var metadata in Tables)
+        {
+            if (string.Equals(metadata.ConfigDomain, configDomain, global::System.StringComparison.Ordinal))
+            {
+                matchedTables.Add(metadata);
+            }
+        }
+
+        return matchedTables.Count == 0 ? global::System.Array.Empty<TableMetadata>() : matchedTables.ToArray();
+    }
+
+    /// <summary>
+    ///     Resolves the generated table metadata entries that aggregate registration would currently include under the supplied filters.
+    /// </summary>
+    /// <param name="options">Optional aggregate registration filters and comparer overrides. When null, every generated table remains eligible.</param>
+    /// <returns>A deterministic metadata snapshot in the same order used by <see cref="GeneratedConfigRegistrationExtensions.RegisterAllGeneratedConfigTables(global::GFramework.Game.Config.YamlConfigLoader, GeneratedConfigRegistrationOptions?)" />.</returns>
+    public static global::System.Collections.Generic.IReadOnlyList<TableMetadata> GetTablesForRegistration(GeneratedConfigRegistrationOptions? options = null)
+    {
+        var matchedTables = new global::System.Collections.Generic.List<TableMetadata>();
+        foreach (var metadata in Tables)
+        {
+            if (MatchesRegistrationOptions(metadata, options))
+            {
+                matchedTables.Add(metadata);
+            }
+        }
+
+        return matchedTables.Count == 0 ? global::System.Array.Empty<TableMetadata>() : matchedTables.ToArray();
+    }
+
+    /// <summary>
+    ///     Evaluates whether one generated table metadata entry remains eligible under the supplied aggregate registration filters.
+    /// </summary>
+    /// <param name="metadata">Generated table metadata under evaluation.</param>
+    /// <param name="options">Optional aggregate registration filters and comparer overrides. When null, the metadata entry is always eligible.</param>
+    /// <returns><see langword="true" /> when the generated table would be included by aggregate registration; otherwise <see langword="false" />.</returns>
+    public static bool MatchesRegistrationOptions(
+        TableMetadata metadata,
+        GeneratedConfigRegistrationOptions? options)
+    {
+        if (options is null)
+        {
+            return true;
+        }
+
+        // Apply cheap generated allow-lists before invoking the optional caller predicate so startup diagnostics stay aligned with real registration.
+        if (!MatchesOptionalAllowList(options.IncludedConfigDomains, metadata.ConfigDomain))
+        {
+            return false;
+        }
+
+        if (!MatchesOptionalAllowList(options.IncludedTableNames, metadata.TableName))
+        {
+            return false;
+        }
+
+        return options.TableFilter?.Invoke(metadata) ?? true;
+    }
+
+    /// <summary>
+    ///     Treats a null or empty allow-list as an unrestricted match, and otherwise performs ordinal string comparison against the generated metadata value.
+    /// </summary>
+    /// <param name="allowedValues">Optional caller-supplied allow-list.</param>
+    /// <param name="candidate">Generated metadata value being evaluated.</param>
+    /// <returns><see langword="true" /> when the value should remain eligible for registration; otherwise <see langword="false" />.</returns>
+    private static bool MatchesOptionalAllowList(
+        global::System.Collections.Generic.IReadOnlyCollection<string>? allowedValues,
+        string candidate)
+    {
+        if (allowedValues is null || allowedValues.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var allowedValue in allowedValues)
+        {
+            if (allowedValue is not null &&
+                string.Equals(allowedValue, candidate, global::System.StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 /// <summary>
@@ -154,64 +254,13 @@ public static class GeneratedConfigRegistrationExtensions
             throw new global::System.ArgumentNullException(nameof(loader));
         }
 
-        options ??= new GeneratedConfigRegistrationOptions();
+        var effectiveOptions = options ?? new GeneratedConfigRegistrationOptions();
 
-        if (ShouldRegisterTable(GeneratedConfigCatalog.Tables[0], options))
+        if (GeneratedConfigCatalog.MatchesRegistrationOptions(GeneratedConfigCatalog.Tables[0], effectiveOptions))
         {
-            loader.RegisterMonsterTable(options.MonsterComparer);
+            loader.RegisterMonsterTable(effectiveOptions.MonsterComparer);
         }
 
         return loader;
-    }
-
-    /// <summary>
-    ///     Applies the generated registration filters in a deterministic order so bootstrap code can narrow aggregate registration without hand-writing per-table calls.
-    /// </summary>
-    /// <param name="metadata">Generated table metadata under consideration.</param>
-    /// <param name="options">Aggregate registration options supplied by the caller.</param>
-    /// <returns><see langword="true" /> when the generated table should be registered; otherwise <see langword="false" />.</returns>
-    private static bool ShouldRegisterTable(
-        GeneratedConfigCatalog.TableMetadata metadata,
-        GeneratedConfigRegistrationOptions options)
-    {
-        // Apply cheap generated allow-lists before invoking the optional caller predicate so startup filtering stays predictable.
-        if (!MatchesOptionalAllowList(options.IncludedConfigDomains, metadata.ConfigDomain))
-        {
-            return false;
-        }
-
-        if (!MatchesOptionalAllowList(options.IncludedTableNames, metadata.TableName))
-        {
-            return false;
-        }
-
-        return options.TableFilter?.Invoke(metadata) ?? true;
-    }
-
-    /// <summary>
-    ///     Treats a null or empty allow-list as an unrestricted match, and otherwise performs ordinal string comparison against the generated metadata value.
-    /// </summary>
-    /// <param name="allowedValues">Optional caller-supplied allow-list.</param>
-    /// <param name="candidate">Generated metadata value being evaluated.</param>
-    /// <returns><see langword="true" /> when the value should remain eligible for registration; otherwise <see langword="false" />.</returns>
-    private static bool MatchesOptionalAllowList(
-        global::System.Collections.Generic.IReadOnlyCollection<string>? allowedValues,
-        string candidate)
-    {
-        if (allowedValues is null || allowedValues.Count == 0)
-        {
-            return true;
-        }
-
-        foreach (var allowedValue in allowedValues)
-        {
-            if (allowedValue is not null &&
-                string.Equals(allowedValue, candidate, global::System.StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
