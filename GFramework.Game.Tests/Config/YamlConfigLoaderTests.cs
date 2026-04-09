@@ -559,6 +559,50 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证大数值配合十进制步进时，会沿用 JS 工具侧的 <c>multipleOf</c> 容差策略。
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_Should_Accept_Large_Decimal_Number_When_MultipleOf_Matches_Js_Tolerance()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            dropRate: 10000000.2
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "dropRate"],
+              "properties": {
+                "id": { "type": "integer" },
+                "dropRate": {
+                  "type": "number",
+                  "multipleOf": 0.1
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterNumberConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        await loader.LoadAsync(registry);
+
+        var table = registry.GetTable<int, MonsterNumberConfigStub>("monster");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(table.Count, Is.EqualTo(1));
+            Assert.That(table.Get(1).DropRate, Is.EqualTo(10000000.2d));
+        });
+    }
+
+    /// <summary>
     ///     验证科学计数法数值会按 <c>number</c> 类型被运行时接受。
     /// </summary>
     [Test]
