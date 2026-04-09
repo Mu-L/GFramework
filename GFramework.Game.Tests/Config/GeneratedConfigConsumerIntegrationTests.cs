@@ -127,9 +127,20 @@ public class GeneratedConfigConsumerIntegrationTests
             {
                 IncludedTableNames = new[] { ItemConfigBindings.TableName }
             });
+        var predicateOnlyRegistrationTables = GeneratedConfigCatalog.GetTablesForRegistration(
+            new GeneratedConfigRegistrationOptions
+            {
+                TableFilter = static metadata =>
+                    string.Equals(metadata.TableName, MonsterConfigBindings.TableName, StringComparison.Ordinal)
+            });
         var monsterOnlyOptions = new GeneratedConfigRegistrationOptions
         {
             IncludedConfigDomains = new[] { MonsterConfigBindings.ConfigDomain }
+        };
+        var predicateOnlyOptions = new GeneratedConfigRegistrationOptions
+        {
+            TableFilter = static metadata =>
+                string.Equals(metadata.TableName, MonsterConfigBindings.TableName, StringComparison.Ordinal)
         };
 
         Assert.Multiple(() =>
@@ -139,10 +150,14 @@ public class GeneratedConfigConsumerIntegrationTests
             Assert.That(missingDomainTables, Is.Empty);
             Assert.That(itemOnlyRegistrationTables.Select(static metadata => metadata.TableName),
                 Is.EqualTo(new[] { ItemConfigBindings.TableName }));
+            Assert.That(predicateOnlyRegistrationTables.Select(static metadata => metadata.TableName),
+                Is.EqualTo(new[] { MonsterConfigBindings.TableName }));
             Assert.That(GeneratedConfigCatalog.GetTablesForRegistration().Select(static metadata => metadata.TableName),
                 Is.SupersetOf(new[] { ItemConfigBindings.TableName, MonsterConfigBindings.TableName }));
             Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, monsterOnlyOptions), Is.True);
             Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(itemMetadata, monsterOnlyOptions), Is.False);
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, predicateOnlyOptions), Is.True);
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(itemMetadata, predicateOnlyOptions), Is.False);
             Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, options: null), Is.True);
         });
     }
