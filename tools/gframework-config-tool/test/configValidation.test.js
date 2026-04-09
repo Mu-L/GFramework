@@ -308,6 +308,47 @@ tags:
     assert.match(diagnostics[1].message, /at most 3 items|最多只能包含 3 个元素/u);
 });
 
+test("validateParsedConfig should report multipleOf and uniqueItems violations", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "hp": {
+              "type": "integer",
+              "multipleOf": 5
+            },
+            "phases": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "wave": { "type": "integer" },
+                  "monsterId": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+hp: 12
+phases:
+  -
+    wave: 1
+    monsterId: slime
+  -
+    monsterId: slime
+    wave: 1
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /multiple of 5|5 的整数倍/u);
+    assert.match(diagnostics[1].message, /phases\[1\]|uniqueItems|元素唯一/u);
+});
+
 test("parseSchemaContent should capture scalar range and length metadata", () => {
     const schema = parseSchemaContent(`
         {
@@ -376,6 +417,32 @@ test("parseSchemaContent should capture exclusive bounds, pattern, and array ite
     assert.equal(schema.properties.tags.minItems, 2);
     assert.equal(schema.properties.tags.maxItems, 4);
     assert.equal(schema.properties.tags.items.pattern, "^[a-z]+$");
+});
+
+test("parseSchemaContent should capture multipleOf and uniqueItems metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "hp": {
+              "type": "integer",
+              "multipleOf": 5
+            },
+            "dropRates": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "number",
+                "multipleOf": 0.5
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.properties.hp.multipleOf, 5);
+    assert.equal(schema.properties.dropRates.uniqueItems, true);
+    assert.equal(schema.properties.dropRates.items.multipleOf, 0.5);
 });
 
 test("parseSchemaContent should reject invalid pattern declarations instead of dropping them", () => {
