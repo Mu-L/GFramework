@@ -308,6 +308,69 @@ tags:
     assert.match(diagnostics[1].message, /at most 3 items|最多只能包含 3 个元素/u);
 });
 
+test("validateParsedConfig should report object property-count mismatches", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "minProperties": 2,
+          "maxProperties": 3,
+          "properties": {
+            "reward": {
+              "type": "object",
+              "minProperties": 2,
+              "maxProperties": 2,
+              "properties": {
+                "gold": { "type": "integer" },
+                "currency": { "type": "string" },
+                "tier": { "type": "string" }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  gold: 10
+  currency: coin
+  tier: epic
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+    const messages = diagnostics.map((diagnostic) => diagnostic.message);
+
+    assert.equal(diagnostics.length, 2);
+    assert.ok(messages.some((message) => /at least 2 properties|至少需要包含 2 个属性/u.test(message)));
+    assert.ok(messages.some((message) => /reward.*at most 2 properties|reward.*最多只能包含 2 个子属性/u.test(message)));
+});
+
+test("validateParsedConfig should count unique object properties for property-count constraints", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "minProperties": 2,
+              "properties": {
+                "gold": { "type": "integer" },
+                "currency": { "type": "string" }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  gold: 10
+  gold: 20
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /reward.*at least 2 properties|reward.*至少需要包含 2 个子属性/u);
+});
+
 test("validateParsedConfig should report multipleOf and uniqueItems violations", () => {
     const schema = parseSchemaContent(`
         {
@@ -615,6 +678,31 @@ test("parseSchemaContent should capture multipleOf and uniqueItems metadata", ()
     assert.equal(schema.properties.dropRates.items.multipleOf, 0.5);
 });
 
+test("parseSchemaContent should capture object property-count metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "minProperties": 2,
+          "maxProperties": 4,
+          "properties": {
+            "reward": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 2,
+              "properties": {
+                "gold": { "type": "integer" }
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.minProperties, 2);
+    assert.equal(schema.maxProperties, 4);
+    assert.equal(schema.properties.reward.minProperties, 1);
+    assert.equal(schema.properties.reward.maxProperties, 2);
+});
+
 test("parseSchemaContent should reject invalid pattern declarations instead of dropping them", () => {
     assert.throws(
         () => parseSchemaContent(`
@@ -673,6 +761,30 @@ id: 1
     assert.equal(diagnostics.length, 2);
     assert.match(diagnostics[0].message, /缺少必填属性/u);
     assert.match(diagnostics[1].message, /未在匹配的 schema 中声明/u);
+});
+
+test("validateParsedConfig should localize expected object diagnostics when Chinese UI is requested", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "gold": { "type": "integer" }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward: 1
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml, {isChinese: true});
+
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].message, "属性“reward”应为对象。");
 });
 
 test("applyFormUpdates should update nested scalar and scalar-array paths", () => {

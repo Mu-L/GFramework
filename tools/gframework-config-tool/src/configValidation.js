@@ -20,7 +20,9 @@ const BooleanScalarPattern = /^(true|false)$/iu;
  * @returns {{
  *   type: "object",
  *   required: string[],
- *   properties: Record<string, SchemaNode>
+ *   properties: Record<string, SchemaNode>,
+ *   minProperties?: number,
+ *   maxProperties?: number
  * }} Parsed schema info.
  */
 function parseSchemaContent(content) {
@@ -639,6 +641,8 @@ function parseSchemaNode(rawNode, displayPath) {
         patternRegex: patternMetadata ? patternMetadata.regex : undefined,
         minItems: normalizeSchemaNonNegativeInteger(value.minItems),
         maxItems: normalizeSchemaNonNegativeInteger(value.maxItems),
+        minProperties: normalizeSchemaNonNegativeInteger(value.minProperties),
+        maxProperties: normalizeSchemaNonNegativeInteger(value.maxProperties),
         uniqueItems: normalizeSchemaBoolean(value.uniqueItems),
         refTable: typeof value["x-gframework-ref-table"] === "string"
             ? value["x-gframework-ref-table"]
@@ -659,6 +663,8 @@ function parseSchemaNode(rawNode, displayPath) {
             displayPath,
             required,
             properties,
+            minProperties: metadata.minProperties,
+            maxProperties: metadata.maxProperties,
             title: metadata.title,
             description: metadata.description,
             defaultValue: metadata.defaultValue
@@ -952,22 +958,20 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
  */
 function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, localizer) {
     if (!yamlNode || yamlNode.kind !== "object") {
-        const subject = displayPath.length === 0
-            ? localizer && localizer.isChinese
-                ? "根对象应为对象。"
-                : "Root object is expected to be an object."
-            : localizer && localizer.isChinese
-                ? `属性“${displayPath}”应为对象。`
-                : `Property '${displayPath}' is expected to be an object.`;
         diagnostics.push({
             severity: "error",
             message: localizeValidationMessage(ValidationMessageKeys.expectedObject, localizer, {
-                subject,
                 displayPath
             })
         });
         return;
     }
+
+    const propertyCount = yamlNode.map instanceof Map
+        ? yamlNode.map.size
+        : Array.isArray(yamlNode.entries)
+            ? new Set(yamlNode.entries.map((entry) => entry.key)).size
+            : 0;
 
     for (const requiredProperty of schemaNode.required) {
         if (!yamlNode.map.has(requiredProperty)) {
@@ -997,6 +1001,28 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
             joinPropertyPath(displayPath, entry.key),
             diagnostics,
             localizer);
+    }
+
+    if (typeof schemaNode.minProperties === "number" &&
+        propertyCount < schemaNode.minProperties) {
+        diagnostics.push({
+            severity: "error",
+            message: localizeValidationMessage(ValidationMessageKeys.minPropertiesViolation, localizer, {
+                displayPath,
+                value: String(schemaNode.minProperties)
+            })
+        });
+    }
+
+    if (typeof schemaNode.maxProperties === "number" &&
+        propertyCount > schemaNode.maxProperties) {
+        diagnostics.push({
+            severity: "error",
+            message: localizeValidationMessage(ValidationMessageKeys.maxPropertiesViolation, localizer, {
+                displayPath,
+                value: String(schemaNode.maxProperties)
+            })
+        });
     }
 }
 
@@ -1060,6 +1086,34 @@ function buildComparableNodeValue(schemaNode, yamlNode) {
  * @returns {string} Localized validation message.
  */
 function localizeValidationMessage(key, localizer, params) {
+    if (key === ValidationMessageKeys.expectedObject) {
+        return formatExpectedObjectMessage(params.displayPath, Boolean(localizer && localizer.isChinese));
+    }
+
+    if (key === ValidationMessageKeys.minPropertiesViolation) {
+        if (localizer && typeof localizer.t === "function" && params.displayPath) {
+            return localizer.t(key, params);
+        }
+
+        return formatObjectPropertyCountMessage(
+            params.displayPath,
+            params.value,
+            "min",
+            Boolean(localizer && localizer.isChinese));
+    }
+
+    if (key === ValidationMessageKeys.maxPropertiesViolation) {
+        if (localizer && typeof localizer.t === "function" && params.displayPath) {
+            return localizer.t(key, params);
+        }
+
+        return formatObjectPropertyCountMessage(
+            params.displayPath,
+            params.value,
+            "max",
+            Boolean(localizer && localizer.isChinese));
+    }
+
     if (localizer && typeof localizer.t === "function") {
         return localizer.t(key, params);
     }
@@ -1096,8 +1150,6 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”必须匹配正则模式“${params.value}”。`;
             case ValidationMessageKeys.uniqueItemsViolation:
                 return `属性“${params.displayPath}”与更早的数组元素 ${params.duplicatePath} 重复；该数组要求元素唯一。`;
-            case ValidationMessageKeys.expectedObject:
-                return params.subject;
             case ValidationMessageKeys.missingRequired:
                 return `缺少必填属性“${params.displayPath}”。`;
             case ValidationMessageKeys.unknownProperty:
@@ -1138,8 +1190,6 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must match pattern '${params.value}'.`;
         case ValidationMessageKeys.uniqueItemsViolation:
             return `Property '${params.displayPath}' duplicates earlier array item '${params.duplicatePath}', but uniqueItems is required.`;
-        case ValidationMessageKeys.expectedObject:
-            return params.subject;
         case ValidationMessageKeys.missingRequired:
             return `Required property '${params.displayPath}' is missing.`;
         case ValidationMessageKeys.unknownProperty:
@@ -1147,6 +1197,60 @@ function localizeValidationMessage(key, localizer, params) {
         default:
             return key;
     }
+}
+
+/**
+ * Format one object-shape expectation diagnostic.
+ *
+ * @param {string} displayPath Logical object path, or empty for the root object.
+ * @param {boolean} isChinese Whether Chinese text should be produced.
+ * @returns {string} Formatted message.
+ */
+function formatExpectedObjectMessage(displayPath, isChinese) {
+    const isRoot = !displayPath;
+    if (isChinese) {
+        return isRoot
+            ? "根对象应为对象。"
+            : `属性“${displayPath}”应为对象。`;
+    }
+
+    return isRoot
+        ? "Root object is expected to be an object."
+        : `Property '${displayPath}' is expected to be an object.`;
+}
+
+/**
+ * Format one object-property-count validation message.
+ *
+ * @param {string} displayPath Logical object path, or empty for the root object.
+ * @param {string} value Constraint value.
+ * @param {"min" | "max"} mode Whether the message describes a minimum or maximum.
+ * @param {boolean} isChinese Whether Chinese text should be produced.
+ * @returns {string} Formatted message.
+ */
+function formatObjectPropertyCountMessage(displayPath, value, mode, isChinese) {
+    const isRoot = !displayPath;
+    if (isChinese) {
+        if (mode === "min") {
+            return isRoot
+                ? `根对象至少需要包含 ${value} 个属性。`
+                : `对象属性“${displayPath}”至少需要包含 ${value} 个子属性。`;
+        }
+
+        return isRoot
+            ? `根对象最多只能包含 ${value} 个属性。`
+            : `对象属性“${displayPath}”最多只能包含 ${value} 个子属性。`;
+    }
+
+    if (mode === "min") {
+        return isRoot
+            ? `Root object must contain at least ${value} properties.`
+            : `Property '${displayPath}' must contain at least ${value} properties.`;
+    }
+
+    return isRoot
+        ? `Root object must contain at most ${value} properties.`
+        : `Property '${displayPath}' must contain at most ${value} properties.`;
 }
 
 /**
@@ -1782,6 +1886,8 @@ module.exports = {
  *   displayPath: string,
  *   required: string[],
  *   properties: Record<string, SchemaNode>,
+ *   minProperties?: number,
+ *   maxProperties?: number,
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string

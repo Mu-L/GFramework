@@ -7,6 +7,9 @@ namespace GFramework.Game.Config.Generated;
 ///     Auto-generated config type for schema file 'monster.schema.json'.
 ///     Represents one monster entry generated from schema metadata.
 /// </summary>
+/// <remarks>
+///     Constraints: minProperties = 4, maxProperties = 8.
+/// </remarks>
 public sealed partial class MonsterConfig
 {
     /// <summary>
@@ -74,6 +77,9 @@ public sealed partial class MonsterConfig
     ///     Auto-generated nested config type for schema property path 'reward'.
     ///     Reward payload.
     /// </summary>
+    /// <remarks>
+    ///     Constraints: minProperties = 2, maxProperties = 2.
+    /// </remarks>
     public sealed partial class RewardConfig
     {
         /// <summary>

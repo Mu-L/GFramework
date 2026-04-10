@@ -1095,6 +1095,7 @@ function renderFormField(field) {
                 <div class="meta-key">${escapeHtml(field.displayPath || field.path)}</div>
                 ${renderYamlCommentBlock(field)}
                 ${field.description ? `<span class="hint">${escapeHtml(field.description)}</span>` : ""}
+                ${field.schema ? renderFieldHint(field.schema, false, false) : ""}
                 ${renderCommentEditor(field)}
             </div>
         `;
@@ -1302,6 +1303,7 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
                 path: propertyPath,
                 label,
                 description: propertySchema.description,
+                schema: propertySchema,
                 comment: commentLookup[propertyPath] || "",
                 required: requiredSet.has(key),
                 depth
@@ -1468,6 +1470,7 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
                 displayPath: itemDisplayPath,
                 label,
                 description: propertySchema.description,
+                schema: propertySchema,
                 comment: commentLookup[itemDisplayPath] || "",
                 required: requiredSet.has(key),
                 depth
@@ -1574,14 +1577,15 @@ function getScalarArrayValue(yamlNode) {
 /**
  * Render human-facing metadata hints for one schema field.
  *
- * @param {{description?: string, defaultValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string, minItems?: number, maxItems?: number, uniqueItems?: boolean, enumValues?: string[], items?: {enumValues?: string[], minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string}, refTable?: string}} propertySchema Property schema metadata.
+ * @param {{type?: string, description?: string, defaultValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string, minItems?: number, maxItems?: number, minProperties?: number, maxProperties?: number, uniqueItems?: boolean, enumValues?: string[], items?: {enumValues?: string[], minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string}, refTable?: string}} propertySchema Property schema metadata.
  * @param {boolean} isArrayField Whether the field is an array.
+ * @param {boolean} includeDescription Whether description text should be included in the hint output.
  * @returns {string} HTML fragment.
  */
-function renderFieldHint(propertySchema, isArrayField) {
+function renderFieldHint(propertySchema, isArrayField, includeDescription = true) {
     const hints = [];
 
-    if (propertySchema.description) {
+    if (includeDescription && propertySchema.description) {
         hints.push(escapeHtml(propertySchema.description));
     }
 
@@ -1628,6 +1632,14 @@ function renderFieldHint(propertySchema, isArrayField) {
 
     if (!isArrayField && propertySchema.pattern) {
         hints.push(escapeHtml(localizer.t("webview.hint.pattern", {value: propertySchema.pattern})));
+    }
+
+    if (propertySchema.type === "object" && typeof propertySchema.minProperties === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.minProperties", {value: propertySchema.minProperties})));
+    }
+
+    if (propertySchema.type === "object" && typeof propertySchema.maxProperties === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.maxProperties", {value: propertySchema.maxProperties})));
     }
 
     if (isArrayField && typeof propertySchema.minItems === "number") {

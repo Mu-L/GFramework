@@ -69,6 +69,8 @@ public class SchemaConfigGeneratorSnapshotTests
                                 "title": "Monster Config",
                                 "description": "Represents one monster entry generated from schema metadata.",
                                 "type": "object",
+                                "minProperties": 4,
+                                "maxProperties": 8,
                                 "required": ["id", "name", "reward", "phases"],
                                 "properties": {
                                   "id": {
@@ -113,6 +115,8 @@ public class SchemaConfigGeneratorSnapshotTests
                                   "reward": {
                                     "type": "object",
                                     "description": "Reward payload.",
+                                    "minProperties": 2,
+                                    "maxProperties": 2,
                                     "required": ["gold", "currency"],
                                     "properties": {
                                       "gold": {

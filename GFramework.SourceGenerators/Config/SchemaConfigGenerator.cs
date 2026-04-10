@@ -6,7 +6,8 @@ namespace GFramework.SourceGenerators.Config;
 ///     根据 AdditionalFiles 中的 JSON schema 生成配置类型和配置表包装。
 ///     当前实现聚焦 AI-First 配置系统共享的最小 schema 子集，
 ///     支持嵌套对象、对象数组、标量数组，以及可映射的 default / enum / ref-table 元数据。
-///     当前共享子集也会把 <c>multipleOf</c> 与 <c>uniqueItems</c> 写入生成代码文档，
+///     当前共享子集也会把 <c>multipleOf</c>、<c>uniqueItems</c>、
+///     <c>minProperties</c> 与 <c>maxProperties</c> 写入生成代码文档，
 ///     让消费者能直接在强类型 API 上看到运行时生效的约束。
 /// </summary>
 [Generator]
@@ -219,7 +220,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                     Path.GetFileName(filePath)));
         }
 
-        var requiredProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var requiredProperties = new HashSet<string>(StringComparer.Ordinal);
         if (element.TryGetProperty("required", out var requiredElement) &&
             requiredElement.ValueKind == JsonValueKind.Array)
         {
@@ -258,6 +259,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             className,
             TryGetMetadataString(element, "title"),
             TryGetMetadataString(element, "description"),
+            TryBuildConstraintDocumentation(element, "object"),
             properties));
     }
 
@@ -1876,6 +1878,14 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine($"{indent}/// </summary>");
+        if (!string.IsNullOrWhiteSpace(objectSpec.ConstraintDocumentation))
+        {
+            builder.AppendLine($"{indent}/// <remarks>");
+            builder.AppendLine(
+                $"{indent}///     Constraints: {EscapeXmlDocumentation(objectSpec.ConstraintDocumentation!)}.");
+            builder.AppendLine($"{indent}/// </remarks>");
+        }
+
         builder.AppendLine($"{indent}public sealed partial class {objectSpec.ClassName}");
         builder.AppendLine($"{indent}{{");
 
@@ -2432,7 +2442,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    ///     将 shared schema 子集中的范围、步进、长度、模式与数组数量 / 去重约束整理成 XML 文档可读字符串。
+    ///     将 shared schema 子集中的范围、步进、长度、数组数量 / 去重与对象属性数量约束整理成 XML 文档可读字符串。
     /// </summary>
     /// <param name="element">Schema 节点。</param>
     /// <param name="schemaType">标量类型。</param>
@@ -2508,6 +2518,18 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             uniqueItemsElement.ValueKind == JsonValueKind.True)
         {
             parts.Add("uniqueItems = true");
+        }
+
+        if (schemaType == "object" &&
+            TryGetNonNegativeInt32(element, "minProperties", out var minProperties))
+        {
+            parts.Add($"minProperties = {minProperties.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (schemaType == "object" &&
+            TryGetNonNegativeInt32(element, "maxProperties", out var maxProperties))
+        {
+            parts.Add($"maxProperties = {maxProperties.ToString(CultureInfo.InvariantCulture)}");
         }
 
         return parts.Count > 0 ? string.Join(", ", parts) : null;
@@ -2654,12 +2676,14 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     /// <param name="ClassName">要生成的 CLR 类型名。</param>
     /// <param name="Title">对象标题元数据。</param>
     /// <param name="Description">对象描述元数据。</param>
+    /// <param name="ConstraintDocumentation">对象约束说明。</param>
     /// <param name="Properties">对象属性集合。</param>
     private sealed record SchemaObjectSpec(
         string DisplayPath,
         string ClassName,
         string? Title,
         string? Description,
+        string? ConstraintDocumentation,
         IReadOnlyList<SchemaPropertySpec> Properties);
 
     /// <summary>
