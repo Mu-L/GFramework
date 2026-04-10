@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 using GFramework.Godot.Config;
 using NUnit.Framework;
@@ -173,6 +174,31 @@ public sealed class GodotYamlConfigLoaderTests
             Assert.That(bossTable.Count, Is.EqualTo(1));
             Assert.That(bossTable.Get(99).Name, Is.EqualTo("Dragon"));
             Assert.That(File.Exists(Path.Combine(cacheRoot, "monster", "boss", "dragon.yaml")), Is.True);
+        });
+    }
+
+    /// <summary>
+    ///     验证运行时缓存目录无法重置时，Godot 适配层仍会返回结构化的配置加载诊断。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Wrap_Runtime_Cache_Directory_Reset_Failure_As_ConfigLoadException()
+    {
+        CreateMonsterFiles(_resourceRoot);
+        WriteFile(_userRoot, "config_cache", "occupied");
+
+        var loader = CreateLoader(isEditor: false);
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () =>
+            await loader.LoadAsync(new ConfigRegistry()));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.ConfigFileReadFailed));
+            Assert.That(exception.Diagnostic.TableName, Is.EqualTo("monster"));
+            Assert.That(exception.Diagnostic.ConfigDirectoryPath, Is.EqualTo(Path.Combine(_resourceRoot, "monster")));
+            Assert.That(exception.Diagnostic.Detail, Does.Contain(Path.Combine(_userRoot, "config_cache", "monster")));
+            Assert.That(exception.InnerException, Is.InstanceOf<IOException>());
         });
     }
 

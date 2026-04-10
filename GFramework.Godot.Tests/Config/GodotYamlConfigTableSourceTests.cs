@@ -15,11 +15,16 @@ public sealed class GodotYamlConfigTableSourceTests
     /// </summary>
     /// <param name="configRelativePath">待验证的配置目录路径。</param>
     [TestCase("../outside")]
+    [TestCase(@"..\outside")]
     [TestCase("./monster")]
+    [TestCase(@".\monster")]
     [TestCase("monster/../outside")]
+    [TestCase(@"monster\..\outside")]
     [TestCase("monster/./child")]
+    [TestCase(@"monster\.\child")]
     [TestCase("/monster")]
     [TestCase("C:/monster")]
+    [TestCase(@"C:\monster")]
     [TestCase("res://monster")]
     [TestCase("user://monster")]
     public void Constructor_Should_Throw_When_Config_Relative_Path_Is_Not_Safe(string configRelativePath)
@@ -35,11 +40,16 @@ public sealed class GodotYamlConfigTableSourceTests
     /// </summary>
     /// <param name="schemaRelativePath">待验证的 schema 路径。</param>
     [TestCase("../schemas/monster.schema.json")]
+    [TestCase(@"..\schemas\monster.schema.json")]
     [TestCase("./schemas/monster.schema.json")]
+    [TestCase(@".\schemas\monster.schema.json")]
     [TestCase("schemas/../monster.schema.json")]
+    [TestCase(@"schemas\..\monster.schema.json")]
     [TestCase("schemas/./monster.schema.json")]
+    [TestCase(@"schemas\.\monster.schema.json")]
     [TestCase("/schemas/monster.schema.json")]
     [TestCase("C:/schemas/monster.schema.json")]
+    [TestCase(@"C:\schemas\monster.schema.json")]
     [TestCase("res://schemas/monster.schema.json")]
     [TestCase("user://schemas/monster.schema.json")]
     public void Constructor_Should_Throw_When_Schema_Relative_Path_Is_Not_Safe(string schemaRelativePath)

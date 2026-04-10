@@ -22,6 +22,20 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
     ///     使用指定选项创建一个 Godot YAML 配置加载器。
     /// </summary>
     /// <param name="options">加载器初始化选项。</param>
+    /// <exception cref="ArgumentNullException">当 <paramref name="options" /> 为 <see langword="null" /> 时抛出。</exception>
+    /// <exception cref="ArgumentException">
+    ///     当 <see cref="GodotYamlConfigLoaderOptions.SourceRootPath" /> 或
+    ///     <see cref="GodotYamlConfigLoaderOptions.RuntimeCacheRootPath" /> 为空白字符串时抛出。
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    ///     当 Godot 特殊路径无法被全局化为非空绝对路径时抛出。
+    /// </exception>
+    /// <remarks>
+    ///     构造完成后，加载器会根据当前环境决定直接读取 <see cref="SourceRootPath" />，还是先同步到
+    ///     <see cref="RuntimeCacheRootPath" /> 再交给底层 <see cref="YamlConfigLoader" />。
+    ///     只有源根目录可直接作为普通文件系统目录访问时，<see cref="CanEnableHotReload" /> 才会返回
+    ///     <see langword="true" />。
+    /// </remarks>
     public GodotYamlConfigLoader(GodotYamlConfigLoaderOptions options)
         : this(options, GodotYamlConfigEnvironment.Default)
     {
@@ -115,6 +129,19 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
     /// <param name="registry">要被热重载更新的配置注册表。</param>
     /// <param name="options">热重载选项；为空时使用默认值。</param>
     /// <returns>用于停止监听的注销句柄。</returns>
+    /// <exception cref="ArgumentNullException">当 <paramref name="registry" /> 为 <see langword="null" /> 时抛出。</exception>
+    /// <exception cref="InvalidOperationException">
+    ///     当当前实例必须通过运行时缓存访问配置源，无法直接监听真实源目录时抛出。
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     当 <paramref name="options" /> 的防抖延迟小于 <see cref="TimeSpan.Zero" /> 时，
+    ///     底层 <see cref="YamlConfigLoader" /> 会拒绝启用热重载。
+    /// </exception>
+    /// <remarks>
+    ///     调用前应先检查 <see cref="CanEnableHotReload" />。
+    ///     当 <see cref="SourceRootPath" /> 只能通过缓存同步访问时，拒绝启用热重载是为了避免监听缓存副本后误导调用方，
+    ///     让其误以为源目录改动会被自动反映到运行时。
+    /// </remarks>
     public IUnRegister EnableHotReload(
         IConfigRegistry registry,
         YamlConfigHotReloadOptions? options = null)
@@ -171,7 +198,7 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
             var sourceDirectoryPath = CombinePath(SourceRootPath, representative.ConfigRelativePath);
             var targetDirectoryPath = CombineAbsolutePath(LoaderRootPath, representative.ConfigRelativePath);
 
-            ResetDirectory(targetDirectoryPath);
+            ResetDirectory(representative.TableName, sourceDirectoryPath, targetDirectoryPath);
             CopyYamlFilesInDirectory(
                 representative.TableName,
                 sourceDirectoryPath,
@@ -214,8 +241,6 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
                 $"Config directory '{DescribePath(sourceDirectoryPath)}' was not found while preparing the Godot runtime cache.",
                 configDirectoryPath: DescribePath(sourceDirectoryPath));
         }
-
-        Directory.CreateDirectory(targetDirectoryPath);
 
         foreach (var entry in entries)
         {
@@ -303,14 +328,28 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
         }
     }
 
-    private void ResetDirectory(string directoryPath)
+    private void ResetDirectory(string tableName, string sourceDirectoryPath, string targetDirectoryPath)
     {
-        if (Directory.Exists(directoryPath))
+        try
         {
-            Directory.Delete(directoryPath, recursive: true);
-        }
+            if (Directory.Exists(targetDirectoryPath))
+            {
+                Directory.Delete(targetDirectoryPath, recursive: true);
+            }
 
-        Directory.CreateDirectory(directoryPath);
+            Directory.CreateDirectory(targetDirectoryPath);
+        }
+        catch (Exception exception)
+        {
+            var describedSourceDirectoryPath = DescribePath(sourceDirectoryPath);
+            throw CreateConfigLoadException(
+                ConfigLoadFailureKind.ConfigFileReadFailed,
+                tableName,
+                $"Failed to reset runtime cache directory '{targetDirectoryPath}' while preparing config directory '{describedSourceDirectoryPath}'.",
+                configDirectoryPath: describedSourceDirectoryPath,
+                detail: $"Runtime cache directory: {targetDirectoryPath}.",
+                innerException: exception);
+        }
     }
 
     private string EnsureAbsolutePath(string path, string optionName)
@@ -417,6 +456,7 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
         string? configDirectoryPath = null,
         string? yamlPath = null,
         string? schemaPath = null,
+        string? detail = null,
         Exception? innerException = null)
     {
         return new ConfigLoadException(
@@ -425,7 +465,8 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
                 tableName,
                 configDirectoryPath: configDirectoryPath,
                 yamlPath: yamlPath,
-                schemaPath: schemaPath),
+                schemaPath: schemaPath,
+                detail: detail),
             message,
             innerException);
     }
