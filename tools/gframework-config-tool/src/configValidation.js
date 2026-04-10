@@ -20,7 +20,9 @@ const BooleanScalarPattern = /^(true|false)$/iu;
  * @returns {{
  *   type: "object",
  *   required: string[],
- *   properties: Record<string, SchemaNode>
+ *   properties: Record<string, SchemaNode>,
+ *   minProperties?: number,
+ *   maxProperties?: number
  * }} Parsed schema info.
  */
 function parseSchemaContent(content) {
@@ -639,6 +641,8 @@ function parseSchemaNode(rawNode, displayPath) {
         patternRegex: patternMetadata ? patternMetadata.regex : undefined,
         minItems: normalizeSchemaNonNegativeInteger(value.minItems),
         maxItems: normalizeSchemaNonNegativeInteger(value.maxItems),
+        minProperties: normalizeSchemaNonNegativeInteger(value.minProperties),
+        maxProperties: normalizeSchemaNonNegativeInteger(value.maxProperties),
         uniqueItems: normalizeSchemaBoolean(value.uniqueItems),
         refTable: typeof value["x-gframework-ref-table"] === "string"
             ? value["x-gframework-ref-table"]
@@ -659,6 +663,8 @@ function parseSchemaNode(rawNode, displayPath) {
             displayPath,
             required,
             properties,
+            minProperties: metadata.minProperties,
+            maxProperties: metadata.maxProperties,
             title: metadata.title,
             description: metadata.description,
             defaultValue: metadata.defaultValue
@@ -969,6 +975,8 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
         return;
     }
 
+    const propertyCount = Array.isArray(yamlNode.entries) ? yamlNode.entries.length : 0;
+
     for (const requiredProperty of schemaNode.required) {
         if (!yamlNode.map.has(requiredProperty)) {
             diagnostics.push({
@@ -997,6 +1005,28 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
             joinPropertyPath(displayPath, entry.key),
             diagnostics,
             localizer);
+    }
+
+    if (typeof schemaNode.minProperties === "number" &&
+        propertyCount < schemaNode.minProperties) {
+        diagnostics.push({
+            severity: "error",
+            message: localizeValidationMessage(ValidationMessageKeys.minPropertiesViolation, localizer, {
+                displayPath,
+                value: String(schemaNode.minProperties)
+            })
+        });
+    }
+
+    if (typeof schemaNode.maxProperties === "number" &&
+        propertyCount > schemaNode.maxProperties) {
+        diagnostics.push({
+            severity: "error",
+            message: localizeValidationMessage(ValidationMessageKeys.maxPropertiesViolation, localizer, {
+                displayPath,
+                value: String(schemaNode.maxProperties)
+            })
+        });
     }
 }
 
@@ -1060,6 +1090,22 @@ function buildComparableNodeValue(schemaNode, yamlNode) {
  * @returns {string} Localized validation message.
  */
 function localizeValidationMessage(key, localizer, params) {
+    if (key === ValidationMessageKeys.minPropertiesViolation) {
+        return formatObjectPropertyCountMessage(
+            params.displayPath,
+            params.value,
+            "min",
+            Boolean(localizer && localizer.isChinese));
+    }
+
+    if (key === ValidationMessageKeys.maxPropertiesViolation) {
+        return formatObjectPropertyCountMessage(
+            params.displayPath,
+            params.value,
+            "max",
+            Boolean(localizer && localizer.isChinese));
+    }
+
     if (localizer && typeof localizer.t === "function") {
         return localizer.t(key, params);
     }
@@ -1084,6 +1130,8 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”最多只能包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.maxLengthViolation:
                 return `属性“${params.displayPath}”长度必须不超过 ${params.value} 个字符。`;
+            case ValidationMessageKeys.maxPropertiesViolation:
+                return formatObjectPropertyCountMessage(params.displayPath, params.value, "max", true);
             case ValidationMessageKeys.minimumViolation:
                 return `属性“${params.displayPath}”必须大于或等于 ${params.value}。`;
             case ValidationMessageKeys.multipleOfViolation:
@@ -1092,6 +1140,8 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”至少需要包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.minLengthViolation:
                 return `属性“${params.displayPath}”长度必须至少为 ${params.value} 个字符。`;
+            case ValidationMessageKeys.minPropertiesViolation:
+                return formatObjectPropertyCountMessage(params.displayPath, params.value, "min", true);
             case ValidationMessageKeys.patternViolation:
                 return `属性“${params.displayPath}”必须匹配正则模式“${params.value}”。`;
             case ValidationMessageKeys.uniqueItemsViolation:
@@ -1126,6 +1176,8 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must contain at most ${params.value} items.`;
         case ValidationMessageKeys.maxLengthViolation:
             return `Property '${params.displayPath}' must be at most ${params.value} characters long.`;
+        case ValidationMessageKeys.maxPropertiesViolation:
+            return formatObjectPropertyCountMessage(params.displayPath, params.value, "max", false);
         case ValidationMessageKeys.minimumViolation:
             return `Property '${params.displayPath}' must be greater than or equal to ${params.value}.`;
         case ValidationMessageKeys.multipleOfViolation:
@@ -1134,6 +1186,8 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must contain at least ${params.value} items.`;
         case ValidationMessageKeys.minLengthViolation:
             return `Property '${params.displayPath}' must be at least ${params.value} characters long.`;
+        case ValidationMessageKeys.minPropertiesViolation:
+            return formatObjectPropertyCountMessage(params.displayPath, params.value, "min", false);
         case ValidationMessageKeys.patternViolation:
             return `Property '${params.displayPath}' must match pattern '${params.value}'.`;
         case ValidationMessageKeys.uniqueItemsViolation:
@@ -1147,6 +1201,40 @@ function localizeValidationMessage(key, localizer, params) {
         default:
             return key;
     }
+}
+
+/**
+ * Format one object-property-count validation message.
+ *
+ * @param {string} displayPath Logical object path, or empty for the root object.
+ * @param {string} value Constraint value.
+ * @param {"min" | "max"} mode Whether the message describes a minimum or maximum.
+ * @param {boolean} isChinese Whether Chinese text should be produced.
+ * @returns {string} Formatted message.
+ */
+function formatObjectPropertyCountMessage(displayPath, value, mode, isChinese) {
+    const isRoot = !displayPath;
+    if (isChinese) {
+        if (mode === "min") {
+            return isRoot
+                ? `根对象至少需要包含 ${value} 个属性。`
+                : `对象属性“${displayPath}”至少需要包含 ${value} 个子属性。`;
+        }
+
+        return isRoot
+            ? `根对象最多只能包含 ${value} 个属性。`
+            : `对象属性“${displayPath}”最多只能包含 ${value} 个子属性。`;
+    }
+
+    if (mode === "min") {
+        return isRoot
+            ? `Root object must contain at least ${value} properties.`
+            : `Property '${displayPath}' must contain at least ${value} properties.`;
+    }
+
+    return isRoot
+        ? `Root object must contain at most ${value} properties.`
+        : `Property '${displayPath}' must contain at most ${value} properties.`;
 }
 
 /**
@@ -1782,6 +1870,8 @@ module.exports = {
  *   displayPath: string,
  *   required: string[],
  *   properties: Record<string, SchemaNode>,
+ *   minProperties?: number,
+ *   maxProperties?: number,
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string

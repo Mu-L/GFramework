@@ -8,8 +8,9 @@ namespace GFramework.Game.Config;
 ///     提供 YAML 配置文件与 JSON Schema 之间的最小运行时校验能力。
 ///     该校验器与当前配置生成器、VS Code 工具支持的 schema 子集保持一致，
 ///     并通过递归遍历方式覆盖嵌套对象、对象数组、标量数组与深层 enum / 引用约束。
-///     当前共享子集额外支持 <c>multipleOf</c> 与 <c>uniqueItems</c>，
-///     让数值步进和数组去重规则在运行时与生成器 / 工具侧保持一致。
+///     当前共享子集额外支持 <c>multipleOf</c>、<c>uniqueItems</c>、
+///     <c>minProperties</c> 与 <c>maxProperties</c>，
+///     让数值步进、数组去重和对象属性数量规则在运行时与生成器 / 工具侧保持一致。
 /// </summary>
 internal static class YamlConfigSchemaValidator
 {
@@ -321,7 +322,11 @@ internal static class YamlConfigSchemaValidator
                 property.Value);
         }
 
-        return YamlConfigSchemaNode.CreateObject(properties, requiredProperties, schemaPath);
+        return YamlConfigSchemaNode.CreateObject(
+            properties,
+            requiredProperties,
+            ParseObjectConstraints(tableName, schemaPath, propertyPath, element),
+            schemaPath);
     }
 
     /// <summary>
@@ -554,6 +559,66 @@ internal static class YamlConfigSchemaValidator
                 yamlPath: yamlPath,
                 schemaPath: schemaNode.SchemaPathHint,
                 displayPath: requiredPath);
+        }
+
+        if (schemaNode.ObjectConstraints is not null)
+        {
+            ValidateObjectConstraints(tableName, yamlPath, displayPath, seenProperties.Count, schemaNode);
+        }
+    }
+
+    /// <summary>
+    ///     校验对象节点声明的属性数量约束。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="yamlPath">YAML 文件路径。</param>
+    /// <param name="displayPath">对象字段路径；根对象时为空。</param>
+    /// <param name="propertyCount">当前对象实际属性数量。</param>
+    /// <param name="schemaNode">对象 schema 节点。</param>
+    private static void ValidateObjectConstraints(
+        string tableName,
+        string yamlPath,
+        string displayPath,
+        int propertyCount,
+        YamlConfigSchemaNode schemaNode)
+    {
+        var constraints = schemaNode.ObjectConstraints;
+        if (constraints is null)
+        {
+            return;
+        }
+
+        var subject = string.IsNullOrWhiteSpace(displayPath)
+            ? "Root object"
+            : $"Property '{displayPath}'";
+        var rawValue = propertyCount.ToString(CultureInfo.InvariantCulture);
+
+        if (constraints.MinProperties.HasValue &&
+            propertyCount < constraints.MinProperties.Value)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.ConstraintViolation,
+                tableName,
+                $"{subject} in config file '{yamlPath}' must contain at least {constraints.MinProperties.Value.ToString(CultureInfo.InvariantCulture)} properties.",
+                yamlPath: yamlPath,
+                schemaPath: schemaNode.SchemaPathHint,
+                displayPath: GetDiagnosticPath(displayPath),
+                rawValue: rawValue,
+                detail: $"Minimum property count: {constraints.MinProperties.Value.ToString(CultureInfo.InvariantCulture)}.");
+        }
+
+        if (constraints.MaxProperties.HasValue &&
+            propertyCount > constraints.MaxProperties.Value)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.ConstraintViolation,
+                tableName,
+                $"{subject} in config file '{yamlPath}' must contain at most {constraints.MaxProperties.Value.ToString(CultureInfo.InvariantCulture)} properties.",
+                yamlPath: yamlPath,
+                schemaPath: schemaNode.SchemaPathHint,
+                displayPath: GetDiagnosticPath(displayPath),
+                rawValue: rawValue,
+                detail: $"Maximum property count: {constraints.MaxProperties.Value.ToString(CultureInfo.InvariantCulture)}.");
         }
     }
 
@@ -871,6 +936,48 @@ internal static class YamlConfigSchemaValidator
     }
 
     /// <summary>
+    ///     解析对象节点支持的属性数量约束。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">对象字段路径。</param>
+    /// <param name="element">Schema 节点。</param>
+    /// <returns>对象约束模型；未声明时返回空。</returns>
+    private static YamlConfigObjectConstraints? ParseObjectConstraints(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element)
+    {
+        var minProperties = TryParseObjectPropertyCountConstraint(
+            tableName,
+            schemaPath,
+            propertyPath,
+            element,
+            "minProperties");
+        var maxProperties = TryParseObjectPropertyCountConstraint(
+            tableName,
+            schemaPath,
+            propertyPath,
+            element,
+            "maxProperties");
+
+        if (minProperties.HasValue && maxProperties.HasValue && minProperties.Value > maxProperties.Value)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' declares 'minProperties' greater than 'maxProperties'.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        return !minProperties.HasValue && !maxProperties.HasValue
+            ? null
+            : new YamlConfigObjectConstraints(minProperties, maxProperties);
+    }
+
+    /// <summary>
     ///     读取数值区间约束。
     /// </summary>
     /// <param name="tableName">所属配置表名称。</param>
@@ -1074,6 +1181,42 @@ internal static class YamlConfigSchemaValidator
     /// <param name="keywordName">关键字名称。</param>
     /// <returns>数组元素数量约束；未声明时返回空。</returns>
     private static int? TryParseArrayLengthConstraint(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element,
+        string keywordName)
+    {
+        if (!element.TryGetProperty(keywordName, out var constraintElement))
+        {
+            return null;
+        }
+
+        if (constraintElement.ValueKind != JsonValueKind.Number ||
+            !constraintElement.TryGetInt32(out var constraintValue) ||
+            constraintValue < 0)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' must declare '{keywordName}' as a non-negative integer.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        return constraintValue;
+    }
+
+    /// <summary>
+    ///     读取对象属性数量约束。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">对象字段路径。</param>
+    /// <param name="element">Schema 节点。</param>
+    /// <param name="keywordName">关键字名称。</param>
+    /// <returns>属性数量约束；未声明时返回空。</returns>
+    private static int? TryParseObjectPropertyCountConstraint(
         string tableName,
         string schemaPath,
         string propertyPath,
@@ -2201,17 +2344,24 @@ internal sealed class YamlConfigSchemaNode
     /// </summary>
     /// <param name="properties">对象属性集合。</param>
     /// <param name="requiredProperties">对象必填属性集合。</param>
+    /// <param name="objectConstraints">对象属性数量约束。</param>
     /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
     /// <returns>对象节点模型。</returns>
     public static YamlConfigSchemaNode CreateObject(
         IReadOnlyDictionary<string, YamlConfigSchemaNode>? properties,
         IReadOnlyCollection<string>? requiredProperties,
+        YamlConfigObjectConstraints? objectConstraints,
         string schemaPathHint)
     {
         return new YamlConfigSchemaNode(
             YamlConfigSchemaPropertyType.Object,
             new NodeChildren(properties, requiredProperties, itemNode: null),
-            NodeValidation.None,
+            new NodeValidation(
+                referenceTableName: null,
+                allowedValues: null,
+                constraints: null,
+                arrayConstraints: null,
+                objectConstraints),
             schemaPathHint);
     }
 
@@ -2234,7 +2384,8 @@ internal sealed class YamlConfigSchemaNode
                 referenceTableName: null,
                 allowedValues: null,
                 constraints: null,
-                arrayConstraints),
+                arrayConstraints,
+                objectConstraints: null),
             schemaPathHint);
     }
 
@@ -2261,7 +2412,8 @@ internal sealed class YamlConfigSchemaNode
                 referenceTableName,
                 allowedValues,
                 constraints,
-                arrayConstraints: null),
+                arrayConstraints: null,
+                objectConstraints: null),
             schemaPathHint);
     }
 
@@ -2285,6 +2437,7 @@ internal sealed class YamlConfigSchemaNode
         AllowedValues = validation.AllowedValues;
         Constraints = validation.Constraints;
         ArrayConstraints = validation.ArrayConstraints;
+        ObjectConstraints = validation.ObjectConstraints;
         SchemaPathHint = schemaPathHint;
     }
 
@@ -2322,6 +2475,11 @@ internal sealed class YamlConfigSchemaNode
     ///     获取标量范围与长度约束；未声明时返回空。
     /// </summary>
     public YamlConfigScalarConstraints? Constraints { get; }
+
+    /// <summary>
+    ///     获取对象属性数量约束；未声明时返回空。
+    /// </summary>
+    public YamlConfigObjectConstraints? ObjectConstraints { get; }
 
     /// <summary>
     ///     获取数组元素数量约束；未声明时返回空。
@@ -2376,18 +2534,21 @@ internal sealed class YamlConfigSchemaNode
             referenceTableName: null,
             allowedValues: null,
             constraints: null,
-            arrayConstraints: null);
+            arrayConstraints: null,
+            objectConstraints: null);
 
         public NodeValidation(
             string? referenceTableName,
             IReadOnlyCollection<string>? allowedValues,
             YamlConfigScalarConstraints? constraints,
-            YamlConfigArrayConstraints? arrayConstraints)
+            YamlConfigArrayConstraints? arrayConstraints,
+            YamlConfigObjectConstraints? objectConstraints)
         {
             ReferenceTableName = referenceTableName;
             AllowedValues = allowedValues;
             Constraints = constraints;
             ArrayConstraints = arrayConstraints;
+            ObjectConstraints = objectConstraints;
         }
 
         public string? ReferenceTableName { get; }
@@ -2398,11 +2559,42 @@ internal sealed class YamlConfigSchemaNode
 
         public YamlConfigArrayConstraints? ArrayConstraints { get; }
 
+        public YamlConfigObjectConstraints? ObjectConstraints { get; }
+
         public NodeValidation WithReferenceTable(string referenceTableName)
         {
-            return new NodeValidation(referenceTableName, AllowedValues, Constraints, ArrayConstraints);
+            return new NodeValidation(referenceTableName, AllowedValues, Constraints, ArrayConstraints,
+                ObjectConstraints);
         }
     }
+}
+
+/// <summary>
+///     表示一个对象节点上声明的属性数量约束。
+///     该模型将对象级约束与数组 / 标量约束拆开保存，避免运行时节点继续暴露无关成员。
+/// </summary>
+internal sealed class YamlConfigObjectConstraints
+{
+    /// <summary>
+    ///     初始化对象约束模型。
+    /// </summary>
+    /// <param name="minProperties">最小属性数量约束。</param>
+    /// <param name="maxProperties">最大属性数量约束。</param>
+    public YamlConfigObjectConstraints(int? minProperties, int? maxProperties)
+    {
+        MinProperties = minProperties;
+        MaxProperties = maxProperties;
+    }
+
+    /// <summary>
+    ///     获取最小属性数量约束。
+    /// </summary>
+    public int? MinProperties { get; }
+
+    /// <summary>
+    ///     获取最大属性数量约束。
+    /// </summary>
+    public int? MaxProperties { get; }
 }
 
 /// <summary>

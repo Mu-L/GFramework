@@ -308,6 +308,41 @@ tags:
     assert.match(diagnostics[1].message, /at most 3 items|最多只能包含 3 个元素/u);
 });
 
+test("validateParsedConfig should report object property-count mismatches", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "minProperties": 2,
+          "maxProperties": 3,
+          "properties": {
+            "reward": {
+              "type": "object",
+              "minProperties": 2,
+              "maxProperties": 2,
+              "properties": {
+                "gold": { "type": "integer" },
+                "currency": { "type": "string" },
+                "tier": { "type": "string" }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  gold: 10
+  currency: coin
+  tier: epic
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+    const messages = diagnostics.map((diagnostic) => diagnostic.message);
+
+    assert.equal(diagnostics.length, 2);
+    assert.ok(messages.some((message) => /at least 2 properties|至少需要包含 2 个属性/u.test(message)));
+    assert.ok(messages.some((message) => /reward.*at most 2 properties|reward.*最多只能包含 2 个子属性/u.test(message)));
+});
+
 test("validateParsedConfig should report multipleOf and uniqueItems violations", () => {
     const schema = parseSchemaContent(`
         {
@@ -613,6 +648,31 @@ test("parseSchemaContent should capture multipleOf and uniqueItems metadata", ()
     assert.equal(schema.properties.hp.multipleOf, 5);
     assert.equal(schema.properties.dropRates.uniqueItems, true);
     assert.equal(schema.properties.dropRates.items.multipleOf, 0.5);
+});
+
+test("parseSchemaContent should capture object property-count metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "minProperties": 2,
+          "maxProperties": 4,
+          "properties": {
+            "reward": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 2,
+              "properties": {
+                "gold": { "type": "integer" }
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.minProperties, 2);
+    assert.equal(schema.maxProperties, 4);
+    assert.equal(schema.properties.reward.minProperties, 1);
+    assert.equal(schema.properties.reward.maxProperties, 2);
 });
 
 test("parseSchemaContent should reject invalid pattern declarations instead of dropping them", () => {

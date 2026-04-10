@@ -1249,6 +1249,115 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证对象字段不满足 <c>minProperties</c> 时会在运行时被拒绝。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Object_Violates_MinProperties()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            reward:
+              gold: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "reward"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "reward": {
+                  "type": "object",
+                  "minProperties": 2,
+                  "properties": {
+                    "gold": { "type": "integer" },
+                    "currency": { "type": "string" }
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterNestedConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.ConstraintViolation));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Diagnostic.RawValue, Is.EqualTo("1"));
+            Assert.That(exception.Message, Does.Contain("at least 2 properties"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证对象字段不满足 <c>maxProperties</c> 时会在运行时被拒绝。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Object_Violates_MaxProperties()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            reward:
+              gold: 10
+              currency: coin
+              tier: epic
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "reward"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "reward": {
+                  "type": "object",
+                  "maxProperties": 2,
+                  "properties": {
+                    "gold": { "type": "integer" },
+                    "currency": { "type": "string" },
+                    "tier": { "type": "string" }
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterNestedConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.ConstraintViolation));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Diagnostic.RawValue, Is.EqualTo("3"));
+            Assert.That(exception.Message, Does.Contain("at most 2 properties"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证对象数组中的嵌套字段也会按 schema 递归校验。
     /// </summary>
     [Test]
