@@ -2923,7 +2923,7 @@ internal sealed class YamlConfigConstantValue
     /// <param name="displayValue">用于诊断输出的原始常量文本。</param>
     public YamlConfigConstantValue(string comparableValue, string displayValue)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(comparableValue);
+        ArgumentNullException.ThrowIfNull(comparableValue);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayValue);
 
         ComparableValue = comparableValue;

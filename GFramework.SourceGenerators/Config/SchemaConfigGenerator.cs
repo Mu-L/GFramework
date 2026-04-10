@@ -2452,7 +2452,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         var parts = new List<string>();
 
         var constDocumentation = TryBuildConstDocumentation(element, schemaType);
-        if (!string.IsNullOrWhiteSpace(constDocumentation))
+        if (constDocumentation is not null)
         {
             parts.Add($"const = {constDocumentation}");
         }
@@ -2562,7 +2562,9 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                 constElement.GetDouble().ToString(CultureInfo.InvariantCulture),
             "boolean" when constElement.ValueKind == JsonValueKind.True => "true",
             "boolean" when constElement.ValueKind == JsonValueKind.False => "false",
-            "string" when constElement.ValueKind == JsonValueKind.String => constElement.GetString(),
+            // Preserve the exact JSON literal so empty strings and other string-shaped constants
+            // remain unambiguous in generated XML documentation.
+            "string" when constElement.ValueKind == JsonValueKind.String => constElement.GetRawText(),
             "array" when constElement.ValueKind == JsonValueKind.Array => constElement.GetRawText(),
             "object" when constElement.ValueKind == JsonValueKind.Object => constElement.GetRawText(),
             _ => null

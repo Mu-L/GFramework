@@ -97,8 +97,51 @@ test("parseSchemaContent should capture const metadata for scalar, object, and a
     `);
 
     assert.equal(schema.properties.rarity.constValue, "common");
+    assert.equal(schema.properties.rarity.constDisplayValue, "\"common\"");
     assert.match(schema.properties.reward.constValue, /"currency":"coin"/u);
+    assert.match(schema.properties.reward.constDisplayValue, /"currency":"coin"/u);
     assert.equal(schema.properties.dropItemIds.constValue, "[\"potion\",\"gem\"]");
+    assert.equal(schema.properties.dropItemIds.constDisplayValue, "[\"potion\",\"gem\"]");
+});
+
+test("parseSchemaContent should preserve empty-string const raw and display metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "const": ""
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.properties.name.constValue, "");
+    assert.equal(schema.properties.name.constDisplayValue, "\"\"");
+});
+
+test("parseSchemaContent should build object const comparable keys with ordinal property ordering", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "properties": {
+                "z": { "type": "integer" },
+                "ä": { "type": "integer" }
+              },
+              "const": {
+                "z": 1,
+                "ä": 2
+              }
+            }
+          }
+        }
+    `);
+
+    assert.match(schema.properties.payload.constComparableValue, /^1:z=/u);
 });
 
 test("parseTopLevelYaml should parse nested mappings and object arrays", () => {
@@ -245,7 +288,7 @@ rarity: rare
     const diagnostics = validateParsedConfig(schema, yaml);
 
     assert.equal(diagnostics.length, 1);
-    assert.match(diagnostics[0].message, /constant value common|固定值 common/u);
+    assert.match(diagnostics[0].message, /constant value "common"|固定值 "common"/u);
 });
 
 test("validateParsedConfig should report object and array const mismatches", () => {
@@ -1180,6 +1223,42 @@ test("getEditableSchemaFields should keep batch editing limited to top-level sca
             required: false
         }
     ]);
+});
+
+test("getEditableSchemaFields should sort keys with ordinal semantics", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "a": { "type": "string" },
+            "A": { "type": "string" },
+            "ä": { "type": "string" },
+            "z": { "type": "string" }
+          }
+        }
+    `);
+
+    assert.deepEqual(
+        getEditableSchemaFields(schema).map((field) => field.key),
+        ["A", "a", "z", "ä"]);
+});
+
+test("createSampleConfigYaml should preserve empty-string scalar const values", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "const": ""
+            }
+          }
+        }
+    `);
+
+    const sample = createSampleConfigYaml(schema);
+
+    assert.match(sample, /^name: ""$/mu);
 });
 
 test("parseBatchArrayValue should keep comma-separated batch editing behavior", () => {

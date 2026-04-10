@@ -1372,7 +1372,7 @@ function collectFormFields(schemaNode, yamlNode, currentPath, depth, fields, uns
                 label,
                 required: requiredSet.has(key),
                 depth,
-                value: getScalarFieldValue(propertyValue, propertySchema.constValue || propertySchema.defaultValue),
+                value: getScalarFieldValue(propertyValue, propertySchema.constValue ?? propertySchema.defaultValue),
                 schema: propertySchema,
                 comment: commentLookup[propertyPath] || ""
             });
@@ -1514,7 +1514,7 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
                 label,
                 required: requiredSet.has(key),
                 depth,
-                value: getScalarFieldValue(propertyValue, propertySchema.constValue || propertySchema.defaultValue),
+                value: getScalarFieldValue(propertyValue, propertySchema.constValue ?? propertySchema.defaultValue),
                 schema: propertySchema,
                 itemMode: true,
                 comment: commentLookup[itemDisplayPath] || ""
@@ -1555,7 +1555,7 @@ function getScalarFieldValue(yamlNode, fallbackValue) {
         return unquoteScalar(yamlNode.value || "");
     }
 
-    return fallbackValue || "";
+    return fallbackValue ?? "";
 }
 
 /**
@@ -1577,7 +1577,7 @@ function getScalarArrayValue(yamlNode) {
 /**
  * Render human-facing metadata hints for one schema field.
  *
- * @param {{type?: string, description?: string, defaultValue?: string, constValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string, minItems?: number, maxItems?: number, minProperties?: number, maxProperties?: number, uniqueItems?: boolean, enumValues?: string[], items?: {enumValues?: string[], constValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string}, refTable?: string}} propertySchema Property schema metadata.
+ * @param {{type?: string, description?: string, defaultValue?: string, constValue?: string, constDisplayValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string, minItems?: number, maxItems?: number, minProperties?: number, maxProperties?: number, uniqueItems?: boolean, enumValues?: string[], items?: {enumValues?: string[], constValue?: string, constDisplayValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string}, refTable?: string}} propertySchema Property schema metadata.
  * @param {boolean} isArrayField Whether the field is an array.
  * @param {boolean} includeDescription Whether description text should be included in the hint output.
  * @returns {string} HTML fragment.
@@ -1593,8 +1593,10 @@ function renderFieldHint(propertySchema, isArrayField, includeDescription = true
         hints.push(escapeHtml(localizer.t("webview.hint.default", {value: propertySchema.defaultValue})));
     }
 
-    if (propertySchema.constValue) {
-        hints.push(escapeHtml(localizer.t("webview.hint.const", {value: propertySchema.constValue})));
+    if (propertySchema.constValue !== undefined) {
+        hints.push(escapeHtml(localizer.t("webview.hint.const", {
+            value: propertySchema.constDisplayValue ?? propertySchema.constValue
+        })));
     }
 
     const enumValues = isArrayField
@@ -1662,8 +1664,10 @@ function renderFieldHint(propertySchema, isArrayField, includeDescription = true
         hints.push(escapeHtml(localizer.t("webview.hint.itemMinimum", {value: propertySchema.items.minimum})));
     }
 
-    if (isArrayField && propertySchema.items && propertySchema.items.constValue) {
-        hints.push(escapeHtml(localizer.t("webview.hint.itemConst", {value: propertySchema.items.constValue})));
+    if (isArrayField && propertySchema.items && propertySchema.items.constValue !== undefined) {
+        hints.push(escapeHtml(localizer.t("webview.hint.itemConst", {
+            value: propertySchema.items.constDisplayValue ?? propertySchema.items.constValue
+        })));
     }
 
     if (isArrayField && propertySchema.items && typeof propertySchema.items.exclusiveMinimum === "number") {

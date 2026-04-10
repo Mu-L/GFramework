@@ -11,6 +11,22 @@ const NumberScalarPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
 const BooleanScalarPattern = /^(true|false)$/iu;
 
 /**
+ * Compare two strings using the same UTF-16 code-unit ordering as C#'s
+ * string.CompareOrdinal so tooling stays aligned with the runtime.
+ *
+ * @param {string} left Left operand.
+ * @param {string} right Right operand.
+ * @returns {number} Negative when left < right, positive when left > right, zero when equal.
+ */
+function compareStringsOrdinal(left, right) {
+    if (left === right) {
+        return 0;
+    }
+
+    return left < right ? -1 : 1;
+}
+
+/**
  * Parse the repository's minimal config-schema subset into a recursive tree.
  * The parser intentionally mirrors the same high-level contract used by the
  * runtime validator and source generator so tooling diagnostics stay aligned.
@@ -89,7 +105,7 @@ function getEditableSchemaFields(schemaInfo) {
         }
     }
 
-    return editableFields.sort((left, right) => left.key.localeCompare(right.key));
+    return editableFields.sort((left, right) => compareStringsOrdinal(left.key, right.key));
 }
 
 /**
@@ -462,18 +478,52 @@ function formatSchemaDefaultValue(value) {
 }
 
 /**
- * Convert a schema const value into a compact string that can be shown in UI
- * metadata hints without losing exactness for arrays and objects.
+ * Convert a schema const value into the raw scalar text used by sample YAML
+ * generation and scalar editors.
  *
+ * @param {SchemaNode} schemaNode Parsed schema node.
  * @param {unknown} value Raw schema const value.
- * @returns {string | undefined} Display string for the const value.
+ * @returns {string | undefined} Raw scalar text, or a JSON literal fallback.
  */
-function formatSchemaConstValue(value) {
+function formatSchemaConstEditableValue(schemaNode, value) {
     if (value === undefined) {
         return undefined;
     }
 
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    if (schemaNode.type === "string" && typeof value === "string") {
+        return value;
+    }
+
+    if ((schemaNode.type === "integer" || schemaNode.type === "number") &&
+        typeof value === "number" &&
+        Number.isFinite(value)) {
+        return String(value);
+    }
+
+    if (schemaNode.type === "boolean" && typeof value === "boolean") {
+        return String(value);
+    }
+
+    return formatSchemaConstDisplayValue(value);
+}
+
+/**
+ * Convert a schema const value into an exact JSON-style literal for diagnostics
+ * and metadata hints.
+ *
+ * @param {unknown} value Raw schema const value.
+ * @returns {string | undefined} Display string for the const value.
+ */
+function formatSchemaConstDisplayValue(value) {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (typeof value === "string") {
+        return JSON.stringify(value);
+    }
+
+    if (typeof value === "number" || typeof value === "boolean") {
         return String(value);
     }
 
@@ -499,7 +549,8 @@ function applyConstMetadata(schemaNode, rawConst, displayPath) {
 
     return {
         ...schemaNode,
-        constValue: formatSchemaConstValue(rawConst),
+        constValue: formatSchemaConstEditableValue(schemaNode, rawConst),
+        constDisplayValue: formatSchemaConstDisplayValue(rawConst),
         constComparableValue: buildSchemaConstComparableValue(schemaNode, rawConst, displayPath)
     };
 }
@@ -567,7 +618,7 @@ function buildSchemaConstObjectComparableValue(schemaNode, rawConst, displayPath
         objectEntries.push([key, childComparableValue]);
     }
 
-    objectEntries.sort((left, right) => left[0].localeCompare(right[0]));
+    objectEntries.sort((left, right) => compareStringsOrdinal(left[0], right[0]));
     return objectEntries.map(([key, value]) => `${key.length}:${key}=${value.length}:${value}`).join("|");
 }
 
@@ -1224,7 +1275,7 @@ function validateConstComparableValue(schemaNode, yamlNode, displayPath, diagnos
         severity: "error",
         message: localizeValidationMessage(ValidationMessageKeys.constMismatch, localizer, {
             displayPath,
-            value: schemaNode.constValue
+            value: schemaNode.constDisplayValue ?? schemaNode.constValue
         })
     });
 }
@@ -1248,7 +1299,7 @@ function buildComparableNodeValue(schemaNode, yamlNode) {
 
         return Object.keys(schemaNode.properties)
             .filter((key) => yamlNode.map.has(key))
-            .sort((left, right) => left.localeCompare(right))
+            .sort(compareStringsOrdinal)
             .map((key) => {
                 const valueKey = buildComparableNodeValue(schemaNode.properties[key], yamlNode.map.get(key));
                 return `${key.length}:${key}=${valueKey.length}:${valueKey}`;
@@ -2103,6 +2154,7 @@ module.exports = {
  *   description?: string,
  *   defaultValue?: string,
  *   constValue?: string,
+ *   constDisplayValue?: string,
  *   constComparableValue?: string
  * } | {
  *   type: "array",
@@ -2111,6 +2163,7 @@ module.exports = {
  *   description?: string,
  *   defaultValue?: string,
  *   constValue?: string,
+ *   constDisplayValue?: string,
  *   constComparableValue?: string,
  *   minItems?: number,
  *   maxItems?: number,
@@ -2124,6 +2177,7 @@ module.exports = {
  *   description?: string,
  *   defaultValue?: string,
  *   constValue?: string,
+ *   constDisplayValue?: string,
  *   constComparableValue?: string,
  *   minimum?: number,
  *   exclusiveMinimum?: number,

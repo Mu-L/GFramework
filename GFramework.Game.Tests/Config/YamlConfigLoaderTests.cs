@@ -1404,6 +1404,53 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证空对象 <c>const</c> 约束会被视为合法 schema，并与空 YAML 映射正确匹配。
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_Should_Accept_Empty_Object_Schema_Const()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            reward: {}
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "reward"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "reward": {
+                  "type": "object",
+                  "properties": {},
+                  "const": {}
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterNestedConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        await loader.LoadAsync(registry);
+
+        var table = registry.GetTable<int, MonsterNestedConfigStub>("monster");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(table.Count, Is.EqualTo(1));
+            Assert.That(table.Get(1).Name, Is.EqualTo("Slime"));
+        });
+    }
+
+    /// <summary>
     ///     验证对象字段不满足 <c>minProperties</c> 时会在运行时被拒绝。
     /// </summary>
     [Test]
