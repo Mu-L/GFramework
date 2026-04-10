@@ -1,4 +1,3 @@
-using System;
 using GFramework.Godot.Config;
 
 namespace GFramework.Godot.Tests.Config;
