@@ -860,6 +860,8 @@ function parseSchemaNode(rawNode, displayPath) {
         patternRegex: patternMetadata ? patternMetadata.regex : undefined,
         minItems: normalizeSchemaNonNegativeInteger(value.minItems),
         maxItems: normalizeSchemaNonNegativeInteger(value.maxItems),
+        minContains: normalizeSchemaNonNegativeInteger(value.minContains),
+        maxContains: normalizeSchemaNonNegativeInteger(value.maxContains),
         minProperties: normalizeSchemaNonNegativeInteger(value.minProperties),
         maxProperties: normalizeSchemaNonNegativeInteger(value.maxProperties),
         uniqueItems: normalizeSchemaBoolean(value.uniqueItems),
@@ -892,6 +894,9 @@ function parseSchemaNode(rawNode, displayPath) {
 
     if (type === "array") {
         const itemNode = parseSchemaNode(value.items || {}, joinArrayTemplatePath(displayPath));
+        const containsNode = value.contains && typeof value.contains === "object"
+            ? parseSchemaNode(value.contains, joinArrayTemplatePath(displayPath))
+            : undefined;
         return applyConstMetadata({
             type: "array",
             displayPath,
@@ -900,8 +905,15 @@ function parseSchemaNode(rawNode, displayPath) {
             defaultValue: metadata.defaultValue,
             minItems: metadata.minItems,
             maxItems: metadata.maxItems,
+            minContains: containsNode
+                ? metadata.minContains
+                : undefined,
+            maxContains: containsNode
+                ? metadata.maxContains
+                : undefined,
             uniqueItems: metadata.uniqueItems === true,
             refTable: metadata.refTable,
+            contains: containsNode,
             items: itemNode
         }, value.const, displayPath);
     }
@@ -993,6 +1005,7 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
         }
 
         const comparableItems = [];
+        let hasInvalidArrayItems = false;
         for (let index = 0; index < yamlNode.items.length; index += 1) {
             const diagnosticsBeforeValidation = diagnostics.length;
             validateNode(
@@ -1006,6 +1019,8 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
             // shape/type error does not also surface as a misleading duplicate.
             if (diagnostics.length === diagnosticsBeforeValidation) {
                 comparableItems.push({index, node: yamlNode.items[index]});
+            } else {
+                hasInvalidArrayItems = true;
             }
         }
 
@@ -1025,6 +1040,39 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
                 }
 
                 seenItems.set(comparableValue, index);
+            }
+        }
+
+        if (!hasInvalidArrayItems && schemaNode.contains) {
+            let matchingContainsCount = 0;
+            for (const {node} of comparableItems) {
+                if (matchesSchemaNode(schemaNode.contains, node)) {
+                    matchingContainsCount += 1;
+                }
+            }
+
+            const requiredMinContains = typeof schemaNode.minContains === "number"
+                ? schemaNode.minContains
+                : 1;
+            if (matchingContainsCount < requiredMinContains) {
+                diagnostics.push({
+                    severity: "error",
+                    message: localizeValidationMessage(ValidationMessageKeys.minContainsViolation, localizer, {
+                        displayPath,
+                        value: String(requiredMinContains)
+                    })
+                });
+            }
+
+            if (typeof schemaNode.maxContains === "number" &&
+                matchingContainsCount > schemaNode.maxContains) {
+                diagnostics.push({
+                    severity: "error",
+                    message: localizeValidationMessage(ValidationMessageKeys.maxContainsViolation, localizer, {
+                        displayPath,
+                        value: String(schemaNode.maxContains)
+                    })
+                });
             }
         }
 
@@ -1252,6 +1300,21 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
 }
 
 /**
+ * Test whether one YAML node satisfies one schema node without emitting user-facing diagnostics.
+ * This is used by array `contains` so the tooling can reuse the same recursive validator
+ * while treating regular validation failures as a simple "does not match" result.
+ *
+ * @param {SchemaNode} schemaNode Schema node.
+ * @param {YamlNode} yamlNode YAML node.
+ * @returns {boolean} True when the YAML node matches the schema node.
+ */
+function matchesSchemaNode(schemaNode, yamlNode) {
+    const diagnostics = [];
+    validateNode(schemaNode, yamlNode, schemaNode.displayPath, diagnostics, undefined);
+    return diagnostics.length === 0;
+}
+
+/**
  * Validate one parsed YAML node against one normalized const comparable value.
  * The helper reuses the same comparable-key logic as uniqueItems so array order
  * and scalar normalization stay aligned with runtime behavior.
@@ -1390,6 +1453,8 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”必须大于 ${params.value}。`;
             case ValidationMessageKeys.maximumViolation:
                 return `属性“${params.displayPath}”必须小于或等于 ${params.value}。`;
+            case ValidationMessageKeys.maxContainsViolation:
+                return `属性“${params.displayPath}”最多只能包含 ${params.value} 个匹配 contains 条件的元素。`;
             case ValidationMessageKeys.maxItemsViolation:
                 return `属性“${params.displayPath}”最多只能包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.maxLengthViolation:
@@ -1398,6 +1463,8 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”必须大于或等于 ${params.value}。`;
             case ValidationMessageKeys.multipleOfViolation:
                 return `属性“${params.displayPath}”必须是 ${params.value} 的整数倍。`;
+            case ValidationMessageKeys.minContainsViolation:
+                return `属性“${params.displayPath}”至少需要包含 ${params.value} 个匹配 contains 条件的元素。`;
             case ValidationMessageKeys.minItemsViolation:
                 return `属性“${params.displayPath}”至少需要包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.minLengthViolation:
@@ -1432,6 +1499,8 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must be greater than ${params.value}.`;
         case ValidationMessageKeys.maximumViolation:
             return `Property '${params.displayPath}' must be less than or equal to ${params.value}.`;
+        case ValidationMessageKeys.maxContainsViolation:
+            return `Property '${params.displayPath}' must contain at most ${params.value} items matching the 'contains' schema.`;
         case ValidationMessageKeys.maxItemsViolation:
             return `Property '${params.displayPath}' must contain at most ${params.value} items.`;
         case ValidationMessageKeys.maxLengthViolation:
@@ -1440,6 +1509,8 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must be greater than or equal to ${params.value}.`;
         case ValidationMessageKeys.multipleOfViolation:
             return `Property '${params.displayPath}' must be a multiple of ${params.value}.`;
+        case ValidationMessageKeys.minContainsViolation:
+            return `Property '${params.displayPath}' must contain at least ${params.value} items matching the 'contains' schema.`;
         case ValidationMessageKeys.minItemsViolation:
             return `Property '${params.displayPath}' must contain at least ${params.value} items.`;
         case ValidationMessageKeys.minLengthViolation:
@@ -2167,8 +2238,11 @@ module.exports = {
  *   constComparableValue?: string,
  *   minItems?: number,
  *   maxItems?: number,
+ *   minContains?: number,
+ *   maxContains?: number,
  *   uniqueItems?: boolean,
  *   refTable?: string,
+ *   contains?: SchemaNode,
  *   items: SchemaNode
  * } | {
  *   type: "string" | "integer" | "number" | "boolean",

@@ -1040,6 +1040,287 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证数组声明 <c>contains</c> 后，默认至少要有一个匹配元素。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Array_Violates_Default_Contains_Match_Count()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropRates:
+              - 1
+              - 2
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropRates"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropRates": {
+                  "type": "array",
+                  "contains": {
+                    "type": "integer",
+                    "const": 5
+                  },
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigIntegerArrayStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.ConstraintViolation));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("dropRates"));
+            Assert.That(exception.Diagnostic.RawValue, Is.EqualTo("0"));
+            Assert.That(exception.Message, Does.Contain("at least 1 items matching the 'contains' schema"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证数组声明 <c>minContains</c> 后，会按匹配数量而不是总元素数做约束判断。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Array_Violates_MinContains()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropRates:
+              - 5
+              - 7
+              - 9
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropRates"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropRates": {
+                  "type": "array",
+                  "minContains": 2,
+                  "contains": {
+                    "type": "integer",
+                    "const": 5
+                  },
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigIntegerArrayStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.ConstraintViolation));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("dropRates"));
+            Assert.That(exception.Diagnostic.RawValue, Is.EqualTo("1"));
+            Assert.That(exception.Message, Does.Contain("at least 2 items matching the 'contains' schema"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证数组声明 <c>maxContains</c> 后，会拒绝匹配元素过多的序列。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Array_Violates_MaxContains()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropRates:
+              - 5
+              - 5
+              - 7
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropRates"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropRates": {
+                  "type": "array",
+                  "maxContains": 1,
+                  "contains": {
+                    "type": "integer",
+                    "const": 5
+                  },
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigIntegerArrayStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.ConstraintViolation));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("dropRates"));
+            Assert.That(exception.Diagnostic.RawValue, Is.EqualTo("2"));
+            Assert.That(exception.Message, Does.Contain("at most 1 items matching the 'contains' schema"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证数组在未声明 <c>contains</c> 时不能单独使用 <c>minContains</c>。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_MinContains_Is_Declared_Without_Contains()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropRates:
+              - 5
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropRates"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropRates": {
+                  "type": "array",
+                  "minContains": 1,
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigIntegerArrayStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("dropRates"));
+            Assert.That(exception.Message, Does.Contain("minContains"));
+            Assert.That(exception.Message, Does.Contain("without a companion 'contains' schema"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证数组字段将 <c>minContains</c> 声明为大于 <c>maxContains</c> 时，会在 schema 解析阶段被拒绝。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Array_Contains_Count_Constraints_Are_Inverted()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropRates:
+              - 5
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "dropRates"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "dropRates": {
+                  "type": "array",
+                  "minContains": 2,
+                  "maxContains": 1,
+                  "contains": {
+                    "type": "integer",
+                    "const": 5
+                  },
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigIntegerArrayStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("dropRates"));
+            Assert.That(exception.Message, Does.Contain("minContains"));
+            Assert.That(exception.Message, Does.Contain("greater than 'maxContains'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证 <c>uniqueItems</c> 的归一化键不会把带分隔符的不同对象值误判为重复项。
     /// </summary>
     [Test]

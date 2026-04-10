@@ -799,6 +799,70 @@ phases:
     assert.match(diagnostics[1].message, /phases\[1\]|uniqueItems|元素唯一/u);
 });
 
+test("validateParsedConfig should report contains match-count violations", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "dropRates": {
+              "type": "array",
+              "minContains": 2,
+              "contains": {
+                "type": "integer",
+                "const": 5
+              },
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+dropRates:
+  - 5
+  - 7
+  - 9
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /at least 2 items matching the 'contains' schema|至少需要包含 2 个匹配 contains 条件的元素/u);
+});
+
+test("validateParsedConfig should report maxContains violations", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "dropRates": {
+              "type": "array",
+              "maxContains": 1,
+              "contains": {
+                "type": "integer",
+                "const": 5
+              },
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+dropRates:
+  - 5
+  - 5
+  - 7
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /at most 1 items matching the 'contains' schema|最多只能包含 1 个匹配 contains 条件的元素/u);
+});
+
 test("validateParsedConfig should accept large decimal multiples without floating-point drift", () => {
     const schema = parseSchemaContent(`
         {
@@ -1063,6 +1127,33 @@ test("parseSchemaContent should capture multipleOf and uniqueItems metadata", ()
     assert.equal(schema.properties.hp.multipleOf, 5);
     assert.equal(schema.properties.dropRates.uniqueItems, true);
     assert.equal(schema.properties.dropRates.items.multipleOf, 0.5);
+});
+
+test("parseSchemaContent should capture contains metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "dropRates": {
+              "type": "array",
+              "minContains": 1,
+              "maxContains": 2,
+              "contains": {
+                "type": "integer",
+                "const": 5
+              },
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.properties.dropRates.minContains, 1);
+    assert.equal(schema.properties.dropRates.maxContains, 2);
+    assert.equal(schema.properties.dropRates.contains.type, "integer");
+    assert.equal(schema.properties.dropRates.contains.constDisplayValue, "5");
 });
 
 test("parseSchemaContent should capture object property-count metadata", () => {

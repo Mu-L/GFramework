@@ -1577,7 +1577,7 @@ function getScalarArrayValue(yamlNode) {
 /**
  * Render human-facing metadata hints for one schema field.
  *
- * @param {{type?: string, description?: string, defaultValue?: string, constValue?: string, constDisplayValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string, minItems?: number, maxItems?: number, minProperties?: number, maxProperties?: number, uniqueItems?: boolean, enumValues?: string[], items?: {enumValues?: string[], constValue?: string, constDisplayValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string}, refTable?: string}} propertySchema Property schema metadata.
+ * @param {{type?: string, description?: string, defaultValue?: string, constValue?: string, constDisplayValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string, minItems?: number, maxItems?: number, minContains?: number, maxContains?: number, minProperties?: number, maxProperties?: number, uniqueItems?: boolean, enumValues?: string[], contains?: {type?: string, enumValues?: string[], constValue?: string, constDisplayValue?: string, pattern?: string, refTable?: string}, items?: {enumValues?: string[], constValue?: string, constDisplayValue?: string, minimum?: number, exclusiveMinimum?: number, maximum?: number, exclusiveMaximum?: number, multipleOf?: number, minLength?: number, maxLength?: number, pattern?: string}, refTable?: string}} propertySchema Property schema metadata.
  * @param {boolean} isArrayField Whether the field is an array.
  * @param {boolean} includeDescription Whether description text should be included in the hint output.
  * @returns {string} HTML fragment.
@@ -1656,6 +1656,20 @@ function renderFieldHint(propertySchema, isArrayField, includeDescription = true
         hints.push(escapeHtml(localizer.t("webview.hint.maxItems", {value: propertySchema.maxItems})));
     }
 
+    if (isArrayField && propertySchema.contains) {
+        hints.push(escapeHtml(localizer.t("webview.hint.contains", {
+            summary: describeContainsSchema(propertySchema.contains)
+        })));
+    }
+
+    if (isArrayField && typeof propertySchema.minContains === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.minContains", {value: propertySchema.minContains})));
+    }
+
+    if (isArrayField && typeof propertySchema.maxContains === "number") {
+        hints.push(escapeHtml(localizer.t("webview.hint.maxContains", {value: propertySchema.maxContains})));
+    }
+
     if (isArrayField && propertySchema.uniqueItems === true) {
         hints.push(escapeHtml(localizer.t("webview.hint.uniqueItems")));
     }
@@ -1707,6 +1721,35 @@ function renderFieldHint(propertySchema, isArrayField, includeDescription = true
     }
 
     return `<span class="hint">${hints.join(" · ")}</span>`;
+}
+
+/**
+ * Build a compact contains-schema summary for array field hints.
+ * The hint intentionally stays short so the form preview can expose the rule
+ * without inlining a second full schema tree beside the field controls.
+ *
+ * @param {{type?: string, enumValues?: string[], constValue?: string, constDisplayValue?: string, pattern?: string, refTable?: string}} containsSchema Parsed contains schema metadata.
+ * @returns {string} Human-facing summary.
+ */
+function describeContainsSchema(containsSchema) {
+    const parts = [];
+    if (containsSchema.type) {
+        parts.push(containsSchema.type);
+    }
+
+    if (containsSchema.constValue !== undefined) {
+        parts.push(`const = ${containsSchema.constDisplayValue ?? containsSchema.constValue}`);
+    } else if (Array.isArray(containsSchema.enumValues) && containsSchema.enumValues.length > 0) {
+        parts.push(`enum = ${containsSchema.enumValues.join(", ")}`);
+    } else if (containsSchema.pattern) {
+        parts.push(`pattern = ${containsSchema.pattern}`);
+    }
+
+    if (containsSchema.refTable) {
+        parts.push(`ref = ${containsSchema.refTable}`);
+    }
+
+    return parts.join(", ") || "item";
 }
 
 /**
