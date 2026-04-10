@@ -6,9 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using GFramework.Game.Abstractions.Config;
-using GFramework.Game.Config;
 using GFramework.Godot.Config;
-using NUnit.Framework;
 
 namespace GFramework.Godot.Tests.Config;
 
@@ -18,6 +16,10 @@ namespace GFramework.Godot.Tests.Config;
 [TestFixture]
 public sealed class GodotYamlConfigLoaderTests
 {
+    private string _resourceRoot = null!;
+    private string _testRoot = null!;
+    private string _userRoot = null!;
+
     /// <summary>
     ///     为每个测试准备独立的资源根目录与用户目录。
     /// </summary>
@@ -45,10 +47,6 @@ public sealed class GodotYamlConfigLoaderTests
             Directory.Delete(_testRoot, true);
         }
     }
-
-    private string _resourceRoot = null!;
-    private string _testRoot = null!;
-    private string _userRoot = null!;
 
     /// <summary>
     ///     验证导出态会把注册过的 YAML 与 schema 文本同步到运行时缓存，再交给底层加载器。
@@ -205,10 +203,12 @@ public sealed class GodotYamlConfigLoaderTests
     /// <summary>
     ///     验证加载器自身会拒绝可能逃逸缓存根目录的非法配置目录路径，即使调用方绕过了公开构造约束。
     /// </summary>
-    [Test]
-    public void LoadAsync_Should_Reject_Invalid_Config_Relative_Path_When_Metadata_Is_Corrupted()
+    [TestCase("../outside")]
+    [TestCase("schemas:bad/monster")]
+    public void LoadAsync_Should_Reject_Invalid_Config_Relative_Path_When_Metadata_Is_Corrupted(
+        string configRelativePath)
     {
-        var corruptedSource = CreateUnsafeTableSource("monster", "../outside");
+        var corruptedSource = CreateUnsafeTableSource("monster", configRelativePath);
         var loader = CreateLoader(
             isEditor: false,
             tableSources: [corruptedSource],
@@ -223,8 +223,10 @@ public sealed class GodotYamlConfigLoaderTests
     /// <summary>
     ///     验证加载器自身会拒绝可能逃逸缓存根目录的非法 schema 路径，即使调用方绕过了公开构造约束。
     /// </summary>
-    [Test]
-    public void LoadAsync_Should_Reject_Invalid_Schema_Relative_Path_When_Metadata_Is_Corrupted()
+    [TestCase("../schemas/monster.schema.json")]
+    [TestCase("schemas:bad/monster.schema.json")]
+    public void LoadAsync_Should_Reject_Invalid_Schema_Relative_Path_When_Metadata_Is_Corrupted(
+        string schemaRelativePath)
     {
         WriteFile(
             _resourceRoot,
@@ -235,7 +237,7 @@ public sealed class GodotYamlConfigLoaderTests
             hp: 10
             """);
 
-        var corruptedSource = CreateUnsafeTableSource("monster", "monster", "../schemas/monster.schema.json");
+        var corruptedSource = CreateUnsafeTableSource("monster", "monster", schemaRelativePath);
         var loader = CreateLoader(
             isEditor: false,
             tableSources: [corruptedSource],

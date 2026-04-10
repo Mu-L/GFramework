@@ -13,11 +13,12 @@ public sealed class GodotYamlConfigTableSource
     /// <param name="tableName">运行时表名称。</param>
     /// <param name="configRelativePath">
     ///     相对配置根目录的 YAML 目录。
-    ///     该路径必须保持为无根相对路径，且不能包含 <c>.</c>、<c>..</c>、<c>res://</c>、<c>user://</c> 或磁盘根路径前缀。
+    ///     该路径必须保持为无根相对路径，且不能包含 <c>.</c>、<c>..</c>、<c>res://</c>、<c>user://</c>、<c>:</c>
+    ///     或磁盘根路径前缀。
     /// </param>
     /// <param name="schemaRelativePath">
     ///     相对配置根目录的 schema 文件路径；未启用 schema 时为空。
-    ///     如果提供，同样必须保持为无根相对路径，且不能包含 <c>.</c>、<c>..</c> 或任何绝对路径前缀。
+    ///     如果提供，同样必须保持为无根相对路径，且不能包含 <c>.</c>、<c>..</c>、<c>:</c> 或任何绝对路径前缀。
     /// </param>
     /// <exception cref="ArgumentException">
     ///     <paramref name="tableName" />、<paramref name="configRelativePath" /> 或 <paramref name="schemaRelativePath" />
@@ -72,13 +73,13 @@ public sealed class GodotYamlConfigTableSource
 
     /// <summary>
     ///     获取相对配置根目录的 YAML 目录路径。
-    ///     该值始终保持为无根相对路径，不会包含 <c>.</c> 或 <c>..</c> 段。
+    ///     该值始终保持为无根相对路径，不会包含 <c>.</c>、<c>..</c> 或 <c>:</c> 段。
     /// </summary>
     public string ConfigRelativePath { get; }
 
     /// <summary>
     ///     获取相对配置根目录的 schema 文件路径；未启用 schema 校验时为空。
-    ///     该值在非空时始终保持为无根相对路径，不会包含 <c>.</c> 或 <c>..</c> 段。
+    ///     该值在非空时始终保持为无根相对路径，不会包含 <c>.</c>、<c>..</c> 或 <c>:</c> 段。
     /// </summary>
     public string? SchemaRelativePath { get; }
 
@@ -90,6 +91,11 @@ public sealed class GodotYamlConfigTableSource
             normalizedPath.StartsWith("user://", StringComparison.Ordinal) ||
             Path.IsPathRooted(path) ||
             HasWindowsDrivePrefix(normalizedPath))
+        {
+            return false;
+        }
+
+        if (normalizedPath.Contains(':', StringComparison.Ordinal))
         {
             return false;
         }

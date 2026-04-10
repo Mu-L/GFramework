@@ -1,6 +1,5 @@
 using System;
 using GFramework.Godot.Config;
-using NUnit.Framework;
 
 namespace GFramework.Godot.Tests.Config;
 
@@ -27,6 +26,8 @@ public sealed class GodotYamlConfigTableSourceTests
     [TestCase(@"C:\monster")]
     [TestCase("res://monster")]
     [TestCase("user://monster")]
+    [TestCase("schemas:bad/monster")]
+    [TestCase(@"schemas:bad\monster")]
     public void Constructor_Should_Throw_When_Config_Relative_Path_Is_Not_Safe(string configRelativePath)
     {
         var exception = Assert.Throws<ArgumentException>(() =>
@@ -52,6 +53,8 @@ public sealed class GodotYamlConfigTableSourceTests
     [TestCase(@"C:\schemas\monster.schema.json")]
     [TestCase("res://schemas/monster.schema.json")]
     [TestCase("user://schemas/monster.schema.json")]
+    [TestCase("schemas:bad/monster.schema.json")]
+    [TestCase(@"schemas:bad\monster.schema.json")]
     public void Constructor_Should_Throw_When_Schema_Relative_Path_Is_Not_Safe(string schemaRelativePath)
     {
         var exception = Assert.Throws<ArgumentException>(() =>

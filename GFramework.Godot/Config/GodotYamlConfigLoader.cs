@@ -3,7 +3,6 @@ using GFramework.Core.Abstractions.Events;
 using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 using GFramework.Godot.Extensions;
-using FileAccess = Godot.FileAccess;
 
 namespace GFramework.Godot.Config;
 
@@ -438,6 +437,14 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
             HasWindowsDrivePrefix(normalizedPath))
         {
             throw new ArgumentException("Relative path must be an unrooted path.", nameof(relativePath));
+        }
+
+        // Reject ':' in later segments as well so Windows-invalid names and ADS-like syntax never reach file APIs.
+        if (normalizedPath.Contains(':', StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Relative path must not contain ':' characters.",
+                nameof(relativePath));
         }
 
         var segments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
