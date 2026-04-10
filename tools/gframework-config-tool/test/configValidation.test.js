@@ -863,6 +863,64 @@ dropRates:
     assert.match(diagnostics[0].message, /at most 1 items matching the 'contains' schema|最多只能包含 1 个匹配 contains 条件的元素/u);
 });
 
+test("validateParsedConfig should accept satisfied contains constraints", () => {
+    const schemaWithRange = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "dropRates": {
+              "type": "array",
+              "minContains": 2,
+              "maxContains": 3,
+              "contains": {
+                "type": "integer",
+                "const": 5
+              },
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+    `);
+    const yamlWithinRange = parseTopLevelYaml(`
+dropRates:
+  - 0
+  - 5
+  - 5
+  - 10
+`);
+
+    assert.deepEqual(validateParsedConfig(schemaWithRange, yamlWithinRange), []);
+
+    const schemaWithDefaultMinContains = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "dropRates": {
+              "type": "array",
+              "contains": {
+                "type": "integer",
+                "const": 5
+              },
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+    `);
+    const yamlSatisfyingDefaultMinContains = parseTopLevelYaml(`
+dropRates:
+  - 1
+  - 2
+  - 5
+  - 3
+`);
+
+    assert.deepEqual(validateParsedConfig(schemaWithDefaultMinContains, yamlSatisfyingDefaultMinContains), []);
+});
+
 test("validateParsedConfig should accept large decimal multiples without floating-point drift", () => {
     const schema = parseSchemaContent(`
         {
@@ -1178,6 +1236,42 @@ test("parseSchemaContent should reject nested-array contains schemas", () => {
             }
         `),
         /unsupported nested array 'contains' schemas/u);
+});
+
+test("parseSchemaContent should reject minContains and maxContains without contains", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "minContains": 1,
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+        `),
+        /'minContains' or 'maxContains' without 'contains'/u);
+
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "maxContains": 1,
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+        `),
+        /'minContains' or 'maxContains' without 'contains'/u);
 });
 
 test("parseSchemaContent should reject contains schemas where default minContains exceeds maxContains", () => {
