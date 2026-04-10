@@ -315,6 +315,48 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证生成器对 <c>required</c> 名称保持大小写敏感，避免与运行时 validator 对同一 schema 产生分歧。
+    /// </summary>
+    [Test]
+    public void Run_Should_Treat_Required_Property_Names_As_Case_Sensitive()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "Name"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "name": { "type": "string" }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var generatedSources = result.Results
+            .Single()
+            .GeneratedSources
+            .ToDictionary(
+                static sourceResult => sourceResult.HintName,
+                static sourceResult => sourceResult.SourceText.ToString(),
+                StringComparer.Ordinal);
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        Assert.That(generatedSources["MonsterConfig.g.cs"], Does.Contain("public string? Name { get; set; }"));
+    }
+
+    /// <summary>
     ///     验证 schema 顶层自定义配置目录元数据不能逃逸配置根目录。
     /// </summary>
     [Test]

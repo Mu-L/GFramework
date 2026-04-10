@@ -964,10 +964,11 @@ internal static class YamlConfigSchemaValidator
 
         if (minProperties.HasValue && maxProperties.HasValue && minProperties.Value > maxProperties.Value)
         {
+            var targetDescription = DescribeObjectSchemaTarget(propertyPath);
             throw ConfigLoadExceptionFactory.Create(
                 ConfigLoadFailureKind.SchemaUnsupported,
                 tableName,
-                $"Property '{propertyPath}' in schema file '{schemaPath}' declares 'minProperties' greater than 'maxProperties'.",
+                $"{targetDescription} in schema file '{schemaPath}' declares 'minProperties' greater than 'maxProperties'.",
                 schemaPath: schemaPath,
                 displayPath: GetDiagnosticPath(propertyPath));
         }
@@ -1232,15 +1233,29 @@ internal static class YamlConfigSchemaValidator
             !constraintElement.TryGetInt32(out var constraintValue) ||
             constraintValue < 0)
         {
+            var targetDescription = DescribeObjectSchemaTarget(propertyPath);
             throw ConfigLoadExceptionFactory.Create(
                 ConfigLoadFailureKind.SchemaUnsupported,
                 tableName,
-                $"Property '{propertyPath}' in schema file '{schemaPath}' must declare '{keywordName}' as a non-negative integer.",
+                $"{targetDescription} in schema file '{schemaPath}' must declare '{keywordName}' as a non-negative integer.",
                 schemaPath: schemaPath,
                 displayPath: GetDiagnosticPath(propertyPath));
         }
 
         return constraintValue;
+    }
+
+    /// <summary>
+    ///     为对象级 schema 关键字构造稳定的诊断主体。
+    ///     根对象不会再显示为空字符串属性名，避免坏 schema 诊断出现 <c>Property ''</c> 之类的文本。
+    /// </summary>
+    /// <param name="propertyPath">对象字段路径。</param>
+    /// <returns>用于错误消息的对象主体描述。</returns>
+    private static string DescribeObjectSchemaTarget(string propertyPath)
+    {
+        return string.IsNullOrWhiteSpace(propertyPath)
+            ? "Root object"
+            : $"Property '{propertyPath}'";
     }
 
     /// <summary>

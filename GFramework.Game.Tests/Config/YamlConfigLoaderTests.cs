@@ -1358,6 +1358,113 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证对象字段将 <c>minProperties</c> 声明为非法值时，会在 schema 解析阶段被拒绝。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Object_Property_Count_Constraint_Is_Not_NonNegative_Integer()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            reward:
+              gold: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "reward"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "reward": {
+                  "type": "object",
+                  "minProperties": -1,
+                  "properties": {
+                    "gold": { "type": "integer" }
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterNestedConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Message, Does.Contain("minProperties"));
+            Assert.That(exception.Message, Does.Contain("non-negative integer"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证对象字段将 <c>minProperties</c> 声明为大于 <c>maxProperties</c> 时，会在 schema 解析阶段被拒绝。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Object_Property_Count_Constraints_Are_Inverted()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            reward:
+              gold: 10
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "reward"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "reward": {
+                  "type": "object",
+                  "minProperties": 3,
+                  "maxProperties": 2,
+                  "properties": {
+                    "gold": { "type": "integer" },
+                    "currency": { "type": "string" },
+                    "tier": { "type": "string" }
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterNestedConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Message, Does.Contain("minProperties"));
+            Assert.That(exception.Message, Does.Contain("greater than 'maxProperties'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证对象数组中的嵌套字段也会按 schema 递归校验。
     /// </summary>
     [Test]

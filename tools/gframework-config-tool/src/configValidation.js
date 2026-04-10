@@ -958,24 +958,20 @@ function validateNode(schemaNode, yamlNode, displayPath, diagnostics, localizer)
  */
 function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, localizer) {
     if (!yamlNode || yamlNode.kind !== "object") {
-        const subject = displayPath.length === 0
-            ? localizer && localizer.isChinese
-                ? "根对象应为对象。"
-                : "Root object is expected to be an object."
-            : localizer && localizer.isChinese
-                ? `属性“${displayPath}”应为对象。`
-                : `Property '${displayPath}' is expected to be an object.`;
         diagnostics.push({
             severity: "error",
             message: localizeValidationMessage(ValidationMessageKeys.expectedObject, localizer, {
-                subject,
                 displayPath
             })
         });
         return;
     }
 
-    const propertyCount = Array.isArray(yamlNode.entries) ? yamlNode.entries.length : 0;
+    const propertyCount = yamlNode.map instanceof Map
+        ? yamlNode.map.size
+        : Array.isArray(yamlNode.entries)
+            ? new Set(yamlNode.entries.map((entry) => entry.key)).size
+            : 0;
 
     for (const requiredProperty of schemaNode.required) {
         if (!yamlNode.map.has(requiredProperty)) {
@@ -1090,6 +1086,10 @@ function buildComparableNodeValue(schemaNode, yamlNode) {
  * @returns {string} Localized validation message.
  */
 function localizeValidationMessage(key, localizer, params) {
+    if (key === ValidationMessageKeys.expectedObject) {
+        return formatExpectedObjectMessage(params.displayPath, Boolean(localizer && localizer.isChinese));
+    }
+
     if (key === ValidationMessageKeys.minPropertiesViolation) {
         return formatObjectPropertyCountMessage(
             params.displayPath,
@@ -1130,8 +1130,6 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”最多只能包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.maxLengthViolation:
                 return `属性“${params.displayPath}”长度必须不超过 ${params.value} 个字符。`;
-            case ValidationMessageKeys.maxPropertiesViolation:
-                return formatObjectPropertyCountMessage(params.displayPath, params.value, "max", true);
             case ValidationMessageKeys.minimumViolation:
                 return `属性“${params.displayPath}”必须大于或等于 ${params.value}。`;
             case ValidationMessageKeys.multipleOfViolation:
@@ -1140,14 +1138,10 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”至少需要包含 ${params.value} 个元素。`;
             case ValidationMessageKeys.minLengthViolation:
                 return `属性“${params.displayPath}”长度必须至少为 ${params.value} 个字符。`;
-            case ValidationMessageKeys.minPropertiesViolation:
-                return formatObjectPropertyCountMessage(params.displayPath, params.value, "min", true);
             case ValidationMessageKeys.patternViolation:
                 return `属性“${params.displayPath}”必须匹配正则模式“${params.value}”。`;
             case ValidationMessageKeys.uniqueItemsViolation:
                 return `属性“${params.displayPath}”与更早的数组元素 ${params.duplicatePath} 重复；该数组要求元素唯一。`;
-            case ValidationMessageKeys.expectedObject:
-                return params.subject;
             case ValidationMessageKeys.missingRequired:
                 return `缺少必填属性“${params.displayPath}”。`;
             case ValidationMessageKeys.unknownProperty:
@@ -1176,8 +1170,6 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must contain at most ${params.value} items.`;
         case ValidationMessageKeys.maxLengthViolation:
             return `Property '${params.displayPath}' must be at most ${params.value} characters long.`;
-        case ValidationMessageKeys.maxPropertiesViolation:
-            return formatObjectPropertyCountMessage(params.displayPath, params.value, "max", false);
         case ValidationMessageKeys.minimumViolation:
             return `Property '${params.displayPath}' must be greater than or equal to ${params.value}.`;
         case ValidationMessageKeys.multipleOfViolation:
@@ -1186,14 +1178,10 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must contain at least ${params.value} items.`;
         case ValidationMessageKeys.minLengthViolation:
             return `Property '${params.displayPath}' must be at least ${params.value} characters long.`;
-        case ValidationMessageKeys.minPropertiesViolation:
-            return formatObjectPropertyCountMessage(params.displayPath, params.value, "min", false);
         case ValidationMessageKeys.patternViolation:
             return `Property '${params.displayPath}' must match pattern '${params.value}'.`;
         case ValidationMessageKeys.uniqueItemsViolation:
             return `Property '${params.displayPath}' duplicates earlier array item '${params.duplicatePath}', but uniqueItems is required.`;
-        case ValidationMessageKeys.expectedObject:
-            return params.subject;
         case ValidationMessageKeys.missingRequired:
             return `Required property '${params.displayPath}' is missing.`;
         case ValidationMessageKeys.unknownProperty:
@@ -1201,6 +1189,26 @@ function localizeValidationMessage(key, localizer, params) {
         default:
             return key;
     }
+}
+
+/**
+ * Format one object-shape expectation diagnostic.
+ *
+ * @param {string} displayPath Logical object path, or empty for the root object.
+ * @param {boolean} isChinese Whether Chinese text should be produced.
+ * @returns {string} Formatted message.
+ */
+function formatExpectedObjectMessage(displayPath, isChinese) {
+    const isRoot = !displayPath;
+    if (isChinese) {
+        return isRoot
+            ? "根对象应为对象。"
+            : `属性“${displayPath}”应为对象。`;
+    }
+
+    return isRoot
+        ? "Root object is expected to be an object."
+        : `Property '${displayPath}' is expected to be an object.`;
 }
 
 /**

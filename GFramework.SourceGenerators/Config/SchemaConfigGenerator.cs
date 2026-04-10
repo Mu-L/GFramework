@@ -220,7 +220,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                     Path.GetFileName(filePath)));
         }
 
-        var requiredProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var requiredProperties = new HashSet<string>(StringComparer.Ordinal);
         if (element.TryGetProperty("required", out var requiredElement) &&
             requiredElement.ValueKind == JsonValueKind.Array)
         {
