@@ -65,6 +65,42 @@ test("parseSchemaContent should capture nested objects and object-array metadata
     assert.equal(schema.properties.phases.items.properties.wave.type, "integer");
 });
 
+test("parseSchemaContent should capture const metadata for scalar, object, and array nodes", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "rarity": {
+              "type": "string",
+              "const": "common"
+            },
+            "reward": {
+              "type": "object",
+              "properties": {
+                "gold": { "type": "integer" },
+                "currency": { "type": "string" }
+              },
+              "const": {
+                "gold": 10,
+                "currency": "coin"
+              }
+            },
+            "dropItemIds": {
+              "type": "array",
+              "const": ["potion", "gem"],
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.properties.rarity.constValue, "common");
+    assert.match(schema.properties.reward.constValue, /"currency":"coin"/u);
+    assert.equal(schema.properties.dropItemIds.constValue, "[\"potion\",\"gem\"]");
+});
+
 test("parseTopLevelYaml should parse nested mappings and object arrays", () => {
     const yaml = parseTopLevelYaml(`
 id: 1
@@ -188,6 +224,70 @@ reward:
 
     assert.equal(diagnostics.length, 1);
     assert.match(diagnostics[0].message, /coin, gem/u);
+});
+
+test("validateParsedConfig should report scalar const mismatches", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "rarity": {
+              "type": "string",
+              "const": "common"
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+rarity: rare
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /constant value common|固定值 common/u);
+});
+
+test("validateParsedConfig should report object and array const mismatches", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "gold": { "type": "integer" },
+                "currency": { "type": "string" }
+              },
+              "const": {
+                "gold": 10,
+                "currency": "coin"
+              }
+            },
+            "dropItemIds": {
+              "type": "array",
+              "const": ["potion", "gem"],
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  gold: 10
+  currency: gem
+dropItemIds:
+  - gem
+  - potion
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 2);
+    assert.match(diagnostics[0].message, /reward/u);
+    assert.match(diagnostics[1].message, /dropItemIds/u);
 });
 
 test("validateParsedConfig should report numeric range and string length mismatches", () => {
