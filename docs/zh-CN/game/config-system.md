@@ -355,6 +355,8 @@ await loader.LoadAsync(registry);
 - 导出预设必须显式包含 `.yaml`、`.yml`、`.json`、`.schema.json` 等原始文本资产；否则导出包里根本没有这些文件，任何加载器都无法读取
 - 只有当源根目录可直接映射到普通文件系统目录时，`EnableHotReload(...)` 才可用；如果当前实例依赖 `user://`
   缓存，热重载会被拒绝，而不是制造“监听了缓存目录却不反映真实源目录”的假象
+- 如果你通过 `GodotYamlConfigLoader.Loader` 继续追加表注册，请只把它当作“注册入口”使用；实际加载和热重载必须继续调用
+  `GodotYamlConfigLoader.LoadAsync(...)` 与 `GodotYamlConfigLoader.EnableHotReload(...)`
 
 ### 运行时读取模板
 

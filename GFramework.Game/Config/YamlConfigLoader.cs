@@ -1,8 +1,5 @@
 using System.Diagnostics;
-using GFramework.Core.Abstractions.Events;
 using GFramework.Game.Abstractions.Config;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace GFramework.Game.Config;
 
@@ -13,6 +10,9 @@ namespace GFramework.Game.Config;
 /// </summary>
 public sealed class YamlConfigLoader : IConfigLoader
 {
+    private const string DefaultHotReloadUnavailableMessage =
+        "Hot reload is not available for the current loader configuration.";
+
     private const string RootPathCannotBeNullOrWhiteSpaceMessage = "Root path cannot be null or whitespace.";
     private const string TableNameCannotBeNullOrWhiteSpaceMessage = "Table name cannot be null or whitespace.";
     private const string RelativePathCannotBeNullOrWhiteSpaceMessage = "Relative path cannot be null or whitespace.";
@@ -22,7 +22,9 @@ public sealed class YamlConfigLoader : IConfigLoader
 
     private static readonly TimeSpan DefaultHotReloadDebounceDelay = TimeSpan.FromMilliseconds(200);
 
+    private readonly Func<bool> _canEnableHotReload;
     private readonly IDeserializer _deserializer;
+    private readonly string _hotReloadUnavailableMessage;
 
     private readonly Dictionary<string, IReadOnlyCollection<string>> _lastSuccessfulDependencies =
         new(StringComparer.Ordinal);
@@ -36,6 +38,27 @@ public sealed class YamlConfigLoader : IConfigLoader
     /// <param name="rootPath">配置根目录。</param>
     /// <exception cref="ArgumentException">当 <paramref name="rootPath" /> 为空时抛出。</exception>
     public YamlConfigLoader(string rootPath)
+        : this(rootPath, null, null)
+    {
+    }
+
+    /// <summary>
+    ///     使用指定配置根目录与热重载可用性守卫创建 YAML 配置加载器。
+    /// </summary>
+    /// <param name="rootPath">配置根目录。</param>
+    /// <param name="canEnableHotReload">
+    ///     用于判断当前实例是否允许启用热重载的委托。
+    ///     宿主适配层可借此把额外的文件系统前置条件下沉到底层加载器，避免公开实例被绕过时启用错误监听目标。
+    /// </param>
+    /// <param name="hotReloadUnavailableMessage">
+    ///     当 <paramref name="canEnableHotReload" /> 返回 <see langword="false" /> 时抛出的异常消息；
+    ///     为空时使用默认消息。
+    /// </param>
+    /// <exception cref="ArgumentException">当 <paramref name="rootPath" /> 为空时抛出。</exception>
+    internal YamlConfigLoader(
+        string rootPath,
+        Func<bool>? canEnableHotReload,
+        string? hotReloadUnavailableMessage)
     {
         if (string.IsNullOrWhiteSpace(rootPath))
         {
@@ -43,6 +66,10 @@ public sealed class YamlConfigLoader : IConfigLoader
         }
 
         _rootPath = rootPath;
+        _canEnableHotReload = canEnableHotReload ?? (() => true);
+        _hotReloadUnavailableMessage = string.IsNullOrWhiteSpace(hotReloadUnavailableMessage)
+            ? DefaultHotReloadUnavailableMessage
+            : hotReloadUnavailableMessage;
         _deserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
@@ -136,6 +163,7 @@ public sealed class YamlConfigLoader : IConfigLoader
     {
         ArgumentNullException.ThrowIfNull(registry);
         options ??= new YamlConfigHotReloadOptions();
+        EnsureHotReloadCanBeEnabled();
         if (options.DebounceDelay < TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(
@@ -152,6 +180,19 @@ public sealed class YamlConfigLoader : IConfigLoader
             options.OnTableReloaded,
             options.OnTableReloadFailed,
             options.DebounceDelay);
+    }
+
+    private void EnsureHotReloadCanBeEnabled()
+    {
+        if (_canEnableHotReload())
+        {
+            return;
+        }
+
+        // Host adapters can attach additional filesystem constraints to the loader instance.
+        // Enforcing the guard here prevents callers from bypassing the adapter by invoking
+        // EnableHotReload directly on the exposed loader reference.
+        throw new InvalidOperationException(_hotReloadUnavailableMessage);
     }
 
     private void UpdateLastSuccessfulDependencies(IEnumerable<YamlTableLoadResult> loadedTables)

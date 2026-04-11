@@ -3,7 +3,6 @@ using GFramework.Core.Abstractions.Events;
 using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 using GFramework.Godot.Extensions;
-using FileAccess = Godot.FileAccess;
 
 namespace GFramework.Godot.Config;
 
@@ -14,6 +13,9 @@ namespace GFramework.Godot.Config;
 /// </summary>
 public sealed class GodotYamlConfigLoader : IConfigLoader
 {
+    private const string HotReloadUnavailableMessage =
+        "Hot reload is only available when the source root can be accessed as a normal filesystem directory.";
+
     private readonly GodotYamlConfigEnvironment _environment;
     private readonly YamlConfigLoader _loader;
     private readonly GodotYamlConfigLoaderOptions _options;
@@ -80,7 +82,10 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
         _options = options;
         _environment = environment;
         LoaderRootPath = ResolveLoaderRootPath();
-        _loader = new YamlConfigLoader(LoaderRootPath);
+        _loader = new YamlConfigLoader(
+            LoaderRootPath,
+            () => CanEnableHotReload,
+            HotReloadUnavailableMessage);
         options.ConfigureLoader?.Invoke(_loader);
     }
 
@@ -103,6 +108,13 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
     ///     获取底层 <see cref="YamlConfigLoader" /> 实例。
     ///     调用方可继续在该实例上追加注册表定义或读取注册数量。
     /// </summary>
+    /// <remarks>
+    ///     该实例仅应用于补充注册表定义或检查注册状态。
+    ///     不要直接调用 <see cref="YamlConfigLoader.LoadAsync(GFramework.Game.Abstractions.Config.IConfigRegistry,System.Threading.CancellationToken)" />
+    ///     或 <see cref="YamlConfigLoader.EnableHotReload(GFramework.Game.Abstractions.Config.IConfigRegistry,YamlConfigHotReloadOptions?)" />；
+    ///     应分别改为调用 <see cref="LoadAsync" /> 与 <see cref="EnableHotReload" />，以确保 Godot 适配层先执行缓存同步并维持
+    ///     <see cref="CanEnableHotReload" /> 守卫。
+    /// </remarks>
     public YamlConfigLoader Loader => _loader;
 
     /// <summary>
@@ -170,8 +182,7 @@ public sealed class GodotYamlConfigLoader : IConfigLoader
 
         if (!CanEnableHotReload)
         {
-            throw new InvalidOperationException(
-                "Hot reload is only available when the source root can be accessed as a normal filesystem directory.");
+            throw new InvalidOperationException(HotReloadUnavailableMessage);
         }
 
         return _loader.EnableHotReload(registry, options);

@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using GFramework.Game.Abstractions.Config;
-using GFramework.Game.Config;
 using GFramework.Godot.Config;
 
 namespace GFramework.Godot.Tests.Config;
@@ -12,6 +11,10 @@ namespace GFramework.Godot.Tests.Config;
 [TestFixture]
 public sealed class GodotYamlConfigLoaderTests
 {
+    private string _resourceRoot = null!;
+    private string _testRoot = null!;
+    private string _userRoot = null!;
+
     /// <summary>
     ///     为每个测试准备独立的资源根目录与用户目录。
     /// </summary>
@@ -39,10 +42,6 @@ public sealed class GodotYamlConfigLoaderTests
             Directory.Delete(_testRoot, true);
         }
     }
-
-    private string _resourceRoot = null!;
-    private string _testRoot = null!;
-    private string _userRoot = null!;
 
     /// <summary>
     ///     验证导出态会把注册过的 YAML 与 schema 文本同步到运行时缓存，再交给底层加载器。
@@ -109,6 +108,20 @@ public sealed class GodotYamlConfigLoaderTests
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             loader.EnableHotReload(new ConfigRegistry()));
+
+        Assert.That(exception!.Message, Does.Contain("Hot reload"));
+    }
+
+    /// <summary>
+    ///     验证即使调用方拿到底层加载器实例，也不能绕过 Godot 适配层施加的热重载守卫。
+    /// </summary>
+    [Test]
+    public void Loader_EnableHotReload_Should_Still_Respect_Godot_HotReload_Guard()
+    {
+        var loader = CreateLoader(isEditor: false);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            loader.Loader.EnableHotReload(new ConfigRegistry()));
 
         Assert.That(exception!.Message, Does.Contain("Hot reload"));
     }
