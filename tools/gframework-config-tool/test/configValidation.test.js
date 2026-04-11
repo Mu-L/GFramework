@@ -667,6 +667,10 @@ test("validateParsedConfig should enforce supported string formats", () => {
               "type": "string",
               "format": "date"
             },
+            "ancientReleaseDate": {
+              "type": "string",
+              "format": "date"
+            },
             "publishedAt": {
               "type": "string",
               "format": "date-time"
@@ -688,6 +692,7 @@ test("validateParsedConfig should enforce supported string formats", () => {
     `);
     const yaml = parseTopLevelYaml(`
 releaseDate: 2026-02-30
+ancientReleaseDate: 0000-01-01
 publishedAt: 2026-04-11T08:30:00
 contactEmail: boss.example.com
 catalogUri: /loot-table
@@ -696,12 +701,13 @@ configId: 123e4567e89b12d3a456426614174000
 
     const diagnostics = validateParsedConfig(schema, yaml);
 
-    assert.equal(diagnostics.length, 5);
+    assert.equal(diagnostics.length, 6);
     assert.match(diagnostics[0].message, /format 'date'|字符串格式“date”/u);
-    assert.match(diagnostics[1].message, /format 'date-time'|字符串格式“date-time”/u);
-    assert.match(diagnostics[2].message, /format 'email'|字符串格式“email”/u);
-    assert.match(diagnostics[3].message, /format 'uri'|字符串格式“uri”/u);
-    assert.match(diagnostics[4].message, /format 'uuid'|字符串格式“uuid”/u);
+    assert.match(diagnostics[1].message, /format 'date'|字符串格式“date”/u);
+    assert.match(diagnostics[2].message, /format 'date-time'|字符串格式“date-time”/u);
+    assert.match(diagnostics[3].message, /format 'email'|字符串格式“email”/u);
+    assert.match(diagnostics[4].message, /format 'uri'|字符串格式“uri”/u);
+    assert.match(diagnostics[5].message, /format 'uuid'|字符串格式“uuid”/u);
 });
 
 test("validateParsedConfig should accept supported string formats", () => {

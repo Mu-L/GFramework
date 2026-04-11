@@ -719,11 +719,13 @@ function isValidCalendarDate(year, month, day) {
         return false;
     }
 
-    if (month < 1 || month > 12 || day < 1) {
+    if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) {
         return false;
     }
 
-    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+    const monthDays = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    const lastDay = monthDays[month - 1];
     return day <= lastDay;
 }
 
