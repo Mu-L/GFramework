@@ -19,6 +19,9 @@ public static class YamlConfigTextValidator
     /// <exception cref="ArgumentException">当 <paramref name="tableName" /> 或 <paramref name="schemaPath" /> 为空白时抛出。</exception>
     /// <exception cref="ArgumentNullException">当 <paramref name="yamlPath" /> 或 <paramref name="yamlText" /> 为 <see langword="null" /> 时抛出。</exception>
     /// <exception cref="GFramework.Game.Abstractions.Config.ConfigLoadException">当 schema 文件不可用，或 YAML 内容与 schema 不匹配时抛出。</exception>
+    /// <remarks>
+    ///     同步加载 schema 并立即校验，适合非异步上下文；内部委托 <see cref="YamlConfigSchemaValidator.Validate" /> 执行校验逻辑。
+    /// </remarks>
     public static void Validate(
         string tableName,
         string schemaPath,
@@ -41,6 +44,11 @@ public static class YamlConfigTextValidator
     /// <exception cref="ArgumentException">当 <paramref name="tableName" /> 或 <paramref name="schemaPath" /> 为空白时抛出。</exception>
     /// <exception cref="ArgumentNullException">当 <paramref name="yamlPath" /> 或 <paramref name="yamlText" /> 为 <see langword="null" /> 时抛出。</exception>
     /// <exception cref="GFramework.Game.Abstractions.Config.ConfigLoadException">当 schema 文件不可用，或 YAML 内容与 schema 不匹配时抛出。</exception>
+    /// <exception cref="OperationCanceledException">当 <paramref name="cancellationToken" /> 已被触发时抛出。</exception>
+    /// <remarks>
+    ///     异步加载 schema（调用 <see cref="YamlConfigSchemaValidator.LoadAsync" />）后同步执行校验，适合 I/O 密集场景；
+    ///     校验本身不涉及异步操作。
+    /// </remarks>
     public static async Task ValidateAsync(
         string tableName,
         string schemaPath,
