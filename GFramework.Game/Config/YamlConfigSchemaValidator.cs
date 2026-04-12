@@ -19,18 +19,23 @@ internal static class YamlConfigSchemaValidator
     // JS tooling so grouping and backreferences behave consistently across environments.
     private const RegexOptions SupportedPatternRegexOptions = RegexOptions.CultureInvariant;
     private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'uri', 'uuid'";
+
     private static readonly Regex ExactDecimalPattern = new(
         @"^(?<sign>[+-]?)(?:(?<integer>\d+)(?:\.(?<fraction>\d*))?|\.(?<fractionOnly>\d+))(?:[eE](?<exponent>[+-]?\d+))?$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex SupportedEmailFormatRegex = new(
         @"^[^@\s]+@[^@\s]+\.[^@\s]+$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex SupportedDateFormatRegex = new(
         @"^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex SupportedDateTimeFormatRegex = new(
         @"^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex SupportedUriSchemeRegex = new(
         @"^[A-Za-z][A-Za-z0-9+\.-]*:",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -84,34 +89,57 @@ internal static class YamlConfigSchemaValidator
                 innerException: exception);
         }
 
-        try
+        return ParseLoadedSchema(tableName, schemaPath, schemaText);
+    }
+
+    /// <summary>
+    ///     从磁盘同步加载并解析一个 JSON Schema 文件。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <returns>解析后的 schema 模型。</returns>
+    /// <exception cref="ArgumentException">当 <paramref name="tableName" /> 为空时抛出。</exception>
+    /// <exception cref="ArgumentException">当 <paramref name="schemaPath" /> 为空时抛出。</exception>
+    /// <exception cref="ConfigLoadException">当 schema 文件不存在或内容非法时抛出。</exception>
+    internal static YamlConfigSchema Load(
+        string tableName,
+        string schemaPath)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
         {
-            using var document = JsonDocument.Parse(schemaText);
-            var root = document.RootElement;
-            var rootNode = ParseNode(tableName, schemaPath, "<root>", root, isRoot: true);
-            if (rootNode.NodeType != YamlConfigSchemaPropertyType.Object)
-            {
-                throw ConfigLoadExceptionFactory.Create(
-                    ConfigLoadFailureKind.SchemaUnsupported,
-                    tableName,
-                    $"Schema file '{schemaPath}' must declare a root object schema.",
-                    schemaPath: schemaPath);
-            }
-
-            var referencedTableNames = new HashSet<string>(StringComparer.Ordinal);
-            CollectReferencedTableNames(rootNode, referencedTableNames);
-
-            return new YamlConfigSchema(schemaPath, rootNode, referencedTableNames.ToArray());
+            throw new ArgumentException("Table name cannot be null or whitespace.", nameof(tableName));
         }
-        catch (JsonException exception)
+
+        if (string.IsNullOrWhiteSpace(schemaPath))
+        {
+            throw new ArgumentException("Schema path cannot be null or whitespace.", nameof(schemaPath));
+        }
+
+        if (!File.Exists(schemaPath))
         {
             throw ConfigLoadExceptionFactory.Create(
-                ConfigLoadFailureKind.SchemaInvalidJson,
+                ConfigLoadFailureKind.SchemaFileNotFound,
                 tableName,
-                $"Schema file '{schemaPath}' contains invalid JSON.",
+                $"Schema file '{schemaPath}' was not found.",
+                schemaPath: schemaPath);
+        }
+
+        string schemaText;
+        try
+        {
+            schemaText = File.ReadAllText(schemaPath);
+        }
+        catch (Exception exception)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaReadFailed,
+                tableName,
+                $"Failed to read schema file '{schemaPath}'.",
                 schemaPath: schemaPath,
                 innerException: exception);
         }
+
+        return ParseLoadedSchema(tableName, schemaPath, schemaText);
     }
 
     /// <summary>
@@ -209,6 +237,48 @@ internal static class YamlConfigSchemaValidator
         }
 
         ValidateNode(tableName, yamlPath, string.Empty, yamlStream.Documents[0].RootNode, schema.RootNode, references);
+    }
+
+    /// <summary>
+    ///     解析已读取到内存中的 schema 文本，并构造运行时最小模型。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径，仅用于诊断信息。</param>
+    /// <param name="schemaText">Schema 文本内容。</param>
+    /// <returns>解析后的 schema 模型。</returns>
+    private static YamlConfigSchema ParseLoadedSchema(
+        string tableName,
+        string schemaPath,
+        string schemaText)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(schemaText);
+            var root = document.RootElement;
+            var rootNode = ParseNode(tableName, schemaPath, "<root>", root, isRoot: true);
+            if (rootNode.NodeType != YamlConfigSchemaPropertyType.Object)
+            {
+                throw ConfigLoadExceptionFactory.Create(
+                    ConfigLoadFailureKind.SchemaUnsupported,
+                    tableName,
+                    $"Schema file '{schemaPath}' must declare a root object schema.",
+                    schemaPath: schemaPath);
+            }
+
+            var referencedTableNames = new HashSet<string>(StringComparer.Ordinal);
+            CollectReferencedTableNames(rootNode, referencedTableNames);
+
+            return new YamlConfigSchema(schemaPath, rootNode, referencedTableNames.ToArray());
+        }
+        catch (JsonException exception)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaInvalidJson,
+                tableName,
+                $"Schema file '{schemaPath}' contains invalid JSON.",
+                schemaPath: schemaPath,
+                innerException: exception);
+        }
     }
 
     /// <summary>
@@ -662,7 +732,8 @@ internal static class YamlConfigSchemaValidator
                 schemaPath: schemaNode.SchemaPathHint,
                 displayPath: GetDiagnosticPath(displayPath),
                 rawValue: rawValue,
-                detail: $"Minimum property count: {constraints.MinProperties.Value.ToString(CultureInfo.InvariantCulture)}.");
+                detail:
+                $"Minimum property count: {constraints.MinProperties.Value.ToString(CultureInfo.InvariantCulture)}.");
         }
 
         if (constraints.MaxProperties.HasValue &&
@@ -676,7 +747,8 @@ internal static class YamlConfigSchemaValidator
                 schemaPath: schemaNode.SchemaPathHint,
                 displayPath: GetDiagnosticPath(displayPath),
                 rawValue: rawValue,
-                detail: $"Maximum property count: {constraints.MaxProperties.Value.ToString(CultureInfo.InvariantCulture)}.");
+                detail:
+                $"Maximum property count: {constraints.MaxProperties.Value.ToString(CultureInfo.InvariantCulture)}.");
         }
     }
 
@@ -1017,7 +1089,7 @@ internal static class YamlConfigSchemaValidator
         }
 
         var properties = schemaNode.Properties
-            ?? throw new InvalidOperationException("Object schema nodes must expose declared properties.");
+                         ?? throw new InvalidOperationException("Object schema nodes must expose declared properties.");
         var objectEntries = new List<KeyValuePair<string, string>>();
         foreach (var property in element.EnumerateObject())
         {
@@ -1087,19 +1159,18 @@ internal static class YamlConfigSchemaValidator
         return "[" +
                string.Join(
                    ",",
-                   element.EnumerateArray().Select(
-                       (item, index) =>
-                       {
-                           var comparableValue = BuildComparableConstantValue(
-                               tableName,
-                               schemaPath,
-                               $"{propertyPath}[{index}]",
-                               keywordName,
-                               item,
-                               schemaNode.ItemNode);
-                           return
-                               $"{comparableValue.Length.ToString(CultureInfo.InvariantCulture)}:{comparableValue}";
-                       })) +
+                   element.EnumerateArray().Select((item, index) =>
+                   {
+                       var comparableValue = BuildComparableConstantValue(
+                           tableName,
+                           schemaPath,
+                           $"{propertyPath}[{index}]",
+                           keywordName,
+                           item,
+                           schemaNode.ItemNode);
+                       return
+                           $"{comparableValue.Length.ToString(CultureInfo.InvariantCulture)}:{comparableValue}";
+                   })) +
                "]";
     }
 
@@ -1133,11 +1204,11 @@ internal static class YamlConfigSchemaValidator
     }
 
     /// <summary>
-///     解析标量字段支持的范围、长度与模式约束。
-///     当前共享子集支持：
-///     `integer/number` 上的 `minimum/maximum/exclusiveMinimum/exclusiveMaximum`，
-///     以及 `string` 上的 `minLength/maxLength/pattern/format`。
-/// </summary>
+    ///     解析标量字段支持的范围、长度与模式约束。
+    ///     当前共享子集支持：
+    ///     `integer/number` 上的 `minimum/maximum/exclusiveMinimum/exclusiveMaximum`，
+    ///     以及 `string` 上的 `minLength/maxLength/pattern/format`。
+    /// </summary>
     /// <param name="tableName">所属配置表名称。</param>
     /// <param name="schemaPath">Schema 文件路径。</param>
     /// <param name="propertyPath">字段路径。</param>
@@ -1420,7 +1491,8 @@ internal static class YamlConfigSchemaValidator
         JsonElement element,
         YamlConfigSchemaPropertyType nodeType)
     {
-        var multipleOf = TryParseNumericConstraint(tableName, schemaPath, propertyPath, element, nodeType, "multipleOf");
+        var multipleOf =
+            TryParseNumericConstraint(tableName, schemaPath, propertyPath, element, nodeType, "multipleOf");
         if (!multipleOf.HasValue)
         {
             return null;
@@ -2060,7 +2132,8 @@ internal static class YamlConfigSchemaValidator
                 schemaPath: schemaNode.SchemaPathHint,
                 displayPath: GetDiagnosticPath(displayPath),
                 rawValue: rawValue,
-                detail: $"Exclusive minimum allowed value: {constraints.ExclusiveMinimum.Value.ToString(CultureInfo.InvariantCulture)}.");
+                detail:
+                $"Exclusive minimum allowed value: {constraints.ExclusiveMinimum.Value.ToString(CultureInfo.InvariantCulture)}.");
         }
 
         if (constraints.Maximum.HasValue && numericValue > constraints.Maximum.Value)
@@ -2086,7 +2159,8 @@ internal static class YamlConfigSchemaValidator
                 schemaPath: schemaNode.SchemaPathHint,
                 displayPath: GetDiagnosticPath(displayPath),
                 rawValue: rawValue,
-                detail: $"Exclusive maximum allowed value: {constraints.ExclusiveMaximum.Value.ToString(CultureInfo.InvariantCulture)}.");
+                detail:
+                $"Exclusive maximum allowed value: {constraints.ExclusiveMaximum.Value.ToString(CultureInfo.InvariantCulture)}.");
         }
 
         if (constraints.MultipleOf.HasValue &&
@@ -2100,7 +2174,8 @@ internal static class YamlConfigSchemaValidator
                 schemaPath: schemaNode.SchemaPathHint,
                 displayPath: GetDiagnosticPath(displayPath),
                 rawValue: rawValue,
-                detail: $"Required numeric step: {constraints.MultipleOf.Value.ToString(CultureInfo.InvariantCulture)}.");
+                detail:
+                $"Required numeric step: {constraints.MultipleOf.Value.ToString(CultureInfo.InvariantCulture)}.");
         }
     }
 
@@ -2534,7 +2609,8 @@ internal static class YamlConfigSchemaValidator
 
             return true;
         }
-        catch (ConfigLoadException exception) when (exception.Diagnostic.FailureKind != ConfigLoadFailureKind.UnexpectedFailure)
+        catch (ConfigLoadException exception) when (exception.Diagnostic.FailureKind !=
+                                                    ConfigLoadFailureKind.UnexpectedFailure)
         {
             return false;
         }
@@ -2577,7 +2653,8 @@ internal static class YamlConfigSchemaValidator
         }
 
         var properties = schemaNode.Properties
-            ?? throw new InvalidOperationException("Validated object nodes must expose declared properties.");
+                         ?? throw new InvalidOperationException(
+                             "Validated object nodes must expose declared properties.");
         var objectEntries = new List<KeyValuePair<string, string>>(mappingNode.Children.Count);
         foreach (var entry in mappingNode.Children)
         {
@@ -2619,12 +2696,11 @@ internal static class YamlConfigSchemaValidator
         return "[" +
                string.Join(
                    ",",
-                   sequenceNode.Children.Select(
-                       item =>
-                       {
-                           var comparableValue = BuildComparableNodeValue(item, schemaNode.ItemNode);
-                           return $"{comparableValue.Length.ToString(CultureInfo.InvariantCulture)}:{comparableValue}";
-                       })) +
+                   sequenceNode.Children.Select(item =>
+                   {
+                       var comparableValue = BuildComparableNodeValue(item, schemaNode.ItemNode);
+                       return $"{comparableValue.Length.ToString(CultureInfo.InvariantCulture)}:{comparableValue}";
+                   })) +
                "]";
     }
 
@@ -2644,7 +2720,8 @@ internal static class YamlConfigSchemaValidator
         }
 
         var normalizedScalar = NormalizeScalarValue(schemaNode.NodeType, scalarNode.Value);
-        return $"{schemaNode.NodeType}:{normalizedScalar.Length.ToString(CultureInfo.InvariantCulture)}:{normalizedScalar}";
+        return
+            $"{schemaNode.NodeType}:{normalizedScalar.Length.ToString(CultureInfo.InvariantCulture)}:{normalizedScalar}";
     }
 
     /// <summary>
@@ -3119,87 +3196,6 @@ internal sealed class YamlConfigSchemaNode
     private readonly NodeChildren _children;
     private readonly NodeValidation _validation;
 
-    /// <summary>
-    ///     创建对象节点描述。
-    /// </summary>
-    /// <param name="properties">对象属性集合。</param>
-    /// <param name="requiredProperties">对象必填属性集合。</param>
-    /// <param name="objectConstraints">对象属性数量约束。</param>
-    /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
-    /// <returns>对象节点模型。</returns>
-    public static YamlConfigSchemaNode CreateObject(
-        IReadOnlyDictionary<string, YamlConfigSchemaNode>? properties,
-        IReadOnlyCollection<string>? requiredProperties,
-        YamlConfigObjectConstraints? objectConstraints,
-        string schemaPathHint)
-    {
-        return new YamlConfigSchemaNode(
-            YamlConfigSchemaPropertyType.Object,
-            new NodeChildren(properties, requiredProperties, itemNode: null),
-            new NodeValidation(
-                referenceTableName: null,
-                allowedValues: null,
-                constraints: null,
-                arrayConstraints: null,
-                objectConstraints,
-                constantValue: null),
-            schemaPathHint);
-    }
-
-    /// <summary>
-    ///     创建数组节点描述。
-    /// </summary>
-    /// <param name="itemNode">数组元素节点。</param>
-    /// <param name="arrayConstraints">数组元素数量约束。</param>
-    /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
-    /// <returns>数组节点模型。</returns>
-    public static YamlConfigSchemaNode CreateArray(
-        YamlConfigSchemaNode itemNode,
-        YamlConfigArrayConstraints? arrayConstraints,
-        string schemaPathHint)
-    {
-        return new YamlConfigSchemaNode(
-            YamlConfigSchemaPropertyType.Array,
-            new NodeChildren(properties: null, requiredProperties: null, itemNode),
-            new NodeValidation(
-                referenceTableName: null,
-                allowedValues: null,
-                constraints: null,
-                arrayConstraints,
-                objectConstraints: null,
-                constantValue: null),
-            schemaPathHint);
-    }
-
-    /// <summary>
-    ///     创建标量节点描述。
-    /// </summary>
-    /// <param name="nodeType">标量节点类型。</param>
-    /// <param name="referenceTableName">目标引用表名称。</param>
-    /// <param name="allowedValues">标量允许值集合。</param>
-    /// <param name="constraints">标量范围与长度约束。</param>
-    /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
-    /// <returns>标量节点模型。</returns>
-    public static YamlConfigSchemaNode CreateScalar(
-        YamlConfigSchemaPropertyType nodeType,
-        string? referenceTableName,
-        IReadOnlyCollection<string>? allowedValues,
-        YamlConfigScalarConstraints? constraints,
-        string schemaPathHint)
-    {
-        return new YamlConfigSchemaNode(
-            nodeType,
-            NodeChildren.None,
-            new NodeValidation(
-                referenceTableName,
-                allowedValues,
-                constraints,
-                arrayConstraints: null,
-                objectConstraints: null,
-                constantValue: null),
-            schemaPathHint);
-    }
-
     private YamlConfigSchemaNode(
         YamlConfigSchemaPropertyType nodeType,
         NodeChildren children,
@@ -3282,6 +3278,87 @@ internal sealed class YamlConfigSchemaNode
     public string SchemaPathHint { get; }
 
     /// <summary>
+    ///     创建对象节点描述。
+    /// </summary>
+    /// <param name="properties">对象属性集合。</param>
+    /// <param name="requiredProperties">对象必填属性集合。</param>
+    /// <param name="objectConstraints">对象属性数量约束。</param>
+    /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
+    /// <returns>对象节点模型。</returns>
+    public static YamlConfigSchemaNode CreateObject(
+        IReadOnlyDictionary<string, YamlConfigSchemaNode>? properties,
+        IReadOnlyCollection<string>? requiredProperties,
+        YamlConfigObjectConstraints? objectConstraints,
+        string schemaPathHint)
+    {
+        return new YamlConfigSchemaNode(
+            YamlConfigSchemaPropertyType.Object,
+            new NodeChildren(properties, requiredProperties, itemNode: null),
+            new NodeValidation(
+                referenceTableName: null,
+                allowedValues: null,
+                constraints: null,
+                arrayConstraints: null,
+                objectConstraints,
+                constantValue: null),
+            schemaPathHint);
+    }
+
+    /// <summary>
+    ///     创建数组节点描述。
+    /// </summary>
+    /// <param name="itemNode">数组元素节点。</param>
+    /// <param name="arrayConstraints">数组元素数量约束。</param>
+    /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
+    /// <returns>数组节点模型。</returns>
+    public static YamlConfigSchemaNode CreateArray(
+        YamlConfigSchemaNode itemNode,
+        YamlConfigArrayConstraints? arrayConstraints,
+        string schemaPathHint)
+    {
+        return new YamlConfigSchemaNode(
+            YamlConfigSchemaPropertyType.Array,
+            new NodeChildren(properties: null, requiredProperties: null, itemNode),
+            new NodeValidation(
+                referenceTableName: null,
+                allowedValues: null,
+                constraints: null,
+                arrayConstraints,
+                objectConstraints: null,
+                constantValue: null),
+            schemaPathHint);
+    }
+
+    /// <summary>
+    ///     创建标量节点描述。
+    /// </summary>
+    /// <param name="nodeType">标量节点类型。</param>
+    /// <param name="referenceTableName">目标引用表名称。</param>
+    /// <param name="allowedValues">标量允许值集合。</param>
+    /// <param name="constraints">标量范围与长度约束。</param>
+    /// <param name="schemaPathHint">用于错误信息的 schema 文件路径提示。</param>
+    /// <returns>标量节点模型。</returns>
+    public static YamlConfigSchemaNode CreateScalar(
+        YamlConfigSchemaPropertyType nodeType,
+        string? referenceTableName,
+        IReadOnlyCollection<string>? allowedValues,
+        YamlConfigScalarConstraints? constraints,
+        string schemaPathHint)
+    {
+        return new YamlConfigSchemaNode(
+            nodeType,
+            NodeChildren.None,
+            new NodeValidation(
+                referenceTableName,
+                allowedValues,
+                constraints,
+                arrayConstraints: null,
+                objectConstraints: null,
+                constantValue: null),
+            schemaPathHint);
+    }
+
+    /// <summary>
     ///     基于当前节点复制一个只替换引用表名称的新节点。
     ///     该方法用于把数组级别的 ref-table 语义挂接到元素节点上。
     /// </summary>
@@ -3312,8 +3389,6 @@ internal sealed class YamlConfigSchemaNode
 
     private sealed class NodeChildren
     {
-        public static NodeChildren None { get; } = new(properties: null, requiredProperties: null, itemNode: null);
-
         public NodeChildren(
             IReadOnlyDictionary<string, YamlConfigSchemaNode>? properties,
             IReadOnlyCollection<string>? requiredProperties,
@@ -3324,6 +3399,8 @@ internal sealed class YamlConfigSchemaNode
             ItemNode = itemNode;
         }
 
+        public static NodeChildren None { get; } = new(properties: null, requiredProperties: null, itemNode: null);
+
         public IReadOnlyDictionary<string, YamlConfigSchemaNode>? Properties { get; }
 
         public IReadOnlyCollection<string>? RequiredProperties { get; }
@@ -3333,14 +3410,6 @@ internal sealed class YamlConfigSchemaNode
 
     private sealed class NodeValidation
     {
-        public static NodeValidation None { get; } = new(
-            referenceTableName: null,
-            allowedValues: null,
-            constraints: null,
-            arrayConstraints: null,
-            objectConstraints: null,
-            constantValue: null);
-
         public NodeValidation(
             string? referenceTableName,
             IReadOnlyCollection<string>? allowedValues,
@@ -3356,6 +3425,14 @@ internal sealed class YamlConfigSchemaNode
             ObjectConstraints = objectConstraints;
             ConstantValue = constantValue;
         }
+
+        public static NodeValidation None { get; } = new(
+            referenceTableName: null,
+            allowedValues: null,
+            constraints: null,
+            arrayConstraints: null,
+            objectConstraints: null,
+            constantValue: null);
 
         public string? ReferenceTableName { get; }
 
@@ -3534,8 +3611,8 @@ internal sealed class YamlConfigNumericConstraints
 internal sealed class YamlConfigStringConstraints
 {
     /// <summary>
-///     初始化字符串约束模型。
-/// </summary>
+    ///     初始化字符串约束模型。
+    /// </summary>
     /// <param name="minLength">最小长度约束。</param>
     /// <param name="maxLength">最大长度约束。</param>
     /// <param name="pattern">正则模式约束原文。</param>

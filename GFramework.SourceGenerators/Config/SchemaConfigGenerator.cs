@@ -17,14 +17,19 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     private const string ConfigPathMetadataKey = "x-gframework-config-path";
     private const string LookupIndexMetadataKey = "x-gframework-index";
     private const string GeneratedNamespace = "GFramework.Game.Config.Generated";
+
     private const string LookupIndexTopLevelScalarOnlyMessage =
         "Only top-level required non-key scalar properties can declare a generated lookup index.";
+
     private const string LookupIndexRequiresRequiredScalarMessage =
         "Generated lookup indexes currently require a required scalar property so dictionary keys remain non-null.";
+
     private const string LookupIndexPrimaryKeyMessage =
         "The primary key already has Get/TryGet lookup semantics and should not declare a generated lookup index.";
+
     private const string LookupIndexReferencePropertyMessage =
         "Reference properties are excluded from generated lookup indexes because they already carry cross-table semantics.";
+
     private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'uri', and 'uuid'";
 
     /// <inheritdoc />
@@ -434,7 +439,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                 if (isIndexedLookup)
                 {
                     return ParsedPropertyResult.FromDiagnostic(
-                        CreateInvalidLookupIndexDiagnostic(filePath, displayPath, LookupIndexTopLevelScalarOnlyMessage));
+                        CreateInvalidLookupIndexDiagnostic(filePath, displayPath,
+                            LookupIndexTopLevelScalarOnlyMessage));
                 }
 
                 if (!string.IsNullOrWhiteSpace(refTableName))
@@ -752,7 +758,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         var itemType = itemTypeElement.GetString() ?? string.Empty;
-        if (!TryValidateStringFormatMetadata(filePath, $"{displayPath}[]", itemsElement, itemType, out var formatDiagnostic))
+        if (!TryValidateStringFormatMetadata(filePath, $"{displayPath}[]", itemsElement, itemType,
+                out var formatDiagnostic))
         {
             return ParsedPropertyResult.FromDiagnostic(formatDiagnostic!);
         }
@@ -1128,6 +1135,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("    /// </summary>");
         builder.AppendLine("    public const string SchemaRelativePath = Metadata.SchemaRelativePath;");
         builder.AppendLine();
+        AppendYamlSerializationHelpers(builder, schema);
+        builder.AppendLine();
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
             "    ///     Exposes generated metadata for schema properties that declare <c>x-gframework-ref-table</c>.");
@@ -1430,7 +1439,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine(
             "    ///     Resolves the generated table metadata entries that belong to the specified logical config domain.");
         builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    /// <param name=\"configDomain\">Logical config domain derived from the schema base name.</param>");
+        builder.AppendLine(
+            "    /// <param name=\"configDomain\">Logical config domain derived from the schema base name.</param>");
         builder.AppendLine(
             "    /// <returns>A deterministic metadata snapshot for the requested config domain, or an empty list when no generated table belongs to that domain.</returns>");
         builder.AppendLine(
@@ -1666,6 +1676,117 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     为生成的绑定类输出 YAML 序列化与 schema 路径辅助。
+    /// </summary>
+    /// <param name="builder">输出缓冲区。</param>
+    /// <param name="schema">生成器级 schema 模型。</param>
+    private static void AppendYamlSerializationHelpers(
+        StringBuilder builder,
+        SchemaFileSpec schema)
+    {
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Serializes one generated config instance to YAML text using the shared runtime naming convention.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("    /// <param name=\"config\">The generated config instance to serialize.</param>");
+        builder.AppendLine(
+            "    /// <returns>YAML text that preserves the shared camelCase field naming convention.</returns>");
+        builder.AppendLine($"    public static string SerializeToYaml({schema.ClassName} config)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return global::GFramework.Game.Config.YamlConfigTextSerializer.Serialize(config);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Resolves the absolute config directory path by combining the caller-supplied config root with the generated relative directory.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <param name=\"configRootPath\">Absolute or workspace-local config root directory.</param>");
+        builder.AppendLine("    /// <returns>The absolute config directory path for the generated table.</returns>");
+        builder.AppendLine("    public static string GetConfigDirectoryPath(string configRootPath)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Resolves the absolute schema file path by combining the caller-supplied config root with the generated relative schema path.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <param name=\"configRootPath\">Absolute or workspace-local config root directory.</param>");
+        builder.AppendLine("    /// <returns>The absolute schema file path for the generated table.</returns>");
+        builder.AppendLine("    public static string GetSchemaPath(string configRootPath)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return ResolveAbsolutePath(configRootPath, Metadata.SchemaRelativePath);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Validates YAML text against the generated schema file located under the supplied config root directory.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <param name=\"configRootPath\">Absolute or workspace-local config root directory.</param>");
+        builder.AppendLine(
+            "    /// <param name=\"yamlPath\">Logical or absolute YAML path used for diagnostics.</param>");
+        builder.AppendLine("    /// <param name=\"yamlText\">YAML text to validate.</param>");
+        builder.AppendLine(
+            "    public static void ValidateYaml(string configRootPath, string yamlPath, string yamlText)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        global::GFramework.Game.Config.YamlConfigTextValidator.Validate(");
+        builder.AppendLine("            Metadata.TableName,");
+        builder.AppendLine("            GetSchemaPath(configRootPath),");
+        builder.AppendLine("            yamlPath,");
+        builder.AppendLine("            yamlText);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Asynchronously validates YAML text against the generated schema file located under the supplied config root directory.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <param name=\"configRootPath\">Absolute or workspace-local config root directory.</param>");
+        builder.AppendLine(
+            "    /// <param name=\"yamlPath\">Logical or absolute YAML path used for diagnostics.</param>");
+        builder.AppendLine("    /// <param name=\"yamlText\">YAML text to validate.</param>");
+        builder.AppendLine("    /// <param name=\"cancellationToken\">Cancellation token.</param>");
+        builder.AppendLine(
+            "    public static global::System.Threading.Tasks.Task ValidateYamlAsync(");
+        builder.AppendLine("        string configRootPath,");
+        builder.AppendLine("        string yamlPath,");
+        builder.AppendLine("        string yamlText,");
+        builder.AppendLine("        global::System.Threading.CancellationToken cancellationToken = default)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return global::GFramework.Game.Config.YamlConfigTextValidator.ValidateAsync(");
+        builder.AppendLine("            Metadata.TableName,");
+        builder.AppendLine("            GetSchemaPath(configRootPath),");
+        builder.AppendLine("            yamlPath,");
+        builder.AppendLine("            yamlText,");
+        builder.AppendLine("            cancellationToken);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    private static string ResolveAbsolutePath(string configRootPath, string relativePath)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (string.IsNullOrWhiteSpace(configRootPath))");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.ArgumentException(\"Config root path cannot be null or whitespace.\", nameof(configRootPath));");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        if (relativePath is null)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(relativePath));");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        var normalizedRelativePath = relativePath.Replace('/', global::System.IO.Path.DirectorySeparatorChar)");
+        builder.AppendLine(
+            "            .Replace('\\\\', global::System.IO.Path.DirectorySeparatorChar);");
+        builder.AppendLine(
+            "        return global::System.IO.Path.Combine(configRootPath, normalizedRelativePath);");
+        builder.AppendLine("    }");
+    }
+
+    /// <summary>
     ///     收集 schema 中声明的跨表引用元数据，并为生成代码分配稳定成员名。
     /// </summary>
     /// <param name="rootObject">根对象模型。</param>
@@ -1778,8 +1899,10 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             "    ///     Materializes a read-only exact-match lookup index from the current table snapshot.");
         builder.AppendLine("    /// </summary>");
         builder.AppendLine("    /// <typeparam name=\"TProperty\">Indexed property type.</typeparam>");
-        builder.AppendLine("    /// <param name=\"keySelector\">Selects the indexed property from one config entry.</param>");
-        builder.AppendLine("    /// <returns>A read-only dictionary whose values preserve snapshot iteration order.</returns>");
+        builder.AppendLine(
+            "    /// <param name=\"keySelector\">Selects the indexed property from one config entry.</param>");
+        builder.AppendLine(
+            "    /// <returns>A read-only dictionary whose values preserve snapshot iteration order.</returns>");
         builder.AppendLine("    /// <remarks>");
         builder.AppendLine(
             "    ///     The generated index skips runtime null keys even though <typeparamref name=\"TProperty\"/> is constrained to <c>notnull</c>. Malformed YAML payloads can still deserialize missing indexed values to <see langword=\"null\" />, and throwing from this lazy path would permanently poison the cached index for the current table wrapper instance.");
@@ -1789,8 +1912,9 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine($"        global::System.Func<{schema.ClassName}, TProperty> keySelector)");
         builder.AppendLine("        where TProperty : notnull");
         builder.AppendLine("    {");
-        builder.AppendLine("        var buckets = new global::System.Collections.Generic.Dictionary<TProperty, global::System.Collections.Generic.List<" +
-                           $"{schema.ClassName}>>();");
+        builder.AppendLine(
+            "        var buckets = new global::System.Collections.Generic.Dictionary<TProperty, global::System.Collections.Generic.List<" +
+            $"{schema.ClassName}>>();");
         builder.AppendLine();
         builder.AppendLine(
             "        // Capture the current table snapshot once so indexed lookups stay deterministic for this wrapper instance.");
@@ -1808,7 +1932,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine();
         builder.AppendLine("            if (!buckets.TryGetValue(key, out var matches))");
         builder.AppendLine("            {");
-        builder.AppendLine($"                matches = new global::System.Collections.Generic.List<{schema.ClassName}>();");
+        builder.AppendLine(
+            $"                matches = new global::System.Collections.Generic.List<{schema.ClassName}>();");
         builder.AppendLine("                buckets.Add(key, matches);");
         builder.AppendLine("            }");
         builder.AppendLine();
@@ -2830,7 +2955,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
 
         return schemaType switch
         {
-            "integer" when constElement.ValueKind == JsonValueKind.Number && constElement.TryGetInt64(out var intValue) =>
+            "integer" when constElement.ValueKind == JsonValueKind.Number &&
+                           constElement.TryGetInt64(out var intValue) =>
                 intValue.ToString(CultureInfo.InvariantCulture),
             "number" when constElement.ValueKind == JsonValueKind.Number =>
                 constElement.GetDouble().ToString(CultureInfo.InvariantCulture),

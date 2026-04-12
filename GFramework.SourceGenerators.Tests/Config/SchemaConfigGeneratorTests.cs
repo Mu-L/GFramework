@@ -446,6 +446,14 @@ public class SchemaConfigGeneratorTests
         Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
             Does.Contain("public const string ConfigRelativePath = \"config/monster\";"));
         Assert.That(generatedSources["MonsterConfigBindings.g.cs"], Does.Contain("Metadata.ConfigRelativePath,"));
+        Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
+            Does.Contain("public static string SerializeToYaml(MonsterConfig config)"));
+        Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
+            Does.Contain("public static string GetSchemaPath(string configRootPath)"));
+        Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
+            Does.Contain("public static void ValidateYaml(string configRootPath, string yamlPath, string yamlText)"));
+        Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
+            Does.Contain("public static global::System.Threading.Tasks.Task ValidateYamlAsync("));
         Assert.That(generatedSources["GeneratedConfigCatalog.g.cs"],
             Does.Contain("MonsterConfigBindings.Metadata.ConfigRelativePath"));
     }

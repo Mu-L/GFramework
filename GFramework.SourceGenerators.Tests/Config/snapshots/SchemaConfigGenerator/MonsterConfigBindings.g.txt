@@ -101,6 +101,89 @@ public static class MonsterConfigBindings
     public const string SchemaRelativePath = Metadata.SchemaRelativePath;
 
     /// <summary>
+    ///     Serializes one generated config instance to YAML text using the shared runtime naming convention.
+    /// </summary>
+    /// <param name="config">The generated config instance to serialize.</param>
+    /// <returns>YAML text that preserves the shared camelCase field naming convention.</returns>
+    public static string SerializeToYaml(MonsterConfig config)
+    {
+        return global::GFramework.Game.Config.YamlConfigTextSerializer.Serialize(config);
+    }
+
+    /// <summary>
+    ///     Resolves the absolute config directory path by combining the caller-supplied config root with the generated relative directory.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <returns>The absolute config directory path for the generated table.</returns>
+    public static string GetConfigDirectoryPath(string configRootPath)
+    {
+        return ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath);
+    }
+
+    /// <summary>
+    ///     Resolves the absolute schema file path by combining the caller-supplied config root with the generated relative schema path.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <returns>The absolute schema file path for the generated table.</returns>
+    public static string GetSchemaPath(string configRootPath)
+    {
+        return ResolveAbsolutePath(configRootPath, Metadata.SchemaRelativePath);
+    }
+
+    /// <summary>
+    ///     Validates YAML text against the generated schema file located under the supplied config root directory.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <param name="yamlPath">Logical or absolute YAML path used for diagnostics.</param>
+    /// <param name="yamlText">YAML text to validate.</param>
+    public static void ValidateYaml(string configRootPath, string yamlPath, string yamlText)
+    {
+        global::GFramework.Game.Config.YamlConfigTextValidator.Validate(
+            Metadata.TableName,
+            GetSchemaPath(configRootPath),
+            yamlPath,
+            yamlText);
+    }
+
+    /// <summary>
+    ///     Asynchronously validates YAML text against the generated schema file located under the supplied config root directory.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <param name="yamlPath">Logical or absolute YAML path used for diagnostics.</param>
+    /// <param name="yamlText">YAML text to validate.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public static global::System.Threading.Tasks.Task ValidateYamlAsync(
+        string configRootPath,
+        string yamlPath,
+        string yamlText,
+        global::System.Threading.CancellationToken cancellationToken = default)
+    {
+        return global::GFramework.Game.Config.YamlConfigTextValidator.ValidateAsync(
+            Metadata.TableName,
+            GetSchemaPath(configRootPath),
+            yamlPath,
+            yamlText,
+            cancellationToken);
+    }
+
+    private static string ResolveAbsolutePath(string configRootPath, string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(configRootPath))
+        {
+            throw new global::System.ArgumentException("Config root path cannot be null or whitespace.", nameof(configRootPath));
+        }
+
+        if (relativePath is null)
+        {
+            throw new global::System.ArgumentNullException(nameof(relativePath));
+        }
+
+        var normalizedRelativePath = relativePath.Replace('/', global::System.IO.Path.DirectorySeparatorChar)
+            .Replace('\\', global::System.IO.Path.DirectorySeparatorChar);
+        return global::System.IO.Path.Combine(configRootPath, normalizedRelativePath);
+    }
+
+    /// <summary>
     ///     Exposes generated metadata for schema properties that declare <c>x-gframework-ref-table</c>.
     /// </summary>
     public static class References
