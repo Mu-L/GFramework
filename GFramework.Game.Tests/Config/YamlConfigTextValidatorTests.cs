@@ -1,4 +1,5 @@
 using System.IO;
+using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 
 namespace GFramework.Game.Tests.Config;
@@ -9,8 +10,6 @@ namespace GFramework.Game.Tests.Config;
 [TestFixture]
 public sealed class YamlConfigTextValidatorTests
 {
-    private string _rootPath = null!;
-
     /// <summary>
     ///     为每个测试准备独立临时目录。
     /// </summary>
@@ -32,6 +31,8 @@ public sealed class YamlConfigTextValidatorTests
             Directory.Delete(_rootPath, true);
         }
     }
+
+    private string _rootPath = null!;
 
     /// <summary>
     ///     验证合法 YAML 文本会通过公开校验入口。
