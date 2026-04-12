@@ -79,8 +79,9 @@ public static class YamlConfigTextValidator
             return cachedSchema;
         }
 
+        var lastWriteTimeUtc = File.GetLastWriteTimeUtc(schemaPath);
         var schema = YamlConfigSchemaValidator.Load(tableName, schemaPath);
-        CacheSchema(cacheKey, schema);
+        CacheSchema(cacheKey, lastWriteTimeUtc, schema);
         return schema;
     }
 
@@ -104,9 +105,10 @@ public static class YamlConfigTextValidator
             return cachedSchema;
         }
 
+        var lastWriteTimeUtc = File.GetLastWriteTimeUtc(schemaPath);
         var schema = await YamlConfigSchemaValidator.LoadAsync(tableName, schemaPath, cancellationToken)
             .ConfigureAwait(false);
-        CacheSchema(cacheKey, schema);
+        CacheSchema(cacheKey, lastWriteTimeUtc, schema);
         return schema;
     }
 
@@ -157,15 +159,18 @@ public static class YamlConfigTextValidator
     }
 
     /// <summary>
-    ///     使用最新的文件时间戳刷新 schema 缓存。
+    ///     使用读取前捕获的文件时间戳刷新 schema 缓存。
+    ///     这样即使 schema 在读取过程中发生变化，后续访问也会因时间戳变新而重新加载，
+    ///     避免把“旧内容 + 新时间戳”写入缓存。
     /// </summary>
     /// <param name="cacheKey">缓存键。</param>
+    /// <param name="lastWriteTimeUtc">本次读取开始前捕获的 schema 文件修改时间。</param>
     /// <param name="schema">最新加载的 schema。</param>
     private static void CacheSchema(
         SchemaCacheKey cacheKey,
+        DateTime lastWriteTimeUtc,
         YamlConfigSchema schema)
     {
-        var lastWriteTimeUtc = File.GetLastWriteTimeUtc(cacheKey.SchemaPath);
         SchemaCache[cacheKey] = new SchemaCacheEntry(lastWriteTimeUtc, schema);
     }
 
