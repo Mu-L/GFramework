@@ -454,8 +454,14 @@ public class SchemaConfigGeneratorTests
             Does.Contain("public static void ValidateYaml(string configRootPath, string yamlPath, string yamlText)"));
         Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
             Does.Contain("public static global::System.Threading.Tasks.Task ValidateYamlAsync("));
+        Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
+            Does.Contain("GeneratedConfigCatalog.ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath)"));
+        Assert.That(generatedSources["MonsterConfigBindings.g.cs"],
+            Does.Not.Contain("private static string ResolveAbsolutePath"));
         Assert.That(generatedSources["GeneratedConfigCatalog.g.cs"],
             Does.Contain("MonsterConfigBindings.Metadata.ConfigRelativePath"));
+        Assert.That(generatedSources["GeneratedConfigCatalog.g.cs"],
+            Does.Contain("internal static string ResolveAbsolutePath(string configRootPath, string relativePath)"));
     }
 
     /// <summary>

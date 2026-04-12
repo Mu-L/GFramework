@@ -263,7 +263,7 @@ public class GeneratedConfigConsumerIntegrationTests
             Assert.That(yaml, Does.Contain("name: Bat"));
             Assert.That(yaml, Does.Contain("hp: 12"));
             Assert.That(yaml, Does.Contain("faction: cave"));
-            Assert.That(yaml.EndsWith(Environment.NewLine, StringComparison.Ordinal), Is.True);
+            Assert.That(yaml.EndsWith("\n", StringComparison.Ordinal), Is.True);
         });
 
         Assert.DoesNotThrow(() =>

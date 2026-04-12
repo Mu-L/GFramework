@@ -144,6 +144,60 @@ public sealed class YamlConfigTextValidatorTests
     }
 
     /// <summary>
+    ///     验证公开校验入口会在 schema 文件发生变化后失效旧缓存，
+    ///     避免保存路径持续沿用过期的字段约束。
+    /// </summary>
+    [Test]
+    public void Validate_Should_Refresh_Cached_Schema_When_File_Timestamp_Changes()
+    {
+        var schemaPath = CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "hp"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "hp": { "type": "integer" }
+              }
+            }
+            """);
+        var yaml = """
+                   id: 1
+                   name: Slime
+                   hp: 10
+                   """;
+
+        Assert.DoesNotThrow(() =>
+            YamlConfigTextValidator.Validate("monster", schemaPath, "monster/generated.yaml", yaml));
+
+        File.WriteAllText(
+            schemaPath,
+            """
+                {
+                  "type": "object",
+                  "required": ["id", "name"],
+                  "properties": {
+                    "id": { "type": "integer" },
+                    "name": { "type": "string" }
+                  }
+                }
+                """.Replace("\n", Environment.NewLine, StringComparison.Ordinal));
+        File.SetLastWriteTimeUtc(schemaPath, new DateTime(2040, 1, 1, 0, 0, 1, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<ConfigLoadException>(() =>
+            YamlConfigTextValidator.Validate("monster", schemaPath, "monster/generated.yaml", yaml));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.UnknownProperty));
+            Assert.That(exception.Diagnostic.SchemaPath, Is.EqualTo(schemaPath));
+        });
+    }
+
+    /// <summary>
     ///     在临时目录中创建 schema 文件。
     /// </summary>
     /// <param name="relativePath">相对根目录的路径。</param>

@@ -119,7 +119,7 @@ public static class MonsterConfigBindings
     /// <exception cref="global::System.ArgumentException">Thrown when <paramref name="configRootPath"/> is null, empty, or whitespace.</exception>
     public static string GetConfigDirectoryPath(string configRootPath)
     {
-        return ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath);
+        return GeneratedConfigCatalog.ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath);
     }
 
     /// <summary>
@@ -130,7 +130,7 @@ public static class MonsterConfigBindings
     /// <exception cref="global::System.ArgumentException">Thrown when <paramref name="configRootPath"/> is null, empty, or whitespace.</exception>
     public static string GetSchemaPath(string configRootPath)
     {
-        return ResolveAbsolutePath(configRootPath, Metadata.SchemaRelativePath);
+        return GeneratedConfigCatalog.ResolveAbsolutePath(configRootPath, Metadata.SchemaRelativePath);
     }
 
     /// <summary>
@@ -174,23 +174,6 @@ public static class MonsterConfigBindings
             yamlPath,
             yamlText,
             cancellationToken);
-    }
-
-    private static string ResolveAbsolutePath(string configRootPath, string relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(configRootPath))
-        {
-            throw new global::System.ArgumentException("Config root path cannot be null or whitespace.", nameof(configRootPath));
-        }
-
-        if (relativePath is null)
-        {
-            throw new global::System.ArgumentNullException(nameof(relativePath));
-        }
-
-        var normalizedRelativePath = relativePath.Replace('/', global::System.IO.Path.DirectorySeparatorChar)
-            .Replace('\\', global::System.IO.Path.DirectorySeparatorChar);
-        return global::System.IO.Path.Combine(configRootPath, normalizedRelativePath);
     }
 
     /// <summary>

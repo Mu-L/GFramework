@@ -1403,6 +1403,40 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("    });");
         builder.AppendLine();
         builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    ///     Resolves one generated relative config path against the caller-supplied config root directory.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <param name=\"configRootPath\">Absolute or workspace-local config root directory.</param>");
+        builder.AppendLine("    /// <param name=\"relativePath\">Generated relative config or schema path.</param>");
+        builder.AppendLine("    /// <returns>The combined absolute path.</returns>");
+        builder.AppendLine(
+            "    /// <exception cref=\"global::System.ArgumentException\">When <paramref name=\"configRootPath\"/> is null, empty, or whitespace.</exception>");
+        builder.AppendLine(
+            "    /// <exception cref=\"global::System.ArgumentNullException\">When <paramref name=\"relativePath\"/> is null.</exception>");
+        builder.AppendLine(
+            "    internal static string ResolveAbsolutePath(string configRootPath, string relativePath)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (string.IsNullOrWhiteSpace(configRootPath))");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.ArgumentException(\"Config root path cannot be null or whitespace.\", nameof(configRootPath));");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        if (relativePath is null)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(relativePath));");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        var normalizedRelativePath = relativePath.Replace('/', global::System.IO.Path.DirectorySeparatorChar)");
+        builder.AppendLine(
+            "            .Replace('\\\\', global::System.IO.Path.DirectorySeparatorChar);");
+        builder.AppendLine(
+            "        return global::System.IO.Path.Combine(configRootPath, normalizedRelativePath);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
         builder.AppendLine("    ///     Tries to resolve generated table metadata by runtime registration name.");
         builder.AppendLine("    /// </summary>");
         builder.AppendLine("    /// <param name=\"tableName\">Runtime registration name.</param>");
@@ -1709,7 +1743,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             "    /// <exception cref=\"global::System.ArgumentException\">Thrown when <paramref name=\"configRootPath\"/> is null, empty, or whitespace.</exception>");
         builder.AppendLine("    public static string GetConfigDirectoryPath(string configRootPath)");
         builder.AppendLine("    {");
-        builder.AppendLine("        return ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath);");
+        builder.AppendLine(
+            "        return GeneratedConfigCatalog.ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath);");
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine("    /// <summary>");
@@ -1723,7 +1758,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             "    /// <exception cref=\"global::System.ArgumentException\">Thrown when <paramref name=\"configRootPath\"/> is null, empty, or whitespace.</exception>");
         builder.AppendLine("    public static string GetSchemaPath(string configRootPath)");
         builder.AppendLine("    {");
-        builder.AppendLine("        return ResolveAbsolutePath(configRootPath, Metadata.SchemaRelativePath);");
+        builder.AppendLine(
+            "        return GeneratedConfigCatalog.ResolveAbsolutePath(configRootPath, Metadata.SchemaRelativePath);");
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine("    /// <summary>");
@@ -1781,27 +1817,6 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         builder.AppendLine("            yamlPath,");
         builder.AppendLine("            yamlText,");
         builder.AppendLine("            cancellationToken);");
-        builder.AppendLine("    }");
-        builder.AppendLine();
-        builder.AppendLine("    private static string ResolveAbsolutePath(string configRootPath, string relativePath)");
-        builder.AppendLine("    {");
-        builder.AppendLine("        if (string.IsNullOrWhiteSpace(configRootPath))");
-        builder.AppendLine("        {");
-        builder.AppendLine(
-            "            throw new global::System.ArgumentException(\"Config root path cannot be null or whitespace.\", nameof(configRootPath));");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        if (relativePath is null)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(relativePath));");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine(
-            "        var normalizedRelativePath = relativePath.Replace('/', global::System.IO.Path.DirectorySeparatorChar)");
-        builder.AppendLine(
-            "            .Replace('\\\\', global::System.IO.Path.DirectorySeparatorChar);");
-        builder.AppendLine(
-            "        return global::System.IO.Path.Combine(configRootPath, normalizedRelativePath);");
         builder.AppendLine("    }");
     }
 
