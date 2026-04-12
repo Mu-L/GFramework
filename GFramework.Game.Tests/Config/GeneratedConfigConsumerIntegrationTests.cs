@@ -1,6 +1,5 @@
-using System;
 using System.IO;
-using System.Linq;
+using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
 using GFramework.Game.Config.Generated;
 
@@ -88,7 +87,8 @@ public class GeneratedConfigConsumerIntegrationTests
             Assert.That(monsterTable.Get(1).Name, Is.EqualTo("Slime"));
             Assert.That(monsterTable.Get(2).Hp, Is.EqualTo(30));
             Assert.That(monsterTable.FindByName("Slime").Select(static config => config.Id), Is.EqualTo(new[] { 1 }));
-            Assert.That(dungeonMonsters.Select(static config => config.Name), Is.EquivalentTo(new[] { "Slime", "Goblin" }));
+            Assert.That(dungeonMonsters.Select(static config => config.Name),
+                Is.EquivalentTo(new[] { "Slime", "Goblin" }));
             Assert.That(monsterTable.TryFindFirstByName("Goblin", out var goblin), Is.True);
             Assert.That(goblin, Is.Not.Null);
             Assert.That(goblin!.Id, Is.EqualTo(2));
@@ -154,10 +154,13 @@ public class GeneratedConfigConsumerIntegrationTests
                 Is.EqualTo(new[] { MonsterConfigBindings.TableName }));
             Assert.That(GeneratedConfigCatalog.GetTablesForRegistration().Select(static metadata => metadata.TableName),
                 Is.SupersetOf(new[] { ItemConfigBindings.TableName, MonsterConfigBindings.TableName }));
-            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, monsterOnlyOptions), Is.True);
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, monsterOnlyOptions),
+                Is.True);
             Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(itemMetadata, monsterOnlyOptions), Is.False);
-            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, predicateOnlyOptions), Is.True);
-            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(itemMetadata, predicateOnlyOptions), Is.False);
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, predicateOnlyOptions),
+                Is.True);
+            Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(itemMetadata, predicateOnlyOptions),
+                Is.False);
             Assert.That(GeneratedConfigCatalog.MatchesRegistrationOptions(monsterMetadata, options: null), Is.True);
         });
     }
@@ -229,6 +232,66 @@ public class GeneratedConfigConsumerIntegrationTests
             Assert.That(predicateRegistry.TryGetMonsterTable(out var predicateMonsterTable), Is.True);
             Assert.That(predicateMonsterTable, Is.Not.Null);
             Assert.That(predicateRegistry.TryGetItemTable(out _), Is.False);
+        });
+    }
+
+    /// <summary>
+    ///     验证生成绑定会同时暴露 YAML 序列化、schema 路径解析与文本校验入口。
+    /// </summary>
+    [Test]
+    public async Task GeneratedBindings_Should_Expose_Serializer_And_Validator_Helpers()
+    {
+        CreateMonsterFiles();
+
+        var config = new MonsterConfig
+        {
+            Id = 3,
+            Name = "Bat",
+            Hp = 12,
+            Faction = "cave"
+        };
+
+        var yaml = MonsterConfigBindings.SerializeToYaml(config);
+        var schemaPath = MonsterConfigBindings.GetSchemaPath(_rootPath);
+        var configDirectoryPath = MonsterConfigBindings.GetConfigDirectoryPath(_rootPath);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(schemaPath, Is.EqualTo(Path.Combine(_rootPath, "schemas", "monster.schema.json")));
+            Assert.That(configDirectoryPath, Is.EqualTo(Path.Combine(_rootPath, "monster")));
+            Assert.That(yaml, Does.Contain("id: 3"));
+            Assert.That(yaml, Does.Contain("name: Bat"));
+            Assert.That(yaml, Does.Contain("hp: 12"));
+            Assert.That(yaml, Does.Contain("faction: cave"));
+            Assert.That(yaml.EndsWith("\n", StringComparison.Ordinal), Is.True);
+        });
+
+        Assert.DoesNotThrow(() =>
+            MonsterConfigBindings.ValidateYaml(_rootPath, "monster/generated.yaml", yaml));
+
+        Assert.DoesNotThrowAsync(async () =>
+            await MonsterConfigBindings.ValidateYamlAsync(_rootPath, "monster/generated.yaml", yaml));
+
+        var invalidYaml = """
+                          id: 3
+                          name: Bat
+                          hp: 12
+                          unknownField: true
+                          """;
+
+        var exception = Assert.Throws<ConfigLoadException>(() =>
+            MonsterConfigBindings.ValidateYaml(_rootPath, "monster/generated.yaml", invalidYaml));
+        var asyncException = Assert.ThrowsAsync<ConfigLoadException>(async () =>
+            await MonsterConfigBindings.ValidateYamlAsync(_rootPath, "monster/generated.yaml", invalidYaml));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.SchemaPath, Is.EqualTo(schemaPath));
+            Assert.That(exception.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.UnknownProperty));
+            Assert.That(asyncException, Is.Not.Null);
+            Assert.That(asyncException!.Diagnostic.SchemaPath, Is.EqualTo(schemaPath));
+            Assert.That(asyncException.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.UnknownProperty));
         });
     }
 

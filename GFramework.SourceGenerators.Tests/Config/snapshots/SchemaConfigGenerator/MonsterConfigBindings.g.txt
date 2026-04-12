@@ -101,6 +101,82 @@ public static class MonsterConfigBindings
     public const string SchemaRelativePath = Metadata.SchemaRelativePath;
 
     /// <summary>
+    ///     Serializes one generated config instance to YAML text using the shared runtime naming convention.
+    /// </summary>
+    /// <param name="config">The generated config instance to serialize.</param>
+    /// <returns>YAML text that preserves the shared camelCase field naming convention.</returns>
+    /// <exception cref="global::System.ArgumentNullException">Thrown when <paramref name="config"/> is <see langword="null"/>.</exception>
+    public static string SerializeToYaml(MonsterConfig config)
+    {
+        return global::GFramework.Game.Config.YamlConfigTextSerializer.Serialize(config);
+    }
+
+    /// <summary>
+    ///     Resolves the absolute config directory path by combining the caller-supplied config root with the generated relative directory.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <returns>The absolute config directory path for the generated table.</returns>
+    /// <exception cref="global::System.ArgumentException">Thrown when <paramref name="configRootPath"/> is null, empty, or whitespace.</exception>
+    public static string GetConfigDirectoryPath(string configRootPath)
+    {
+        return GeneratedConfigCatalog.ResolveAbsolutePath(configRootPath, Metadata.ConfigRelativePath);
+    }
+
+    /// <summary>
+    ///     Resolves the absolute schema file path by combining the caller-supplied config root with the generated relative schema path.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <returns>The absolute schema file path for the generated table.</returns>
+    /// <exception cref="global::System.ArgumentException">Thrown when <paramref name="configRootPath"/> is null, empty, or whitespace.</exception>
+    public static string GetSchemaPath(string configRootPath)
+    {
+        return GeneratedConfigCatalog.ResolveAbsolutePath(configRootPath, Metadata.SchemaRelativePath);
+    }
+
+    /// <summary>
+    ///     Validates YAML text against the generated schema file located under the supplied config root directory.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <param name="yamlPath">Logical or absolute YAML path used for diagnostics.</param>
+    /// <param name="yamlText">YAML text to validate.</param>
+    /// <exception cref="global::System.ArgumentException">Thrown when <paramref name="configRootPath"/> is null, empty, or whitespace.</exception>
+    /// <exception cref="global::System.ArgumentNullException">Thrown when <paramref name="yamlPath"/> or <paramref name="yamlText"/> is <see langword="null"/>.</exception>
+    /// <exception cref="global::GFramework.Game.Abstractions.Config.ConfigLoadException">Thrown when the generated schema file cannot be loaded or the YAML text fails schema validation.</exception>
+    public static void ValidateYaml(string configRootPath, string yamlPath, string yamlText)
+    {
+        global::GFramework.Game.Config.YamlConfigTextValidator.Validate(
+            Metadata.TableName,
+            GetSchemaPath(configRootPath),
+            yamlPath,
+            yamlText);
+    }
+
+    /// <summary>
+    ///     Asynchronously validates YAML text against the generated schema file located under the supplied config root directory.
+    /// </summary>
+    /// <param name="configRootPath">Absolute or workspace-local config root directory.</param>
+    /// <param name="yamlPath">Logical or absolute YAML path used for diagnostics.</param>
+    /// <param name="yamlText">YAML text to validate.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that represents the asynchronous validation operation.</returns>
+    /// <exception cref="global::System.ArgumentException">Thrown when <paramref name="configRootPath"/> is null, empty, or whitespace.</exception>
+    /// <exception cref="global::System.ArgumentNullException">Thrown when <paramref name="yamlPath"/> or <paramref name="yamlText"/> is <see langword="null"/>.</exception>
+    /// <exception cref="global::GFramework.Game.Abstractions.Config.ConfigLoadException">Thrown when the generated schema file cannot be loaded or the YAML text fails schema validation.</exception>
+    public static global::System.Threading.Tasks.Task ValidateYamlAsync(
+        string configRootPath,
+        string yamlPath,
+        string yamlText,
+        global::System.Threading.CancellationToken cancellationToken = default)
+    {
+        return global::GFramework.Game.Config.YamlConfigTextValidator.ValidateAsync(
+            Metadata.TableName,
+            GetSchemaPath(configRootPath),
+            yamlPath,
+            yamlText,
+            cancellationToken);
+    }
+
+    /// <summary>
     ///     Exposes generated metadata for schema properties that declare <c>x-gframework-ref-table</c>.
     /// </summary>
     public static class References
