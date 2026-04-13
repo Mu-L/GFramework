@@ -86,6 +86,32 @@ bash scripts/collect-dev-environment.sh --write
 python3 scripts/generate-ai-environment.py
 ```
 
+## 文档站 LLM 索引接入说明
+
+### 访问路径
+
+LLM 索引文件与文档站一起部署在 GitHub Pages，遵循 `docs/.vitepress/config.mts` 里 `base: '/GFramework/'` 的路径规则。部署之后可以直接访问
+`https://gewuyou.github.io/GFramework/llms.txt` 和 `https://gewuyou.github.io/GFramework/llms-full.txt`。这些文件最终会被写入 `
+docs/.vitepress/dist/`，但生成动作发生在 `publish-docs` workflow 的 `demodrive-ai/llms-txt-action` 步骤，而不是单独执行 `
+bun run build` 时直接产出。
+
+### 生成时机与依赖
+
+`demodrive-ai/llms-txt-action` 负责把文档站打包后的页面转换成 LLM 索引，它的 `docs_dir` 已指定为 `docs/.vitepress/dist`
+，并通过 `sitemap.xml` 解析页面 URL。只能在 `bun run build` 之后（即 VitePress 将页面输出到 `dist` 并生成 `sitemap.xml`
+）执行；如果没有 sitemap，action 会得不到页面列表，生成的 `llms.txt` 就会不完整。
+
+### 验证流程
+
+1. 本地执行 `bun run build`，确认 `docs/.vitepress/dist/sitemap.xml` 已生成，并检查其中的 URL 是否与 GitHub Pages
+   地址一致。添加或删除文档页面后必须重新运行一次全量构建。
+2. 在 Pull Request 或发布前查看 `publish-docs` workflow 日志，确认 `Verify LLM artifacts` 步骤通过，并检查
+   `docs/.vitepress/dist/llms.txt`、`docs/.vitepress/dist/llms-full.txt` 已作为 Pages artifact 上传。
+3. 部署完成后通过 GitHub Pages 打开 `https://gewuyou.github.io/GFramework/llms.txt`
+   和 `https://gewuyou.github.io/GFramework/llms-full.txt`，确认可访问且内容覆盖最新页面。
+4. 如果后续需要对 LLM 索引行为做变更，优先思考是否影响 `sitemap` 结构或 `docs_dir` 路径；失效通常表现为 `llms`
+   文件缺失、内容为空，或链接仍指向旧页面。
+
 ## 维护规则
 
 - 目标不是记录“这台机器装了什么”，而是记录“GFramework 开发和 AI 协作实际该用什么”。
