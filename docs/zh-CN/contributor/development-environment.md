@@ -90,16 +90,11 @@ python3 scripts/generate-ai-environment.py
 
 ### 访问路径
 
-LLM 索引文件与文档站一起部署在 GitHub Pages，遵循 `docs/.vitepress/config.mts` 里 `base: '/GFramework/'` 的路径规则。部署之后可以直接访问
-`https://gewuyou.github.io/GFramework/llms.txt` 和 `https://gewuyou.github.io/GFramework/llms-full.txt`。这些文件最终会被写入 `
-docs/.vitepress/dist/`，但生成动作发生在 `publish-docs` workflow 的 `demodrive-ai/llms-txt-action` 步骤，而不是单独执行 `
-bun run build` 时直接产出。
+LLM 索引文件与文档站一起部署在 GitHub Pages，遵循 `docs/.vitepress/config.mts` 里 `base: '/GFramework/'` 的路径规则。部署之后可以直接访问 `https://gewuyou.github.io/GFramework/llms.txt` 和 `https://gewuyou.github.io/GFramework/llms-full.txt`。这些文件最终会被写入 `docs/.vitepress/dist/`，但生成动作发生在 `publish-docs` workflow 的 `demodrive-ai/llms-txt-action` 步骤，而不是单独执行 `bun run build` 时直接产出。
 
 ### 生成时机与依赖
 
-`demodrive-ai/llms-txt-action` 负责把文档站打包后的页面转换成 LLM 索引，它的 `docs_dir` 已指定为 `docs/.vitepress/dist`
-，并通过 `sitemap.xml` 解析页面 URL。只能在 `bun run build` 之后（即 VitePress 将页面输出到 `dist` 并生成 `sitemap.xml`
-）执行；如果没有 sitemap，action 会得不到页面列表，生成的 `llms.txt` 就会不完整。
+`demodrive-ai/llms-txt-action` 负责把文档站打包后的页面转换成 LLM 索引，它的 `docs_dir` 已指定为 `docs/.vitepress/dist`，并通过 `sitemap.xml` 解析页面 URL。只能在 `bun run build` 之后（即 VitePress 将页面输出到 `dist` 并生成 `sitemap.xml`）执行；如果没有 sitemap，action 会得不到页面列表，生成的 `llms.txt` 就会不完整。
 
 ### 验证流程
 
