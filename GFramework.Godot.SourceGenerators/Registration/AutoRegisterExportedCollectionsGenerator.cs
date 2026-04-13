@@ -222,8 +222,7 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
                 out var registerMethodName))
             return false;
 
-        var registryMember = ownerType.GetMembers(registryMemberName)
-            .FirstOrDefault(member => member is IFieldSymbol or IPropertySymbol);
+        var registryMember = FindRegistryMember(ownerType, registryMemberName);
 
         if (registryMember is null)
         {
@@ -236,7 +235,8 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
             return false;
         }
 
-        if (!IsInstanceReadableMember(registryMember))
+        if (!IsInstanceReadableMember(registryMember) ||
+            !compilation.IsSymbolAccessibleWithin(registryMember, ownerType))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 AutoRegisterExportedCollectionsDiagnostics.RegistryMemberMustBeInstanceReadable,
@@ -318,19 +318,40 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
         return compilation.ClassifyConversion(elementType, parameterType).IsImplicit;
     }
 
+    private static ISymbol? FindRegistryMember(
+        INamedTypeSymbol ownerType,
+        string registryMemberName)
+    {
+        for (var currentType = ownerType; currentType is not null; currentType = currentType.BaseType)
+        {
+            // Search the owner hierarchy one level at a time so the generator follows the same
+            // name-hiding order as `this.<member>` in generated code.
+            var candidateMember = currentType.GetMembers(registryMemberName)
+                .FirstOrDefault(static member => member is IFieldSymbol or IPropertySymbol);
+
+            if (candidateMember is not null)
+                return candidateMember;
+        }
+
+        return null;
+    }
+
     /// <summary>
     ///     枚举给定注册表类型上可能承载批量注册入口的候选实例方法。
     /// </summary>
     /// <param name="registryType">声明注册表成员的静态类型。</param>
     /// <param name="registerMethodName">特性参数中声明的注册方法名称。</param>
     /// <returns>
-    ///     按“当前类型 -> 基类链 -> 已实现接口”顺序返回所有同名方法，供后续签名和可访问性筛选使用。
+    ///     按“当前类型 -> 基类链 -> 接口继承链（仅当静态类型本身是接口）”顺序返回所有同名方法，
+    ///     供后续签名和可访问性筛选使用。
     /// </returns>
     /// <remarks>
-    ///     生成器需要沿这三条继承路径查找方法，因为用户代码可能通过派生类字段引用基类实现，
-    ///     或通过接口类型引用由上层接口声明的契约方法。这里故意不做去重：同一个语义方法可能同时经由
-    ///     覆盖链、接口继承或显式声明被枚举多次，但当前调用方只使用 <c>Any</c> 判断“是否存在至少一个可用候选”，
-    ///     因此重复项只会带来额外的符号检查成本，不会改变生成结果或诊断边界。
+    ///     生成器需要沿当前类型和基类链查找方法，因为用户代码可能通过派生类字段引用基类实现；
+    ///     当注册表成员本身声明为接口类型时，还要继续沿接口继承链查找由父接口声明的契约方法。
+    ///     对类或结构体不遍历 <see cref="INamedTypeSymbol.AllInterfaces"/>，避免把仅能通过接口调用的显式实现
+    ///     误判为可由 <c>this.&lt;registry&gt;.&lt;method&gt;(...)</c> 直接访问的方法。
+    ///     这里故意不做去重：同一个语义方法可能同时经由覆盖链、接口继承或显式声明被枚举多次，但当前调用方只使用
+    ///     <c>Any</c> 判断“是否存在至少一个可用候选”，因此重复项只会带来额外的符号检查成本，不会改变生成结果或诊断边界。
     /// </remarks>
     private static IEnumerable<IMethodSymbol> EnumerateCandidateMethods(
         INamedTypeSymbol registryType,
@@ -344,6 +365,9 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
             foreach (var method in baseType.GetMembers(registerMethodName).OfType<IMethodSymbol>())
                 yield return method;
         }
+
+        if (registryType.TypeKind != TypeKind.Interface)
+            yield break;
 
         foreach (var interfaceType in registryType.AllInterfaces)
         {
