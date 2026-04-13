@@ -104,6 +104,7 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
 
             var registrations = CollectRegistrations(
                 context,
+                compilation,
                 candidate.TypeSymbol,
                 registerCollectionAttribute,
                 enumerableType);
@@ -138,6 +139,7 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
 
     private static List<RegistrationSpec> CollectRegistrations(
         SourceProductionContext context,
+        Compilation compilation,
         INamedTypeSymbol typeSymbol,
         INamedTypeSymbol registerCollectionAttribute,
         INamedTypeSymbol enumerableType)
@@ -156,8 +158,17 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
             if (attribute is null)
                 continue;
 
-            if (!TryCreateRegistration(context, typeSymbol, member, attribute, enumerableType, out var registration))
+            if (!TryCreateRegistration(
+                    context,
+                    compilation,
+                    typeSymbol,
+                    member,
+                    attribute,
+                    enumerableType,
+                    out var registration))
+            {
                 continue;
+            }
 
             registrations.Add(registration);
         }
@@ -167,6 +178,7 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
 
     private static bool TryCreateRegistration(
         SourceProductionContext context,
+        Compilation compilation,
         INamedTypeSymbol ownerType,
         ISymbol collectionMember,
         AttributeData attribute,
@@ -238,7 +250,7 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
             .Any(method =>
                 !method.IsStatic &&
                 method.Parameters.Length == 1 &&
-                elementType.IsAssignableTo(method.Parameters[0].Type as INamedTypeSymbol));
+                CanAcceptElementType(compilation, elementType, method.Parameters[0].Type));
 
         if (!hasCompatibleMethod)
         {
@@ -253,6 +265,19 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
 
         registration = new RegistrationSpec(collectionMember.Name, registryMemberName, registerMethodName);
         return true;
+    }
+
+    private static bool CanAcceptElementType(
+        Compilation compilation,
+        ITypeSymbol elementType,
+        ITypeSymbol parameterType)
+    {
+        if (elementType.IsAssignableTo(parameterType as INamedTypeSymbol))
+            return true;
+
+        // Fall back to Roslyn's conversion rules so arrays and other non-named types are
+        // validated the same way the generated invocation will be bound by the compiler.
+        return compilation.ClassifyConversion(elementType, parameterType).IsImplicit;
     }
 
     private static bool TryGetRegistrationAttributeArguments(
