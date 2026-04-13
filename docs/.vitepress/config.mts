@@ -76,6 +76,13 @@ export default defineConfig({
   ],
   /** GitHub Pages / 子路径部署 */
   base: '/GFramework/',
+  /**
+   * 为 GitHub Pages 产物生成稳定的绝对 URL。
+   * llms-txt-action 依赖 sitemap.xml 发现站点页面，因此 hostname 需要与最终 Pages 地址对齐。
+   */
+  sitemap: {
+    hostname: 'https://gewuyou.github.io/GFramework/'
+  },
   vite: {
     plugins: [safeGenericEscapePlugin()],
     build: {

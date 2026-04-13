@@ -50,6 +50,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # 按 GitHub Pages 官方流程初始化部署元数据。
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       # 安装 Bun 运行时
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -70,7 +74,26 @@ jobs:
       - name: Make docs LLM ready
         uses: demodrive-ai/llms-txt-action@v1
         with:
-          docs_dir: docs/.vitepress/dist 
+          docs_dir: docs/.vitepress/dist
+          sitemap_path: sitemap.xml
+          skip_llms_txt: 'false'
+          skip_llms_full_txt: 'false'
+          skip_md_files: 'false'
+
+      # 在上传前校验 LLM 索引产物，避免部署出“步骤成功但文件缺失”的 Pages 站点。
+      - name: Verify LLM artifacts
+        run: |
+          test -f docs/.vitepress/dist/sitemap.xml
+          test -f docs/.vitepress/dist/llms.txt
+          test -f docs/.vitepress/dist/llms-full.txt
+
+          md_count="$(find docs/.vitepress/dist -type f -name '*.md' | wc -l)"
+          if [ "$md_count" -eq 0 ]; then
+            echo "Expected llms-txt-action to generate page-level markdown files, but none were found."
+            exit 1
+          fi
+
+          echo "Generated $md_count markdown files for LLM ingestion."
       
       # 上传构建产物作为 Pages 部署工件
       - name: Upload Pages Artifact
