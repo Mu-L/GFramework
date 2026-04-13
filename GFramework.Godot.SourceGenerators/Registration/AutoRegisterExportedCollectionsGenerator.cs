@@ -1,7 +1,6 @@
 using GFramework.Godot.SourceGenerators.Diagnostics;
 using GFramework.SourceGenerators.Common.Constants;
 using GFramework.SourceGenerators.Common.Diagnostics;
-using GFramework.SourceGenerators.Common.Extensions;
 
 namespace GFramework.Godot.SourceGenerators.Registration;
 
@@ -208,12 +207,23 @@ public sealed class AutoRegisterExportedCollectionsGenerator : IIncrementalGener
             return false;
 
         var elementType = TryGetElementType(collectionType);
+        if (elementType is null)
+        {
+            // Non-generic IEnumerable exposes elements as object at compile time, which is not safe
+            // for validating or generating a strongly typed registry call.
+            context.ReportDiagnostic(Diagnostic.Create(
+                AutoRegisterExportedCollectionsDiagnostics.CollectionElementTypeCouldNotBeInferred,
+                collectionMember.Locations.FirstOrDefault() ?? Location.None,
+                collectionMember.Name));
+            return false;
+        }
+
         var hasCompatibleMethod = registryType.GetMembers(registerMethodName)
             .OfType<IMethodSymbol>()
             .Any(method =>
                 !method.IsStatic &&
                 method.Parameters.Length == 1 &&
-                (elementType is null || elementType.IsAssignableTo(method.Parameters[0].Type as INamedTypeSymbol)));
+                elementType.IsAssignableTo(method.Parameters[0].Type as INamedTypeSymbol));
 
         if (!hasCompatibleMethod)
         {

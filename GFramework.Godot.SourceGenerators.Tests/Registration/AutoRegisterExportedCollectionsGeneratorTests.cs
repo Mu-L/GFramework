@@ -67,4 +67,58 @@ public class AutoRegisterExportedCollectionsGeneratorTests
             source,
             ("TestApp_Bootstrapper.AutoRegisterExportedCollections.g.cs", expected));
     }
+
+    [Test]
+    public async Task Reports_Diagnostic_When_Collection_Element_Type_Cannot_Be_Inferred()
+    {
+        const string source = """
+                              using System;
+                              using System.Collections;
+                              using GFramework.Godot.SourceGenerators.Abstractions;
+
+                              namespace GFramework.Godot.SourceGenerators.Abstractions
+                              {
+                                  [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+                                  public sealed class AutoRegisterExportedCollectionsAttribute : Attribute { }
+
+                                  [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
+                                  public sealed class RegisterExportedCollectionAttribute : Attribute
+                                  {
+                                      public RegisterExportedCollectionAttribute(string registryMemberName, string registerMethodName) { }
+                                  }
+                              }
+
+                              namespace TestApp
+                              {
+                                  public sealed class IntRegistry
+                                  {
+                                      public void Register(int value) { }
+                                  }
+
+                                  [AutoRegisterExportedCollections]
+                                  public partial class Bootstrapper
+                                  {
+                                      private readonly IntRegistry _registry = new();
+
+                                      [RegisterExportedCollection(nameof(_registry), nameof(IntRegistry.Register))]
+                                      public IEnumerable {|#0:Values|} { get; } = new ArrayList();
+                                  }
+                              }
+                              """;
+
+        var test = new CSharpSourceGeneratorTest<AutoRegisterExportedCollectionsGenerator, DefaultVerifier>
+        {
+            TestState =
+            {
+                Sources = { source }
+            },
+            DisabledDiagnostics = { "GF_Common_Trace_001" }
+        };
+
+        test.ExpectedDiagnostics.Add(new DiagnosticResult("GF_AutoExport_005", DiagnosticSeverity.Error)
+            .WithLocation(0)
+            .WithArguments("Values"));
+
+        await test.RunAsync();
+    }
 }

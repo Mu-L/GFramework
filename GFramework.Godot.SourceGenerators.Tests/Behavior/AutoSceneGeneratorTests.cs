@@ -82,4 +82,52 @@ public class AutoSceneGeneratorTests
             source,
             ("TestApp_GameplayRoot.AutoScene.g.cs", expected));
     }
+
+    [Test]
+    public async Task Reports_Diagnostic_When_AutoScene_Arguments_Are_Invalid()
+    {
+        const string source = """
+                              using System;
+                              using GFramework.Godot.SourceGenerators.Abstractions;
+                              using Godot;
+
+                              namespace GFramework.Godot.SourceGenerators.Abstractions
+                              {
+                                  [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+                                  public sealed class AutoSceneAttribute : Attribute
+                                  {
+                                      public AutoSceneAttribute() { }
+                                  }
+                              }
+
+                              namespace Godot
+                              {
+                                  public class Node { }
+                                  public class Node2D : Node { }
+                              }
+
+                              namespace TestApp
+                              {
+                                  [{|#0:AutoScene|}]
+                                  public partial class GameplayRoot : Node2D
+                                  {
+                                  }
+                              }
+                              """;
+
+        var test = new CSharpSourceGeneratorTest<AutoSceneGenerator, DefaultVerifier>
+        {
+            TestState =
+            {
+                Sources = { source }
+            },
+            DisabledDiagnostics = { "GF_Common_Trace_001" }
+        };
+
+        test.ExpectedDiagnostics.Add(new DiagnosticResult("GF_AutoBehavior_004", DiagnosticSeverity.Error)
+            .WithLocation(0)
+            .WithArguments("AutoSceneAttribute", "GameplayRoot", "a single string scene key argument"));
+
+        await test.RunAsync();
+    }
 }

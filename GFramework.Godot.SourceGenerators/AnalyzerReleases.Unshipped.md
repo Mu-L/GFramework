@@ -24,7 +24,9 @@
  GF_AutoBehavior_001         | GFramework.Godot.SourceGenerators.Behavior     | Error    | AutoBehaviorDiagnostics                    
  GF_AutoBehavior_002         | GFramework.Godot.SourceGenerators.Behavior     | Error    | AutoBehaviorDiagnostics                    
  GF_AutoBehavior_003         | GFramework.Godot.SourceGenerators.Behavior     | Error    | AutoBehaviorDiagnostics                    
+ GF_AutoBehavior_004         | GFramework.Godot.SourceGenerators.Behavior     | Error    | AutoBehaviorDiagnostics                    
  GF_AutoExport_001           | GFramework.Godot.SourceGenerators.Registration | Error    | AutoRegisterExportedCollectionsDiagnostics 
  GF_AutoExport_002           | GFramework.Godot.SourceGenerators.Registration | Error    | AutoRegisterExportedCollectionsDiagnostics 
  GF_AutoExport_003           | GFramework.Godot.SourceGenerators.Registration | Error    | AutoRegisterExportedCollectionsDiagnostics 
  GF_AutoExport_004           | GFramework.Godot.SourceGenerators.Registration | Error    | AutoRegisterExportedCollectionsDiagnostics 
+ GF_AutoExport_005           | GFramework.Godot.SourceGenerators.Registration | Error    | AutoRegisterExportedCollectionsDiagnostics 

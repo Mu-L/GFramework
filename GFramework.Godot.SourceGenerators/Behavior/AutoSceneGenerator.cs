@@ -1,7 +1,6 @@
 using GFramework.Godot.SourceGenerators.Diagnostics;
 using GFramework.SourceGenerators.Common.Constants;
 using GFramework.SourceGenerators.Common.Diagnostics;
-using GFramework.SourceGenerators.Common.Extensions;
 
 namespace GFramework.Godot.SourceGenerators.Behavior;
 
@@ -79,7 +78,7 @@ public sealed class AutoSceneGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (attribute.ConstructorArguments.Length != 1 || attribute.ConstructorArguments[0].Value is not string key)
+            if (!TryGetSceneKey(context, candidate.TypeSymbol, attribute, out var key))
                 continue;
 
             context.AddSource(GetHintName(candidate.TypeSymbol), GenerateSource(candidate.TypeSymbol, key));
@@ -119,6 +118,32 @@ public sealed class AutoSceneGenerator : IIncrementalGenerator
             candidate.TypeSymbol.Name,
             requiredBaseType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
             "AutoScene"));
+        return false;
+    }
+
+    private static bool TryGetSceneKey(
+        SourceProductionContext context,
+        INamedTypeSymbol typeSymbol,
+        AttributeData attribute,
+        out string key)
+    {
+        key = string.Empty;
+
+        if (attribute.ConstructorArguments.Length == 1 &&
+            attribute.ConstructorArguments[0].Value is string sceneKey)
+        {
+            key = sceneKey;
+            return true;
+        }
+
+        context.ReportDiagnostic(Diagnostic.Create(
+            AutoBehaviorDiagnostics.InvalidAttributeArguments,
+            attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ??
+            typeSymbol.Locations.FirstOrDefault() ??
+            Location.None,
+            "AutoSceneAttribute",
+            typeSymbol.Name,
+            "a single string scene key argument"));
         return false;
     }
 
