@@ -15,6 +15,9 @@ public static class ContextAwareCqrsCommandExtensions
     /// <param name="contextAware">实现 <see cref="IContextAware" /> 接口的对象。</param>
     /// <param name="command">要发送的命令对象。</param>
     /// <returns>命令执行结果。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="command" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static TResponse SendCommand<TResponse>(this IContextAware contextAware, ICommand<TResponse> command)
     {
         ArgumentNullException.ThrowIfNull(contextAware);
@@ -31,6 +34,9 @@ public static class ContextAwareCqrsCommandExtensions
     /// <param name="command">要发送的命令对象。</param>
     /// <param name="cancellationToken">取消令牌，用于取消操作。</param>
     /// <returns>包含命令执行结果的 <see cref="ValueTask{TResult}" />。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="command" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static ValueTask<TResponse> SendCommandAsync<TResponse>(
         this IContextAware contextAware,
         ICommand<TResponse> command,

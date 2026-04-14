@@ -15,6 +15,9 @@ public static class ContextAwareCqrsQueryExtensions
     /// <param name="contextAware">实现 <see cref="IContextAware" /> 接口的对象。</param>
     /// <param name="query">要发送的查询对象。</param>
     /// <returns>查询结果。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="query" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static TResponse SendQuery<TResponse>(this IContextAware contextAware, IQuery<TResponse> query)
     {
         ArgumentNullException.ThrowIfNull(contextAware);
@@ -31,6 +34,9 @@ public static class ContextAwareCqrsQueryExtensions
     /// <param name="query">要发送的查询对象。</param>
     /// <param name="cancellationToken">取消令牌，用于取消操作。</param>
     /// <returns>包含查询结果的 <see cref="ValueTask{TResult}" />。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="query" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static ValueTask<TResponse> SendQueryAsync<TResponse>(
         this IContextAware contextAware,
         IQuery<TResponse> query,

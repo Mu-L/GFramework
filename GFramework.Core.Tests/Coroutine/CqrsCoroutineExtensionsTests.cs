@@ -67,6 +67,32 @@ public class CqrsCoroutineExtensionsTests
     }
 
     /// <summary>
+    ///     验证 SendCommandCoroutine 在提供错误回调时也会传递解包后的原始异常，
+    ///     避免回调路径暴露 <see cref="AggregateException" />。
+    /// </summary>
+    [Test]
+    public void SendCommandCoroutine_Should_Forward_Inner_Exception_To_Error_Handler()
+    {
+        var command = new TestCommand("Test");
+        var contextAware = new TestContextAware();
+        var expectedException = new InvalidOperationException("Command failed.");
+        Exception? capturedException = null;
+
+        contextAware.MockContext
+            .Setup(ctx => ctx.SendAsync(command, It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask(Task.FromException(expectedException)));
+
+        var coroutine = CqrsCoroutineExtensions.SendCommandCoroutine(
+            contextAware,
+            command,
+            exception => capturedException = exception);
+
+        Assert.That(coroutine.MoveNext(), Is.True);
+        Assert.That(coroutine.MoveNext(), Is.False);
+        Assert.That(capturedException, Is.SameAs(expectedException));
+    }
+
+    /// <summary>
     ///     测试用的简单命令类
     /// </summary>
     private sealed record TestCommand(string Data) : IRequest<Unit>;

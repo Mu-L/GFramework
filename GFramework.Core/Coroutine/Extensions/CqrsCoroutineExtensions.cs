@@ -19,6 +19,13 @@ public static class CqrsCoroutineExtensions
     /// <param name="command">要发送的命令对象。</param>
     /// <param name="onError">发生异常时的回调处理函数。</param>
     /// <returns>协程枚举器，用于协程执行。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="command" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
+    /// <remarks>
+    ///     当底层命令调度失败时，该扩展会把底层异常解包后传给 <paramref name="onError" />，
+    ///     或在未提供回调时重新抛出同一个异常实例，避免两条失败路径暴露不同的异常类型。
+    /// </remarks>
     public static IEnumerator<IYieldInstruction> SendCommandCoroutine<TCommand>(
         this IContextAware contextAware,
         TCommand command,
@@ -35,9 +42,10 @@ public static class CqrsCoroutineExtensions
         if (!task.IsFaulted)
             yield break;
 
+        var exception = task.Exception!.InnerException ?? task.Exception;
         if (onError != null)
-            onError.Invoke(task.Exception!);
+            onError.Invoke(exception);
         else
-            throw task.Exception!.InnerException ?? task.Exception;
+            throw exception;
     }
 }

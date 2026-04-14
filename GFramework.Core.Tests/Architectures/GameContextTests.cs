@@ -394,45 +394,106 @@ public class TestArchitectureContext : IArchitectureContext
     {
     }
 
+    /// <summary>
+    ///     测试桩：异步发送统一 CQRS 请求。
+    /// </summary>
+    /// <typeparam name="TResponse">响应类型。</typeparam>
+    /// <param name="request">要发送的请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>请求响应任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public ValueTask<TResponse> SendRequestAsync<TResponse>(IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：同步发送统一 CQRS 请求。
+    /// </summary>
+    /// <typeparam name="TResponse">响应类型。</typeparam>
+    /// <param name="request">要发送的请求。</param>
+    /// <returns>请求响应。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public TResponse SendRequest<TResponse>(IRequest<TResponse> request)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：异步发送 CQRS 命令并返回响应。
+    /// </summary>
+    /// <typeparam name="TResponse">命令响应类型。</typeparam>
+    /// <param name="command">要发送的命令。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>命令响应任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public ValueTask<TResponse> SendCommandAsync<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：同步发送 CQRS 命令并返回响应。
+    /// </summary>
+    /// <typeparam name="TResponse">命令响应类型。</typeparam>
+    /// <param name="command">要发送的命令。</param>
+    /// <returns>命令响应。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public TResponse SendCommand<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：异步发送 CQRS 查询并返回结果。
+    /// </summary>
+    /// <typeparam name="TResponse">查询结果类型。</typeparam>
+    /// <param name="query">要发送的查询。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>查询结果任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public ValueTask<TResponse> SendQueryAsync<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：同步发送 CQRS 查询并返回结果。
+    /// </summary>
+    /// <typeparam name="TResponse">查询结果类型。</typeparam>
+    /// <param name="query">要发送的查询。</param>
+    /// <returns>查询结果。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public TResponse SendQuery<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：异步发布 CQRS 通知。
+    /// </summary>
+    /// <typeparam name="TNotification">通知类型。</typeparam>
+    /// <param name="notification">要发布的通知。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>通知发布任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public ValueTask PublishAsync<TNotification>(TNotification notification,
         CancellationToken cancellationToken = default) where TNotification : INotification
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：创建 CQRS 流式请求响应序列。
+    /// </summary>
+    /// <typeparam name="TResponse">流式响应元素类型。</typeparam>
+    /// <param name="request">流式请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>异步响应流。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
         IStreamRequest<TResponse> request,
         CancellationToken cancellationToken = default)
@@ -440,12 +501,28 @@ public class TestArchitectureContext : IArchitectureContext
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：异步发送无返回值 CQRS 命令。
+    /// </summary>
+    /// <typeparam name="TCommand">命令类型。</typeparam>
+    /// <param name="command">要发送的命令。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>命令发送任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public ValueTask SendAsync<TCommand>(TCommand command, CancellationToken cancellationToken = default)
         where TCommand : IRequest<Unit>
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试桩：异步发送带返回值的 CQRS 请求。
+    /// </summary>
+    /// <typeparam name="TResponse">响应类型。</typeparam>
+    /// <param name="command">要发送的请求。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>请求响应任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public ValueTask<TResponse> SendAsync<TResponse>(IRequest<TResponse> command,
         CancellationToken cancellationToken = default)
     {

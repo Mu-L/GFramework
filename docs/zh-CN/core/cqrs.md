@@ -204,21 +204,23 @@ public async Task<List<ScoreData>> GetHighScores()
 
 ### 注册处理器
 
-在架构中注册 CQRS 行为并让处理器自动扫描注册：
+在架构中注册 CQRS 行为；默认会自动扫描当前架构所在程序集和 `GFramework.Core` 程序集中的处理器：
 
 ```csharp
 public class GameArchitecture : Architecture
 {
-    protected override void Init()
+    protected override void OnInitialize()
     {
         // 注册通用开放泛型行为
         RegisterCqrsPipelineBehavior<LoggingBehavior<,>>();
         RegisterCqrsPipelineBehavior<PerformanceBehavior<,>>();
 
-        // 处理器会自动通过依赖注入注册
+        // 默认只自动扫描当前架构程序集和 GFramework.Core 程序集中的处理器
     }
 }
 ```
+
+如果处理器位于其他模块或扩展程序集中，需要额外接入对应程序集的处理器注册，而不是依赖默认扫描。
 
 `RegisterCqrsPipelineBehavior<TBehavior>()` 是推荐入口；旧的 `RegisterMediatorBehavior<TBehavior>()`
 仅作为兼容名称保留。当前接口支持两种形式：
@@ -338,8 +340,8 @@ public class LoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
 {
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        CancellationToken cancellationToken,
-        MessageHandlerDelegate<TMessage, TResponse> next)
+        MessageHandlerDelegate<TMessage, TResponse> next,
+        CancellationToken cancellationToken)
     {
         var messageName = message.GetType().Name;
         Console.WriteLine($"[开始] {messageName}");
@@ -358,8 +360,8 @@ public class PerformanceBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
 {
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        CancellationToken cancellationToken,
-        MessageHandlerDelegate<TMessage, TResponse> next)
+        MessageHandlerDelegate<TMessage, TResponse> next,
+        CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
 
@@ -390,8 +392,8 @@ public class ValidationBehavior<TMessage, TResponse> : IPipelineBehavior<TMessag
 {
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        CancellationToken cancellationToken,
-        MessageHandlerDelegate<TMessage, TResponse> next)
+        MessageHandlerDelegate<TMessage, TResponse> next,
+        CancellationToken cancellationToken)
     {
         // 验证输入
         if (message is IValidatable validatable)

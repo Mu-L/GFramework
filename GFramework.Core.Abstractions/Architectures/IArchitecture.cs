@@ -2,6 +2,7 @@ using GFramework.Core.Abstractions.Lifecycle;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Core.Abstractions.Architectures;
 

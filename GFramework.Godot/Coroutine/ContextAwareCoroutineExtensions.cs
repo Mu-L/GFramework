@@ -2,6 +2,9 @@
 using GFramework.Core.Abstractions.Cqrs.Command;
 using GFramework.Core.Abstractions.Cqrs.Query;
 using GFramework.Core.Abstractions.Rule;
+using GFramework.Core.Coroutine;
+using GFramework.Core.Coroutine.Extensions;
+using GFramework.Core.Cqrs.Extensions;
 
 namespace GFramework.Godot.Coroutine;
 
@@ -26,7 +29,7 @@ public static class ContextAwareCoroutineExtensions
         string? tag = null,
         CancellationToken cancellationToken = default)
     {
-        return Core.Cqrs.Extensions.ContextAwareCqrsCommandExtensions
+        return ContextAwareCqrsCommandExtensions
             .SendCommandAsync(contextAware, command, cancellationToken)
             .AsTask()
             .ToCoroutineEnumerator()
@@ -50,7 +53,7 @@ public static class ContextAwareCoroutineExtensions
         string? tag = null,
         CancellationToken cancellationToken = default)
     {
-        return Core.Cqrs.Extensions.ContextAwareCqrsCommandExtensions
+        return ContextAwareCqrsCommandExtensions
             .SendCommandAsync(contextAware, command, cancellationToken)
             .AsTask()
             .ToCoroutineEnumerator()
@@ -74,7 +77,7 @@ public static class ContextAwareCoroutineExtensions
         string? tag = null,
         CancellationToken cancellationToken = default)
     {
-        return Core.Cqrs.Extensions.ContextAwareCqrsQueryExtensions
+        return ContextAwareCqrsQueryExtensions
             .SendQueryAsync(contextAware, query, cancellationToken)
             .AsTask()
             .ToCoroutineEnumerator()
@@ -97,7 +100,7 @@ public static class ContextAwareCoroutineExtensions
         string? tag = null,
         CancellationToken cancellationToken = default)
     {
-        return Core.Cqrs.Extensions.ContextAwareCqrsExtensions
+        return ContextAwareCqrsExtensions
             .PublishAsync(contextAware, notification, cancellationToken)
             .AsTask()
             .ToCoroutineEnumerator()

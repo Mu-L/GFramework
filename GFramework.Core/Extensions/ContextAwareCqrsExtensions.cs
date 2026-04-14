@@ -17,6 +17,9 @@ public static class ContextAwareCqrsExtensions
     /// <param name="request">要发送的请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求结果。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="request" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static ValueTask<TResponse> SendRequestAsync<TResponse>(
         this IContextAware contextAware,
         IRequest<TResponse> request,
@@ -35,6 +38,9 @@ public static class ContextAwareCqrsExtensions
     /// <param name="contextAware">实现 <see cref="IContextAware" /> 接口的对象。</param>
     /// <param name="request">要发送的请求。</param>
     /// <returns>请求结果。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="request" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static TResponse SendRequest<TResponse>(this IContextAware contextAware, IRequest<TResponse> request)
     {
         ArgumentNullException.ThrowIfNull(contextAware);
@@ -51,6 +57,9 @@ public static class ContextAwareCqrsExtensions
     /// <param name="notification">要发布的通知。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>异步任务。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="notification" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static ValueTask PublishAsync<TNotification>(
         this IContextAware contextAware,
         TNotification notification,
@@ -71,6 +80,9 @@ public static class ContextAwareCqrsExtensions
     /// <param name="request">流式请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>异步响应流。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="request" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static IAsyncEnumerable<TResponse> CreateStream<TResponse>(
         this IContextAware contextAware,
         IStreamRequest<TResponse> request,
@@ -90,6 +102,9 @@ public static class ContextAwareCqrsExtensions
     /// <param name="command">要发送的命令。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>异步任务。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="command" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static ValueTask SendAsync<TCommand>(
         this IContextAware contextAware,
         TCommand command,
@@ -110,6 +125,9 @@ public static class ContextAwareCqrsExtensions
     /// <param name="command">要发送的命令。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>命令执行结果。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="contextAware" /> 或 <paramref name="command" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public static ValueTask<TResponse> SendAsync<TResponse>(
         this IContextAware contextAware,
         IRequest<TResponse> command,
