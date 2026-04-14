@@ -2,7 +2,6 @@ using GFramework.Core.Abstractions.Lifecycle;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Core.Abstractions.Architectures;
 
@@ -73,8 +72,8 @@ public interface IArchitecture : IAsyncInitializable, IAsyncDestroyable, IInitia
     void RegisterUtility<T>(Action<T>? onCreated = null) where T : class, IUtility;
 
     /// <summary>
-    ///     注册中介行为管道
-    ///     用于配置Mediator框架的行为拦截和处理逻辑。
+    ///     注册 CQRS 请求管道行为。
+    ///     历史方法名保留了 Mediator 前缀，但当前用于配置框架内建 CQRS runtime 的行为拦截和处理逻辑。
     ///     既支持实现 <c>IPipelineBehavior&lt;,&gt;</c> 的开放泛型行为类型，
     ///     也支持绑定到单一请求/响应对的封闭行为类型。
     /// </summary>

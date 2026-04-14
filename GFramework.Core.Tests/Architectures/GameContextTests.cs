@@ -1,5 +1,6 @@
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Command;
+using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Environment;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Abstractions.Ioc;
@@ -13,7 +14,6 @@ using GFramework.Core.Environment;
 using GFramework.Core.Events;
 using GFramework.Core.Ioc;
 using GFramework.Core.Query;
-using Mediator;
 using ICommand = GFramework.Core.Abstractions.Command.ICommand;
 
 namespace GFramework.Core.Tests.Architectures;
@@ -394,61 +394,59 @@ public class TestArchitectureContext : IArchitectureContext
     {
     }
 
-    public ValueTask<TResponse> SendRequestAsync<TResponse>(global::GFramework.Core.Abstractions.Cqrs.IRequest<TResponse> request,
+    public ValueTask<TResponse> SendRequestAsync<TResponse>(IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
-    public TResponse SendRequest<TResponse>(global::GFramework.Core.Abstractions.Cqrs.IRequest<TResponse> request)
+    public TResponse SendRequest<TResponse>(IRequest<TResponse> request)
     {
         throw new NotImplementedException();
     }
 
-    public ValueTask<TResponse> SendCommandAsync<TResponse>(
-        global::GFramework.Core.Abstractions.Cqrs.Command.ICommand<TResponse> command,
+    public ValueTask<TResponse> SendCommandAsync<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
-    public TResponse SendCommand<TResponse>(global::GFramework.Core.Abstractions.Cqrs.Command.ICommand<TResponse> command)
+    public TResponse SendCommand<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
         throw new NotImplementedException();
     }
 
-    public ValueTask<TResponse> SendQueryAsync<TResponse>(
-        global::GFramework.Core.Abstractions.Cqrs.Query.IQuery<TResponse> query,
+    public ValueTask<TResponse> SendQueryAsync<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
-    public TResponse SendQuery<TResponse>(global::GFramework.Core.Abstractions.Cqrs.Query.IQuery<TResponse> query)
+    public TResponse SendQuery<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
         throw new NotImplementedException();
     }
 
     public ValueTask PublishAsync<TNotification>(TNotification notification,
-        CancellationToken cancellationToken = default) where TNotification : global::GFramework.Core.Abstractions.Cqrs.INotification
+        CancellationToken cancellationToken = default) where TNotification : INotification
     {
         throw new NotImplementedException();
     }
 
     public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
-        global::GFramework.Core.Abstractions.Cqrs.IStreamRequest<TResponse> request,
+        IStreamRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
     public ValueTask SendAsync<TCommand>(TCommand command, CancellationToken cancellationToken = default)
-        where TCommand : global::GFramework.Core.Abstractions.Cqrs.IRequest<global::GFramework.Core.Abstractions.Cqrs.Unit>
+        where TCommand : IRequest<Unit>
     {
         throw new NotImplementedException();
     }
 
-    public ValueTask<TResponse> SendAsync<TResponse>(global::GFramework.Core.Abstractions.Cqrs.IRequest<TResponse> command,
+    public ValueTask<TResponse> SendAsync<TResponse>(IRequest<TResponse> command,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
@@ -468,7 +466,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <typeparam name="TResult">返回值类型</typeparam>
     /// <param name="command">命令对象</param>
     /// <returns>命令执行结果</returns>
-    public TResult SendCommand<TResult>(Abstractions.Command.ICommand<TResult> command)
+    public TResult SendCommand<TResult>(ICommand<TResult> command)
     {
         return default!;
     }
@@ -489,7 +487,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <typeparam name="TResult">查询结果类型</typeparam>
     /// <param name="query">查询对象</param>
     /// <returns>查询结果</returns>
-    public TResult SendQuery<TResult>(Abstractions.Query.IQuery<TResult> query)
+    public TResult SendQuery<TResult>(IQuery<TResult> query)
     {
         return default!;
     }

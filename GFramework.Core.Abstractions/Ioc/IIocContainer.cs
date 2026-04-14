@@ -1,6 +1,5 @@
 ﻿using GFramework.Core.Abstractions.Rule;
 using GFramework.Core.Abstractions.Systems;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Core.Abstractions.Ioc;
 
@@ -90,8 +89,8 @@ public interface IIocContainer : IContextAware
     void RegisterFactory<TService>(Func<IServiceProvider, TService> factory) where TService : class;
 
     /// <summary>
-    ///     注册中介行为管道
-    ///     用于配置Mediator框架的行为拦截和处理逻辑
+    ///     注册 CQRS 请求管道行为。
+    ///     历史方法名保留了 Mediator 前缀，但当前用于配置框架内建 CQRS runtime 的行为拦截和处理逻辑。
     /// </summary>
     /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
     void RegisterMediatorBehavior<TBehavior>()

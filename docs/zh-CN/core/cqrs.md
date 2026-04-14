@@ -1,21 +1,21 @@
 ---
-title: CQRS 与 Mediator
-description: CQRS 模式通过 Mediator 实现命令查询职责分离，提供清晰的业务逻辑组织方式。
+title: CQRS
+description: GFramework 内建 CQRS runtime，用统一请求分发、通知发布和流式处理组织业务逻辑。
 ---
 
-# CQRS 与 Mediator
+# CQRS
 
 ## 概述
 
 CQRS（Command Query Responsibility Segregation，命令查询职责分离）是一种架构模式，将数据的读取（Query）和修改（Command）操作分离。GFramework
-通过集成 Mediator 库实现了 CQRS 模式，提供了类型安全、解耦的业务逻辑处理方式。
+当前内建自有 CQRS runtime，通过统一的请求分发器、通知发布和流式请求管道提供类型安全、解耦的业务逻辑处理方式。
 
 通过 CQRS，你可以将复杂的业务逻辑拆分为独立的命令和查询处理器，每个处理器只负责单一职责，使代码更易于测试和维护。
 
 **主要特性**：
 
 - 命令查询职责分离
-- 基于 Mediator 模式的解耦设计
+- 内建请求分发与解耦设计
 - 支持管道行为（Behaviors）
 - 异步处理支持
 - 与架构系统深度集成
@@ -72,7 +72,6 @@ public class GetPlayerQuery : QueryBase<GetPlayerInput, PlayerData>
 
 ```csharp
 using GFramework.Core.CQRS.Command;
-using Mediator;
 
 // 命令处理器
 public class CreatePlayerCommandHandler : AbstractCommandHandler<CreatePlayerCommand, int>
@@ -92,19 +91,19 @@ public class CreatePlayerCommandHandler : AbstractCommandHandler<CreatePlayerCom
 }
 ```
 
-### Mediator（中介者）
+### Dispatcher（请求分发器）
 
-Mediator 负责将命令/查询路由到对应的处理器：
+架构上下文会负责将命令、查询和通知路由到对应的处理器：
 
 ```csharp
-// 通过 Mediator 发送命令
+// 通过架构上下文发送命令
 var command = new CreatePlayerCommand(new CreatePlayerInput
 {
     Name = "Player1",
     Level = 1
 });
 
-var playerId = await mediator.Send(command);
+var playerId = await this.SendAsync(command);
 ```
 
 ## 基本用法
@@ -148,15 +147,13 @@ public class SaveGameCommandHandler : AbstractCommandHandler<SaveGameCommand>
 // 4. 发送命令
 public async Task SaveGame()
 {
-    var mediator = this.GetService<IMediator>();
-
     var command = new SaveGameCommand(new SaveGameInput
     {
         SlotId = 1,
         Data = currentGameData
     });
 
-    await mediator.Send(command);
+    await this.SendAsync(command);
 }
 ```
 
@@ -195,21 +192,19 @@ public class GetHighScoresQueryHandler : AbstractQueryHandler<GetHighScoresQuery
 // 4. 发送查询
 public async Task<List<ScoreData>> GetHighScores()
 {
-    var mediator = this.GetService<IMediator>();
-
     var query = new GetHighScoresQuery(new GetHighScoresInput
     {
         Count = 10
     });
 
-    var scores = await mediator.Send(query);
+    var scores = await this.SendQueryAsync(query);
     return scores;
 }
 ```
 
 ### 注册处理器
 
-在架构中注册 Mediator 和处理器：
+在架构中注册 CQRS 行为并让处理器自动扫描注册：
 
 ```csharp
 public class GameArchitecture : Architecture
@@ -225,7 +220,7 @@ public class GameArchitecture : Architecture
 }
 ```
 
-`RegisterMediatorBehavior<TBehavior>()` 同时支持两种形式：
+`RegisterMediatorBehavior<TBehavior>()` 是保留的兼容名称，当前用于注册框架内建 CQRS pipeline，支持两种形式：
 
 - 开放泛型行为，例如 `LoggingBehavior<,>`，用于匹配所有请求
 - 封闭行为类型，例如某个只服务于单一请求的 `SpecialBehavior`
@@ -326,7 +321,7 @@ var notification = new PlayerLevelUpNotification(new PlayerLevelUpInput
     NewLevel = 10
 });
 
-await mediator.Publish(notification);
+await this.PublishAsync(notification);
 ```
 
 ### Pipeline Behaviors（管道行为）
@@ -334,11 +329,11 @@ await mediator.Publish(notification);
 Behaviors 可以在处理器执行前后添加横切关注点：
 
 ```csharp
-using Mediator;
+using GFramework.Core.Abstractions.Cqrs;
 
 // 日志行为
 public class LoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
-    where TMessage : IMessage
+    where TMessage : IRequest<TResponse>
 {
     public async ValueTask<TResponse> Handle(
         TMessage message,
@@ -358,7 +353,7 @@ public class LoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
 
 // 性能监控行为
 public class PerformanceBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
-    where TMessage : IMessage
+    where TMessage : IRequest<TResponse>
 {
     public async ValueTask<TResponse> Handle(
         TMessage message,
@@ -390,7 +385,7 @@ RegisterMediatorBehavior<PerformanceBehavior<,>>();
 
 ```csharp
 public class ValidationBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
-    where TMessage : IMessage
+    where TMessage : IRequest<TResponse>
 {
     public async ValueTask<TResponse> Handle(
         TMessage message,
@@ -441,7 +436,7 @@ public class GetAllPlayersStreamQueryHandler : AbstractStreamQueryHandler<GetAll
 
 // 使用流式查询
 var query = new GetAllPlayersStreamQuery();
-var stream = await mediator.CreateStream(query);
+var stream = this.CreateStream(query);
 
 await foreach (var player in stream)
 {
@@ -530,12 +525,12 @@ CalculateDamageRequest
 
 **解答**：
 
-- **Notification**：通过 Mediator 发送，处理器在同一请求上下文中执行
+- **Notification**：通过内建 CQRS runtime 发送，处理器在同一请求上下文中执行
 - **Event**：通过 EventBus 发送，监听器异步执行
 
 ```csharp
 // Notification: 同步处理
-await mediator.Publish(notification); // 等待所有处理器完成
+await this.PublishAsync(notification); // 等待所有处理器完成
 
 // Event: 异步处理
 this.SendEvent(event); // 立即返回，监听器异步执行
@@ -569,15 +564,13 @@ public override async ValueTask<Result> Handle(...)
 ### 问题：处理器可以调用其他处理器吗？
 
 **解答**：
-可以，通过 Mediator 发送新的命令或查询：
+可以，通过架构上下文继续发送新的命令或查询：
 
 ```csharp
 public override async ValueTask<Unit> Handle(...)
 {
-    var mediator = this.GetService<IMediator>();
-
     // 调用其他命令
-    await mediator.Send(new AnotherCommand(...));
+    await this.SendAsync(new AnotherCommand(...));
 
     return Unit.Value;
 }

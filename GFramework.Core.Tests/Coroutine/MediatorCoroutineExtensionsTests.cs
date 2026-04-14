@@ -13,68 +13,32 @@
 
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Coroutine;
+using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Rule;
 using GFramework.Core.Coroutine.Extensions;
-using Mediator;
-using Moq;
 
 namespace GFramework.Core.Tests.Coroutine;
 
 /// <summary>
-///     MediatorCoroutineExtensions的单元测试类
-///     测试Mediator模式与协程集成的扩展方法
-///     注意：由于 Mediator 使用源生成器，本测试类主要验证接口和参数验证
+///     <see cref="MediatorCoroutineExtensions" /> 的单元测试类。
+///     验证历史命名的协程扩展已切到框架内建 CQRS runtime，
+///     并确保协程对命令调度异常的传播行为保持稳定。
 /// </summary>
 [TestFixture]
 public class MediatorCoroutineExtensionsTests
 {
-    /// <summary>
-    ///     测试用的简单命令类
-    /// </summary>
-    private class TestCommand : IRequest<Unit>
-    {
-        public string Data { get; set; } = string.Empty;
-    }
-
-    /// <summary>
-    ///     测试用的简单事件类
-    /// </summary>
-    private class TestEvent
-    {
-        public string Data { get; set; } = string.Empty;
-    }
-
-    /// <summary>
-    ///     上下文感知基类的模拟实现
-    /// </summary>
-    private class TestContextAware : IContextAware
-    {
-        public readonly Mock<IArchitectureContext> _mockContext = new();
-
-        public IArchitectureContext GetContext()
-        {
-            return _mockContext.Object;
-        }
-
-        public void SetContext(IArchitectureContext context)
-        {
-        }
-    }
-
     /// <summary>
     ///     验证SendCommandCoroutine应该返回IEnumerator<IYieldInstruction>
     /// </summary>
     [Test]
     public void SendCommandCoroutine_Should_Return_IEnumerator_Of_YieldInstruction()
     {
-        var command = new TestCommand { Data = "Test" };
+        var command = new TestCommand("Test");
         var contextAware = new TestContextAware();
 
-        // 创建 mediator 模拟
-        var mediatorMock = new Mock<IMediator>();
-        contextAware._mockContext
-            .Setup(ctx => ctx.GetService<IMediator>())
-            .Returns(mediatorMock.Object);
+        contextAware.MockContext
+            .Setup(ctx => ctx.SendAsync(command, It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
 
         var coroutine = MediatorCoroutineExtensions.SendCommandCoroutine(contextAware, command);
 
@@ -82,23 +46,45 @@ public class MediatorCoroutineExtensionsTests
     }
 
     /// <summary>
-    ///     验证SendCommandCoroutine应该在mediator为null时抛出NullReferenceException
+    ///     验证 SendCommandCoroutine 在底层命令调度失败时会重新抛出原始异常。
     /// </summary>
     [Test]
-    public void SendCommandCoroutine_Should_Throw_When_Mediator_Null()
+    public void SendCommandCoroutine_Should_Rethrow_Inner_Exception_When_Command_Fails()
     {
-        var command = new TestCommand { Data = "Test" };
+        var command = new TestCommand("Test");
         var contextAware = new TestContextAware();
+        var expectedException = new InvalidOperationException("Command failed.");
 
-        // 设置上下文服务以返回null mediator
-        contextAware._mockContext
-            .Setup(ctx => ctx.GetService<IMediator>())
-            .Returns((IMediator?)null);
+        contextAware.MockContext
+            .Setup(ctx => ctx.SendAsync(command, It.IsAny<CancellationToken>()))
+            .Returns(new ValueTask(Task.FromException(expectedException)));
 
-        // 创建协程
         var coroutine = MediatorCoroutineExtensions.SendCommandCoroutine(contextAware, command);
 
-        // 调用 MoveNext 时应该抛出 NullReferenceException
-        Assert.Throws<NullReferenceException>(() => coroutine.MoveNext());
+        Assert.That(coroutine.MoveNext(), Is.True);
+        var exception = Assert.Throws<InvalidOperationException>(() => coroutine.MoveNext());
+        Assert.That(exception, Is.SameAs(expectedException));
+    }
+
+    /// <summary>
+    ///     测试用的简单命令类
+    /// </summary>
+    private sealed record TestCommand(string Data) : IRequest<Unit>;
+
+    /// <summary>
+    ///     上下文感知基类的模拟实现
+    /// </summary>
+    private sealed class TestContextAware : IContextAware
+    {
+        public Mock<IArchitectureContext> MockContext { get; } = new();
+
+        public IArchitectureContext GetContext()
+        {
+            return MockContext.Object;
+        }
+
+        public void SetContext(IArchitectureContext context)
+        {
+        }
     }
 }

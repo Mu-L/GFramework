@@ -5,7 +5,6 @@ using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Logging;
 using GFramework.Core.Rule;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Core.Ioc;
 
@@ -310,8 +309,8 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
 
 
     /// <summary>
-    ///     注册中介行为管道
-    ///     用于配置Mediator框架的行为拦截和处理逻辑。
+    ///     注册 CQRS 请求管道行为。
+    ///     历史方法名保留了 Mediator 前缀，但当前用于配置框架内建 CQRS runtime 的行为拦截和处理逻辑。
     ///     同时支持开放泛型行为类型和已闭合的具体行为类型，
     ///     以兼容通用行为和针对单一请求的专用行为两种注册方式。
     /// </summary>
@@ -351,7 +350,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
                 }
             }
 
-            _logger.Debug($"Mediator behavior registered: {behaviorType.Name}");
+            _logger.Debug($"CQRS pipeline behavior registered: {behaviorType.Name}");
         }
         finally
         {

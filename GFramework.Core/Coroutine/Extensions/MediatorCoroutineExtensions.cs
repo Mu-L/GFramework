@@ -12,21 +12,22 @@
 // limitations under the License.
 
 using GFramework.Core.Abstractions.Coroutine;
+using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Rule;
-using Mediator;
 
 namespace GFramework.Core.Coroutine.Extensions;
 
 /// <summary>
-/// 提供Mediator模式与协程集成的扩展方法。
-/// 包含发送命令和等待事件的协程实现。
+/// 提供 CQRS 命令与协程集成的扩展方法。
+/// 历史命名保留了 Mediator 前缀，但当前实现直接走 <see cref="IContextAware.GetContext" /> 返回的
+/// <see cref="GFramework.Core.Abstractions.Architectures.IArchitectureContext" /> CQRS 入口，不再依赖外部 Mediator 服务。
 /// </summary>
 public static class MediatorCoroutineExtensions
 {
     /// <summary>
-    /// 以协程方式发送命令并处理可能的异常。
+    /// 以协程方式发送无返回值 CQRS 命令并处理可能的异常。
     /// </summary>
-    /// <typeparam name="TCommand">命令的类型</typeparam>
+    /// <typeparam name="TCommand">命令的类型。</typeparam>
     /// <param name="contextAware">上下文感知对象，用于获取服务</param>
     /// <param name="command">要发送的命令对象</param>
     /// <param name="onError">发生异常时的回调处理函数</param>
@@ -35,13 +36,12 @@ public static class MediatorCoroutineExtensions
         this IContextAware contextAware,
         TCommand command,
         Action<Exception>? onError = null)
-        where TCommand : notnull
+        where TCommand : IRequest<Unit>
     {
-        var mediator = contextAware
-            .GetContext()
-            .GetService<IMediator>()!;
+        ArgumentNullException.ThrowIfNull(contextAware);
+        ArgumentNullException.ThrowIfNull(command);
 
-        var task = mediator.Send(command).AsTask();
+        var task = contextAware.GetContext().SendAsync(command).AsTask();
 
         yield return task.AsCoroutineInstruction();
 

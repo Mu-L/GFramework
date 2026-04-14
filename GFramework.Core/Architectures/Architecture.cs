@@ -7,7 +7,6 @@ using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
 using GFramework.Core.Environment;
 using GFramework.Core.Logging;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Core.Architectures;
 
@@ -146,8 +145,8 @@ public abstract class Architecture : IArchitecture
     #region Module Management
 
     /// <summary>
-    ///     注册中介行为管道
-    ///     用于配置Mediator框架的行为拦截和处理逻辑。
+    ///     注册 CQRS 请求管道行为。
+    ///     历史方法名保留了 Mediator 前缀，但当前用于配置框架内建 CQRS runtime 的行为拦截和处理逻辑。
     ///     可以传入开放泛型行为类型，也可以传入绑定到特定请求的封闭行为类型。
     /// </summary>
     /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
