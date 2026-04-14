@@ -463,6 +463,66 @@ public class GodotProjectMetadataGeneratorTests
         });
     }
 
+    /// <summary>
+    ///     验证缺少 <c>project.godot</c> AdditionalText 时不会生成任何源码或诊断。
+    /// </summary>
+    [Test]
+    public void Run_Should_Not_Generate_Sources_When_Project_File_Is_Missing()
+    {
+        var result = AdditionalTextGeneratorTestDriver.Run<GodotProjectMetadataGenerator>(
+            CreateSource("namespace TestApp { }"));
+
+        var generatorResult = result.Results.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(generatorResult.Diagnostics, Is.Empty);
+            Assert.That(generatorResult.GeneratedSources, Is.Empty);
+        });
+    }
+
+    /// <summary>
+    ///     验证空的 <c>project.godot</c> 内容不会生成任何源码或诊断。
+    /// </summary>
+    [Test]
+    public void Run_Should_Not_Generate_Sources_When_Project_File_Is_Empty()
+    {
+        var result = RunGenerator(
+            CreateSource("namespace TestApp { }"),
+            string.Empty);
+
+        var generatorResult = result.Results.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(generatorResult.Diagnostics, Is.Empty);
+            Assert.That(generatorResult.GeneratedSources, Is.Empty);
+        });
+    }
+
+    /// <summary>
+    ///     验证只有空节的 <c>project.godot</c> 不会生成任何源码或诊断。
+    /// </summary>
+    [Test]
+    public void Run_Should_Not_Generate_Sources_When_Project_File_Has_Empty_Sections()
+    {
+        var result = RunGenerator(
+            CreateSource("namespace TestApp { }"),
+            """
+            [autoload]
+
+            [input]
+            """);
+
+        var generatorResult = result.Results.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(generatorResult.Diagnostics, Is.Empty);
+            Assert.That(generatorResult.GeneratedSources, Is.Empty);
+        });
+    }
+
     private static GeneratorDriverRunResult RunGenerator(
         string source,
         string projectFile)
