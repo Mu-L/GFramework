@@ -1,5 +1,6 @@
 using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
+using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Core.Tests.Cqrs;
@@ -13,8 +14,6 @@ namespace GFramework.Core.Tests.Ioc;
 [TestFixture]
 public class MicrosoftDiContainerTests
 {
-    private MicrosoftDiContainer _container = null!;
-
     /// <summary>
     ///     在每个测试方法执行前进行设置
     /// </summary>
@@ -33,6 +32,8 @@ public class MicrosoftDiContainerTests
 
         CqrsTestRuntime.RegisterInfrastructure(_container);
     }
+
+    private MicrosoftDiContainer _container = null!;
 
     /// <summary>
     ///     测试注册单例实例的功能
