@@ -11,20 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using GFramework.Core.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs.Query;
 
-namespace GFramework.Core.Cqrs.Query;
+namespace GFramework.Cqrs.Cqrs.Query;
 
 /// <summary>
 /// 抽象流式查询处理器基类
-/// 继承自ContextAwareBase并实现IStreamQueryHandler接口，为具体的流式查询处理器提供基础功能
+/// 继承自轻量 CQRS 上下文基类并实现IStreamQueryHandler接口，为具体的流式查询处理器提供基础功能
 /// 支持流式处理查询并产生异步可枚举的响应序列，适用于大数据量或实时数据查询场景
 /// </summary>
 /// <typeparam name="TQuery">流式查询类型，必须实现IStreamQuery接口</typeparam>
 /// <typeparam name="TResponse">流式查询响应元素类型</typeparam>
-public abstract class AbstractStreamQueryHandler<TQuery, TResponse> : ContextAwareBase,
+public abstract class AbstractStreamQueryHandler<TQuery, TResponse> : CqrsContextAwareHandlerBase,
     IStreamRequestHandler<TQuery, TResponse>
     where TQuery : IStreamQuery<TResponse>
 {

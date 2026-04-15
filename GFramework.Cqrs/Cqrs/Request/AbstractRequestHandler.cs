@@ -11,17 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using GFramework.Core.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
 
-namespace GFramework.Core.Cqrs.Request;
+namespace GFramework.Cqrs.Cqrs.Request;
 
 /// <summary>
 /// 抽象请求处理器基类，用于处理不返回具体响应的请求
-/// 继承自ContextAwareBase并实现IRequestHandler接口
+/// 继承自轻量 CQRS 上下文基类并实现IRequestHandler接口
 /// </summary>
 /// <typeparam name="TRequest">请求类型，必须实现IRequest[Unit]接口</typeparam>
-public abstract class AbstractRequestHandler<TRequest> : ContextAwareBase, IRequestHandler<TRequest, Unit>
+public abstract class AbstractRequestHandler<TRequest> : CqrsContextAwareHandlerBase, IRequestHandler<TRequest, Unit>
     where TRequest : IRequest<Unit>
 {
     /// <summary>
@@ -35,11 +34,11 @@ public abstract class AbstractRequestHandler<TRequest> : ContextAwareBase, IRequ
 
 /// <summary>
 /// 抽象请求处理器基类，用于处理需要返回具体响应的请求
-/// 继承自ContextAwareBase并实现IRequestHandler接口
+/// 继承自轻量 CQRS 上下文基类并实现IRequestHandler接口
 /// </summary>
 /// <typeparam name="TRequest">请求类型，必须实现IRequest[TResponse]接口</typeparam>
 /// <typeparam name="TResponse">响应类型</typeparam>
-public abstract class AbstractRequestHandler<TRequest, TResponse> : ContextAwareBase,
+public abstract class AbstractRequestHandler<TRequest, TResponse> : CqrsContextAwareHandlerBase,
     IRequestHandler<TRequest, TResponse> where TRequest : IRequest<TResponse>
 {
     /// <summary>

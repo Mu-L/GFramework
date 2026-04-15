@@ -25,7 +25,7 @@ public static class CqrsTestRuntime
 
     private static readonly Type CqrsHandlerRegistrarType = CqrsRuntimeAssembly
         .GetType(
-            "GFramework.Core.Cqrs.Internal.CqrsHandlerRegistrar",
+            "GFramework.Cqrs.Internal.CqrsHandlerRegistrar",
             throwOnError: true)!;
 
     private static readonly MethodInfo RegisterHandlersMethod = CqrsHandlerRegistrarType

@@ -11,19 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using GFramework.Core.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs.Command;
 
-namespace GFramework.Core.Cqrs.Command;
+namespace GFramework.Cqrs.Cqrs.Command;
 
 /// <summary>
 /// 抽象命令处理器基类
-/// 继承自 ContextAwareBase 并实现 IRequestHandler 接口，为具体的命令处理器提供基础功能。
+/// 继承自轻量 CQRS 上下文基类并实现 IRequestHandler 接口，为具体的命令处理器提供基础功能。
 /// 框架会在每次分发前注入当前架构上下文，因此派生类可以通过 Context 访问架构级服务。
 /// </summary>
 /// <typeparam name="TCommand">命令类型</typeparam>
-public abstract class AbstractCommandHandler<TCommand> : ContextAwareBase, IRequestHandler<TCommand, Unit>
+public abstract class AbstractCommandHandler<TCommand> : CqrsContextAwareHandlerBase, IRequestHandler<TCommand, Unit>
     where TCommand : ICommand<Unit>
 {
     /// <summary>
@@ -38,12 +37,13 @@ public abstract class AbstractCommandHandler<TCommand> : ContextAwareBase, IRequ
 
 /// <summary>
 /// 抽象命令处理器基类（带返回值版本）
-/// 继承自 ContextAwareBase 并实现 IRequestHandler 接口，为具体的命令处理器提供基础功能。
+/// 继承自轻量 CQRS 上下文基类并实现 IRequestHandler 接口，为具体的命令处理器提供基础功能。
 /// 支持泛型命令和结果类型，框架会在每次分发前注入当前架构上下文。
 /// </summary>
 /// <typeparam name="TCommand">命令类型，必须实现ICommand接口</typeparam>
 /// <typeparam name="TResult">命令执行结果类型</typeparam>
-public abstract class AbstractCommandHandler<TCommand, TResult> : ContextAwareBase, IRequestHandler<TCommand, TResult>
+public abstract class AbstractCommandHandler<TCommand, TResult> : CqrsContextAwareHandlerBase,
+    IRequestHandler<TCommand, TResult>
     where TCommand : ICommand<TResult>
 {
     /// <summary>

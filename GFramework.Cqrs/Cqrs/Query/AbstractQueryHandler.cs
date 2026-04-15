@@ -11,20 +11,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using GFramework.Core.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs.Query;
 
-namespace GFramework.Core.Cqrs.Query;
+namespace GFramework.Cqrs.Cqrs.Query;
 
 /// <summary>
 /// 抽象查询处理器基类
-/// 继承自 ContextAwareBase 并实现 IRequestHandler 接口，为具体的查询处理器提供基础功能。
+/// 继承自轻量 CQRS 上下文基类并实现 IRequestHandler 接口，为具体的查询处理器提供基础功能。
 /// 框架会在每次分发前注入当前架构上下文，因此派生类可以通过 Context 访问架构级服务。
 /// </summary>
 /// <typeparam name="TQuery">查询类型，必须实现IQuery接口</typeparam>
 /// <typeparam name="TResult">查询结果类型</typeparam>
-public abstract class AbstractQueryHandler<TQuery, TResult> : ContextAwareBase, IRequestHandler<TQuery, TResult>
+public abstract class AbstractQueryHandler<TQuery, TResult> : CqrsContextAwareHandlerBase,
+    IRequestHandler<TQuery, TResult>
     where TQuery : IQuery<TResult>
 {
     /// <summary>

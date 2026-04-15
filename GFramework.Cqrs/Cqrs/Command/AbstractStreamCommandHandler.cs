@@ -11,15 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using GFramework.Core.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs.Command;
 
-namespace GFramework.Core.Cqrs.Command;
+namespace GFramework.Cqrs.Cqrs.Command;
 
 /// <summary>
 /// 抽象流式命令处理器基类。
-/// 继承自 <see cref="ContextAwareBase" /> 并实现 <see cref="IStreamRequestHandler{TRequest,TResponse}" />，
+/// 继承自轻量 CQRS 上下文基类并实现 <see cref="IStreamRequestHandler{TRequest,TResponse}" />，
 /// 为具体的流式命令处理器提供基础功能。
 /// </summary>
 /// <typeparam name="TCommand">流式命令类型，必须实现 <see cref="IStreamCommand{TResponse}" />。</typeparam>
@@ -32,7 +31,7 @@ namespace GFramework.Core.Cqrs.Command;
 /// 传入 <see cref="Handle" /> 的取消令牌同时约束流的创建与后续枚举，
 /// 派生类应在启动阶段和每次生成响应前尊重取消请求，避免在调用方停止枚举后继续执行后台工作。
 /// </remarks>
-public abstract class AbstractStreamCommandHandler<TCommand, TResponse> : ContextAwareBase,
+public abstract class AbstractStreamCommandHandler<TCommand, TResponse> : CqrsContextAwareHandlerBase,
     IStreamRequestHandler<TCommand, TResponse>
     where TCommand : IStreamCommand<TResponse>
 {
