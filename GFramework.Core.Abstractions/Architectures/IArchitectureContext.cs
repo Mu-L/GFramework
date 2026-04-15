@@ -18,7 +18,7 @@ namespace GFramework.Core.Abstractions.Architectures;
 ///     <para>新的 <c>GFramework.Cqrs.Abstractions.Cqrs</c> 契约由内置 CQRS dispatcher 统一处理，支持 request pipeline、notification publish 与 stream request。</para>
 ///     <para>新功能优先使用 <see cref="SendRequestAsync{TResponse}(IRequest{TResponse},CancellationToken)" />、<see cref="SendAsync{TCommand}(TCommand,CancellationToken)" /> 与对应的 CQRS Command/Query 重载；迁移旧代码时可先保留旧入口，再逐步替换为 CQRS 请求模型。</para>
 /// </remarks>
-public interface IArchitectureContext
+public interface IArchitectureContext : ICqrsContext
 {
     /// <summary>
     ///     获取指定类型的服务实例

@@ -4,7 +4,6 @@ using GFramework.Core.Abstractions.Bases;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Systems;
-using GFramework.Core.Logging;
 using GFramework.Core.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
 
@@ -624,11 +623,14 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
                     .Where(s => s.ServiceType == serviceType || serviceType.IsAssignableFrom(s.ServiceType)).ToList();
 
                 var result = new List<T>();
+                var seenInstances = new HashSet<object>(ReferenceEqualityComparer.Instance);
                 foreach (var descriptor in registeredServices)
                 {
                     if (descriptor.ImplementationInstance is T instance)
                     {
-                        result.Add(instance);
+                        // 同一实例可能同时以“正式接口 + 兼容别名接口”被注册；未冻结路径需去重以保持与冻结后的解析口径一致。
+                        if (seenInstances.Add(instance))
+                            result.Add(instance);
                     }
                     else if (descriptor.ImplementationFactory != null)
                     {
@@ -672,11 +674,14 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
                     .ToList();
 
                 var result = new List<object>();
+                var seenInstances = new HashSet<object>(ReferenceEqualityComparer.Instance);
                 foreach (var descriptor in registeredServices)
                 {
                     if (descriptor.ImplementationInstance != null)
                     {
-                        result.Add(descriptor.ImplementationInstance);
+                        // 同一实例可能通过多个可赋值服务类型暴露；返回前按引用去重，避免兼容别名造成重复观察结果。
+                        if (seenInstances.Add(descriptor.ImplementationInstance))
+                            result.Add(descriptor.ImplementationInstance);
                     }
                     else if (descriptor.ImplementationFactory != null)
                     {

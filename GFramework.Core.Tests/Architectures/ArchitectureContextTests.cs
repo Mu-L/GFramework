@@ -1,7 +1,6 @@
 using System.Reflection;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Command;
-using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Environment;
 using GFramework.Core.Abstractions.Ioc;

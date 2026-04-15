@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Ioc;
 using GFramework.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using GFramework.Cqrs.Command;
+using LegacyICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
 
 namespace GFramework.Tests.Common;
 
@@ -60,7 +60,12 @@ public static class CqrsTestRuntime
         {
             var runtimeLogger = LoggerFactoryResolver.Provider.CreateLogger("CqrsDispatcher");
             var runtime = CqrsRuntimeFactory.CreateRuntime(container, runtimeLogger);
-            container.Register<ICqrsRuntime>(runtime);
+            container.Register(runtime);
+            container.Register<LegacyICqrsRuntime>((LegacyICqrsRuntime)runtime);
+        }
+        else if (container.Get<LegacyICqrsRuntime>() is null)
+        {
+            container.Register<LegacyICqrsRuntime>((LegacyICqrsRuntime)container.GetRequired<ICqrsRuntime>());
         }
 
         if (container.Get<ICqrsHandlerRegistrar>() is null)

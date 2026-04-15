@@ -1,12 +1,12 @@
 using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
-using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Core.Tests.Cqrs;
 using GFramework.Core.Tests.Systems;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using LegacyICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
 
 namespace GFramework.Core.Tests.Ioc;
 
@@ -160,12 +160,16 @@ public class MicrosoftDiContainerTests
     public void RegisterHandlers_Should_Not_Duplicate_Cqrs_Infrastructure_When_It_Is_Already_Registered()
     {
         Assert.That(_container.GetAll<ICqrsRuntime>(), Has.Count.EqualTo(1));
+        Assert.That(_container.GetAll<LegacyICqrsRuntime>(), Has.Count.EqualTo(1));
         Assert.That(_container.GetAll<ICqrsHandlerRegistrar>(), Has.Count.EqualTo(1));
+        Assert.That(_container.Get<ICqrsRuntime>(), Is.SameAs(_container.Get<LegacyICqrsRuntime>()));
 
         CqrsTestRuntime.RegisterHandlers(_container);
 
         Assert.That(_container.GetAll<ICqrsRuntime>(), Has.Count.EqualTo(1));
+        Assert.That(_container.GetAll<LegacyICqrsRuntime>(), Has.Count.EqualTo(1));
         Assert.That(_container.GetAll<ICqrsHandlerRegistrar>(), Has.Count.EqualTo(1));
+        Assert.That(_container.Get<ICqrsRuntime>(), Is.SameAs(_container.Get<LegacyICqrsRuntime>()));
     }
 
     /// <summary>
