@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Ioc;
@@ -80,22 +79,31 @@ public static class CqrsTestRuntime
     ///     为裸测试容器补齐默认 CQRS runtime seam。
     /// </summary>
     /// <param name="container">目标测试容器。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="container" /> 为 <see langword="null" />。</exception>
+    /// <exception cref="TargetInvocationException">反射调用底层 CQRS runtime 或注册器构造函数失败时抛出。</exception>
     /// <remarks>
     ///     这使仅使用 <see cref="MicrosoftDiContainer" /> 的测试环境也能观察与生产路径一致的 runtime 行为，
     ///     而无需完整启动服务模块管理器。
+    ///     该方法按服务类型执行幂等注册，只会补齐当前容器中尚未接线的 CQRS 基础设施。
     /// </remarks>
     public static void RegisterInfrastructure(MicrosoftDiContainer container)
     {
         ArgumentNullException.ThrowIfNull(container);
 
-        var runtimeLogger = LoggerFactoryResolver.Provider.CreateLogger("CqrsDispatcher");
-        var registrarLogger = LoggerFactoryResolver.Provider.CreateLogger(nameof(CqrsTestRuntime));
-        var runtime = (ICqrsRuntime)CqrsDispatcherConstructor.Invoke([container, runtimeLogger]);
-        var registrar =
-            (ICqrsHandlerRegistrar)DefaultCqrsHandlerRegistrarConstructor.Invoke([container, registrarLogger]);
+        if (container.Get<ICqrsRuntime>() is null)
+        {
+            var runtimeLogger = LoggerFactoryResolver.Provider.CreateLogger(CqrsDispatcherType.Name);
+            var runtime = (ICqrsRuntime)CqrsDispatcherConstructor.Invoke([container, runtimeLogger]);
+            container.Register<ICqrsRuntime>(runtime);
+        }
 
-        container.Register<ICqrsRuntime>(runtime);
-        container.Register<ICqrsHandlerRegistrar>(registrar);
+        if (container.Get<ICqrsHandlerRegistrar>() is null)
+        {
+            var registrarLogger = LoggerFactoryResolver.Provider.CreateLogger(DefaultCqrsHandlerRegistrarType.Name);
+            var registrar =
+                (ICqrsHandlerRegistrar)DefaultCqrsHandlerRegistrarConstructor.Invoke([container, registrarLogger]);
+            container.Register<ICqrsHandlerRegistrar>(registrar);
+        }
     }
 
     /// <summary>
@@ -103,6 +111,14 @@ public static class CqrsTestRuntime
     /// </summary>
     /// <param name="container">承载处理器映射的测试容器。</param>
     /// <param name="assemblies">要扫描的程序集集合。</param>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="container" /> 或 <paramref name="assemblies" /> 为 <see langword="null" />。
+    /// </exception>
+    /// <exception cref="TargetInvocationException">反射调用底层 CQRS 处理器注册入口失败时抛出。</exception>
+    /// <remarks>
+    ///     该入口会自动调用 <see cref="RegisterInfrastructure" />，因此测试通常无需预先手动接线 CQRS 基础设施。
+    ///     程序集去重与空元素过滤由生产注册入口统一处理，避免测试辅助层复制相同筛选逻辑。
+    /// </remarks>
     public static void RegisterHandlers(MicrosoftDiContainer container, params Assembly[] assemblies)
     {
         ArgumentNullException.ThrowIfNull(container);
@@ -113,6 +129,6 @@ public static class CqrsTestRuntime
         var logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(CqrsTestRuntime));
         RegisterHandlersMethod.Invoke(
             null,
-            [container, assemblies.Where(static assembly => assembly is not null).Distinct().ToArray(), logger]);
+            [container, assemblies, logger]);
     }
 }

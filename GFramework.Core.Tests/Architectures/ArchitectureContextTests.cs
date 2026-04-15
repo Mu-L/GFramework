@@ -16,7 +16,6 @@ using GFramework.Core.Events;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Core.Query;
-using GFramework.Cqrs.Abstractions.Cqrs;
 
 namespace GFramework.Core.Tests.Architectures;
 
@@ -45,6 +44,15 @@ namespace GFramework.Core.Tests.Architectures;
 [TestFixture]
 public class ArchitectureContextTests
 {
+    private AsyncQueryExecutor? _asyncQueryBus;
+    private CommandExecutor? _commandBus;
+    private MicrosoftDiContainer? _container;
+
+    private ArchitectureContext? _context;
+    private DefaultEnvironment? _environment;
+    private EventBus? _eventBus;
+    private QueryExecutor? _queryBus;
+
     [SetUp]
     public void SetUp()
     {
@@ -75,14 +83,6 @@ public class ArchitectureContextTests
 
         _context = new ArchitectureContext(_container);
     }
-
-    private ArchitectureContext? _context;
-    private MicrosoftDiContainer? _container;
-    private EventBus? _eventBus;
-    private CommandExecutor? _commandBus;
-    private QueryExecutor? _queryBus;
-    private AsyncQueryExecutor? _asyncQueryBus;
-    private DefaultEnvironment? _environment;
 
     /// <summary>
     ///     测试构造函数在所有参数都有效时不应抛出异常
@@ -308,8 +308,10 @@ public class ArchitectureContextTests
     [Test]
     public async Task SendRequestAsync_Should_ResolveCqrsRuntime_OnlyOnce_When_AccessedConcurrently()
     {
+        const int workerCount = 16;
         using var startGate = new ManualResetEventSlim(false);
         using var allowResolutionToComplete = new ManualResetEventSlim(false);
+        using var workersReady = new CountdownEvent(workerCount);
         var resolutionCallCount = 0;
         var runtime = new Mock<ICqrsRuntime>(MockBehavior.Strict);
         var container = new Mock<IIocContainer>(MockBehavior.Strict);
@@ -329,14 +331,19 @@ public class ArchitectureContextTests
             });
 
         var context = new ArchitectureContext(container.Object);
-        var requests = Enumerable.Range(0, 16)
+        var requests = Enumerable.Range(0, workerCount)
             .Select(_ => Task.Run(async () =>
             {
+                workersReady.Signal();
                 startGate.Wait();
                 return await context.SendRequestAsync(new TestCqrsRequest());
             }))
             .ToArray();
 
+        Assert.That(
+            workersReady.Wait(TimeSpan.FromSeconds(1)),
+            Is.True,
+            "Expected all workers to be ready before releasing start gate.");
         startGate.Set();
 
         Assert.That(
@@ -344,8 +351,6 @@ public class ArchitectureContextTests
             Is.True,
             "Expected at least one CQRS runtime resolution attempt.");
 
-        // 留出一个短暂窗口，让并发首次访问都在 runtime 尚未发布前抵达同一初始化点。
-        await Task.Delay(50);
         allowResolutionToComplete.Set();
 
         var responses = await Task.WhenAll(requests);

@@ -1,10 +1,10 @@
 using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
+using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Core.Tests.Cqrs;
 using GFramework.Core.Tests.Systems;
-using GFramework.Cqrs.Abstractions.Cqrs;
 
 namespace GFramework.Core.Tests.Ioc;
 
@@ -14,6 +14,8 @@ namespace GFramework.Core.Tests.Ioc;
 [TestFixture]
 public class MicrosoftDiContainerTests
 {
+    private MicrosoftDiContainer _container = null!;
+
     /// <summary>
     ///     在每个测试方法执行前进行设置
     /// </summary>
@@ -32,8 +34,6 @@ public class MicrosoftDiContainerTests
 
         CqrsTestRuntime.RegisterInfrastructure(_container);
     }
-
-    private MicrosoftDiContainer _container = null!;
 
     /// <summary>
     ///     测试注册单例实例的功能
@@ -149,6 +149,21 @@ public class MicrosoftDiContainerTests
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.SameAs(instance));
+    }
+
+    /// <summary>
+    ///     测试当 CQRS 基础设施已手动接线后，再调用处理器注册入口不会重复注册 runtime seam。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Not_Duplicate_Cqrs_Infrastructure_When_It_Is_Already_Registered()
+    {
+        Assert.That(_container.GetAll<ICqrsRuntime>(), Has.Count.EqualTo(1));
+        Assert.That(_container.GetAll<ICqrsHandlerRegistrar>(), Has.Count.EqualTo(1));
+
+        CqrsTestRuntime.RegisterHandlers(_container);
+
+        Assert.That(_container.GetAll<ICqrsRuntime>(), Has.Count.EqualTo(1));
+        Assert.That(_container.GetAll<ICqrsHandlerRegistrar>(), Has.Count.EqualTo(1));
     }
 
     /// <summary>
