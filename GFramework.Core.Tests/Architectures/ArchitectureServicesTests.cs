@@ -1,6 +1,5 @@
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Command;
-using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Environment;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Abstractions.Ioc;
@@ -14,6 +13,7 @@ using GFramework.Core.Environment;
 using GFramework.Core.Events;
 using GFramework.Core.Ioc;
 using GFramework.Core.Query;
+using GFramework.Cqrs.Abstractions.Cqrs;
 using ICommand = GFramework.Core.Abstractions.Command.ICommand;
 
 namespace GFramework.Core.Tests.Architectures;
@@ -34,16 +34,16 @@ namespace GFramework.Core.Tests.Architectures;
 [TestFixture]
 public class ArchitectureServicesTests
 {
-    private TestArchitectureContextV3? _context;
-
-    private ArchitectureServices? _services;
-
     [SetUp]
     public void SetUp()
     {
         _services = new ArchitectureServices();
         _context = new TestArchitectureContextV3();
     }
+
+    private TestArchitectureContextV3? _context;
+
+    private ArchitectureServices? _services;
 
     private void RegisterBuiltInServices()
     {
@@ -359,24 +359,56 @@ public class TestArchitectureContextV3 : IArchitectureContext
         throw new NotImplementedException();
     }
 
-    public ValueTask<TResponse> SendCommandAsync<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command,
+    /// <summary>
+    ///     测试桩：异步发送 CQRS 命令并返回响应。
+    /// </summary>
+    /// <typeparam name="TResponse">命令响应类型。</typeparam>
+    /// <param name="command">要发送的命令。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>命令响应任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    public ValueTask<TResponse> SendCommandAsync<TResponse>(
+        GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
-    public TResponse SendCommand<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command)
+    /// <summary>
+    ///     测试桩：同步发送 CQRS 命令并返回响应。
+    /// </summary>
+    /// <typeparam name="TResponse">命令响应类型。</typeparam>
+    /// <param name="command">要发送的命令。</param>
+    /// <returns>命令响应。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    public TResponse SendCommand<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
         throw new NotImplementedException();
     }
 
-    public ValueTask<TResponse> SendQueryAsync<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query,
+    /// <summary>
+    ///     测试桩：异步发送 CQRS 查询并返回结果。
+    /// </summary>
+    /// <typeparam name="TResponse">查询结果类型。</typeparam>
+    /// <param name="query">要发送的查询。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>查询结果任务。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    public ValueTask<TResponse> SendQueryAsync<TResponse>(
+        GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query,
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
-    public TResponse SendQuery<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query)
+    /// <summary>
+    ///     测试桩：同步发送 CQRS 查询并返回结果。
+    /// </summary>
+    /// <typeparam name="TResponse">查询结果类型。</typeparam>
+    /// <param name="query">要发送的查询。</param>
+    /// <returns>查询结果。</returns>
+    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    public TResponse SendQuery<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
         throw new NotImplementedException();
     }

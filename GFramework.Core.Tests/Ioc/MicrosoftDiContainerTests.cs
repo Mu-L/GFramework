@@ -5,6 +5,7 @@ using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Core.Tests.Cqrs;
 using GFramework.Core.Tests.Systems;
+using GFramework.Cqrs.Abstractions.Cqrs;
 
 namespace GFramework.Core.Tests.Ioc;
 
@@ -29,6 +30,8 @@ public class MicrosoftDiContainerTests
             BindingFlags.NonPublic | BindingFlags.Instance);
         loggerField?.SetValue(_container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(MicrosoftDiContainer)));
+
+        CqrsTestRuntime.RegisterInfrastructure(_container);
     }
 
     private MicrosoftDiContainer _container = null!;
@@ -147,6 +150,21 @@ public class MicrosoftDiContainerTests
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.SameAs(instance));
+    }
+
+    /// <summary>
+    ///     测试当 CQRS 基础设施已手动接线后，再调用处理器注册入口不会重复注册 runtime seam。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Not_Duplicate_Cqrs_Infrastructure_When_It_Is_Already_Registered()
+    {
+        Assert.That(_container.GetAll<ICqrsRuntime>(), Has.Count.EqualTo(1));
+        Assert.That(_container.GetAll<ICqrsHandlerRegistrar>(), Has.Count.EqualTo(1));
+
+        CqrsTestRuntime.RegisterHandlers(_container);
+
+        Assert.That(_container.GetAll<ICqrsRuntime>(), Has.Count.EqualTo(1));
+        Assert.That(_container.GetAll<ICqrsHandlerRegistrar>(), Has.Count.EqualTo(1));
     }
 
     /// <summary>
@@ -314,7 +332,7 @@ public class MicrosoftDiContainerTests
     [Test]
     public void Clear_Should_Reset_Cqrs_Assembly_Deduplication_State()
     {
-        var assembly = typeof(CqrsHandlerRegistrarTests).Assembly;
+        var assembly = typeof(DeterministicOrderNotification).Assembly;
 
         _container.RegisterCqrsHandlersFromAssembly(assembly);
         Assert.That(
@@ -328,6 +346,8 @@ public class MicrosoftDiContainerTests
                 descriptor.ServiceType == typeof(INotificationHandler<DeterministicOrderNotification>)),
             Is.False);
 
+        // Clear 会移除测试手工补齐的 CQRS seam，需要先恢复基础设施再验证程序集去重状态是否已重置。
+        CqrsTestRuntime.RegisterInfrastructure(_container);
         _container.RegisterCqrsHandlersFromAssembly(assembly);
 
         Assert.That(
