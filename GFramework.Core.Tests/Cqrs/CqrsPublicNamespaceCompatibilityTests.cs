@@ -3,6 +3,10 @@ using GFramework.Cqrs.Abstractions.Cqrs.Command;
 using GFramework.Cqrs.Abstractions.Cqrs.Notification;
 using GFramework.Cqrs.Abstractions.Cqrs.Query;
 using GFramework.Cqrs.Abstractions.Cqrs.Request;
+using GFramework.Cqrs.Command;
+using GFramework.Cqrs.Notification;
+using GFramework.Cqrs.Query;
+using GFramework.Cqrs.Request;
 
 namespace GFramework.Core.Tests.Cqrs;
 
