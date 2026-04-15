@@ -1,3 +1,4 @@
+using System.Reflection;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Lifecycle;
@@ -185,6 +186,16 @@ public class TestArchitectureWithRegistry : IArchitecture
         throw new NotImplementedException();
     }
 
+    public void RegisterCqrsHandlersFromAssembly(Assembly assembly)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
+    {
+        throw new NotImplementedException();
+    }
+
     [Obsolete("Use RegisterCqrsPipelineBehavior<TBehavior>() instead.")]
     public void RegisterMediatorBehavior<TBehavior>() where TBehavior : class
     {
@@ -312,6 +323,16 @@ public class TestArchitectureWithoutRegistry : IArchitecture
     }
 
     public void RegisterCqrsPipelineBehavior<TBehavior>() where TBehavior : class
+    {
+        throw new NotImplementedException();
+    }
+
+    public void RegisterCqrsHandlersFromAssembly(Assembly assembly)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
     {
         throw new NotImplementedException();
     }

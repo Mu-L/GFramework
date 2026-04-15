@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Environment;
@@ -167,6 +168,26 @@ public abstract class Architecture : IArchitecture
     public void RegisterMediatorBehavior<TBehavior>() where TBehavior : class
     {
         RegisterCqrsPipelineBehavior<TBehavior>();
+    }
+
+    /// <summary>
+    ///     从指定程序集显式注册 CQRS 处理器。
+    ///     该入口适用于把拆分到其他模块或扩展包程序集中的 handlers 接入当前架构。
+    /// </summary>
+    /// <param name="assembly">包含 CQRS 处理器或生成注册器的程序集。</param>
+    public void RegisterCqrsHandlersFromAssembly(Assembly assembly)
+    {
+        _modules.RegisterCqrsHandlersFromAssembly(assembly);
+    }
+
+    /// <summary>
+    ///     从多个程序集显式注册 CQRS 处理器。
+    ///     适用于在初始化阶段批量接入多个扩展程序集，并沿用容器的去重策略避免重复注册。
+    /// </summary>
+    /// <param name="assemblies">要接入的程序集集合。</param>
+    public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
+    {
+        _modules.RegisterCqrsHandlersFromAssemblies(assemblies);
     }
 
     /// <summary>
