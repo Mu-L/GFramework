@@ -20,7 +20,7 @@ public sealed class CqrsPublicNamespaceCompatibilityTests
     ///     验证基础消息类型继续暴露在历史 Core.Cqrs 命名空间，同时由独立 runtime 程序集承载实现。
     /// </summary>
     [Test]
-    public void Base_Message_Types_Should_Remain_In_Legacy_Namespaces_While_Living_In_Runtime_Assembly()
+    public void Base_Message_Types_Should_Live_In_Cqrs_Namespaces_And_Runtime_Assembly()
     {
         Assert.Multiple(() =>
         {
