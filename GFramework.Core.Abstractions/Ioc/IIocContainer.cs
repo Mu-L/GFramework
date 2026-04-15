@@ -115,6 +115,8 @@ public interface IIocContainer : IContextAware
     ///     运行时会优先使用程序集级源码生成注册器；若不存在可用注册器，则自动回退到反射扫描。
     /// </summary>
     /// <param name="assembly">包含 CQRS 处理器或生成注册器的程序集。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="assembly" /> 为 <see langword="null" />。</exception>
+    /// <exception cref="InvalidOperationException">容器已冻结，无法继续注册 CQRS 处理器。</exception>
     void RegisterCqrsHandlersFromAssembly(Assembly assembly);
 
     /// <summary>
@@ -122,6 +124,8 @@ public interface IIocContainer : IContextAware
     ///     容器会按稳定程序集键去重，避免默认启动路径与扩展模块重复接入同一程序集时产生重复 handler 映射。
     /// </summary>
     /// <param name="assemblies">要接入的程序集集合。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="assemblies" /> 为 <see langword="null" />。</exception>
+    /// <exception cref="InvalidOperationException">容器已冻结，无法继续注册 CQRS 处理器。</exception>
     void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies);
 
 

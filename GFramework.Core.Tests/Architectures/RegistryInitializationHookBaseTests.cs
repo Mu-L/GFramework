@@ -186,11 +186,21 @@ public class TestArchitectureWithRegistry : IArchitecture
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试替身未实现显式程序集 CQRS 处理器接入入口。
+    /// </summary>
+    /// <param name="assembly">包含 CQRS 处理器或生成注册器的程序集。</param>
+    /// <exception cref="NotImplementedException">该测试替身不参与 CQRS 程序集接入路径验证。</exception>
     public void RegisterCqrsHandlersFromAssembly(Assembly assembly)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试替身未实现显式程序集 CQRS 处理器接入入口。
+    /// </summary>
+    /// <param name="assemblies">要接入的程序集集合。</param>
+    /// <exception cref="NotImplementedException">该测试替身不参与 CQRS 程序集接入路径验证。</exception>
     public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
     {
         throw new NotImplementedException();
@@ -327,11 +337,21 @@ public class TestArchitectureWithoutRegistry : IArchitecture
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试替身未实现显式程序集 CQRS 处理器接入入口。
+    /// </summary>
+    /// <param name="assembly">包含 CQRS 处理器或生成注册器的程序集。</param>
+    /// <exception cref="NotImplementedException">该测试替身不参与 CQRS 程序集接入路径验证。</exception>
     public void RegisterCqrsHandlersFromAssembly(Assembly assembly)
     {
         throw new NotImplementedException();
     }
 
+    /// <summary>
+    ///     测试替身未实现显式程序集 CQRS 处理器接入入口。
+    /// </summary>
+    /// <param name="assemblies">要接入的程序集集合。</param>
+    /// <exception cref="NotImplementedException">该测试替身不参与 CQRS 程序集接入路径验证。</exception>
     public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
     {
         throw new NotImplementedException();

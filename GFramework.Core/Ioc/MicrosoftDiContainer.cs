@@ -384,6 +384,8 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     ///     从指定程序集显式注册 CQRS 处理器。
     /// </summary>
     /// <param name="assembly">包含 CQRS 处理器或生成注册器的程序集。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="assembly" /> 为 <see langword="null" />。</exception>
+    /// <exception cref="InvalidOperationException">容器已冻结，无法继续注册 CQRS 处理器。</exception>
     public void RegisterCqrsHandlersFromAssembly(Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(assembly);
@@ -395,6 +397,8 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     ///     同一程序集只会被接入一次，避免默认启动路径与扩展模块重复注册相同 handlers。
     /// </summary>
     /// <param name="assemblies">要接入的程序集集合。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="assemblies" /> 为 <see langword="null" />。</exception>
+    /// <exception cref="InvalidOperationException">容器已冻结，无法继续注册 CQRS 处理器。</exception>
     public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
     {
         ArgumentNullException.ThrowIfNull(assemblies);
@@ -803,6 +807,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
 
             GetServicesUnsafe.Clear();
             _registeredInstances.Clear();
+            _registeredCqrsHandlerAssemblyKeys.Clear();
             _provider = null;
             _logger.Info("Container cleared");
         }

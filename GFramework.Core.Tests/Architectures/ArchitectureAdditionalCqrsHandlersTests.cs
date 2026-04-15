@@ -18,9 +18,10 @@ public sealed class ArchitectureAdditionalCqrsHandlersTests
     [SetUp]
     public void SetUp()
     {
+        _previousLoggerFactoryProvider = LoggerFactoryResolver.Provider;
         LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
         GameContext.Clear();
-        AdditionalAssemblyNotificationHandler.Reset();
+        AdditionalAssemblyNotificationHandlerState.Reset();
     }
 
     /// <summary>
@@ -29,9 +30,14 @@ public sealed class ArchitectureAdditionalCqrsHandlersTests
     [TearDown]
     public void TearDown()
     {
-        AdditionalAssemblyNotificationHandler.Reset();
+        AdditionalAssemblyNotificationHandlerState.Reset();
         GameContext.Clear();
+        LoggerFactoryResolver.Provider = _previousLoggerFactoryProvider
+                                         ?? throw new InvalidOperationException(
+                                             "LoggerFactoryResolver.Provider should be captured during setup.");
     }
+
+    private ILoggerFactoryProvider? _previousLoggerFactoryProvider;
 
     /// <summary>
     ///     验证显式声明的额外程序集会在初始化阶段接入当前架构容器。
@@ -44,11 +50,16 @@ public sealed class ArchitectureAdditionalCqrsHandlersTests
             target.RegisterCqrsHandlersFromAssembly(generatedAssembly.Object));
 
         await architecture.InitializeAsync();
-        await architecture.Context.PublishAsync(new AdditionalAssemblyNotification());
+        try
+        {
+            await architecture.Context.PublishAsync(new AdditionalAssemblyNotification());
 
-        Assert.That(AdditionalAssemblyNotificationHandler.InvocationCount, Is.EqualTo(1));
-
-        await architecture.DestroyAsync();
+            Assert.That(AdditionalAssemblyNotificationHandlerState.InvocationCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            await architecture.DestroyAsync();
+        }
     }
 
     /// <summary>
@@ -65,11 +76,16 @@ public sealed class ArchitectureAdditionalCqrsHandlersTests
         });
 
         await architecture.InitializeAsync();
-        await architecture.Context.PublishAsync(new AdditionalAssemblyNotification());
+        try
+        {
+            await architecture.Context.PublishAsync(new AdditionalAssemblyNotification());
 
-        Assert.That(AdditionalAssemblyNotificationHandler.InvocationCount, Is.EqualTo(1));
-
-        await architecture.DestroyAsync();
+            Assert.That(AdditionalAssemblyNotificationHandlerState.InvocationCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            await architecture.DestroyAsync();
+        }
     }
 
     /// <summary>
@@ -111,25 +127,26 @@ public sealed class ArchitectureAdditionalCqrsHandlersTests
 public sealed record AdditionalAssemblyNotification : INotification;
 
 /// <summary>
-///     由模拟扩展程序集的生成注册器挂入当前容器的通知处理器。
+///     记录模拟扩展程序集通知处理器的执行次数。
 /// </summary>
-public sealed class AdditionalAssemblyNotificationHandler : INotificationHandler<AdditionalAssemblyNotification>
+public static class AdditionalAssemblyNotificationHandlerState
 {
+    private static int _invocationCount;
+
     /// <summary>
     ///     获取当前测试进程中该处理器的执行次数。
     /// </summary>
-    public static int InvocationCount { get; private set; }
+    /// <remarks>
+    ///     该计数器通过原子读写维护，以支持 NUnit 并行执行环境中的并发访问。
+    /// </remarks>
+    public static int InvocationCount => Volatile.Read(ref _invocationCount);
 
     /// <summary>
     ///     记录一次通知处理，供测试断言显式程序集接入后的运行时行为。
     /// </summary>
-    /// <param name="notification">通知实例。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>已完成任务。</returns>
-    public ValueTask Handle(AdditionalAssemblyNotification notification, CancellationToken cancellationToken)
+    public static void RecordInvocation()
     {
-        InvocationCount++;
-        return ValueTask.CompletedTask;
+        Interlocked.Increment(ref _invocationCount);
     }
 
     /// <summary>
@@ -137,7 +154,7 @@ public sealed class AdditionalAssemblyNotificationHandler : INotificationHandler
     /// </summary>
     public static void Reset()
     {
-        InvocationCount = 0;
+        Interlocked.Exchange(ref _invocationCount, 0);
     }
 }
 
@@ -156,10 +173,25 @@ internal sealed class AdditionalAssemblyNotificationHandlerRegistry : ICqrsHandl
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(logger);
 
-        services
-            .AddTransient<INotificationHandler<AdditionalAssemblyNotification>,
-                AdditionalAssemblyNotificationHandler>();
+        services.AddTransient<INotificationHandler<AdditionalAssemblyNotification>>(_ => CreateHandler());
         logger.Debug(
-            $"Registered CQRS handler {typeof(AdditionalAssemblyNotificationHandler).FullName} as {typeof(INotificationHandler<AdditionalAssemblyNotification>).FullName}.");
+            $"Registered CQRS handler proxy for {typeof(INotificationHandler<AdditionalAssemblyNotification>).FullName}.");
+    }
+
+    /// <summary>
+    ///     创建一个仅供显式程序集注册路径使用的动态通知处理器。
+    /// </summary>
+    /// <returns>用于记录通知触发次数的测试替身处理器。</returns>
+    private static INotificationHandler<AdditionalAssemblyNotification> CreateHandler()
+    {
+        var handler = new Mock<INotificationHandler<AdditionalAssemblyNotification>>();
+        handler
+            .Setup(target => target.Handle(It.IsAny<AdditionalAssemblyNotification>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                AdditionalAssemblyNotificationHandlerState.RecordInvocation();
+                return ValueTask.CompletedTask;
+            });
+        return handler.Object;
     }
 }
