@@ -42,6 +42,7 @@ public sealed class ArchitectureAdditionalCqrsHandlersTests
     /// <summary>
     ///     验证显式声明的额外程序集会在初始化阶段接入当前架构容器。
     /// </summary>
+    /// <returns>The asynchronous test task.</returns>
     [Test]
     public async Task RegisterCqrsHandlersFromAssembly_Should_Register_Handlers_From_Explicit_Assembly()
     {
@@ -65,6 +66,7 @@ public sealed class ArchitectureAdditionalCqrsHandlersTests
     /// <summary>
     ///     验证不同 <see cref="Assembly" /> 实例只要解析到相同程序集键，就不会向容器重复写入相同 handler 映射。
     /// </summary>
+    /// <returns>The asynchronous test task.</returns>
     [Test]
     public async Task RegisterCqrsHandlersFromAssembly_Should_Deduplicate_Repeated_Assembly_Registration()
     {
