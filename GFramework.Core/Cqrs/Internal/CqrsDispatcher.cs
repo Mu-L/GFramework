@@ -17,14 +17,20 @@ internal sealed class CqrsDispatcher(
     IIocContainer container,
     ILogger logger) : ICqrsRuntime
 {
+    // 进程级缓存：按请求/响应类型缓存直接处理器调用委托，避免热路径重复反射。
+    // 线程安全依赖 ConcurrentDictionary；缓存与进程同寿命，默认假设请求类型集合有限且稳定。
     private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestInvoker>
         RequestInvokers = new();
 
+    // 进程级缓存：缓存带 pipeline 的请求调用委托，减少每次分发时的反射与表达式重建开销。
+    // 若后续引入动态生成请求类型，需要重新评估该缓存的增长边界。
     private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestPipelineInvoker>
         RequestPipelineInvokers = new();
 
+    // 进程级缓存：缓存通知调用委托，复用并发安全字典以支撑多线程发布路径。
     private static readonly ConcurrentDictionary<Type, NotificationInvoker> NotificationInvokers = new();
 
+    // 进程级缓存：缓存流式请求调用委托，避免每次创建流时重复解析反射签名。
     private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), StreamInvoker> StreamInvokers =
         new();
 

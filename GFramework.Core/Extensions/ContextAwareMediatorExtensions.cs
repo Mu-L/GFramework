@@ -11,7 +11,7 @@ namespace GFramework.Core.Extensions;
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 [Obsolete(
-    "Use GFramework.Core.Cqrs.Extensions.ContextAwareCqrsExtensions instead. This compatibility alias will be removed in a future major version.")]
+    "Use GFramework.Core.Extensions.ContextAwareCqrsExtensions instead. This compatibility alias will be removed in a future major version.")]
 public static class ContextAwareMediatorExtensions
 {
     /// <summary>
