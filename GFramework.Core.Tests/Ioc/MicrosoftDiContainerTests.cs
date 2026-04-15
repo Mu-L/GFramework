@@ -315,7 +315,7 @@ public class MicrosoftDiContainerTests
     [Test]
     public void Clear_Should_Reset_Cqrs_Assembly_Deduplication_State()
     {
-        var assembly = typeof(CqrsHandlerRegistrarTests).Assembly;
+        var assembly = typeof(DeterministicOrderNotification).Assembly;
 
         _container.RegisterCqrsHandlersFromAssembly(assembly);
         Assert.That(

@@ -63,6 +63,9 @@
         <None Remove="Godot\**"/>
         <None Remove="GFramework.Game.Tests\**"/>
         <None Remove="GFramework.Godot.Tests\**"/>
+        <None Remove="GFramework.Cqrs\**"/>
+        <None Remove="GFramework.Cqrs.Abstractions\**"/>
+        <None Remove="GFramework.Cqrs.Tests\**"/>
     </ItemGroup>
     <!-- 聚合核心模块 -->
     <ItemGroup>
@@ -104,6 +107,9 @@
         <Compile Remove="Godot\**"/>
         <Compile Remove="GFramework.Game.Tests\**"/>
         <Compile Remove="GFramework.Godot.Tests\**"/>
+        <Compile Remove="GFramework.Cqrs\**"/>
+        <Compile Remove="GFramework.Cqrs.Abstractions\**"/>
+        <Compile Remove="GFramework.Cqrs.Tests\**"/>
     </ItemGroup>
     <ItemGroup>
         <EmbeddedResource Remove="GFramework.Core\**"/>
@@ -131,6 +137,9 @@
         <EmbeddedResource Remove="Godot\**"/>
         <EmbeddedResource Remove="GFramework.Game.Tests\**"/>
         <EmbeddedResource Remove="GFramework.Godot.Tests\**"/>
+        <EmbeddedResource Remove="GFramework.Cqrs\**"/>
+        <EmbeddedResource Remove="GFramework.Cqrs.Abstractions\**"/>
+        <EmbeddedResource Remove="GFramework.Cqrs.Tests\**"/>
     </ItemGroup>
     <ItemGroup>
         <AdditionalFiles Remove="AnalyzerReleases.Shipped.md"/>

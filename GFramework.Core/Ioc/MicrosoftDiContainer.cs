@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
+using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Systems;

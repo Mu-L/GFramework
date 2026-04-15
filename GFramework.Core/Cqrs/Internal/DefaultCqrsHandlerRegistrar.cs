@@ -1,4 +1,5 @@
 using System.Reflection;
+using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 
