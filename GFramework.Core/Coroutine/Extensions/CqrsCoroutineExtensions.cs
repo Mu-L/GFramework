@@ -23,8 +23,8 @@ public static class CqrsCoroutineExtensions
     /// <exception cref="ArgumentNullException">
     ///     当 <paramref name="contextAware" /> 或 <paramref name="command" /> 为 <see langword="null" /> 时抛出。
     /// </exception>
-    /// <exception cref="TaskCanceledException">
-    ///     当底层命令调度被取消且未提供 <paramref name="onError" /> 时抛出。
+    /// <exception cref="Exception">
+    ///     当底层命令调度失败且未提供 <paramref name="onError" /> 时，抛出底层原始异常。
     /// </exception>
     /// <remarks>
     ///     当底层命令调度失败时，该扩展会把底层异常解包后传给 <paramref name="onError" />，
