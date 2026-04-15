@@ -11,33 +11,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using System.Diagnostics;
 using GFramework.Core.Abstractions.Logging;
-using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 
-namespace GFramework.Core.Cqrs.Behaviors;
+namespace GFramework.Cqrs.Cqrs.Behaviors;
 
 /// <summary>
-/// 性能监控行为类，用于监控CQRS请求的执行时间
-/// 实现IPipelineBehavior接口，检测并记录执行时间过长的请求
+///     在 CQRS 请求管道中监控处理耗时，并对长耗时请求发出告警。
 /// </summary>
-/// <typeparam name="TRequest">请求类型，必须实现IRequest接口</typeparam>
-/// <typeparam name="TResponse">响应类型</typeparam>
+/// <typeparam name="TRequest">请求类型。</typeparam>
+/// <typeparam name="TResponse">响应类型。</typeparam>
+/// <remarks>
+///     该行为保留现有公开命名空间以维持消费端兼容性，但实现已迁入 <c>GFramework.Cqrs</c> 程序集。
+/// </remarks>
 public sealed class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>
 {
+    private const double SlowRequestThresholdMilliseconds = 500;
+
     private readonly ILogger _logger =
         LoggerFactoryResolver.Provider.CreateLogger(nameof(PerformanceBehavior<TRequest, TResponse>));
 
     /// <summary>
-    /// 处理请求并监控执行时间
-    /// 使用Stopwatch测量请求处理耗时，超过500ms时记录警告日志
+    ///     统计当前请求处理耗时，并在超阈值时记录警告日志。
     /// </summary>
-    /// <param name="message">要处理的请求消息</param>
-    /// <param name="next">下一个处理委托，用于继续管道执行</param>
-    /// <param name="cancellationToken">取消令牌，用于取消操作</param>
-    /// <returns>处理结果的ValueTask</returns>
+    /// <param name="message">当前请求消息。</param>
+    /// <param name="next">后续处理委托。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>请求处理结果。</returns>
     public async ValueTask<TResponse> Handle(
         TRequest message,
         MessageHandlerDelegate<TRequest, TResponse> next,
@@ -53,11 +54,10 @@ public sealed class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior
         {
             var elapsed = Stopwatch.GetElapsedTime(start);
 
-            if (elapsed.TotalMilliseconds > 500)
+            if (elapsed.TotalMilliseconds > SlowRequestThresholdMilliseconds)
             {
                 var requestName = typeof(TRequest).Name;
-                _logger.Warn(
-                    $"Long Running Request: {requestName} ({elapsed.TotalMilliseconds:F2} ms)");
+                _logger.Warn($"Long Running Request: {requestName} ({elapsed.TotalMilliseconds:F2} ms)");
             }
         }
     }

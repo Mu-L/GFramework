@@ -4,3 +4,4 @@ global using System.Linq;
 global using System.Threading;
 global using System.Threading.Tasks;
 global using Microsoft.Extensions.DependencyInjection;
+global using System.Diagnostics;

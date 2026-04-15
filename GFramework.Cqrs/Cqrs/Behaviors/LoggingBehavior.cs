@@ -11,19 +11,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using System.Diagnostics;
 using GFramework.Core.Abstractions.Logging;
-using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 
-namespace GFramework.Core.Cqrs.Behaviors;
+namespace GFramework.Cqrs.Cqrs.Behaviors;
 
 /// <summary>
-/// 日志记录行为类，用于在CQRS管道中记录请求处理的日志信息
-/// 实现IPipelineBehavior接口，为请求处理提供日志记录功能
+///     在 CQRS 请求管道中记录请求开始、完成、取消与失败日志。
 /// </summary>
-/// <typeparam name="TRequest">请求类型，必须实现IRequest接口</typeparam>
-/// <typeparam name="TResponse">响应类型</typeparam>
+/// <typeparam name="TRequest">请求类型。</typeparam>
+/// <typeparam name="TResponse">响应类型。</typeparam>
+/// <remarks>
+///     该行为保留在 <c>GFramework.Core.Cqrs.Behaviors</c> 命名空间以兼容现有调用点，
+///     但实现已迁入 <c>GFramework.Cqrs</c> 程序集，避免继续由 <c>GFramework.Core</c> 承载 CQRS runtime 细节。
+/// </remarks>
 public sealed class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>
 {
@@ -31,13 +32,12 @@ public sealed class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
         LoggerFactoryResolver.Provider.CreateLogger(nameof(LoggingBehavior<TRequest, TResponse>));
 
     /// <summary>
-    /// 处理请求并记录日志
-    /// 在请求处理前后记录调试信息，处理异常时记录错误日志
+    ///     执行日志包装后的下一段请求处理逻辑。
     /// </summary>
-    /// <param name="message">要处理的请求消息</param>
-    /// <param name="next">下一个处理委托，用于继续管道执行</param>
-    /// <param name="cancellationToken">取消令牌，用于取消操作</param>
-    /// <returns>处理结果的ValueTask</returns>
+    /// <param name="message">当前请求消息。</param>
+    /// <param name="next">后续处理委托。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>请求处理结果。</returns>
     public async ValueTask<TResponse> Handle(
         TRequest message,
         MessageHandlerDelegate<TRequest, TResponse> next,
