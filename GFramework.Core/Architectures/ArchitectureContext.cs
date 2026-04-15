@@ -2,18 +2,13 @@ using System.Collections.Concurrent;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Command;
 using GFramework.Core.Abstractions.Cqrs;
-using GFramework.Core.Abstractions.Cqrs.Command;
-using GFramework.Core.Abstractions.Cqrs.Query;
 using GFramework.Core.Abstractions.Environment;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Abstractions.Ioc;
-using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Query;
 using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
-using GFramework.Core.Cqrs.Internal;
-using GFramework.Core.Logging;
 using ICommand = GFramework.Core.Abstractions.Command.ICommand;
 
 namespace GFramework.Core.Architectures;
@@ -25,15 +20,15 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
 {
     private readonly IIocContainer _container = container ?? throw new ArgumentNullException(nameof(container));
     private readonly ConcurrentDictionary<Type, object> _serviceCache = new();
-    private readonly ILogger _logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(ArchitectureContext));
-    private CqrsDispatcher? _cqrsDispatcher;
+    private ICqrsRuntime? _cqrsRuntime;
 
     #region CQRS Integration
 
     /// <summary>
-    /// 获取 CQRS 运行时分发器（延迟初始化）。
+    /// 获取 CQRS runtime seam（延迟初始化）。
     /// </summary>
-    private CqrsDispatcher CqrsDispatcher => _cqrsDispatcher ??= new CqrsDispatcher(_container, this, _logger);
+    private ICqrsRuntime CqrsRuntime => _cqrsRuntime ??=
+        _container.Get<ICqrsRuntime>() ?? throw new InvalidOperationException("ICqrsRuntime not registered");
 
     /// <summary>
     /// 获取指定类型的服务实例，如果缓存中存在则直接返回，否则从容器中获取并缓存
@@ -73,7 +68,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return await CqrsDispatcher.SendAsync(request, cancellationToken);
+        return await CqrsRuntime.SendAsync(this, request, cancellationToken);
     }
 
     /// <summary>
@@ -100,7 +95,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
         where TNotification : INotification
     {
         ArgumentNullException.ThrowIfNull(notification);
-        await CqrsDispatcher.PublishAsync(notification, cancellationToken);
+        await CqrsRuntime.PublishAsync(this, notification, cancellationToken);
     }
 
     /// <summary>
@@ -115,7 +110,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return CqrsDispatcher.CreateStream(request, cancellationToken);
+        return CqrsRuntime.CreateStream(this, request, cancellationToken);
     }
 
     /// <summary>
@@ -151,7 +146,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
     /// <typeparam name="TResult">查询结果类型</typeparam>
     /// <param name="query">要发送的查询</param>
     /// <returns>查询结果</returns>
-    public TResult SendQuery<TResult>(Abstractions.Query.IQuery<TResult> query)
+    public TResult SendQuery<TResult>(IQuery<TResult> query)
     {
         if (query == null) throw new ArgumentNullException(nameof(query));
         var queryBus = GetOrCache<IQueryExecutor>();
@@ -165,7 +160,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
     /// <typeparam name="TResponse">查询响应类型</typeparam>
     /// <param name="query">要发送的查询对象</param>
     /// <returns>查询结果</returns>
-    public TResponse SendQuery<TResponse>(GFramework.Core.Abstractions.Cqrs.Query.IQuery<TResponse> query)
+    public TResponse SendQuery<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
         return SendQueryAsync(query).AsTask().GetAwaiter().GetResult();
     }
@@ -191,7 +186,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
     /// <param name="query">要发送的查询对象</param>
     /// <param name="cancellationToken">取消令牌，用于取消操作</param>
     /// <returns>包含查询结果的ValueTask</returns>
-    public async ValueTask<TResponse> SendQueryAsync<TResponse>(GFramework.Core.Abstractions.Cqrs.Query.IQuery<TResponse> query,
+    public async ValueTask<TResponse> SendQueryAsync<TResponse>(Abstractions.Cqrs.Query.IQuery<TResponse> query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -327,7 +322,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
     /// <param name="command">要发送的命令对象</param>
     /// <param name="cancellationToken">取消令牌，用于取消操作</param>
     /// <returns>包含命令执行结果的ValueTask</returns>
-    public async ValueTask<TResponse> SendCommandAsync<TResponse>(GFramework.Core.Abstractions.Cqrs.Command.ICommand<TResponse> command,
+    public async ValueTask<TResponse> SendCommandAsync<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -366,7 +361,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
     /// <typeparam name="TResponse">命令响应类型</typeparam>
     /// <param name="command">要发送的命令对象</param>
     /// <returns>命令执行结果</returns>
-    public TResponse SendCommand<TResponse>(GFramework.Core.Abstractions.Cqrs.Command.ICommand<TResponse> command)
+    public TResponse SendCommand<TResponse>(Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
         return SendCommandAsync(command).AsTask().GetAwaiter().GetResult();
     }
@@ -388,7 +383,7 @@ public class ArchitectureContext(IIocContainer container) : IArchitectureContext
     /// <typeparam name="TResult">命令执行结果类型</typeparam>
     /// <param name="command">要发送的命令</param>
     /// <returns>命令执行结果</returns>
-    public TResult SendCommand<TResult>(Abstractions.Command.ICommand<TResult> command)
+    public TResult SendCommand<TResult>(ICommand<TResult> command)
     {
         ArgumentNullException.ThrowIfNull(command);
         var commandBus = GetOrCache<ICommandExecutor>();

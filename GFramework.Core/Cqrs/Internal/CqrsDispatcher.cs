@@ -14,34 +14,70 @@ namespace GFramework.Core.Cqrs.Internal;
 /// </summary>
 internal sealed class CqrsDispatcher(
     IIocContainer container,
-    IArchitectureContext context,
-    ILogger logger)
+    ILogger logger) : ICqrsRuntime
 {
-    private delegate ValueTask<object?> RequestInvoker(object handler, object request, CancellationToken cancellationToken);
-    private delegate ValueTask<object?> RequestPipelineInvoker(
-        object handler,
-        IReadOnlyList<object> behaviors,
-        object request,
-        CancellationToken cancellationToken);
-    private delegate ValueTask NotificationInvoker(object handler, object notification, CancellationToken cancellationToken);
-    private delegate object StreamInvoker(object handler, object request, CancellationToken cancellationToken);
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestInvoker>
+        RequestInvokers = new();
 
-    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestInvoker> RequestInvokers = new();
-    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestPipelineInvoker> RequestPipelineInvokers = new();
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestPipelineInvoker>
+        RequestPipelineInvokers = new();
+
     private static readonly ConcurrentDictionary<Type, NotificationInvoker> NotificationInvokers = new();
-    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), StreamInvoker> StreamInvokers = new();
+
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), StreamInvoker> StreamInvokers =
+        new();
+
+    /// <summary>
+    ///     发布通知到所有已注册处理器。
+    /// </summary>
+    /// <typeparam name="TNotification">通知类型。</typeparam>
+    /// <param name="context">当前架构上下文，用于上下文感知处理器注入。</param>
+    /// <param name="notification">通知对象。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public async ValueTask PublishAsync<TNotification>(
+        IArchitectureContext context,
+        TNotification notification,
+        CancellationToken cancellationToken = default)
+        where TNotification : INotification
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(notification);
+
+        var notificationType = notification.GetType();
+        var handlerType = typeof(INotificationHandler<>).MakeGenericType(notificationType);
+        var handlers = container.GetAll(handlerType);
+
+        if (handlers.Count == 0)
+        {
+            logger.Debug($"No CQRS notification handler registered for {notificationType.FullName}.");
+            return;
+        }
+
+        var invoker = NotificationInvokers.GetOrAdd(
+            notificationType,
+            CreateNotificationInvoker);
+
+        foreach (var handler in handlers)
+        {
+            PrepareHandler(handler, context);
+            await invoker(handler, notification, cancellationToken);
+        }
+    }
 
     /// <summary>
     ///     发送请求并返回结果。
     /// </summary>
     /// <typeparam name="TResponse">响应类型。</typeparam>
+    /// <param name="context">当前架构上下文，用于上下文感知处理器注入。</param>
     /// <param name="request">请求对象。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求响应。</returns>
     public async ValueTask<TResponse> SendAsync<TResponse>(
+        IArchitectureContext context,
         IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(request);
 
         var requestType = request.GetType();
@@ -50,12 +86,12 @@ internal sealed class CqrsDispatcher(
                       ?? throw new InvalidOperationException(
                           $"No CQRS request handler registered for {requestType.FullName}.");
 
-        PrepareHandler(handler);
+        PrepareHandler(handler, context);
         var behaviorType = typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse));
         var behaviors = container.GetAll(behaviorType);
 
         foreach (var behavior in behaviors)
-            PrepareHandler(behavior);
+            PrepareHandler(behavior, context);
 
         if (behaviors.Count == 0)
         {
@@ -76,50 +112,19 @@ internal sealed class CqrsDispatcher(
     }
 
     /// <summary>
-    ///     发布通知到所有已注册处理器。
-    /// </summary>
-    /// <typeparam name="TNotification">通知类型。</typeparam>
-    /// <param name="notification">通知对象。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    public async ValueTask PublishAsync<TNotification>(
-        TNotification notification,
-        CancellationToken cancellationToken = default)
-        where TNotification : INotification
-    {
-        ArgumentNullException.ThrowIfNull(notification);
-
-        var notificationType = notification.GetType();
-        var handlerType = typeof(INotificationHandler<>).MakeGenericType(notificationType);
-        var handlers = container.GetAll(handlerType);
-
-        if (handlers.Count == 0)
-        {
-            logger.Debug($"No CQRS notification handler registered for {notificationType.FullName}.");
-            return;
-        }
-
-        var invoker = NotificationInvokers.GetOrAdd(
-            notificationType,
-            CreateNotificationInvoker);
-
-        foreach (var handler in handlers)
-        {
-            PrepareHandler(handler);
-            await invoker(handler, notification, cancellationToken);
-        }
-    }
-
-    /// <summary>
     ///     创建流式请求并返回异步响应序列。
     /// </summary>
     /// <typeparam name="TResponse">响应元素类型。</typeparam>
+    /// <param name="context">当前架构上下文，用于上下文感知处理器注入。</param>
     /// <param name="request">流式请求对象。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>异步响应序列。</returns>
     public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
+        IArchitectureContext context,
         IStreamRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(request);
 
         var requestType = request.GetType();
@@ -128,7 +133,7 @@ internal sealed class CqrsDispatcher(
                       ?? throw new InvalidOperationException(
                           $"No CQRS stream handler registered for {requestType.FullName}.");
 
-        PrepareHandler(handler);
+        PrepareHandler(handler, context);
 
         var invoker = StreamInvokers.GetOrAdd(
             (requestType, typeof(TResponse)),
@@ -141,7 +146,8 @@ internal sealed class CqrsDispatcher(
     ///     为上下文感知处理器注入当前架构上下文。
     /// </summary>
     /// <param name="handler">处理器实例。</param>
-    private void PrepareHandler(object handler)
+    /// <param name="context">当前架构上下文。</param>
+    private static void PrepareHandler(object handler, IArchitectureContext context)
     {
         if (handler is IContextAware contextAware)
             contextAware.SetContext(context);
@@ -260,4 +266,18 @@ internal sealed class CqrsDispatcher(
         var typedRequest = (TRequest)request;
         return typedHandler.Handle(typedRequest, cancellationToken);
     }
+
+    private delegate ValueTask<object?> RequestInvoker(object handler, object request,
+        CancellationToken cancellationToken);
+
+    private delegate ValueTask<object?> RequestPipelineInvoker(
+        object handler,
+        IReadOnlyList<object> behaviors,
+        object request,
+        CancellationToken cancellationToken);
+
+    private delegate ValueTask NotificationInvoker(object handler, object notification,
+        CancellationToken cancellationToken);
+
+    private delegate object StreamInvoker(object handler, object request, CancellationToken cancellationToken);
 }

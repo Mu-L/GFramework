@@ -1,11 +1,9 @@
 using System.ComponentModel;
 using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
-using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Systems;
-using GFramework.Core.Cqrs.Internal;
 using GFramework.Core.Logging;
 using GFramework.Core.Rule;
 
@@ -424,7 +422,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
                     continue;
                 }
 
-                CqrsHandlerRegistrar.RegisterHandlers(this, [assembly], _logger);
+                ResolveCqrsHandlerRegistrar().RegisterHandlers([assembly]);
                 _registeredCqrsHandlerAssemblyKeys.Add(assemblyKey);
             }
         }
@@ -455,6 +453,27 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     #endregion
 
     #region Get
+
+    /// <summary>
+    ///     获取当前容器中已注册的 CQRS 处理器注册器。
+    ///     该方法仅供容器内部在注册阶段使用，因此直接读取服务描述符中的实例绑定，
+    ///     避免在容器未冻结前依赖完整的服务提供者构建流程。
+    /// </summary>
+    /// <returns>已注册的 CQRS 处理器注册器实例。</returns>
+    /// <exception cref="InvalidOperationException">未找到可用的 CQRS 处理器注册器实例时抛出。</exception>
+    private ICqrsHandlerRegistrar ResolveCqrsHandlerRegistrar()
+    {
+        var descriptor = GetServicesUnsafe.LastOrDefault(static service =>
+            service.ServiceType == typeof(ICqrsHandlerRegistrar));
+
+        if (descriptor?.ImplementationInstance is ICqrsHandlerRegistrar registrar)
+            return registrar;
+
+        const string errorMessage =
+            "ICqrsHandlerRegistrar not registered. Ensure the CQRS runtime module has been installed before registering handlers.";
+        _logger.Error(errorMessage);
+        throw new InvalidOperationException(errorMessage);
+    }
 
     /// <summary>
     /// 获取指定泛型类型的服务实例

@@ -11,10 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace GFramework.Core.Abstractions.Cqrs.Notification;
+namespace GFramework.Core.Abstractions.Cqrs.Request;
 
 /// <summary>
-/// 表示通知输入数据的标记接口。
-/// 该接口继承自 IInput，用于标识CQRS模式中通知类型的输入参数。
+/// 表示请求输入数据的标记接口。
+/// 该接口继承自 IInput，用于标识CQRS模式中请求类型的输入参数。
 /// </summary>
-public interface INotificationInput : IInput;
+public interface IRequestInput : IInput;

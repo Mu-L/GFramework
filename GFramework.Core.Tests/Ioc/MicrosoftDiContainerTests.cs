@@ -1,6 +1,5 @@
 using System.Reflection;
 using GFramework.Core.Abstractions.Bases;
-using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Core.Tests.Cqrs;
@@ -14,6 +13,8 @@ namespace GFramework.Core.Tests.Ioc;
 [TestFixture]
 public class MicrosoftDiContainerTests
 {
+    private MicrosoftDiContainer _container = null!;
+
     /// <summary>
     ///     在每个测试方法执行前进行设置
     /// </summary>
@@ -29,9 +30,9 @@ public class MicrosoftDiContainerTests
             BindingFlags.NonPublic | BindingFlags.Instance);
         loggerField?.SetValue(_container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(MicrosoftDiContainer)));
-    }
 
-    private MicrosoftDiContainer _container = null!;
+        CqrsTestRuntime.RegisterInfrastructure(_container);
+    }
 
     /// <summary>
     ///     测试注册单例实例的功能
@@ -328,6 +329,8 @@ public class MicrosoftDiContainerTests
                 descriptor.ServiceType == typeof(INotificationHandler<DeterministicOrderNotification>)),
             Is.False);
 
+        // Clear 会移除测试手工补齐的 CQRS seam，需要先恢复基础设施再验证程序集去重状态是否已重置。
+        CqrsTestRuntime.RegisterInfrastructure(_container);
         _container.RegisterCqrsHandlersFromAssembly(assembly);
 
         Assert.That(
