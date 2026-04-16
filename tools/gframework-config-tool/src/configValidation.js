@@ -592,6 +592,10 @@ function applyEnumMetadata(schemaNode, rawEnum, displayPath) {
         return schemaNode;
     }
 
+    if (rawEnum.length === 0) {
+        throw new Error(`Schema property '${displayPath}' must declare 'enum' with at least one value.`);
+    }
+
     const enumComparableValues = [];
     const enumDisplayValues = [];
     const enumValues = [];
@@ -614,6 +618,7 @@ function applyEnumMetadata(schemaNode, rawEnum, displayPath) {
 
     return {
         ...schemaNode,
+        enumSampleValue: rawEnum[0],
         enumValues: enumValues.length > 0 ? enumValues : undefined,
         enumDisplayValues: enumDisplayValues.length > 0 ? enumDisplayValues : undefined,
         enumComparableValues: enumComparableValues.length > 0 ? enumComparableValues : undefined
@@ -2584,6 +2589,10 @@ function createObjectNode() {
  */
 function createSampleNodeFromSchema(schemaNode) {
     if (!schemaNode || schemaNode.type === "object") {
+        if (schemaNode && schemaNode.enumSampleValue !== undefined) {
+            return createNodeFromFormValue(schemaNode.enumSampleValue);
+        }
+
         const objectNode = createObjectNode();
         for (const [key, propertySchema] of Object.entries(schemaNode && schemaNode.properties ? schemaNode.properties : {})) {
             const childNode = createSampleNodeFromSchema(propertySchema);
@@ -2594,6 +2603,10 @@ function createSampleNodeFromSchema(schemaNode) {
     }
 
     if (schemaNode.type === "array") {
+        if (schemaNode.enumSampleValue !== undefined) {
+            return createNodeFromFormValue(schemaNode.enumSampleValue);
+        }
+
         if (schemaNode.items.type === "object") {
             return createArrayNode([createSampleNodeFromSchema(schemaNode.items)]);
         }
@@ -2870,6 +2883,7 @@ module.exports = {
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string,
+ *   enumSampleValue?: unknown,
  *   enumDisplayValues?: string[],
  *   enumComparableValues?: string[],
  *   constValue?: string,
@@ -2882,6 +2896,7 @@ module.exports = {
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string,
+ *   enumSampleValue?: unknown,
  *   enumDisplayValues?: string[],
  *   enumComparableValues?: string[],
  *   constValue?: string,
@@ -2902,6 +2917,7 @@ module.exports = {
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string,
+ *   enumSampleValue?: unknown,
  *   constValue?: string,
  *   constDisplayValue?: string,
  *   constComparableValue?: string,

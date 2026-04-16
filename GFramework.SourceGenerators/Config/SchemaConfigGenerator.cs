@@ -857,7 +857,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                         "array",
                         $"global::System.Collections.Generic.IReadOnlyList<{objectSpec.ClassName}>",
                         $" = global::System.Array.Empty<{objectSpec.ClassName}>();",
-                        TryBuildEnumDocumentation(property.Value, "array"),
+                        TryBuildEnumDocumentation(property.Value, "array") ??
+                        TryBuildEnumDocumentation(itemsElement, "object"),
                         TryBuildConstraintDocumentation(property.Value, "array"),
                         null,
                         null,
@@ -866,7 +867,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                             "object",
                             objectSpec.ClassName,
                             null,
-                            null,
+                            TryBuildEnumDocumentation(itemsElement, "object"),
                             null,
                             null,
                             objectSpec,

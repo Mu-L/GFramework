@@ -92,6 +92,54 @@ public class SchemaConfigGeneratorEnumTests
     }
 
     /// <summary>
+    ///     验证对象数组项 <c>enum</c> 文档回退输出与快照保持一致。
+    /// </summary>
+    [Test]
+    public async Task Snapshot_Should_Preserve_Array_Object_Item_Enum_Documentation_Fallback()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "phases"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "phases": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["wave", "monsterId"],
+                                      "properties": {
+                                        "wave": { "type": "integer" },
+                                        "monsterId": { "type": "string" }
+                                      },
+                                      "enum": [
+                                        { "wave": 1, "monsterId": "slime" },
+                                        { "wave": 2, "monsterId": "goblin" }
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        await AssertSnapshotAsync(result, "MonsterConfig.ArrayObjectItemEnum.g.txt");
+    }
+
+    /// <summary>
     ///     对单个生成文件执行快照断言。
     /// </summary>
     /// <param name="result">生成器运行结果。</param>

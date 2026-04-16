@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+    createSampleConfigYaml,
     parseSchemaContent,
     parseTopLevelYaml,
     validateParsedConfig
@@ -160,4 +161,67 @@ dropLevels:
     assert.equal(diagnostics.length, 1);
     assert.match(diagnostics[0].message, /dropLevels\[1\]/u);
     assert.doesNotMatch(diagnostics[0].message, /must be one of|必须是以下值之一/u);
+});
+
+test("createSampleConfigYaml should reuse object and array enum payloads for valid samples", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "required": ["reward", "phases"],
+          "properties": {
+            "reward": {
+              "type": "object",
+              "required": ["gold", "itemId"],
+              "properties": {
+                "gold": { "type": "integer" },
+                "itemId": { "type": "string" }
+              },
+              "enum": [
+                { "gold": 10, "itemId": "potion" }
+              ]
+            },
+            "phases": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["wave", "monsterId"],
+                "properties": {
+                  "wave": { "type": "integer" },
+                  "monsterId": { "type": "string" }
+                },
+                "enum": [
+                  { "wave": 1, "monsterId": "slime" }
+                ]
+              }
+            }
+          }
+        }
+    `);
+
+    const sample = createSampleConfigYaml(schema);
+    const yaml = parseTopLevelYaml(sample);
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 0);
+    assert.match(sample, /^reward:$/mu);
+    assert.match(sample, /^  gold: 10$/mu);
+    assert.match(sample, /^  itemId: potion$/mu);
+    assert.match(sample, /^phases:$/mu);
+    assert.match(sample, /^  -$/mu);
+    assert.match(sample, /^    wave: 1$/mu);
+    assert.match(sample, /^    monsterId: slime$/mu);
+});
+
+test("parseSchemaContent should reject empty enum arrays", () => {
+    assert.throws(() => parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "rarity": {
+              "type": "string",
+              "enum": []
+            }
+          }
+        }
+    `), /must declare 'enum' with at least one value/u);
 });
