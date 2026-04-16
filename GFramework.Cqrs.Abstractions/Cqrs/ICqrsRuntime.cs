@@ -15,6 +15,17 @@ public interface ICqrsRuntime
     /// <param name="request">要分发的请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求响应。</returns>
+    /// <exception cref="System.ArgumentNullException">
+    ///     <paramref name="context" /> 或 <paramref name="request" /> 为 <see langword="null" />。
+    /// </exception>
+    /// <exception cref="System.InvalidOperationException">
+    ///     当前上下文无法满足运行时要求，例如未找到对应请求处理器，或请求处理链中的
+    ///     <c>IContextAware</c> 对象需要 <c>IArchitectureContext</c> 但当前 <paramref name="context" /> 不提供该能力。
+    /// </exception>
+    /// <remarks>
+    ///     该契约允许调用方传入任意 <see cref="ICqrsContext" />，
+    ///     但默认运行时在需要向处理器或行为注入框架上下文时，仍要求该上下文同时实现 <c>IArchitectureContext</c>。
+    /// </remarks>
     ValueTask<TResponse> SendAsync<TResponse>(
         ICqrsContext context,
         IRequest<TResponse> request,
@@ -28,6 +39,16 @@ public interface ICqrsRuntime
     /// <param name="notification">要发布的通知。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示通知分发完成的值任务。</returns>
+    /// <exception cref="System.ArgumentNullException">
+    ///     <paramref name="context" /> 或 <paramref name="notification" /> 为 <see langword="null" />。
+    /// </exception>
+    /// <exception cref="System.InvalidOperationException">
+    ///     已解析到的通知处理器需要框架级上下文注入，但当前 <paramref name="context" /> 不提供
+    ///     <c>IArchitectureContext</c> 能力。
+    /// </exception>
+    /// <remarks>
+    ///     默认实现允许零处理器场景静默完成；只有在处理器注入前置条件不满足时才会抛出异常。
+    /// </remarks>
     ValueTask PublishAsync<TNotification>(
         ICqrsContext context,
         TNotification notification,
@@ -42,6 +63,17 @@ public interface ICqrsRuntime
     /// <param name="request">流式请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>按需生成的异步响应序列。</returns>
+    /// <exception cref="System.ArgumentNullException">
+    ///     <paramref name="context" /> 或 <paramref name="request" /> 为 <see langword="null" />。
+    /// </exception>
+    /// <exception cref="System.InvalidOperationException">
+    ///     当前上下文无法满足运行时要求，例如未找到对应流式处理器，或流式处理链中的
+    ///     <c>IContextAware</c> 对象需要 <c>IArchitectureContext</c> 但当前 <paramref name="context" /> 不提供该能力。
+    /// </exception>
+    /// <remarks>
+    ///     返回的异步序列在枚举前通常已完成处理器解析与上下文注入，
+    ///     因此调用方应把 <paramref name="context" /> 视为整个枚举生命周期内的必需依赖。
+    /// </remarks>
     IAsyncEnumerable<TResponse> CreateStream<TResponse>(
         ICqrsContext context,
         IStreamRequest<TResponse> request,

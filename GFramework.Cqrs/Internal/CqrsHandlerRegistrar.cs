@@ -236,6 +236,8 @@ internal static class CqrsHandlerRegistrar
         Type handlerInterface,
         Type implementationType)
     {
+        // 这里保持线性扫描，避免为常见的小到中等规模程序集长期维护额外索引。
+        // 若未来大型服务集合出现热点，可在更高层批处理中引入 HashSet<(Type, Type)> 做 O(1) 去重。
         return services.Any(descriptor =>
             descriptor.ServiceType == handlerInterface &&
             descriptor.ImplementationType == implementationType);

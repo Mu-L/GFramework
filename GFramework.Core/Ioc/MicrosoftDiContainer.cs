@@ -35,6 +35,14 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
 
     #endregion
 
+    /// <summary>
+    ///     记录某个实例在未冻结查询中可见的服务类型分组信息。
+    /// </summary>
+    /// <param name="ServiceType">当前分组对应的服务类型。</param>
+    /// <param name="Count">该服务类型下的描述符数量。</param>
+    /// <param name="FirstIndex">该服务类型首次出现的位置，用于稳定打破并列。</param>
+    private sealed record VisibleServiceTypeGroup(Type ServiceType, int Count, int FirstIndex);
+
     #region Fields
 
     /// <summary>
@@ -593,32 +601,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         {
             if (_provider == null)
             {
-                // 如果容器未冻结，从服务集合中获取已注册的实例
-                var serviceType = typeof(T);
-                var registeredServices = GetServicesUnsafe
-                    .Where(s => s.ServiceType == serviceType || serviceType.IsAssignableFrom(s.ServiceType)).ToList();
-
-                var result = new List<T>();
-                var seenInstances = new HashSet<object>(ReferenceEqualityComparer.Instance);
-                foreach (var descriptor in registeredServices)
-                {
-                    if (descriptor.ImplementationInstance is T instance)
-                    {
-                        // 同一实例可能同时以“正式接口 + 兼容别名接口”被注册；未冻结路径需去重以保持与冻结后的解析口径一致。
-                        if (seenInstances.Add(instance))
-                            result.Add(instance);
-                    }
-                    else if (descriptor.ImplementationFactory != null)
-                    {
-                        // 在未冻结状态下无法调用工厂方法，跳过
-                    }
-                    else if (descriptor.ImplementationType != null)
-                    {
-                        // 在未冻结状态下无法创建实例，跳过
-                    }
-                }
-
-                return result;
+                return CollectRegisteredImplementationInstances(typeof(T)).Cast<T>().ToList();
             }
 
             var services = _provider!.GetServices<T>().ToList();
@@ -636,40 +619,17 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     /// </summary>
     /// <param name="type">服务类型</param>
     /// <returns>只读的服务实例列表</returns>
-    /// <exception cref="InvalidOperationException">当容器未冻结时抛出</exception>
+    /// <exception cref="ArgumentNullException">当 <paramref name="type" /> 为 <see langword="null" /> 时抛出</exception>
     public IReadOnlyList<object> GetAll(Type type)
     {
+        ArgumentNullException.ThrowIfNull(type);
+
         _lock.EnterReadLock();
         try
         {
             if (_provider == null)
             {
-                // 如果容器未冻结，从服务集合中获取已注册的实例
-                var registeredServices = GetServicesUnsafe
-                    .Where(s => s.ServiceType == type || type.IsAssignableFrom(s.ServiceType))
-                    .ToList();
-
-                var result = new List<object>();
-                var seenInstances = new HashSet<object>(ReferenceEqualityComparer.Instance);
-                foreach (var descriptor in registeredServices)
-                {
-                    if (descriptor.ImplementationInstance != null)
-                    {
-                        // 同一实例可能通过多个可赋值服务类型暴露；返回前按引用去重，避免兼容别名造成重复观察结果。
-                        if (seenInstances.Add(descriptor.ImplementationInstance))
-                            result.Add(descriptor.ImplementationInstance);
-                    }
-                    else if (descriptor.ImplementationFactory != null)
-                    {
-                        // 在未冻结状态下无法调用工厂方法，跳过
-                    }
-                    else if (descriptor.ImplementationType != null)
-                    {
-                        // 在未冻结状态下无法创建实例，跳过
-                    }
-                }
-
-                return result;
+                return CollectRegisteredImplementationInstances(type);
             }
 
             var services = _provider!.GetServices(type).ToList();
@@ -680,6 +640,108 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         {
             _lock.ExitReadLock();
         }
+    }
+
+    /// <summary>
+    ///     在容器未冻结时，从服务描述符中收集当前可直接观察到的实例绑定。
+    /// </summary>
+    /// <param name="requestedServiceType">调用方请求的服务类型。</param>
+    /// <returns>按当前未冻结语义可见的实例列表。</returns>
+    /// <remarks>
+    ///     该方法只读取 <see cref="ServiceDescriptor.ImplementationInstance" />，因为未冻结路径不会主动执行工厂方法，
+    ///     也不会提前构造 <see cref="ServiceDescriptor.ImplementationType" />。
+    ///     若同一实例同时经由多个可赋值的 <see cref="ServiceDescriptor.ServiceType" /> 暴露，
+    ///     这里会把它视为兼容别名并只保留一个规范服务类型对应的结果；
+    ///     但同一 <see cref="ServiceDescriptor.ServiceType" /> 的重复显式注册仍会完整保留，以维持注册顺序和多次注册语义。
+    /// </remarks>
+    private List<object> CollectRegisteredImplementationInstances(Type requestedServiceType)
+    {
+        ArgumentNullException.ThrowIfNull(requestedServiceType);
+
+        var matchingDescriptors = GetServicesUnsafe
+            .Where(descriptor =>
+                descriptor.ServiceType == requestedServiceType ||
+                requestedServiceType.IsAssignableFrom(descriptor.ServiceType))
+            .ToList();
+
+        if (matchingDescriptors.Count == 0)
+            return [];
+
+        var preferredServiceTypes = BuildPreferredVisibleServiceTypes(matchingDescriptors, requestedServiceType);
+        var result = new List<object>();
+        foreach (var descriptor in matchingDescriptors)
+        {
+            if (descriptor.ImplementationInstance is { } instance)
+            {
+                if (preferredServiceTypes.TryGetValue(instance, out var preferredServiceType) &&
+                    preferredServiceType == descriptor.ServiceType)
+                {
+                    result.Add(instance);
+                }
+            }
+            else if (descriptor.ImplementationFactory != null)
+            {
+                // 在未冻结状态下无法调用工厂方法，跳过。
+            }
+            else if (descriptor.ImplementationType != null)
+            {
+                // 在未冻结状态下无法创建实例，跳过。
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///     为每个可见实例选择一个规范服务类型，避免同一实例因兼容别名重复出现在未冻结查询结果中。
+    /// </summary>
+    /// <param name="matchingDescriptors">已按请求类型过滤过的服务描述符集合。</param>
+    /// <param name="requestedServiceType">调用方请求的服务类型。</param>
+    /// <returns>实例到其规范服务类型的映射。</returns>
+    private static Dictionary<object, Type> BuildPreferredVisibleServiceTypes(
+        IReadOnlyList<ServiceDescriptor> matchingDescriptors,
+        Type requestedServiceType)
+    {
+        var preferredServiceTypes = new Dictionary<object, Type>(ReferenceEqualityComparer.Instance);
+        foreach (var instanceGroup in matchingDescriptors
+                     .Where(static descriptor => descriptor.ImplementationInstance is not null)
+                     .GroupBy(static descriptor => descriptor.ImplementationInstance!,
+                         ReferenceEqualityComparer.Instance))
+        {
+            preferredServiceTypes.Add(
+                instanceGroup.Key,
+                SelectPreferredVisibleServiceType(instanceGroup, requestedServiceType));
+        }
+
+        return preferredServiceTypes;
+    }
+
+    /// <summary>
+    ///     在“同一实例被多个服务类型暴露”的场景下，选择未冻结查询结果应保留的规范服务类型。
+    /// </summary>
+    /// <param name="descriptorsForInstance">引用同一实例的服务描述符。</param>
+    /// <param name="requestedServiceType">调用方请求的服务类型。</param>
+    /// <returns>应在结果中保留的服务类型。</returns>
+    private static Type SelectPreferredVisibleServiceType(
+        IEnumerable<ServiceDescriptor> descriptorsForInstance,
+        Type requestedServiceType)
+    {
+        var serviceTypeGroups = descriptorsForInstance
+            .GroupBy(static descriptor => descriptor.ServiceType)
+            .Select((group, index) => new VisibleServiceTypeGroup(group.Key, group.Count(), index))
+            .ToList();
+
+        // 若调用方请求的正是其中一个服务类型，优先保留它，使未冻结行为尽量贴近冻结后的精确服务解析口径。
+        var requestedGroup = serviceTypeGroups.FirstOrDefault(group => group.ServiceType == requestedServiceType);
+        if (requestedGroup is not null)
+            return requestedGroup.ServiceType;
+
+        // 否则优先保留“同一服务类型下注册次数最多”的那组，避免显式多次注册被较宽泛的别名折叠掉。
+        return serviceTypeGroups
+            .OrderByDescending(static group => group.Count)
+            .ThenBy(static group => group.FirstIndex)
+            .First()
+            .ServiceType;
     }
 
     /// <summary>
