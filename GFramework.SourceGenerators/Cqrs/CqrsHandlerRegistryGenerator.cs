@@ -228,6 +228,23 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                string.Equals(definitionMetadataName, IStreamRequestHandlerMetadataName, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    ///     为无法直接在生成代码中书写的关闭处理器接口构造精确的运行时注册描述。
+    /// </summary>
+    /// <param name="compilation">
+    ///     当前生成轮次对应的编译上下文，用于判断类型是否属于当前程序集，从而决定是生成直接类型引用还是延迟到运行时反射解析。
+    /// </param>
+    /// <param name="handlerInterface">
+    ///     需要注册的关闭处理器接口。调用方应保证它来自受支持的 CQRS 处理器接口定义，并且其泛型参数顺序与运行时注册约定一致。
+    /// </param>
+    /// <param name="registration">
+    ///     当方法返回 <see langword="true" /> 时，包含开放泛型处理器类型和每个运行时类型实参的精确描述；
+    ///     当方法返回 <see langword="false" /> 时，为默认值，调用方应回退到基于实现类型的宽松反射发现路径。
+    /// </param>
+    /// <returns>
+    ///     当接口上的所有运行时类型引用都能在生成阶段被稳定描述时返回 <see langword="true" />；
+    ///     只要任一泛型实参无法安全编码到生成输出中，就返回 <see langword="false" />。
+    /// </returns>
     private static bool TryCreatePreciseReflectedRegistration(
         Compilation compilation,
         INamedTypeSymbol handlerInterface,
@@ -236,7 +253,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         var openHandlerTypeDisplayName = handlerInterface.OriginalDefinition
             .ConstructUnboundGenericType()
             .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var typeArguments = ImmutableArray.CreateBuilder<RuntimeTypeReferenceSpec>(handlerInterface.TypeArguments.Length);
+        var typeArguments =
+            ImmutableArray.CreateBuilder<RuntimeTypeReferenceSpec>(handlerInterface.TypeArguments.Length);
         foreach (var typeArgument in handlerInterface.TypeArguments)
         {
             if (!TryCreateRuntimeTypeReference(compilation, typeArgument, out var runtimeTypeReference))
@@ -255,6 +273,23 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    ///     将 Roslyn 类型符号转换为生成注册器可消费的运行时类型引用描述。
+    /// </summary>
+    /// <param name="compilation">
+    ///     当前编译上下文，用于区分可直接引用的外部可访问类型与必须通过当前程序集运行时反射查找的内部类型。
+    /// </param>
+    /// <param name="type">
+    ///     需要转换的类型符号。该方法会递归处理数组元素类型和已构造泛型的类型实参，但不会为未绑定泛型或类型参数生成引用。
+    /// </param>
+    /// <param name="runtimeTypeReference">
+    ///     当方法返回 <see langword="true" /> 时，包含可直接引用、数组、已构造泛型或反射查找中的一种运行时表示；
+    ///     当方法返回 <see langword="false" /> 时为 <see langword="null" />，调用方应回退到更宽泛的实现类型反射扫描策略。
+    /// </param>
+    /// <returns>
+    ///     当 <paramref name="type" /> 及其递归子结构都能映射为稳定的运行时引用时返回 <see langword="true" />；
+    ///     若遇到类型参数、无法访问的运行时结构，或任一递归分支无法表示，则返回 <see langword="false" />。
+    /// </returns>
     private static bool TryCreateRuntimeTypeReference(
         Compilation compilation,
         ITypeSymbol type,
@@ -277,7 +312,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         if (type is INamedTypeSymbol genericNamedType &&
             genericNamedType.IsGenericType &&
             !genericNamedType.IsUnboundGenericType &&
-            TryCreateGenericTypeDefinitionReference(compilation, genericNamedType, out var genericTypeDefinitionReference))
+            TryCreateGenericTypeDefinitionReference(compilation, genericNamedType,
+                out var genericTypeDefinitionReference))
         {
             var genericTypeArguments =
                 ImmutableArray.CreateBuilder<RuntimeTypeReferenceSpec>(genericNamedType.TypeArguments.Length);
@@ -310,6 +346,23 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         return false;
     }
 
+    /// <summary>
+    ///     为已构造泛型类型解析其泛型定义的运行时引用描述。
+    /// </summary>
+    /// <param name="compilation">
+    ///     当前编译上下文，用于判断泛型定义是否应以内联类型引用形式生成，或在运行时通过当前程序集反射解析。
+    /// </param>
+    /// <param name="genericNamedType">
+    ///     已构造的泛型类型。该方法只处理其原始泛型定义，不负责递归解析类型实参。
+    /// </param>
+    /// <param name="genericTypeDefinitionReference">
+    ///     当方法返回 <see langword="true" /> 时，包含泛型定义的直接引用或反射查找描述；
+    ///     当方法返回 <see langword="false" /> 时为 <see langword="null" />，调用方应停止精确构造并回退到更保守的注册路径。
+    /// </param>
+    /// <returns>
+    ///     当泛型定义能够以稳定方式编码到生成输出中时返回 <see langword="true" />；
+    ///     若泛型定义既不能直接引用，也不属于当前程序集可供反射查找，则返回 <see langword="false" />。
+    /// </returns>
     private static bool TryCreateGenericTypeDefinitionReference(
         Compilation compilation,
         INamedTypeSymbol genericNamedType,
@@ -479,7 +532,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("        if (logger is null)");
         builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(logger));");
-        if (hasReflectedImplementationRegistrations || hasPreciseReflectedRegistrations || hasFullReflectionRegistrations)
+        if (hasReflectedImplementationRegistrations || hasPreciseReflectedRegistrations ||
+            hasFullReflectionRegistrations)
         {
             builder.AppendLine();
             builder.Append("        var registryAssembly = typeof(global::");
@@ -697,7 +751,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
         builder.AppendLine(");");
         builder.Append(indent);
-        builder.AppendLine("global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient(");
+        builder.AppendLine(
+            "global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient(");
         builder.Append(indent);
         builder.AppendLine("    services,");
         builder.Append(indent);
@@ -755,7 +810,9 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 reflectedArgumentNames,
                 indent);
             var genericArgumentExpressions = new string[runtimeTypeReference.GenericTypeArguments.Length];
-            for (var argumentIndex = 0; argumentIndex < runtimeTypeReference.GenericTypeArguments.Length; argumentIndex++)
+            for (var argumentIndex = 0;
+                 argumentIndex < runtimeTypeReference.GenericTypeArguments.Length;
+                 argumentIndex++)
             {
                 genericArgumentExpressions[argumentIndex] = AppendRuntimeTypeReferenceResolution(
                     builder,
@@ -765,7 +822,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                     indent);
             }
 
-            return $"{genericTypeDefinitionExpression}.MakeGenericType({string.Join(", ", genericArgumentExpressions)})";
+            return
+                $"{genericTypeDefinitionExpression}.MakeGenericType({string.Join(", ", genericArgumentExpressions)})";
         }
 
         var reflectionTypeMetadataName = runtimeTypeReference.ReflectionTypeMetadataName!;
