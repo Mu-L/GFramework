@@ -59,7 +59,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
         return new GenerationEnvironment(
             generationEnabled,
-            compilation.GetTypeByMetadataName(CqrsReflectionFallbackAttributeMetadataName) is not null);
+            GetReflectionFallbackEmissionMode(
+                compilation.GetTypeByMetadataName(CqrsReflectionFallbackAttributeMetadataName)));
     }
 
     private static bool IsHandlerCandidate(SyntaxNode node)
@@ -96,7 +97,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             return new HandlerCandidateAnalysis(
                 implementationTypeDisplayName,
                 ImmutableArray<HandlerRegistrationSpec>.Empty,
-                true);
+                true,
+                GetReflectionFallbackTypeName(type));
         }
 
         var implementationLogName = GetLogDisplayName(type);
@@ -113,7 +115,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         return new HandlerCandidateAnalysis(
             implementationTypeDisplayName,
             registrations.MoveToImmutable(),
-            false);
+            false,
+            null);
     }
 
     private static void Execute(SourceProductionContext context, GenerationEnvironment generationEnvironment,
@@ -122,27 +125,37 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         if (!generationEnvironment.GenerationEnabled)
             return;
 
-        var registrations = CollectRegistrations(candidates, out var hasUnsupportedConcreteHandler);
+        var registrations = CollectRegistrations(
+            candidates,
+            out var hasUnsupportedConcreteHandler,
+            out var reflectionFallbackTypeNames);
 
         if (registrations.Count == 0)
             return;
 
         // If the runtime contract does not yet expose the reflection fallback marker,
         // keep the previous all-or-nothing behavior so unsupported handlers are not silently dropped.
-        if (hasUnsupportedConcreteHandler && !generationEnvironment.SupportsReflectionFallbackMarker)
+        if (hasUnsupportedConcreteHandler &&
+            generationEnvironment.ReflectionFallbackEmissionMode == ReflectionFallbackEmissionMode.Disabled)
             return;
 
         context.AddSource(
             HintName,
-            GenerateSource(registrations, hasUnsupportedConcreteHandler));
+            GenerateSource(
+                registrations,
+                hasUnsupportedConcreteHandler,
+                generationEnvironment.ReflectionFallbackEmissionMode,
+                reflectionFallbackTypeNames));
     }
 
     private static List<HandlerRegistrationSpec> CollectRegistrations(
         ImmutableArray<HandlerCandidateAnalysis?> candidates,
-        out bool hasUnsupportedConcreteHandler)
+        out bool hasUnsupportedConcreteHandler,
+        out IReadOnlyList<string> reflectionFallbackTypeNames)
     {
         var registrations = new List<HandlerRegistrationSpec>();
         hasUnsupportedConcreteHandler = false;
+        var fallbackTypeNames = new SortedSet<string>(StringComparer.Ordinal);
 
         // Partial declarations surface the same symbol through multiple syntax nodes.
         // Collapse them by implementation type so generated registrations stay stable and duplicate-free.
@@ -156,6 +169,13 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             if (candidate.Value.HasUnsupportedConcreteHandler)
             {
                 hasUnsupportedConcreteHandler = true;
+                var reflectionFallbackTypeName = candidate.Value.ReflectionFallbackTypeName;
+                if (reflectionFallbackTypeName is not null &&
+                    !string.IsNullOrWhiteSpace(reflectionFallbackTypeName))
+                {
+                    fallbackTypeNames.Add(reflectionFallbackTypeName);
+                }
+
                 continue;
             }
 
@@ -178,7 +198,28 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 : StringComparer.Ordinal.Compare(left.HandlerInterfaceLogName, right.HandlerInterfaceLogName);
         });
 
+        reflectionFallbackTypeNames = fallbackTypeNames.ToArray();
         return registrations;
+    }
+
+    private static ReflectionFallbackEmissionMode GetReflectionFallbackEmissionMode(INamedTypeSymbol? attributeType)
+    {
+        if (attributeType is null)
+            return ReflectionFallbackEmissionMode.Disabled;
+
+        foreach (var constructor in attributeType.InstanceConstructors)
+        {
+            if (constructor.Parameters.Length != 1)
+                continue;
+
+            if (constructor.Parameters[0].Type is IArrayTypeSymbol arrayType &&
+                arrayType.ElementType.SpecialType == SpecialType.System_String)
+            {
+                return ReflectionFallbackEmissionMode.PreciseTypeNames;
+            }
+        }
+
+        return ReflectionFallbackEmissionMode.MarkerOnly;
     }
 
     private static bool IsConcreteHandlerType(INamedTypeSymbol type)
@@ -272,6 +313,34 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         return builder.ToString();
     }
 
+    private static string GetReflectionFallbackTypeName(INamedTypeSymbol type)
+    {
+        var nestedTypes = new Stack<string>();
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            nestedTypes.Push(current.MetadataName);
+        }
+
+        var builder = new StringBuilder();
+        if (!type.ContainingNamespace.IsGlobalNamespace)
+        {
+            builder.Append(type.ContainingNamespace.ToDisplayString());
+            builder.Append('.');
+        }
+
+        var isFirstType = true;
+        while (nestedTypes.Count > 0)
+        {
+            if (!isFirstType)
+                builder.Append('+');
+
+            builder.Append(nestedTypes.Pop());
+            isFirstType = false;
+        }
+
+        return builder.ToString();
+    }
+
     private static string GetTypeSortKey(ITypeSymbol type)
     {
         return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -284,7 +353,9 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
     private static string GenerateSource(
         IReadOnlyList<HandlerRegistrationSpec> registrations,
-        bool emitReflectionFallbackAttribute)
+        bool emitReflectionFallbackAttribute,
+        ReflectionFallbackEmissionMode reflectionFallbackEmissionMode,
+        IReadOnlyList<string> reflectionFallbackTypeNames)
     {
         var builder = new StringBuilder();
         builder.AppendLine("// <auto-generated />");
@@ -297,11 +368,10 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         builder.Append('.');
         builder.Append(GeneratedTypeName);
         builder.AppendLine("))]");
-        if (emitReflectionFallbackAttribute)
+        if (emitReflectionFallbackAttribute &&
+            reflectionFallbackEmissionMode != ReflectionFallbackEmissionMode.Disabled)
         {
-            builder.Append("[assembly: global::");
-            builder.Append(CqrsRuntimeNamespace);
-            builder.AppendLine(".CqrsReflectionFallbackAttribute()]");
+            AppendReflectionFallbackAttribute(builder, reflectionFallbackEmissionMode, reflectionFallbackTypeNames);
         }
 
         builder.AppendLine();
@@ -349,6 +419,36 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         return builder.ToString();
     }
 
+    private static void AppendReflectionFallbackAttribute(
+        StringBuilder builder,
+        ReflectionFallbackEmissionMode reflectionFallbackEmissionMode,
+        IReadOnlyList<string> reflectionFallbackTypeNames)
+    {
+        builder.Append("[assembly: global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.Append(".CqrsReflectionFallbackAttribute");
+
+        if (reflectionFallbackEmissionMode == ReflectionFallbackEmissionMode.PreciseTypeNames &&
+            reflectionFallbackTypeNames.Count > 0)
+        {
+            builder.Append('(');
+            for (var index = 0; index < reflectionFallbackTypeNames.Count; index++)
+            {
+                if (index > 0)
+                    builder.Append(", ");
+
+                builder.Append('"');
+                builder.Append(EscapeStringLiteral(reflectionFallbackTypeNames[index]));
+                builder.Append('"');
+            }
+
+            builder.AppendLine(")]");
+            return;
+        }
+
+        builder.AppendLine("()]");
+    }
+
     private static string EscapeStringLiteral(string value)
     {
         return value.Replace("\\", "\\\\")
@@ -368,11 +468,13 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         public HandlerCandidateAnalysis(
             string implementationTypeDisplayName,
             ImmutableArray<HandlerRegistrationSpec> registrations,
-            bool hasUnsupportedConcreteHandler)
+            bool hasUnsupportedConcreteHandler,
+            string? reflectionFallbackTypeName)
         {
             ImplementationTypeDisplayName = implementationTypeDisplayName;
             Registrations = registrations;
             HasUnsupportedConcreteHandler = hasUnsupportedConcreteHandler;
+            ReflectionFallbackTypeName = reflectionFallbackTypeName;
         }
 
         public string ImplementationTypeDisplayName { get; }
@@ -381,11 +483,15 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
         public bool HasUnsupportedConcreteHandler { get; }
 
+        public string? ReflectionFallbackTypeName { get; }
+
         public bool Equals(HandlerCandidateAnalysis other)
         {
             if (!string.Equals(ImplementationTypeDisplayName, other.ImplementationTypeDisplayName,
                     StringComparison.Ordinal) ||
                 HasUnsupportedConcreteHandler != other.HasUnsupportedConcreteHandler ||
+                !string.Equals(ReflectionFallbackTypeName, other.ReflectionFallbackTypeName,
+                    StringComparison.Ordinal) ||
                 Registrations.Length != other.Registrations.Length)
             {
                 return false;
@@ -411,6 +517,10 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             {
                 var hashCode = StringComparer.Ordinal.GetHashCode(ImplementationTypeDisplayName);
                 hashCode = (hashCode * 397) ^ HasUnsupportedConcreteHandler.GetHashCode();
+                hashCode = (hashCode * 397) ^
+                           (ReflectionFallbackTypeName is null
+                               ? 0
+                               : StringComparer.Ordinal.GetHashCode(ReflectionFallbackTypeName));
                 foreach (var registration in Registrations)
                 {
                     hashCode = (hashCode * 397) ^ registration.GetHashCode();
@@ -423,5 +533,12 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
     private readonly record struct GenerationEnvironment(
         bool GenerationEnabled,
-        bool SupportsReflectionFallbackMarker);
+        ReflectionFallbackEmissionMode ReflectionFallbackEmissionMode);
+
+    private enum ReflectionFallbackEmissionMode
+    {
+        Disabled,
+        MarkerOnly,
+        PreciseTypeNames
+    }
 }

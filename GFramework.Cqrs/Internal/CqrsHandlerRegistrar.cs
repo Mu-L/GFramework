@@ -33,10 +33,14 @@ internal static class CqrsHandlerRegistrar
         {
             var generatedRegistrationResult =
                 TryRegisterGeneratedHandlers(container.GetServicesUnsafe, assembly, logger);
-            if (generatedRegistrationResult == GeneratedRegistrationResult.FullyHandled)
+            if (generatedRegistrationResult is { UsedGeneratedRegistry: true, RequiresReflectionFallback: false })
                 continue;
 
-            RegisterAssemblyHandlers(container.GetServicesUnsafe, assembly, logger);
+            RegisterAssemblyHandlers(
+                container.GetServicesUnsafe,
+                assembly,
+                logger,
+                generatedRegistrationResult.ReflectionFallbackTypeNames);
         }
     }
 
@@ -66,7 +70,7 @@ internal static class CqrsHandlerRegistrar
                 .ToList();
 
             if (registryTypes.Count == 0)
-                return GeneratedRegistrationResult.NoGeneratedRegistry;
+                return GeneratedRegistrationResult.NoGeneratedRegistry();
 
             var registries = new List<ICqrsHandlerRegistry>(registryTypes.Count);
             foreach (var registryType in registryTypes)
@@ -75,21 +79,21 @@ internal static class CqrsHandlerRegistrar
                 {
                     logger.Warn(
                         $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it does not implement {typeof(ICqrsHandlerRegistry).FullName}.");
-                    return GeneratedRegistrationResult.NoGeneratedRegistry;
+                    return GeneratedRegistrationResult.NoGeneratedRegistry();
                 }
 
                 if (registryType.IsAbstract)
                 {
                     logger.Warn(
                         $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it is abstract.");
-                    return GeneratedRegistrationResult.NoGeneratedRegistry;
+                    return GeneratedRegistrationResult.NoGeneratedRegistry();
                 }
 
                 if (Activator.CreateInstance(registryType, nonPublic: true) is not ICqrsHandlerRegistry registry)
                 {
                     logger.Warn(
                         $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it could not be instantiated.");
-                    return GeneratedRegistrationResult.NoGeneratedRegistry;
+                    return GeneratedRegistrationResult.NoGeneratedRegistry();
                 }
 
                 registries.Add(registry);
@@ -102,14 +106,24 @@ internal static class CqrsHandlerRegistrar
                 registry.Register(services, logger);
             }
 
-            if (RequiresReflectionFallback(assembly))
+            var reflectionFallbackTypeNames = GetReflectionFallbackTypeNames(assembly);
+            if (reflectionFallbackTypeNames is not null)
             {
-                logger.Debug(
-                    $"Generated CQRS registry for assembly {assemblyName} requested reflection fallback for unsupported handlers.");
-                return GeneratedRegistrationResult.RequiresReflectionFallback;
+                if (reflectionFallbackTypeNames.Count > 0)
+                {
+                    logger.Debug(
+                        $"Generated CQRS registry for assembly {assemblyName} requested targeted reflection fallback for {reflectionFallbackTypeNames.Count} unsupported handler type(s).");
+                }
+                else
+                {
+                    logger.Debug(
+                        $"Generated CQRS registry for assembly {assemblyName} requested full reflection fallback for unsupported handlers.");
+                }
+
+                return GeneratedRegistrationResult.WithReflectionFallback(reflectionFallbackTypeNames);
             }
 
-            return GeneratedRegistrationResult.FullyHandled;
+            return GeneratedRegistrationResult.FullyHandled();
         }
         catch (Exception exception)
         {
@@ -117,16 +131,21 @@ internal static class CqrsHandlerRegistrar
                 $"Generated CQRS handler registry discovery failed for assembly {assemblyName}. Falling back to reflection scan.");
             logger.Warn(
                 $"Failed to use generated CQRS handler registry for assembly {assemblyName}: {exception.Message}");
-            return GeneratedRegistrationResult.NoGeneratedRegistry;
+            return GeneratedRegistrationResult.NoGeneratedRegistry();
         }
     }
 
     /// <summary>
     ///     注册单个程序集里的所有 CQRS 处理器映射。
     /// </summary>
-    private static void RegisterAssemblyHandlers(IServiceCollection services, Assembly assembly, ILogger logger)
+    private static void RegisterAssemblyHandlers(
+        IServiceCollection services,
+        Assembly assembly,
+        ILogger logger,
+        IReadOnlyList<string>? reflectionFallbackTypeNames)
     {
-        foreach (var implementationType in GetLoadableTypes(assembly, logger).Where(IsConcreteHandlerType))
+        foreach (var implementationType in GetCandidateHandlerTypes(assembly, logger, reflectionFallbackTypeNames)
+                     .Where(IsConcreteHandlerType))
         {
             var handlerInterfaces = implementationType
                 .GetInterfaces()
@@ -153,6 +172,58 @@ internal static class CqrsHandlerRegistrar
                     $"Registered CQRS handler {implementationType.FullName} as {handlerInterface.FullName}.");
             }
         }
+    }
+
+    /// <summary>
+    ///     根据生成器提供的 fallback 清单或整程序集扫描结果，获取本轮要注册的候选处理器类型。
+    /// </summary>
+    private static IReadOnlyList<Type> GetCandidateHandlerTypes(
+        Assembly assembly,
+        ILogger logger,
+        IReadOnlyList<string>? reflectionFallbackTypeNames)
+    {
+        return reflectionFallbackTypeNames is { Count: > 0 }
+            ? GetNamedFallbackTypes(assembly, reflectionFallbackTypeNames, logger)
+            : GetLoadableTypes(assembly, logger);
+    }
+
+    /// <summary>
+    ///     根据生成器记录的类型全名，精确解析仍需运行时补充注册的处理器类型。
+    /// </summary>
+    private static IReadOnlyList<Type> GetNamedFallbackTypes(
+        Assembly assembly,
+        IReadOnlyList<string> reflectionFallbackTypeNames,
+        ILogger logger)
+    {
+        var assemblyName = GetAssemblySortKey(assembly);
+        var resolvedTypes = new List<Type>(reflectionFallbackTypeNames.Count);
+        foreach (var typeName in reflectionFallbackTypeNames
+                     .Where(static name => !string.IsNullOrWhiteSpace(name))
+                     .Distinct(StringComparer.Ordinal)
+                     .OrderBy(static name => name, StringComparer.Ordinal))
+        {
+            try
+            {
+                var type = assembly.GetType(typeName, throwOnError: false, ignoreCase: false);
+                if (type is null)
+                {
+                    logger.Warn(
+                        $"Generated CQRS reflection fallback type {typeName} could not be resolved in assembly {assemblyName}. Skipping targeted fallback entry.");
+                    continue;
+                }
+
+                resolvedTypes.Add(type);
+            }
+            catch (Exception exception)
+            {
+                logger.Warn(
+                    $"Generated CQRS reflection fallback type {typeName} failed to load in assembly {assemblyName}: {exception.Message}");
+            }
+        }
+
+        return resolvedTypes
+            .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
+            .ToList();
     }
 
     /// <summary>
@@ -221,11 +292,24 @@ internal static class CqrsHandlerRegistrar
     }
 
     /// <summary>
-    ///     判断生成注册器是否要求运行时继续补充反射扫描。
+    ///     获取生成注册器要求运行时继续补充反射扫描的 handler 类型名清单。
     /// </summary>
-    private static bool RequiresReflectionFallback(Assembly assembly)
+    private static IReadOnlyList<string>? GetReflectionFallbackTypeNames(Assembly assembly)
     {
-        return assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), inherit: false)?.Length > 0;
+        var fallbackAttributes = assembly
+            .GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), inherit: false)
+            .OfType<CqrsReflectionFallbackAttribute>()
+            .ToList();
+
+        if (fallbackAttributes.Count == 0)
+            return null;
+
+        return fallbackAttributes
+            .SelectMany(static attribute => attribute.FallbackHandlerTypeNames)
+            .Where(static typeName => !string.IsNullOrWhiteSpace(typeName))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static typeName => typeName, StringComparer.Ordinal)
+            .ToArray();
     }
 
     /// <summary>
@@ -259,10 +343,36 @@ internal static class CqrsHandlerRegistrar
         return type.FullName ?? type.Name;
     }
 
-    private enum GeneratedRegistrationResult
+    private readonly record struct GeneratedRegistrationResult(
+        bool UsedGeneratedRegistry,
+        bool RequiresReflectionFallback,
+        IReadOnlyList<string>? ReflectionFallbackTypeNames)
     {
-        NoGeneratedRegistry,
-        FullyHandled,
-        RequiresReflectionFallback
+        public static GeneratedRegistrationResult NoGeneratedRegistry()
+        {
+            return new GeneratedRegistrationResult(
+                UsedGeneratedRegistry: false,
+                RequiresReflectionFallback: false,
+                ReflectionFallbackTypeNames: null);
+        }
+
+        public static GeneratedRegistrationResult FullyHandled()
+        {
+            return new GeneratedRegistrationResult(
+                UsedGeneratedRegistry: true,
+                RequiresReflectionFallback: false,
+                ReflectionFallbackTypeNames: null);
+        }
+
+        public static GeneratedRegistrationResult WithReflectionFallback(
+            IReadOnlyList<string> reflectionFallbackTypeNames)
+        {
+            ArgumentNullException.ThrowIfNull(reflectionFallbackTypeNames);
+
+            return new GeneratedRegistrationResult(
+                UsedGeneratedRegistry: true,
+                RequiresReflectionFallback: true,
+                ReflectionFallbackTypeNames: reflectionFallbackTypeNames);
+        }
     }
 }

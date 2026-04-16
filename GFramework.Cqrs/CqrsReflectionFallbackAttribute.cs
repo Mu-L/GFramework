@@ -11,4 +11,26 @@ namespace GFramework.Cqrs;
 [AttributeUsage(AttributeTargets.Assembly)]
 public sealed class CqrsReflectionFallbackAttribute : Attribute
 {
+    /// <summary>
+    ///     初始化 <see cref="CqrsReflectionFallbackAttribute" />。
+    /// </summary>
+    /// <param name="fallbackHandlerTypeNames">
+    ///     需要运行时补充反射注册的处理器类型全名。
+    ///     当该清单为空时，运行时会回退到整程序集扫描，以兼容旧版 marker 语义。
+    /// </param>
+    public CqrsReflectionFallbackAttribute(params string[] fallbackHandlerTypeNames)
+    {
+        ArgumentNullException.ThrowIfNull(fallbackHandlerTypeNames);
+
+        FallbackHandlerTypeNames = fallbackHandlerTypeNames
+            .Where(static typeName => !string.IsNullOrWhiteSpace(typeName))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static typeName => typeName, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    ///     获取需要运行时补充反射注册的处理器类型全名集合。
+    /// </summary>
+    public IReadOnlyList<string> FallbackHandlerTypeNames { get; }
 }
