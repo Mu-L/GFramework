@@ -12,7 +12,7 @@
 - JSON Schema 作为结构描述
 - 一对象一文件的目录组织
 - 运行时只读查询
-- Runtime / Generator / Tooling 共享支持 `const`、`minimum`、`maximum`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf`、`minLength`、`maxLength`、`pattern`、`format`（当前稳定子集：`date`、`date-time`、`email`、`uri`、`uuid`）、`minItems`、`maxItems`、`uniqueItems`、`contains`、`minContains`、`maxContains`、`minProperties`、`maxProperties`
+- Runtime / Generator / Tooling 共享支持 `const`、`not`、`minimum`、`maximum`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf`、`minLength`、`maxLength`、`pattern`、`format`（当前稳定子集：`date`、`date-time`、`duration`、`email`、`time`、`uri`、`uuid`）、`minItems`、`maxItems`、`uniqueItems`、`contains`、`minContains`、`maxContains`、`minProperties`、`maxProperties`
 - Source Generator 生成配置类型、表包装、单表注册/访问辅助，以及项目级聚合注册目录
 - VS Code 插件提供配置浏览、raw 编辑、schema 打开、递归轻量校验和嵌套对象表单入口
 
@@ -720,6 +720,7 @@ var loader = new YamlConfigLoader("config-root")
 - 数组字段违反 `contains` / `minContains` / `maxContains`
 - 对象字段违反 `minProperties` / `maxProperties`
 - 标量 / 对象 / 数组字段违反 `const`
+- 标量 / 对象 / 数组字段命中 `not`
 - 标量 `enum` 不匹配
 - 标量数组元素 `enum` 不匹配
 - 通过 `x-gframework-ref-table` 声明的跨表引用缺失目标行
@@ -767,13 +768,17 @@ if (MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out var re
 - `description`：供表单提示、生成代码 XML 文档和接入说明复用
 - `default`：供生成类型属性初始值和工具提示复用
 - `const`：供运行时校验、VS Code 校验、表单 hint 和生成代码 XML 文档复用；对象会忽略字段顺序比较，数组保留元素顺序，标量按运行时同一套类型归一化规则比较
+- `not`：供运行时校验、VS Code 校验和生成代码 XML 文档复用；`not` 子 schema 会复用同一套递归校验规则，但对象匹配保持主校验链的严格语义，不会像 `contains` 那样把“声明属性子集”视为命中
 - `enum`：供运行时校验、VS Code 校验和表单枚举选择复用
 - `minimum` / `maximum`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
 - `exclusiveMinimum` / `exclusiveMaximum`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
 - `multipleOf`：供运行时校验、VS Code 校验、表单 hint 和生成代码 XML 文档复用；当前优先按运行时与 JS 共用的十进制精确整倍数判定处理常见十进制步进，并在必要时退回浮点容差兜底
 - `minLength` / `maxLength`：供运行时校验、VS Code 校验和生成代码 XML 文档复用
 - `pattern`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用；当前按 C# `CultureInvariant` 与 JS Unicode `u` 模式解释，非法模式会在 schema 解析阶段直接报错
-- `format`：当前只支持 Runtime / Generator / Tooling 三端都能稳定对齐的字符串子集 `date`、`date-time`、`email`、`uri`、`uuid`；运行时会拒绝不满足格式的值，VS Code 校验与表单 hint 会同步展示该约束，生成代码 XML 文档也会保留 `format = ...` 说明
+- `format`：当前只支持 Runtime / Generator / Tooling 三端都能稳定对齐的字符串子集 `date`、`date-time`、`duration`、`email`、`time`、`uri`、`uuid`
+- `duration`：当前只支持稳定的 day-time duration 子集，例如 `P2D`、`PT45M`、`P2DT3H4M5.5S`；为了避免跨宿主对日历语义解释漂移，暂不支持 `Y` / `M（月）` / `W`
+- `time`：固定要求显式时区偏移（例如 `08:30:00Z` 或 `08:30:00+08:00`），避免不同宿主对 time-only 文本隐式补日期或本地时区
+- 对上述共享子集，运行时会拒绝不满足格式的值，VS Code 校验与表单 hint 会同步展示该约束，生成代码 XML 文档也会保留 `format = ...` 说明
 - `minItems` / `maxItems`：供运行时校验、VS Code 校验、表单提示和生成代码 XML 文档复用
 - `uniqueItems`：供运行时校验、VS Code 校验、表单 hint 和生成代码 XML 文档复用；对象数组会按 schema 归一化后的结构比较重复项，而不是依赖 YAML 字段顺序
 - `contains` / `minContains` / `maxContains`：供运行时校验、VS Code 校验、表单 hint 和生成代码 XML 文档复用；当前会按同一套递归 schema 规则统计“有多少数组元素匹配 contains 子 schema”，其中仅声明 `contains` 时默认至少需要 1 个匹配元素

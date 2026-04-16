@@ -18,7 +18,7 @@ internal static class YamlConfigSchemaValidator
     // The runtime intentionally uses the same culture-invariant regex semantics as the
     // JS tooling so grouping and backreferences behave consistently across environments.
     private const RegexOptions SupportedPatternRegexOptions = RegexOptions.CultureInvariant;
-    private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'uri', 'uuid'";
+    private const string SupportedStringFormatNames = "'date', 'date-time', 'duration', 'email', 'time', 'uri', 'uuid'";
 
     private static readonly Regex ExactDecimalPattern = new(
         @"^(?<sign>[+-]?)(?:(?<integer>\d+)(?:\.(?<fraction>\d*))?|\.(?<fractionOnly>\d+))(?:[eE](?<exponent>[+-]?\d+))?$",
@@ -34,6 +34,14 @@ internal static class YamlConfigSchemaValidator
 
     private static readonly Regex SupportedDateTimeFormatRegex = new(
         @"^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SupportedDurationFormatRegex = new(
+        @"^P(?:(?<days>\d+)D)?(?:T(?:(?<hours>\d+)H)?(?:(?<minutes>\d+)M)?(?:(?<seconds>\d+(?:\.\d+)?)S)?)?$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SupportedTimeFormatRegex = new(
+        @"^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex SupportedUriSchemeRegex = new(
@@ -316,42 +324,80 @@ internal static class YamlConfigSchemaValidator
         var typeName = typeElement.GetString() ?? string.Empty;
         var referenceTableName = TryGetReferenceTableName(tableName, schemaPath, propertyPath, element);
 
-        switch (typeName)
+        var parsedNode = typeName switch
         {
-            case "object":
-                EnsureReferenceKeywordIsSupported(tableName, schemaPath, propertyPath,
-                    YamlConfigSchemaPropertyType.Object,
-                    referenceTableName);
-                return ParseObjectNode(tableName, schemaPath, propertyPath, element, isRoot);
+            "object" => ParseObjectSchemaNode(
+                tableName,
+                schemaPath,
+                propertyPath,
+                element,
+                referenceTableName,
+                isRoot),
+            "array" => ParseArrayNode(tableName, schemaPath, propertyPath, element, referenceTableName),
+            "integer" => CreateScalarNode(
+                tableName,
+                schemaPath,
+                propertyPath,
+                YamlConfigSchemaPropertyType.Integer,
+                element,
+                referenceTableName),
+            "number" => CreateScalarNode(
+                tableName,
+                schemaPath,
+                propertyPath,
+                YamlConfigSchemaPropertyType.Number,
+                element,
+                referenceTableName),
+            "boolean" => CreateScalarNode(
+                tableName,
+                schemaPath,
+                propertyPath,
+                YamlConfigSchemaPropertyType.Boolean,
+                element,
+                referenceTableName),
+            "string" => CreateScalarNode(
+                tableName,
+                schemaPath,
+                propertyPath,
+                YamlConfigSchemaPropertyType.String,
+                element,
+                referenceTableName),
+            _ => throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' uses unsupported type '{typeName}'.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath),
+                rawValue: typeName)
+        };
+        return parsedNode.WithNegatedSchemaNode(ParseNegatedSchemaNode(tableName, schemaPath, propertyPath, element));
+    }
 
-            case "array":
-                return ParseArrayNode(tableName, schemaPath, propertyPath, element, referenceTableName);
-
-            case "integer":
-                return CreateScalarNode(tableName, schemaPath, propertyPath, YamlConfigSchemaPropertyType.Integer,
-                    element, referenceTableName);
-
-            case "number":
-                return CreateScalarNode(tableName, schemaPath, propertyPath, YamlConfigSchemaPropertyType.Number,
-                    element, referenceTableName);
-
-            case "boolean":
-                return CreateScalarNode(tableName, schemaPath, propertyPath, YamlConfigSchemaPropertyType.Boolean,
-                    element, referenceTableName);
-
-            case "string":
-                return CreateScalarNode(tableName, schemaPath, propertyPath, YamlConfigSchemaPropertyType.String,
-                    element, referenceTableName);
-
-            default:
-                throw ConfigLoadExceptionFactory.Create(
-                    ConfigLoadFailureKind.SchemaUnsupported,
-                    tableName,
-                    $"Property '{propertyPath}' in schema file '{schemaPath}' uses unsupported type '{typeName}'.",
-                    schemaPath: schemaPath,
-                    displayPath: GetDiagnosticPath(propertyPath),
-                    rawValue: typeName);
-        }
+    /// <summary>
+    ///     解析对象类型 schema，并在进入对象节点解析前先校验 ref-table 是否兼容。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">对象属性路径。</param>
+    /// <param name="element">对象 schema 节点。</param>
+    /// <param name="referenceTableName">声明在当前节点上的目标引用表。</param>
+    /// <param name="isRoot">是否为根节点。</param>
+    /// <returns>对象节点模型。</returns>
+    private static YamlConfigSchemaNode ParseObjectSchemaNode(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element,
+        string? referenceTableName,
+        bool isRoot)
+    {
+        EnsureReferenceKeywordIsSupported(
+            tableName,
+            schemaPath,
+            propertyPath,
+            YamlConfigSchemaPropertyType.Object,
+            referenceTableName);
+        return ParseObjectNode(tableName, schemaPath, propertyPath, element, isRoot);
     }
 
     /// <summary>
@@ -512,6 +558,57 @@ internal static class YamlConfigSchemaValidator
             schemaPath);
         return scalarNode.WithConstantValue(
             ParseConstantValue(tableName, schemaPath, propertyPath, element, scalarNode));
+    }
+
+    /// <summary>
+    ///     解析节点上的 <c>not</c> 约束。
+    ///     该子 schema 继续复用同一套节点解析逻辑，保证 Runtime / Generator / Tooling
+    ///     对深层结构与格式白名单的解释保持一致。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">当前节点路径。</param>
+    /// <param name="element">Schema JSON 节点。</param>
+    /// <returns>解析后的 negated schema；未声明时返回空。</returns>
+    private static YamlConfigSchemaNode? ParseNegatedSchemaNode(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element)
+    {
+        if (!element.TryGetProperty("not", out var notElement))
+        {
+            return null;
+        }
+
+        if (notElement.ValueKind != JsonValueKind.Object)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"Property '{propertyPath}' in schema file '{schemaPath}' must declare 'not' as an object-valued schema.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        return ParseNode(
+            tableName,
+            schemaPath,
+            BuildNestedSchemaPath(propertyPath, "not"),
+            notElement);
+    }
+
+    /// <summary>
+    ///     为 <c>contains</c> / <c>not</c> 这类内联子 schema 构建稳定的诊断路径。
+    /// </summary>
+    /// <param name="propertyPath">当前节点路径。</param>
+    /// <param name="suffix">内联子 schema 后缀。</param>
+    /// <returns>带内联后缀的 schema 路径。</returns>
+    private static string BuildNestedSchemaPath(string propertyPath, string suffix)
+    {
+        return string.IsNullOrWhiteSpace(propertyPath)
+            ? $"[{suffix}]"
+            : $"{propertyPath}[{suffix}]";
     }
 
     /// <summary>
@@ -698,6 +795,7 @@ internal static class YamlConfigSchemaValidator
         }
 
         ValidateConstantValue(tableName, yamlPath, displayPath, mappingNode, schemaNode);
+        ValidateNegatedSchemaConstraint(tableName, yamlPath, displayPath, mappingNode, schemaNode);
     }
 
     /// <summary>
@@ -820,6 +918,7 @@ internal static class YamlConfigSchemaValidator
         ValidateArrayUniqueItemsConstraint(tableName, yamlPath, displayPath, sequenceNode, schemaNode);
         ValidateArrayContainsConstraints(tableName, yamlPath, displayPath, sequenceNode, schemaNode, references);
         ValidateConstantValue(tableName, yamlPath, displayPath, sequenceNode, schemaNode);
+        ValidateNegatedSchemaConstraint(tableName, yamlPath, displayPath, sequenceNode, schemaNode);
     }
 
     /// <summary>
@@ -913,6 +1012,7 @@ internal static class YamlConfigSchemaValidator
         }
 
         ValidateConstantValue(tableName, yamlPath, displayPath, scalarNode, schemaNode);
+        ValidateNegatedSchemaConstraint(tableName, yamlPath, displayPath, scalarNode, schemaNode);
 
         if (schemaNode.ReferenceTableName != null &&
             references is not null)
@@ -1703,8 +1803,16 @@ internal static class YamlConfigSchemaValidator
                 kind = YamlConfigStringFormatKind.DateTime;
                 return true;
 
+            case "duration":
+                kind = YamlConfigStringFormatKind.Duration;
+                return true;
+
             case "email":
                 kind = YamlConfigStringFormatKind.Email;
+                return true;
+
+            case "time":
+                kind = YamlConfigStringFormatKind.Time;
                 return true;
 
             case "uri":
@@ -2317,7 +2425,9 @@ internal static class YamlConfigSchemaValidator
         {
             YamlConfigStringFormatKind.Date => MatchesSupportedDateFormat(value),
             YamlConfigStringFormatKind.DateTime => MatchesSupportedDateTimeFormat(value),
+            YamlConfigStringFormatKind.Duration => MatchesSupportedDurationFormat(value),
             YamlConfigStringFormatKind.Email => SupportedEmailFormatRegex.IsMatch(value),
+            YamlConfigStringFormatKind.Time => MatchesSupportedTimeFormat(value),
             YamlConfigStringFormatKind.Uri => MatchesSupportedUriFormat(value),
             YamlConfigStringFormatKind.Uuid => Guid.TryParseExact(value, "D", out _),
             _ => false
@@ -2360,6 +2470,78 @@ internal static class YamlConfigSchemaValidator
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out _);
+    }
+
+    /// <summary>
+    ///     判断字符串是否满足共享支持的 <c>duration</c> 格式。
+    ///     当前共享子集只接受 day-time duration：可声明 <c>D/H/M/S</c>，秒允许小数，
+    ///     但拒绝 <c>Y</c> / <c>M(月)</c> / <c>W</c> 等依赖日历语义的部分，
+    ///     避免不同宿主对“一个月/一年到底多长”出现解释漂移。
+    /// </summary>
+    /// <param name="value">待校验的字符串值。</param>
+    /// <returns>当前值是否是合法持续时间文本。</returns>
+    private static bool MatchesSupportedDurationFormat(string value)
+    {
+        var match = SupportedDurationFormatRegex.Match(value);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var hasDayComponent = match.Groups["days"].Success;
+        var hasHourComponent = match.Groups["hours"].Success;
+        var hasMinuteComponent = match.Groups["minutes"].Success;
+        var hasSecondComponent = match.Groups["seconds"].Success;
+        var hasAnyComponent = hasDayComponent || hasHourComponent || hasMinuteComponent || hasSecondComponent;
+        if (!hasAnyComponent)
+        {
+            return false;
+        }
+
+        var hasTimeSection = value.Contains('T', StringComparison.Ordinal);
+        if (hasTimeSection &&
+            !hasHourComponent &&
+            !hasMinuteComponent &&
+            !hasSecondComponent)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     判断字符串是否满足共享支持的 <c>time</c> 格式。
+    ///     该格式固定要求显式时区偏移，并只接受 24 小时制的合法时分秒文本，
+    ///     避免不同宿主对“time-only + offset”解析默认日期或时区时产生漂移。
+    /// </summary>
+    /// <param name="value">待校验的字符串值。</param>
+    /// <returns>当前值是否是合法时间文本。</returns>
+    private static bool MatchesSupportedTimeFormat(string value)
+    {
+        var match = SupportedTimeFormatRegex.Match(value);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var hour = int.Parse(match.Groups["hour"].Value, CultureInfo.InvariantCulture);
+        var minute = int.Parse(match.Groups["minute"].Value, CultureInfo.InvariantCulture);
+        var second = int.Parse(match.Groups["second"].Value, CultureInfo.InvariantCulture);
+        if (hour > 23 || minute > 59 || second > 59)
+        {
+            return false;
+        }
+
+        var offset = match.Groups["offset"].Value;
+        if (offset == "Z")
+        {
+            return true;
+        }
+
+        var offsetHour = int.Parse(offset.AsSpan(1, 2), CultureInfo.InvariantCulture);
+        var offsetMinute = int.Parse(offset.AsSpan(4, 2), CultureInfo.InvariantCulture);
+        return offsetHour <= 23 && offsetMinute <= 59;
     }
 
     /// <summary>
@@ -2554,13 +2736,14 @@ internal static class YamlConfigSchemaValidator
         var matchingCount = 0;
         for (var itemIndex = 0; itemIndex < sequenceNode.Children.Count; itemIndex++)
         {
-            if (IsArrayItemMatchingContains(
+            if (TryMatchSchemaNode(
                     tableName,
                     yamlPath,
                     $"{displayPath}[{itemIndex}]",
                     sequenceNode.Children[itemIndex],
                     containsNode,
-                    references))
+                    references,
+                    allowUnknownObjectProperties: true))
             {
                 matchingCount++;
             }
@@ -2570,26 +2753,29 @@ internal static class YamlConfigSchemaValidator
     }
 
     /// <summary>
-    ///     判断单个数组元素是否满足 <c>contains</c> 子 schema。
-    ///     contains 的语义是“尝试匹配”，因此普通约束失败会返回 <see langword="false" />，但内部意外状态仍会继续抛出。
+    ///     判断当前 YAML 节点是否满足给定 schema 子树。
+    ///     contains / not 都通过该路径复用主校验逻辑，因此普通约束失败会返回 <see langword="false" />，
+    ///     但内部意外状态仍会继续抛出。
     /// </summary>
     /// <param name="tableName">所属配置表名称。</param>
     /// <param name="yamlPath">YAML 文件路径。</param>
-    /// <param name="displayPath">当前数组元素路径。</param>
-    /// <param name="itemNode">实际 YAML 元素。</param>
-    /// <param name="containsNode">contains 子 schema。</param>
-    /// <param name="references">当前元素匹配成功后要写回的可选跨表引用收集器。</param>
-    /// <returns>当前元素是否匹配 contains 子 schema。</returns>
-    private static bool IsArrayItemMatchingContains(
+    /// <param name="displayPath">当前节点路径。</param>
+    /// <param name="node">实际 YAML 节点。</param>
+    /// <param name="schemaNode">要试匹配的 schema 子树。</param>
+    /// <param name="references">当前节点匹配成功后要写回的可选跨表引用收集器。</param>
+    /// <param name="allowUnknownObjectProperties">对象试匹配时是否允许额外字段。</param>
+    /// <returns>当前节点是否匹配指定 schema 子树。</returns>
+    private static bool TryMatchSchemaNode(
         string tableName,
         string yamlPath,
         string displayPath,
-        YamlNode itemNode,
-        YamlConfigSchemaNode containsNode,
-        ICollection<YamlConfigReferenceUsage>? references)
+        YamlNode node,
+        YamlConfigSchemaNode schemaNode,
+        ICollection<YamlConfigReferenceUsage>? references,
+        bool allowUnknownObjectProperties)
     {
-        // contains 的“试匹配”不能把失败元素的引用泄漏给外层，但匹配成功的元素仍需要参与
-        // 跨表引用收集，否则仅声明在 contains 子 schema 里的 ref-table 会被运行时遗漏。
+        // 约束试匹配不能把失败路径的引用泄漏给外层，但匹配成功的分支仍需要把引用写回，
+        // 这样 contains / not 等内联 schema 才能与主校验链复用同一套递归解释规则。
         List<YamlConfigReferenceUsage>? matchedReferences = references is null ? null : new();
 
         try
@@ -2598,10 +2784,10 @@ internal static class YamlConfigSchemaValidator
                 tableName,
                 yamlPath,
                 displayPath,
-                itemNode,
-                containsNode,
+                node,
+                schemaNode,
                 matchedReferences,
-                allowUnknownObjectProperties: true);
+                allowUnknownObjectProperties);
 
             if (references is not null &&
                 matchedReferences is not null)
@@ -2619,6 +2805,49 @@ internal static class YamlConfigSchemaValidator
         {
             return false;
         }
+    }
+
+    /// <summary>
+    ///     校验节点是否命中了 <c>not</c> 声明的禁用 schema。
+    ///     与 contains 不同，not 会沿用主校验链的严格对象语义，避免把“声明属性子集”误当成完整命中。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="yamlPath">YAML 文件路径。</param>
+    /// <param name="displayPath">当前字段路径。</param>
+    /// <param name="node">当前 YAML 节点。</param>
+    /// <param name="schemaNode">当前 schema 节点。</param>
+    private static void ValidateNegatedSchemaConstraint(
+        string tableName,
+        string yamlPath,
+        string displayPath,
+        YamlNode node,
+        YamlConfigSchemaNode schemaNode)
+    {
+        if (schemaNode.NegatedSchemaNode is null ||
+            !TryMatchSchemaNode(
+                tableName,
+                yamlPath,
+                displayPath,
+                node,
+                schemaNode.NegatedSchemaNode,
+                references: null,
+                allowUnknownObjectProperties: false))
+        {
+            return;
+        }
+
+        var subject = string.IsNullOrWhiteSpace(displayPath)
+            ? "Root object"
+            : $"Property '{displayPath}'";
+        throw ConfigLoadExceptionFactory.Create(
+            ConfigLoadFailureKind.ConstraintViolation,
+            tableName,
+            $"{subject} in config file '{yamlPath}' must not match the 'not' schema.",
+            yamlPath: yamlPath,
+            schemaPath: schemaNode.SchemaPathHint,
+            displayPath: GetDiagnosticPath(displayPath),
+            rawValue: DescribeYamlNodeForDiagnostics(node, schemaNode.NegatedSchemaNode),
+            detail: "The current YAML value matches the forbidden 'not' schema.");
     }
 
     /// <summary>
@@ -3223,6 +3452,7 @@ internal sealed class YamlConfigSchemaNode
         ArrayConstraints = validation.ArrayConstraints;
         ObjectConstraints = validation.ObjectConstraints;
         ConstantValue = validation.ConstantValue;
+        NegatedSchemaNode = validation.NegatedSchemaNode;
         SchemaPathHint = schemaPathHint;
     }
 
@@ -3277,6 +3507,11 @@ internal sealed class YamlConfigSchemaNode
     public YamlConfigConstantValue? ConstantValue { get; }
 
     /// <summary>
+    ///     获取节点声明的 <c>not</c> 子 schema；未声明时返回空。
+    /// </summary>
+    public YamlConfigSchemaNode? NegatedSchemaNode { get; }
+
+    /// <summary>
     ///     获取用于诊断显示的 schema 路径提示。
     ///     当前节点本身不记录独立路径，因此对象校验会回退到所属根 schema 路径。
     /// </summary>
@@ -3305,7 +3540,8 @@ internal sealed class YamlConfigSchemaNode
                 constraints: null,
                 arrayConstraints: null,
                 objectConstraints,
-                constantValue: null),
+                constantValue: null,
+                negatedSchemaNode: null),
             schemaPathHint);
     }
 
@@ -3330,7 +3566,8 @@ internal sealed class YamlConfigSchemaNode
                 constraints: null,
                 arrayConstraints,
                 objectConstraints: null,
-                constantValue: null),
+                constantValue: null,
+                negatedSchemaNode: null),
             schemaPathHint);
     }
 
@@ -3359,7 +3596,8 @@ internal sealed class YamlConfigSchemaNode
                 constraints,
                 arrayConstraints: null,
                 objectConstraints: null,
-                constantValue: null),
+                constantValue: null,
+                negatedSchemaNode: null),
             schemaPathHint);
     }
 
@@ -3392,6 +3630,20 @@ internal sealed class YamlConfigSchemaNode
             SchemaPathHint);
     }
 
+    /// <summary>
+    ///     基于当前节点复制一个只替换 <c>not</c> 子 schema 的新节点。
+    /// </summary>
+    /// <param name="negatedSchemaNode">新的 negated schema。</param>
+    /// <returns>复制后的节点。</returns>
+    public YamlConfigSchemaNode WithNegatedSchemaNode(YamlConfigSchemaNode? negatedSchemaNode)
+    {
+        return new YamlConfigSchemaNode(
+            NodeType,
+            _children,
+            _validation.WithNegatedSchemaNode(negatedSchemaNode),
+            SchemaPathHint);
+    }
+
     private sealed class NodeChildren
     {
         public NodeChildren(
@@ -3421,7 +3673,8 @@ internal sealed class YamlConfigSchemaNode
             YamlConfigScalarConstraints? constraints,
             YamlConfigArrayConstraints? arrayConstraints,
             YamlConfigObjectConstraints? objectConstraints,
-            YamlConfigConstantValue? constantValue)
+            YamlConfigConstantValue? constantValue,
+            YamlConfigSchemaNode? negatedSchemaNode)
         {
             ReferenceTableName = referenceTableName;
             AllowedValues = allowedValues;
@@ -3429,6 +3682,7 @@ internal sealed class YamlConfigSchemaNode
             ArrayConstraints = arrayConstraints;
             ObjectConstraints = objectConstraints;
             ConstantValue = constantValue;
+            NegatedSchemaNode = negatedSchemaNode;
         }
 
         public static NodeValidation None { get; } = new(
@@ -3437,7 +3691,8 @@ internal sealed class YamlConfigSchemaNode
             constraints: null,
             arrayConstraints: null,
             objectConstraints: null,
-            constantValue: null);
+            constantValue: null,
+            negatedSchemaNode: null);
 
         public string? ReferenceTableName { get; }
 
@@ -3451,16 +3706,24 @@ internal sealed class YamlConfigSchemaNode
 
         public YamlConfigConstantValue? ConstantValue { get; }
 
+        public YamlConfigSchemaNode? NegatedSchemaNode { get; }
+
         public NodeValidation WithReferenceTable(string referenceTableName)
         {
             return new NodeValidation(referenceTableName, AllowedValues, Constraints, ArrayConstraints,
-                ObjectConstraints, ConstantValue);
+                ObjectConstraints, ConstantValue, NegatedSchemaNode);
         }
 
         public NodeValidation WithConstantValue(YamlConfigConstantValue? constantValue)
         {
             return new NodeValidation(ReferenceTableName, AllowedValues, Constraints, ArrayConstraints,
-                ObjectConstraints, constantValue);
+                ObjectConstraints, constantValue, NegatedSchemaNode);
+        }
+
+        public NodeValidation WithNegatedSchemaNode(YamlConfigSchemaNode? negatedSchemaNode)
+        {
+            return new NodeValidation(ReferenceTableName, AllowedValues, Constraints, ArrayConstraints,
+                ObjectConstraints, ConstantValue, negatedSchemaNode);
         }
     }
 }
@@ -3711,9 +3974,19 @@ internal enum YamlConfigStringFormatKind
     DateTime,
 
     /// <summary>
+    ///     表示 day-time duration 形式的持续时间。
+    /// </summary>
+    Duration,
+
+    /// <summary>
     ///     表示基础电子邮件地址格式。
     /// </summary>
     Email,
+
+    /// <summary>
+    ///     表示带显式时区偏移的 RFC 3339 时间。
+    /// </summary>
+    Time,
 
     /// <summary>
     ///     表示绝对 URI。

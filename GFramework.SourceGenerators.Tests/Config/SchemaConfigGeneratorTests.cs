@@ -95,7 +95,7 @@ public class SchemaConfigGeneratorTests
     ///     验证共享支持的字符串 <c>format</c> 会写入生成 XML 文档。
     /// </summary>
     [Test]
-    public void Run_Should_Write_Supported_String_Format_Into_Generated_Documentation()
+    public void Run_Should_Write_Supported_Duration_Format_Into_Generated_Documentation()
     {
         const string source = """
                               namespace TestApp
@@ -109,12 +109,12 @@ public class SchemaConfigGeneratorTests
         const string schema = """
                               {
                                 "type": "object",
-                                "required": ["id", "contactEmail"],
+                                "required": ["id", "respawnDelay"],
                                 "properties": {
                                   "id": { "type": "integer" },
-                                  "contactEmail": {
+                                  "respawnDelay": {
                                     "type": "string",
-                                    "format": "email"
+                                    "format": "duration"
                                   }
                                 }
                               }
@@ -133,7 +133,7 @@ public class SchemaConfigGeneratorTests
                 StringComparer.Ordinal);
 
         Assert.That(result.Results.Single().Diagnostics, Is.Empty);
-        Assert.That(generatedSources["MonsterConfig.g.cs"], Does.Contain("Constraints: format = 'email'."));
+        Assert.That(generatedSources["MonsterConfig.g.cs"], Does.Contain("Constraints: format = 'duration'."));
     }
 
     /// <summary>
@@ -178,6 +178,8 @@ public class SchemaConfigGeneratorTests
             Assert.That(diagnostic.GetMessage(), Does.Contain("address"));
             Assert.That(diagnostic.GetMessage(), Does.Contain("ipv4"));
             Assert.That(diagnostic.GetMessage(), Does.Contain("date-time"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("duration"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("time"));
         });
     }
 
@@ -266,6 +268,102 @@ public class SchemaConfigGeneratorTests
             Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_009"));
             Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
             Assert.That(diagnostic.GetMessage(), Does.Contain("dropIds[contains]"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("Only 'string' properties can declare 'format'."));
+        });
+    }
+
+    /// <summary>
+    ///     验证 <c>not</c> 子 schema 的约束会写入生成 XML 文档。
+    /// </summary>
+    [Test]
+    public void Run_Should_Write_Not_Constraint_Into_Generated_Documentation()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "name"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "name": {
+                                    "type": "string",
+                                    "not": {
+                                      "type": "string",
+                                      "const": "Deprecated"
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var generatedSources = result.Results
+            .Single()
+            .GeneratedSources
+            .ToDictionary(
+                static sourceResult => sourceResult.HintName,
+                static sourceResult => sourceResult.SourceText.ToString(),
+                StringComparer.Ordinal);
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        Assert.That(generatedSources["MonsterConfig.g.cs"],
+            Does.Contain("Constraints: not = string (const = \"Deprecated\")."));
+    }
+
+    /// <summary>
+    ///     验证 <c>not</c> 子 schema 内的非法 <c>format</c> 也会在生成阶段直接给出诊断。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_Not_Schema_Uses_Format_On_Non_String_Node()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "hp"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "hp": {
+                                    "type": "integer",
+                                    "not": {
+                                      "type": "integer",
+                                      "format": "uuid"
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_009"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("hp[not]"));
             Assert.That(diagnostic.GetMessage(), Does.Contain("Only 'string' properties can declare 'format'."));
         });
     }

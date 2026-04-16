@@ -675,9 +675,17 @@ test("validateParsedConfig should enforce supported string formats", () => {
               "type": "string",
               "format": "date-time"
             },
+            "respawnDelay": {
+              "type": "string",
+              "format": "duration"
+            },
             "contactEmail": {
               "type": "string",
               "format": "email"
+            },
+            "dailyResetAt": {
+              "type": "string",
+              "format": "time"
             },
             "catalogUri": {
               "type": "string",
@@ -694,20 +702,24 @@ test("validateParsedConfig should enforce supported string formats", () => {
 releaseDate: 2026-02-30
 ancientReleaseDate: 0000-01-01
 publishedAt: 2026-04-11T08:30:00
+respawnDelay: P1Y
 contactEmail: boss.example.com
+dailyResetAt: 08:30:00
 catalogUri: /loot-table
 configId: 123e4567e89b12d3a456426614174000
 `);
 
     const diagnostics = validateParsedConfig(schema, yaml);
 
-    assert.equal(diagnostics.length, 6);
+    assert.equal(diagnostics.length, 8);
     assert.match(diagnostics[0].message, /format 'date'|字符串格式“date”/u);
     assert.match(diagnostics[1].message, /format 'date'|字符串格式“date”/u);
     assert.match(diagnostics[2].message, /format 'date-time'|字符串格式“date-time”/u);
-    assert.match(diagnostics[3].message, /format 'email'|字符串格式“email”/u);
-    assert.match(diagnostics[4].message, /format 'uri'|字符串格式“uri”/u);
-    assert.match(diagnostics[5].message, /format 'uuid'|字符串格式“uuid”/u);
+    assert.match(diagnostics[3].message, /format 'duration'|字符串格式“duration”/u);
+    assert.match(diagnostics[4].message, /format 'email'|字符串格式“email”/u);
+    assert.match(diagnostics[5].message, /format 'time'|字符串格式“time”/u);
+    assert.match(diagnostics[6].message, /format 'uri'|字符串格式“uri”/u);
+    assert.match(diagnostics[7].message, /format 'uuid'|字符串格式“uuid”/u);
 });
 
 test("validateParsedConfig should accept supported string formats", () => {
@@ -723,9 +735,17 @@ test("validateParsedConfig should accept supported string formats", () => {
               "type": "string",
               "format": "date-time"
             },
+            "respawnDelay": {
+              "type": "string",
+              "format": "duration"
+            },
             "contactEmail": {
               "type": "string",
               "format": "email"
+            },
+            "dailyResetAt": {
+              "type": "string",
+              "format": "time"
             },
             "catalogUri": {
               "type": "string",
@@ -741,7 +761,9 @@ test("validateParsedConfig should accept supported string formats", () => {
     const yaml = parseTopLevelYaml(`
 releaseDate: 2026-04-11
 publishedAt: 2026-04-11T08:30:00Z
+respawnDelay: P2DT3H4M5.5S
 contactEmail: boss@example.com
+dailyResetAt: 08:30:00Z
 catalogUri: https://example.com/loot-table
 configId: 123e4567-e89b-12d3-a456-426614174000
 `);
@@ -1406,7 +1428,7 @@ test("parseSchemaContent should capture supported string format metadata", () =>
               "type": "array",
               "items": {
                 "type": "string",
-                "format": "uuid"
+                "format": "duration"
               }
             }
           }
@@ -1414,7 +1436,7 @@ test("parseSchemaContent should capture supported string format metadata", () =>
     `);
 
     assert.equal(schema.properties.contactEmail.format, "email");
-    assert.equal(schema.properties.aliases.items.format, "uuid");
+    assert.equal(schema.properties.aliases.items.format, "duration");
 });
 
 test("parseSchemaContent should capture multipleOf and uniqueItems metadata", () => {
@@ -1602,6 +1624,43 @@ test("parseSchemaContent should capture object property-count metadata", () => {
     assert.equal(schema.properties.reward.maxProperties, 2);
 });
 
+test("parseSchemaContent should capture not sub-schema metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "not": {
+                "type": "string",
+                "const": "Deprecated"
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.properties.name.not.type, "string");
+    assert.equal(schema.properties.name.not.constDisplayValue, "\"Deprecated\"");
+});
+
+test("parseSchemaContent should reject non-object not declarations", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "not": "deprecated"
+                }
+              }
+            }
+        `),
+        /must declare 'not' as an object-valued schema/u
+    );
+});
+
 test("parseSchemaContent should reject invalid pattern declarations instead of dropping them", () => {
     assert.throws(
         () => parseSchemaContent(`
@@ -1632,7 +1691,7 @@ test("parseSchemaContent should reject unsupported string format declarations", 
               }
             }
         `),
-        /unsupported string format 'ipv4'/u
+        /unsupported string format 'ipv4'.*'duration'.*'time'/u
     );
 });
 
@@ -1735,6 +1794,99 @@ reward: 1
 
     assert.equal(diagnostics.length, 1);
     assert.equal(diagnostics[0].message, "属性“reward”应为对象。");
+});
+
+test("validateParsedConfig should reject values that match a forbidden not schema", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "not": {
+                "type": "string",
+                "const": "Deprecated"
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+name: Deprecated
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.equal(
+        diagnostics[0].message,
+        "Property 'name' must not match the forbidden 'not' schema.");
+});
+
+test("validateParsedConfig should keep not object matching strict instead of contains-style subset matching", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "not": {
+                "type": "object",
+                "required": ["gold"],
+                "properties": {
+                  "gold": { "type": "integer" }
+                }
+              },
+              "properties": {
+                "gold": { "type": "integer" },
+                "bonus": { "type": "integer" }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  gold: 10
+  bonus: 5
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.deepEqual(diagnostics, []);
+});
+
+test("validateParsedConfig should reject objects that fully match a forbidden not schema", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "not": {
+                "type": "object",
+                "required": ["gold"],
+                "properties": {
+                  "gold": { "type": "integer" }
+                }
+              },
+              "properties": {
+                "gold": { "type": "integer" },
+                "bonus": { "type": "integer" }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  gold: 10
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /not/u);
 });
 
 test("applyFormUpdates should update nested scalar and scalar-array paths", () => {
