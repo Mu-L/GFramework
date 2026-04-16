@@ -67,10 +67,8 @@ public sealed class YamlConfigLoaderNegationTests
             }
             """);
 
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<int, MonsterConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
-        var registry = new ConfigRegistry();
+        var loader = CreateMonsterLoader();
+        var registry = CreateRegistry();
 
         var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
 
@@ -117,10 +115,8 @@ public sealed class YamlConfigLoaderNegationTests
             }
             """);
 
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<int, MonsterConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
-        var registry = new ConfigRegistry();
+        var loader = CreateMonsterLoader();
+        var registry = CreateRegistry();
 
         await loader.LoadAsync(registry);
 
@@ -173,10 +169,8 @@ public sealed class YamlConfigLoaderNegationTests
             }
             """);
 
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<int, MonsterRewardConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
-        var registry = new ConfigRegistry();
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
 
         var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
 
@@ -230,10 +224,8 @@ public sealed class YamlConfigLoaderNegationTests
             }
             """);
 
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<int, MonsterRewardConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
-        var registry = new ConfigRegistry();
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
 
         await loader.LoadAsync(registry);
 
@@ -277,10 +269,8 @@ public sealed class YamlConfigLoaderNegationTests
             }
             """);
 
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<int, MonsterConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
-        var registry = new ConfigRegistry();
+        var loader = CreateMonsterLoader();
+        var registry = CreateRegistry();
 
         var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
 
@@ -319,6 +309,37 @@ public sealed class YamlConfigLoaderNegationTests
     private void CreateSchemaFile(string relativePath, string content)
     {
         CreateConfigFile(relativePath, content);
+    }
+
+    /// <summary>
+    ///     创建用于标量 <c>not</c> 场景的加载器，统一测试夹具中的注册方式。
+    /// </summary>
+    /// <returns>已注册怪物表与 schema 路径的加载器。</returns>
+    private YamlConfigLoader CreateMonsterLoader()
+    {
+        return new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+    }
+
+    /// <summary>
+    ///     创建用于对象 <c>not</c> 场景的加载器，避免重复维护同一注册参数。
+    /// </summary>
+    /// <returns>已注册奖励对象测试表的加载器。</returns>
+    private YamlConfigLoader CreateMonsterRewardLoader()
+    {
+        return new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterRewardConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+    }
+
+    /// <summary>
+    ///     创建新的配置注册表，明确每个用例都从干净状态开始。
+    /// </summary>
+    /// <returns>空的配置注册表。</returns>
+    private static ConfigRegistry CreateRegistry()
+    {
+        return new ConfigRegistry();
     }
 
     /// <summary>
