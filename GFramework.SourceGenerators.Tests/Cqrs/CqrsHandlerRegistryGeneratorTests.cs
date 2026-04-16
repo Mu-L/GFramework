@@ -1,6 +1,7 @@
 using System.Reflection;
 using GFramework.SourceGenerators.Cqrs;
 using GFramework.SourceGenerators.Tests.Core;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace GFramework.SourceGenerators.Tests.Cqrs;
 
@@ -826,6 +827,135 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
+    ///     验证当外部基类暴露的 handler interface 含有生成注册器顶层上下文不可直接引用的 protected 类型时，
+    ///     生成器会保留已知直注册，并只对剩余未知接口做本地 interface discovery。
+    /// </summary>
+    [Test]
+    public void Generates_Partial_Runtime_Interface_Discovery_For_Inaccessible_External_Protected_Types()
+    {
+        const string contractsSource = """
+                                       namespace GFramework.Cqrs.Abstractions.Cqrs
+                                       {
+                                           public interface IRequest<TResponse> { }
+                                           public interface INotification { }
+                                           public interface IStreamRequest<TResponse> { }
+
+                                           public interface IRequestHandler<in TRequest, TResponse> where TRequest : IRequest<TResponse> { }
+                                           public interface INotificationHandler<in TNotification> where TNotification : INotification { }
+                                           public interface IStreamRequestHandler<in TRequest, out TResponse> where TRequest : IStreamRequest<TResponse> { }
+                                       }
+                                       """;
+
+        const string dependencySource = """
+                                        using GFramework.Cqrs.Abstractions.Cqrs;
+
+                                        namespace Dep;
+
+                                        public sealed record VisibleRequest() : IRequest<string>;
+
+                                        public abstract class VisibilityScope
+                                        {
+                                            protected internal sealed record ProtectedResponse();
+
+                                            protected internal sealed record ProtectedRequest() : IRequest<ProtectedResponse[]>;
+                                        }
+
+                                        public abstract class HandlerBase :
+                                            VisibilityScope,
+                                            IRequestHandler<VisibleRequest, string>,
+                                            IRequestHandler<VisibilityScope.ProtectedRequest, VisibilityScope.ProtectedResponse[]>
+                                        {
+                                        }
+                                        """;
+
+        const string source = """
+                              using System;
+                              using Dep;
+
+                              namespace Microsoft.Extensions.DependencyInjection
+                              {
+                                  public interface IServiceCollection { }
+
+                                  public static class ServiceCollectionServiceExtensions
+                                  {
+                                      public static void AddTransient(IServiceCollection services, Type serviceType, Type implementationType) { }
+                                  }
+                              }
+
+                              namespace GFramework.Core.Abstractions.Logging
+                              {
+                                  public interface ILogger
+                                  {
+                                      void Debug(string msg);
+                                  }
+                              }
+
+                              namespace GFramework.Cqrs
+                              {
+                                  public interface ICqrsHandlerRegistry
+                                  {
+                                      void Register(Microsoft.Extensions.DependencyInjection.IServiceCollection services, GFramework.Core.Abstractions.Logging.ILogger logger);
+                                  }
+
+                                  [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+                                  public sealed class CqrsHandlerRegistryAttribute : Attribute
+                                  {
+                                      public CqrsHandlerRegistryAttribute(Type registryType) { }
+                                  }
+                              }
+
+                              namespace TestApp
+                              {
+                                  public sealed class DerivedHandler : HandlerBase
+                                  {
+                                  }
+                              }
+                              """;
+
+        var contractsReference = MetadataReferenceTestBuilder.CreateFromSource(
+            "Contracts",
+            contractsSource);
+        var dependencyReference = MetadataReferenceTestBuilder.CreateFromSource(
+            "Dependency",
+            dependencySource,
+            contractsReference);
+        var generatedSource = RunGenerator(
+            source,
+            contractsReference,
+            dependencyReference);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain("var implementationType0 = typeof(global::TestApp.DerivedHandler);"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "var knownServiceTypes0 = new global::System.Collections.Generic.HashSet<global::System.Type>();"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "knownServiceTypes0.Add(typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<global::Dep.VisibleRequest, string>));"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "RegisterRemainingReflectedHandlerInterfaces(services, logger, implementationType0, knownServiceTypes0);"));
+            Assert.That(
+                generatedSource,
+                Does.Contain("if (knownServiceTypes.Contains(handlerInterface))"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "Registered CQRS handler TestApp.DerivedHandler as GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<Dep.VisibleRequest, string>."));
+            Assert.That(
+                generatedSource,
+                Does.Not.Contain(
+                    "typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<global::Dep.VisibilityScope.ProtectedRequest"));
+        });
+    }
+
+    /// <summary>
     ///     验证即使 runtime 仍暴露旧版无参 fallback marker，生成器也会优先在生成注册器内部处理隐藏 handler，
     ///     不再输出 fallback marker。
     /// </summary>
@@ -998,5 +1128,39 @@ public class CqrsHandlerRegistryGeneratorTests
         var escaped = method!.Invoke(null, [input]) as string;
 
         Assert.That(escaped, Is.EqualTo(expected));
+    }
+
+    /// <summary>
+    ///     运行 CQRS handler registry generator，并返回单个生成文件的源码文本。
+    /// </summary>
+    private static string RunGenerator(
+        string source,
+        params MetadataReference[] additionalReferences)
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(source);
+        var compilation = CSharpCompilation.Create(
+            "TestProject",
+            [syntaxTree],
+            MetadataReferenceTestBuilder.GetRuntimeMetadataReferences().AddRange(additionalReferences),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            generators: [new CqrsHandlerRegistryGenerator().AsSourceGenerator()],
+            parseOptions: (CSharpParseOptions)syntaxTree.Options);
+        driver = driver.RunGeneratorsAndUpdateCompilation(
+            compilation,
+            out var updatedCompilation,
+            out _);
+
+        var compilationErrors = updatedCompilation.GetDiagnostics()
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.That(compilationErrors, Is.Empty, string.Join(Environment.NewLine, compilationErrors));
+
+        var runResult = driver.GetRunResult();
+        Assert.That(runResult.Results, Has.Length.EqualTo(1));
+        Assert.That(runResult.Results[0].GeneratedSources, Has.Length.EqualTo(1));
+
+        return runResult.Results[0].GeneratedSources[0].SourceText.ToString();
     }
 }
