@@ -1,4 +1,4 @@
-using GFramework.SourceGenerators.Architectures;
+using GFramework.Core.SourceGenerators.Architectures;
 using GFramework.SourceGenerators.Tests.Core;
 
 namespace GFramework.SourceGenerators.Tests.Architectures;
@@ -14,9 +14,9 @@ public class AutoRegisterModuleGeneratorTests
     {
         const string source = """
                               using System;
-                              using GFramework.SourceGenerators.Abstractions.Architectures;
+                              using GFramework.Core.SourceGenerators.Abstractions.Architectures;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Architectures
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Architectures
                               {
                                   [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
                                   public sealed class AutoRegisterModuleAttribute : Attribute { }
@@ -70,7 +70,7 @@ public class AutoRegisterModuleGeneratorTests
                                   using GFramework.Core.Abstractions.Model;
                                   using GFramework.Core.Abstractions.Systems;
                                   using GFramework.Core.Abstractions.Utility;
-                                  using GFramework.SourceGenerators.Abstractions.Architectures;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Architectures;
 
                                   public sealed class PlayerModel : IModel { }
                                   public sealed class CombatSystem : ISystem { }
@@ -118,7 +118,7 @@ public class AutoRegisterModuleGeneratorTests
         const string commonSource = """
                                     using System;
 
-                                    namespace GFramework.SourceGenerators.Abstractions.Architectures
+                                    namespace GFramework.Core.SourceGenerators.Abstractions.Architectures
                                     {
                                         [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
                                         public sealed class AutoRegisterModuleAttribute : Attribute { }
@@ -180,42 +180,42 @@ public class AutoRegisterModuleGeneratorTests
                                     """;
 
         const string partASource = """
-                                    namespace TestApp
-                                    {
-                                        using GFramework.SourceGenerators.Abstractions.Architectures;
+                                   namespace TestApp
+                                   {
+                                       using GFramework.Core.SourceGenerators.Abstractions.Architectures;
 
-                                        // Padding ensures this attribute lives later in the file than the attributes in PartB.
-                                        // The generator should still place it first because PartA sorts before PartB.
-                                        // padding 01
-                                        // padding 02
-                                        // padding 03
-                                        // padding 04
-                                        // padding 05
-                                        // padding 06
-                                        // padding 07
-                                        // padding 08
-                                        // padding 09
-                                        // padding 10
-                                        [AutoRegisterModule]
-                                        [RegisterUtility(typeof(AudioUtility))]
-                                        public partial class GameplayModule
-                                        {
-                                        }
-                                    }
-                                    """;
+                                       // Padding ensures this attribute lives later in the file than the attributes in PartB.
+                                       // The generator should still place it first because PartA sorts before PartB.
+                                       // padding 01
+                                       // padding 02
+                                       // padding 03
+                                       // padding 04
+                                       // padding 05
+                                       // padding 06
+                                       // padding 07
+                                       // padding 08
+                                       // padding 09
+                                       // padding 10
+                                       [AutoRegisterModule]
+                                       [RegisterUtility(typeof(AudioUtility))]
+                                       public partial class GameplayModule
+                                       {
+                                       }
+                                   }
+                                   """;
 
         const string partBSource = """
-                                    namespace TestApp
-                                    {
-                                        using GFramework.SourceGenerators.Abstractions.Architectures;
+                                   namespace TestApp
+                                   {
+                                       using GFramework.Core.SourceGenerators.Abstractions.Architectures;
 
-                                        [RegisterSystem(typeof(CombatSystem))]
-                                        [RegisterModel(typeof(PlayerModel))]
-                                        public partial class GameplayModule
-                                        {
-                                        }
-                                    }
-                                    """;
+                                       [RegisterSystem(typeof(CombatSystem))]
+                                       [RegisterModel(typeof(PlayerModel))]
+                                       public partial class GameplayModule
+                                       {
+                                       }
+                                   }
+                                   """;
 
         const string expected = """
                                 // <auto-generated />
@@ -247,7 +247,8 @@ public class AutoRegisterModuleGeneratorTests
                 },
                 GeneratedSources =
                 {
-                    (typeof(AutoRegisterModuleGenerator), "TestApp_GameplayModule.AutoRegisterModule.g.cs", NormalizeLineEndings(expected))
+                    (typeof(AutoRegisterModuleGenerator), "TestApp_GameplayModule.AutoRegisterModule.g.cs",
+                        NormalizeLineEndings(expected))
                 }
             },
             DisabledDiagnostics = { "GF_Common_Trace_001" }
@@ -265,9 +266,9 @@ public class AutoRegisterModuleGeneratorTests
         const string source = """
                               #nullable enable
                               using System;
-                              using GFramework.SourceGenerators.Abstractions.Architectures;
+                              using GFramework.Core.SourceGenerators.Abstractions.Architectures;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Architectures
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Architectures
                               {
                                   [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
                                   public sealed class AutoRegisterModuleAttribute : Attribute { }
@@ -319,7 +320,7 @@ public class AutoRegisterModuleGeneratorTests
                               namespace TestApp
                               {
                                   using GFramework.Core.Abstractions.Model;
-                                  using GFramework.SourceGenerators.Abstractions.Architectures;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Architectures;
 
                                   public sealed class PlayerModel : IModel { }
 

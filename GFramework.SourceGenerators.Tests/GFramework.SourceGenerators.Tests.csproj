@@ -23,10 +23,16 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\GFramework.SourceGenerators\GFramework.SourceGenerators.csproj"/>
+        <ProjectReference Include="..\GFramework.Core.SourceGenerators\GFramework.Core.SourceGenerators.csproj"/>
+        <ProjectReference Include="..\GFramework.Cqrs.SourceGenerators\GFramework.Cqrs.SourceGenerators.csproj"/>
+        <ProjectReference Include="..\GFramework.Game.SourceGenerators\GFramework.Game.SourceGenerators.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
+        <Compile Remove="**\snapshots\**\*.cs"/>
+        <Compile Remove="**\Snapshots\**\*.cs"/>
+        <None Include="**\snapshots\**\*.cs"/>
+        <None Include="**\Snapshots\**\*.cs"/>
         <Folder Include="rule\snapshots\ContextAwareGenerator\"/>
     </ItemGroup>
 

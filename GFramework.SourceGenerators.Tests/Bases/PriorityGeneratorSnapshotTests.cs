@@ -1,7 +1,6 @@
 using System.IO;
-using GFramework.SourceGenerators.Bases;
+using GFramework.Core.SourceGenerators.Bases;
 using GFramework.SourceGenerators.Tests.Core;
-using NUnit.Framework;
 
 namespace GFramework.SourceGenerators.Tests.Bases;
 
@@ -20,7 +19,7 @@ public class PriorityGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Bases
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Bases
                               {
                                   [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
                                   public sealed class PriorityAttribute : Attribute
@@ -40,7 +39,7 @@ public class PriorityGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Bases;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Bases;
 
                                   [Priority(10)]
                                   public partial class MySystem
@@ -68,7 +67,7 @@ public class PriorityGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Bases
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Bases
                               {
                                   [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
                                   public sealed class PriorityAttribute : Attribute
@@ -88,7 +87,7 @@ public class PriorityGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Bases;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Bases;
 
                                   [Priority(-100)]
                                   public partial class CriticalSystem
@@ -116,7 +115,7 @@ public class PriorityGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Bases
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Bases
                               {
                                   [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
                                   public sealed class PriorityAttribute : Attribute
@@ -145,7 +144,7 @@ public class PriorityGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Bases;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Bases;
                                   using GFramework.Core.Abstractions.Bases;
 
                                   [Priority(PriorityGroup.High)]
@@ -174,7 +173,7 @@ public class PriorityGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Bases
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Bases
                               {
                                   [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
                                   public sealed class PriorityAttribute : Attribute
@@ -194,7 +193,7 @@ public class PriorityGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Bases;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Bases;
 
                                   [Priority(20)]
                                   public partial class GenericSystem<T>

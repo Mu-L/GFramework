@@ -153,31 +153,36 @@ GameProject/
 
   <ItemGroup>
     <ProjectReference Include="..\GFramework.Game\GFramework.Game.csproj" />
-    <ProjectReference Include="..\GFramework.SourceGenerators.Abstractions\GFramework.SourceGenerators.Abstractions.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\GFramework.Core.SourceGenerators.Abstractions\GFramework.Core.SourceGenerators.Abstractions.csproj" />
     <ProjectReference Include="..\GFramework.SourceGenerators.Common\GFramework.SourceGenerators.Common.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\GFramework.SourceGenerators\GFramework.SourceGenerators.csproj"
+    <ProjectReference Include="..\GFramework.Core.SourceGenerators\GFramework.Core.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\GFramework.Game.SourceGenerators\GFramework.Game.SourceGenerators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <Import Project="..\GFramework.SourceGenerators\GeWuYou.GFramework.SourceGenerators.targets" />
+  <Import Project="..\GFramework.Game.SourceGenerators\GeWuYou.GFramework.Game.SourceGenerators.targets" />
 </Project>
 ```
 
 这段配置的作用：
 
 - `GFramework.Game` 提供运行时 `YamlConfigLoader`、`ConfigRegistry`、`GameConfigBootstrap`、`GameConfigModule` 和只读表实现
-- 三个 `ProjectReference(... OutputItemType="Analyzer")` 把生成器接进当前消费者项目
-- `GeWuYou.GFramework.SourceGenerators.targets` 自动把 `schemas/**/*.schema.json` 加入 `AdditionalFiles`
+- `GFramework.Core.SourceGenerators.Abstractions` 提供 `Core` 侧 source-generator attributes
+- `GFramework.SourceGenerators.Common`、`GFramework.Core.SourceGenerators` 与 `GFramework.Game.SourceGenerators`
+  共同把生成器接进当前消费者项目
+- `GeWuYou.GFramework.Game.SourceGenerators.targets` 自动把 `schemas/**/*.schema.json` 加入 `AdditionalFiles`
 
 如果你使用打包后的 NuGet，而不是仓库内项目引用，原则保持不变：
 
 - 运行时项目需要引用 `GeWuYou.GFramework.Game`
-- 生成器项目需要引用 `GeWuYou.GFramework.SourceGenerators`
+- 配置 schema 生成器需要引用 `GeWuYou.GFramework.Game.SourceGenerators`
+- 如果同一项目还会使用 `[Log]`、`[ContextAware]`、`[GetSystem]` 等 Core 侧生成器特性，再额外引用
+  `GeWuYou.GFramework.Core.SourceGenerators`
 - schema 目录默认仍然是 `schemas/`
 
 如果你的 schema 不放在默认目录，可以在项目文件里覆盖：

@@ -1,7 +1,6 @@
 using System.IO;
-using GFramework.SourceGenerators.Logging;
+using GFramework.Core.SourceGenerators.Logging;
 using GFramework.SourceGenerators.Tests.Core;
-using NUnit.Framework;
 
 namespace GFramework.SourceGenerators.Tests.Logging;
 
@@ -14,7 +13,7 @@ public class LoggerGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Logging
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Logging
                               {
                                   [AttributeUsage(AttributeTargets.Class)]
                                   public sealed class LogAttribute : Attribute
@@ -86,7 +85,7 @@ public class LoggerGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Logging;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Logging;
 
                                   [Log]
                                   public partial class MyService
@@ -111,7 +110,7 @@ public class LoggerGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Logging
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Logging
                               {
                                   [AttributeUsage(AttributeTargets.Class)]
                                   public sealed class LogAttribute : Attribute
@@ -183,7 +182,7 @@ public class LoggerGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Logging;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Logging;
 
                                   [Log(Name = "CustomLogger")]
                                   public partial class MyService
@@ -208,7 +207,7 @@ public class LoggerGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Logging
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Logging
                               {
                                   [AttributeUsage(AttributeTargets.Class)]
                                   public sealed class LogAttribute : Attribute
@@ -280,7 +279,7 @@ public class LoggerGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Logging;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Logging;
 
                                   [Log(FieldName = "MyLogger")]
                                   public partial class MyService
@@ -305,7 +304,7 @@ public class LoggerGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Logging
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Logging
                               {
                                   [AttributeUsage(AttributeTargets.Class)]
                                   public sealed class LogAttribute : Attribute
@@ -377,7 +376,7 @@ public class LoggerGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Logging;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Logging;
 
                                   [Log(IsStatic = false)]
                                   public partial class MyService
@@ -402,7 +401,7 @@ public class LoggerGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Logging
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Logging
                               {
                                   [AttributeUsage(AttributeTargets.Class)]
                                   public sealed class LogAttribute : Attribute
@@ -474,7 +473,7 @@ public class LoggerGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Logging;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Logging;
 
                                   [Log(AccessModifier = "public")]
                                   public partial class MyService
@@ -499,7 +498,7 @@ public class LoggerGeneratorSnapshotTests
         const string source = """
                               using System;
 
-                              namespace GFramework.SourceGenerators.Abstractions.Logging
+                              namespace GFramework.Core.SourceGenerators.Abstractions.Logging
                               {
                                   [AttributeUsage(AttributeTargets.Class)]
                                   public sealed class LogAttribute : Attribute
@@ -571,7 +570,7 @@ public class LoggerGeneratorSnapshotTests
 
                               namespace TestApp
                               {
-                                  using GFramework.SourceGenerators.Abstractions.Logging;
+                                  using GFramework.Core.SourceGenerators.Abstractions.Logging;
 
                                   [Log]
                                   public partial class MyService<T>
