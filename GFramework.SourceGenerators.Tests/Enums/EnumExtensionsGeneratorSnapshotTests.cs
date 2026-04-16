@@ -35,6 +35,26 @@ public class EnumExtensionsGeneratorSnapshotTests
     }
 
     /// <summary>
+    ///     验证未提供快照文件名映射时，会直接按生成文件名进行快照比对。
+    /// </summary>
+    [Test]
+    public async Task Snapshot_BasicEnum_IsMethods_DefaultSnapshotFileNameSelector()
+    {
+        var source = BuildSource(
+            """
+            public enum Status
+            {
+                Active,
+                Inactive
+            }
+            """);
+
+        await GeneratorSnapshotTest<EnumExtensionsGenerator>.RunAsync(
+            source,
+            GetSnapshotFolder("BasicEnum_IsMethods_DefaultSnapshotFileNameSelector"));
+    }
+
+    /// <summary>
     ///     验证默认配置在较小枚举上仍会生成集合判断方法。
     /// </summary>
     [Test]

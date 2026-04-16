@@ -21,25 +21,45 @@ public static class GeneratorSnapshotTest<TGenerator>
         string snapshotFolder,
         Func<string, string>? snapshotFileNameSelector = null)
     {
-        var test = new CSharpSourceGeneratorTest<TGenerator, DefaultVerifier>
-        {
-            TestState =
-            {
-                Sources = { source }
-            },
-            TestBehaviors = TestBehaviors.SkipGeneratedSourcesCheck,
-            DisabledDiagnostics = { "GF_Common_Trace_001" }
-        };
+        var syntaxTree = CSharpSyntaxTree.ParseText(source);
+        var compilation = CSharpCompilation.Create(
+            $"{typeof(TGenerator).Name}SnapshotTests",
+            [syntaxTree],
+            MetadataReferenceTestBuilder.GetRuntimeMetadataReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            generators: [CreateGenerator()],
+            parseOptions: (CSharpParseOptions)syntaxTree.Options);
+        driver = driver.RunGeneratorsAndUpdateCompilation(
+            compilation,
+            out var updatedCompilation,
+            out _);
 
-        await test.RunAsync();
+        var compilationErrors = updatedCompilation.GetDiagnostics()
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.That(
+            compilationErrors,
+            Is.Empty,
+            () =>
+                $"编译生成的代码时出现错误:{Environment.NewLine}{string.Join(Environment.NewLine, compilationErrors.Select(static diagnostic => diagnostic.ToString()))}");
 
-        var generated = test.TestState.GeneratedSources;
+        var runResult = driver.GetRunResult();
+        var generated = runResult.Results
+            .SelectMany(static result => result.GeneratedSources)
+            .OrderBy(static source => source.HintName, StringComparer.Ordinal)
+            .Select(static source => (filename: source.HintName, content: source.SourceText.ToString()))
+            .ToArray();
+        Assert.That(
+            generated,
+            Is.Not.Empty,
+            $"Generator '{typeof(TGenerator).FullName}' did not produce any sources.");
 
         foreach (var (filename, content) in generated)
         {
             // 不同测试套件可能需要将生成文件映射到非 .cs 快照，以避免测试资产被当作可编译源码参与构建。
             var snapshotFileName = snapshotFileNameSelector?.Invoke(filename) ?? filename;
-            var path = Path.Combine(
+            var path = ResolveSnapshotPath(
                 snapshotFolder,
                 snapshotFileName);
 
@@ -70,5 +90,53 @@ public static class GeneratorSnapshotTest<TGenerator>
     private static string Normalize(string text)
     {
         return text.Replace("\r\n", "\n").Trim();
+    }
+
+    /// <summary>
+    ///     创建可由 Roslyn 驱动直接执行的源生成器实例，并统一兼容经典与增量生成器。
+    /// </summary>
+    /// <returns>适配后的源生成器实例。</returns>
+    /// <exception cref="InvalidOperationException">当测试类型既不是源生成器也不是增量生成器时抛出。</exception>
+    private static ISourceGenerator CreateGenerator()
+    {
+        var generator = new TGenerator();
+        return generator switch
+        {
+            ISourceGenerator sourceGenerator => sourceGenerator,
+            IIncrementalGenerator incrementalGenerator => incrementalGenerator.AsSourceGenerator(),
+            _ => throw new InvalidOperationException(
+                $"Generator type '{typeof(TGenerator).FullName}' must implement {nameof(ISourceGenerator)} or {nameof(IIncrementalGenerator)}.")
+        };
+    }
+
+    /// <summary>
+    ///     解析并验证快照路径，确保文件名映射不会逃逸出当前快照根目录。
+    /// </summary>
+    /// <param name="snapshotFolder">快照根目录。</param>
+    /// <param name="snapshotFileName">映射后的快照文件名。</param>
+    /// <returns>可安全访问的快照绝对路径。</returns>
+    /// <exception cref="InvalidOperationException">
+    ///     当映射结果为空白、为绝对路径，或通过相对路径越界到快照目录之外时抛出。
+    /// </exception>
+    private static string ResolveSnapshotPath(string snapshotFolder, string snapshotFileName)
+    {
+        if (string.IsNullOrWhiteSpace(snapshotFileName) || Path.IsPathRooted(snapshotFileName))
+        {
+            throw new InvalidOperationException($"Invalid snapshot file name: {snapshotFileName}");
+        }
+
+        // 先规范化根目录再做包含关系判断，避免 `..` 或平台大小写差异导致的目录逃逸。
+        var snapshotRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(snapshotFolder));
+        var snapshotPath = Path.GetFullPath(Path.Combine(snapshotRoot, snapshotFileName));
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (!snapshotPath.StartsWith(snapshotRoot + Path.DirectorySeparatorChar, comparison))
+        {
+            throw new InvalidOperationException($"Snapshot path escapes root folder: {snapshotFileName}");
+        }
+
+        return snapshotPath;
     }
 }
