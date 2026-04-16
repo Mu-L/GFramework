@@ -935,6 +935,10 @@ public class CqrsHandlerRegistryGeneratorTests
             Assert.That(
                 generatedSource,
                 Does.Contain(
+                    "// Remaining runtime interface discovery target: GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<Dep.VisibilityScope.ProtectedRequest, Dep.VisibilityScope.ProtectedResponse[]>"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
                     "knownServiceTypes0.Add(typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<global::Dep.VisibleRequest, string>));"));
             Assert.That(
                 generatedSource,
