@@ -369,6 +369,111 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证对象 <c>dependentRequired</c> 会写入生成 XML 文档。
+    /// </summary>
+    [Test]
+    public void Run_Should_Write_DependentRequired_Constraint_Into_Generated_Documentation()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "reward"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "reward": {
+                                    "type": "object",
+                                    "properties": {
+                                      "itemId": { "type": "string" },
+                                      "itemCount": { "type": "integer" },
+                                      "bonusId": { "type": "string" },
+                                      "bonusCount": { "type": "integer" }
+                                    },
+                                    "dependentRequired": {
+                                      "itemId": ["itemCount"],
+                                      "bonusId": ["bonusCount"]
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var generatedSources = result.Results
+            .Single()
+            .GeneratedSources
+            .ToDictionary(
+                static sourceResult => sourceResult.HintName,
+                static sourceResult => sourceResult.SourceText.ToString(),
+                StringComparer.Ordinal);
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+        Assert.That(
+            generatedSources["MonsterConfig.g.cs"],
+            Does.Contain("Constraints: dependentRequired = { itemId =&gt; [itemCount]; bonusId =&gt; [bonusCount] }."));
+    }
+
+    /// <summary>
+    ///     验证生成器会拒绝引用未声明对象字段的 <c>dependentRequired</c> 元数据。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_DependentRequired_Target_Is_Not_Declared()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "reward"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "reward": {
+                                    "type": "object",
+                                    "properties": {
+                                      "itemId": { "type": "string" }
+                                    },
+                                    "dependentRequired": {
+                                      "itemId": ["itemCount"]
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_010"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("reward"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("itemCount"));
+        });
+    }
+
+    /// <summary>
     ///     验证深层不支持的数组嵌套会带着完整字段路径产生命名明确的诊断。
     /// </summary>
     [Test]

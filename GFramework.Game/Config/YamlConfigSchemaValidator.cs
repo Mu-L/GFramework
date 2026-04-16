@@ -10,8 +10,9 @@ namespace GFramework.Game.Config;
 ///     并通过递归遍历方式覆盖嵌套对象、对象数组、标量数组与深层 enum / 引用约束。
 ///     当前共享子集额外支持 <c>multipleOf</c>、<c>uniqueItems</c>、
 ///     <c>contains</c> / <c>minContains</c> / <c>maxContains</c>、
-///     <c>minProperties</c>、<c>maxProperties</c> 与稳定字符串 <c>format</c> 子集，
-///     让数值步进、数组去重、数组匹配计数和对象属性数量规则在运行时与生成器 / 工具侧保持一致。
+///     <c>minProperties</c>、<c>maxProperties</c>、<c>dependentRequired</c>
+///     与稳定字符串 <c>format</c> 子集，让数值步进、数组去重、数组匹配计数、
+///     对象属性数量与对象内字段依赖规则在运行时与生成器 / 工具侧保持一致。
 /// </summary>
 internal static class YamlConfigSchemaValidator
 {
@@ -460,7 +461,7 @@ internal static class YamlConfigSchemaValidator
         var objectNode = YamlConfigSchemaNode.CreateObject(
             properties,
             requiredProperties,
-            ParseObjectConstraints(tableName, schemaPath, propertyPath, element),
+            ParseObjectConstraints(tableName, schemaPath, propertyPath, element, properties),
             schemaPath);
         objectNode = objectNode.WithAllowedValues(
             ParseEnumValues(tableName, schemaPath, propertyPath, element, objectNode, "enum"));
@@ -796,10 +797,7 @@ internal static class YamlConfigSchemaValidator
                 displayPath: requiredPath);
         }
 
-        if (schemaNode.ObjectConstraints is not null)
-        {
-            ValidateObjectConstraints(tableName, yamlPath, displayPath, seenProperties.Count, schemaNode);
-        }
+        ValidateObjectConstraints(tableName, yamlPath, displayPath, seenProperties, schemaNode);
 
         ValidateAllowedValues(tableName, yamlPath, displayPath, mappingNode, schemaNode);
         ValidateConstantValue(tableName, yamlPath, displayPath, mappingNode, schemaNode);
@@ -812,13 +810,13 @@ internal static class YamlConfigSchemaValidator
     /// <param name="tableName">所属配置表名称。</param>
     /// <param name="yamlPath">YAML 文件路径。</param>
     /// <param name="displayPath">对象字段路径；根对象时为空。</param>
-    /// <param name="propertyCount">当前对象实际属性数量。</param>
+    /// <param name="seenProperties">当前对象已出现的属性集合。</param>
     /// <param name="schemaNode">对象 schema 节点。</param>
     private static void ValidateObjectConstraints(
         string tableName,
         string yamlPath,
         string displayPath,
-        int propertyCount,
+        HashSet<string> seenProperties,
         YamlConfigSchemaNode schemaNode)
     {
         var constraints = schemaNode.ObjectConstraints;
@@ -827,6 +825,7 @@ internal static class YamlConfigSchemaValidator
             return;
         }
 
+        var propertyCount = seenProperties.Count;
         var subject = string.IsNullOrWhiteSpace(displayPath)
             ? "Root object"
             : $"Property '{displayPath}'";
@@ -860,6 +859,42 @@ internal static class YamlConfigSchemaValidator
                 rawValue: rawValue,
                 detail:
                 $"Maximum property count: {constraints.MaxProperties.Value.ToString(CultureInfo.InvariantCulture)}.");
+        }
+
+        if (constraints.DependentRequired is null ||
+            constraints.DependentRequired.Count == 0)
+        {
+            return;
+        }
+
+        // Reuse the collected sibling-name set so the main validation path and
+        // the contains/not matcher both interpret object dependencies identically.
+        foreach (var dependency in constraints.DependentRequired)
+        {
+            if (!seenProperties.Contains(dependency.Key))
+            {
+                continue;
+            }
+
+            var triggerPath = CombineDisplayPath(displayPath, dependency.Key);
+            foreach (var dependentProperty in dependency.Value)
+            {
+                if (seenProperties.Contains(dependentProperty))
+                {
+                    continue;
+                }
+
+                var requiredPath = CombineDisplayPath(displayPath, dependentProperty);
+                throw ConfigLoadExceptionFactory.Create(
+                    ConfigLoadFailureKind.MissingRequiredProperty,
+                    tableName,
+                    $"Property '{requiredPath}' in config file '{yamlPath}' is required when sibling property '{triggerPath}' is present.",
+                    yamlPath: yamlPath,
+                    schemaPath: schemaNode.SchemaPathHint,
+                    displayPath: requiredPath,
+                    detail:
+                    $"Dependent requirement: when '{triggerPath}' exists, '{requiredPath}' must also be declared.");
+            }
         }
     }
 
@@ -1505,12 +1540,14 @@ internal static class YamlConfigSchemaValidator
     /// <param name="schemaPath">Schema 文件路径。</param>
     /// <param name="propertyPath">对象字段路径。</param>
     /// <param name="element">Schema 节点。</param>
+    /// <param name="properties">当前对象已声明的属性集合。</param>
     /// <returns>对象约束模型；未声明时返回空。</returns>
     private static YamlConfigObjectConstraints? ParseObjectConstraints(
         string tableName,
         string schemaPath,
         string propertyPath,
-        JsonElement element)
+        JsonElement element,
+        IReadOnlyDictionary<string, YamlConfigSchemaNode> properties)
     {
         var minProperties = TryParseObjectPropertyCountConstraint(
             tableName,
@@ -1524,6 +1561,7 @@ internal static class YamlConfigSchemaValidator
             propertyPath,
             element,
             "maxProperties");
+        var dependentRequired = ParseDependentRequiredConstraints(tableName, schemaPath, propertyPath, element, properties);
 
         if (minProperties.HasValue && maxProperties.HasValue && minProperties.Value > maxProperties.Value)
         {
@@ -1536,9 +1574,118 @@ internal static class YamlConfigSchemaValidator
                 displayPath: GetDiagnosticPath(propertyPath));
         }
 
-        return !minProperties.HasValue && !maxProperties.HasValue
+        return !minProperties.HasValue && !maxProperties.HasValue && dependentRequired is null
             ? null
-            : new YamlConfigObjectConstraints(minProperties, maxProperties);
+            : new YamlConfigObjectConstraints(minProperties, maxProperties, dependentRequired);
+    }
+
+    /// <summary>
+    ///     解析对象节点声明的 <c>dependentRequired</c> 依赖关系。
+    ///     该关键字只表达“当触发字段出现时，还必须同时声明哪些同级字段”，
+    ///     因此这里会把触发字段与依赖字段都限制在当前对象已声明的属性集合内，
+    ///     避免运行时与工具链对无效键名各自做隐式容错。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">对象字段路径。</param>
+    /// <param name="element">Schema 节点。</param>
+    /// <param name="properties">当前对象已声明的属性集合。</param>
+    /// <returns>归一化后的依赖关系表；未声明或只有空依赖时返回空。</returns>
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>>? ParseDependentRequiredConstraints(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element,
+        IReadOnlyDictionary<string, YamlConfigSchemaNode> properties)
+    {
+        if (!element.TryGetProperty("dependentRequired", out var dependentRequiredElement))
+        {
+            return null;
+        }
+
+        if (dependentRequiredElement.ValueKind != JsonValueKind.Object)
+        {
+            throw ConfigLoadExceptionFactory.Create(
+                ConfigLoadFailureKind.SchemaUnsupported,
+                tableName,
+                $"{DescribeObjectSchemaTarget(propertyPath)} in schema file '{schemaPath}' must declare 'dependentRequired' as an object.",
+                schemaPath: schemaPath,
+                displayPath: GetDiagnosticPath(propertyPath));
+        }
+
+        var dependentRequired = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var dependency in dependentRequiredElement.EnumerateObject())
+        {
+            if (!properties.ContainsKey(dependency.Name))
+            {
+                throw ConfigLoadExceptionFactory.Create(
+                    ConfigLoadFailureKind.SchemaUnsupported,
+                    tableName,
+                    $"{DescribeObjectSchemaTarget(propertyPath)} in schema file '{schemaPath}' declares 'dependentRequired' for undeclared property '{dependency.Name}'.",
+                    schemaPath: schemaPath,
+                    displayPath: GetDiagnosticPath(propertyPath));
+            }
+
+            if (dependency.Value.ValueKind != JsonValueKind.Array)
+            {
+                throw ConfigLoadExceptionFactory.Create(
+                    ConfigLoadFailureKind.SchemaUnsupported,
+                    tableName,
+                    $"Property '{dependency.Name}' in {DescribeObjectSchemaTargetInClause(propertyPath)} of schema file '{schemaPath}' must declare 'dependentRequired' as an array of sibling property names.",
+                    schemaPath: schemaPath,
+                    displayPath: GetDiagnosticPath(propertyPath));
+            }
+
+            var dependencyTargets = new List<string>();
+            var seenDependencyTargets = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var dependencyTarget in dependency.Value.EnumerateArray())
+            {
+                if (dependencyTarget.ValueKind != JsonValueKind.String)
+                {
+                    throw ConfigLoadExceptionFactory.Create(
+                        ConfigLoadFailureKind.SchemaUnsupported,
+                        tableName,
+                        $"Property '{dependency.Name}' in {DescribeObjectSchemaTargetInClause(propertyPath)} of schema file '{schemaPath}' must declare 'dependentRequired' entries as strings.",
+                        schemaPath: schemaPath,
+                        displayPath: GetDiagnosticPath(propertyPath));
+                }
+
+                var dependencyTargetName = dependencyTarget.GetString();
+                if (string.IsNullOrWhiteSpace(dependencyTargetName))
+                {
+                    throw ConfigLoadExceptionFactory.Create(
+                        ConfigLoadFailureKind.SchemaUnsupported,
+                        tableName,
+                        $"Property '{dependency.Name}' in {DescribeObjectSchemaTargetInClause(propertyPath)} of schema file '{schemaPath}' cannot declare blank 'dependentRequired' entries.",
+                        schemaPath: schemaPath,
+                        displayPath: GetDiagnosticPath(propertyPath));
+                }
+
+                if (!properties.ContainsKey(dependencyTargetName))
+                {
+                    throw ConfigLoadExceptionFactory.Create(
+                        ConfigLoadFailureKind.SchemaUnsupported,
+                        tableName,
+                        $"{DescribeObjectSchemaTarget(propertyPath)} in schema file '{schemaPath}' declares 'dependentRequired' target '{dependencyTargetName}' that is not declared in the same object schema.",
+                        schemaPath: schemaPath,
+                        displayPath: GetDiagnosticPath(propertyPath));
+                }
+
+                if (seenDependencyTargets.Add(dependencyTargetName))
+                {
+                    dependencyTargets.Add(dependencyTargetName);
+                }
+            }
+
+            if (dependencyTargets.Count > 0)
+            {
+                dependentRequired[dependency.Name] = dependencyTargets;
+            }
+        }
+
+        return dependentRequired.Count == 0
+            ? null
+            : dependentRequired;
     }
 
     /// <summary>
@@ -1924,6 +2071,19 @@ internal static class YamlConfigSchemaValidator
         return string.IsNullOrWhiteSpace(propertyPath)
             ? "Root object"
             : $"Property '{propertyPath}'";
+    }
+
+    /// <summary>
+    ///     为插入句中位置的对象级 schema 关键字构造稳定描述。
+    ///     这里只调整语法前缀大小写，不改变真实字段路径，避免诊断消息把 schema 作者声明的大小写一起改写。
+    /// </summary>
+    /// <param name="propertyPath">对象字段路径。</param>
+    /// <returns>可直接拼接到句中介词后的对象主体描述。</returns>
+    private static string DescribeObjectSchemaTargetInClause(string propertyPath)
+    {
+        return string.IsNullOrWhiteSpace(propertyPath)
+            ? "root object"
+            : $"property '{propertyPath}'";
     }
 
     /// <summary>
@@ -3868,7 +4028,7 @@ internal sealed class YamlConfigAllowedValue
 }
 
 /// <summary>
-///     表示一个对象节点上声明的属性数量约束。
+///     表示一个对象节点上声明的属性数量约束与字段依赖约束。
 ///     该模型将对象级约束与数组 / 标量约束拆开保存，避免运行时节点继续暴露无关成员。
 /// </summary>
 internal sealed class YamlConfigObjectConstraints
@@ -3878,10 +4038,15 @@ internal sealed class YamlConfigObjectConstraints
     /// </summary>
     /// <param name="minProperties">最小属性数量约束。</param>
     /// <param name="maxProperties">最大属性数量约束。</param>
-    public YamlConfigObjectConstraints(int? minProperties, int? maxProperties)
+    /// <param name="dependentRequired">对象内字段依赖约束。</param>
+    public YamlConfigObjectConstraints(
+        int? minProperties,
+        int? maxProperties,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? dependentRequired)
     {
         MinProperties = minProperties;
         MaxProperties = maxProperties;
+        DependentRequired = dependentRequired;
     }
 
     /// <summary>
@@ -3893,6 +4058,12 @@ internal sealed class YamlConfigObjectConstraints
     ///     获取最大属性数量约束。
     /// </summary>
     public int? MaxProperties { get; }
+
+    /// <summary>
+    ///     获取对象内字段依赖约束。
+    ///     键表示“触发字段”，值表示“触发字段出现后还必须存在的同级字段集合”。
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>>? DependentRequired { get; }
 }
 
 /// <summary>

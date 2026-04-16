@@ -1624,6 +1624,73 @@ test("parseSchemaContent should capture object property-count metadata", () => {
     assert.equal(schema.properties.reward.maxProperties, 2);
 });
 
+test("parseSchemaContent should capture dependentRequired metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "itemId": { "type": "string" },
+                "itemCount": { "type": "integer" }
+              },
+              "dependentRequired": {
+                "itemId": ["itemCount"]
+              }
+            }
+          }
+        }
+    `);
+
+    assert.deepEqual(schema.properties.reward.dependentRequired, {
+        itemId: ["itemCount"]
+    });
+});
+
+test("parseSchemaContent should reject non-object dependentRequired declarations", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemId": { "type": "string" },
+                    "itemCount": { "type": "integer" }
+                  },
+                  "dependentRequired": ["itemId"]
+                }
+              }
+            }
+        `),
+        /must declare 'dependentRequired' as an object/u
+    );
+});
+
+test("parseSchemaContent should reject dependentRequired targets outside the same object schema", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemId": { "type": "string" }
+                  },
+                  "dependentRequired": {
+                    "itemId": ["itemCount"]
+                  }
+                }
+              }
+            }
+        `),
+        /dependentRequired' target 'itemCount'/u
+    );
+});
+
 test("parseSchemaContent should capture not sub-schema metadata", () => {
     const schema = parseSchemaContent(`
         {
@@ -1642,6 +1709,63 @@ test("parseSchemaContent should capture not sub-schema metadata", () => {
 
     assert.equal(schema.properties.name.not.type, "string");
     assert.equal(schema.properties.name.not.constDisplayValue, "\"Deprecated\"");
+});
+
+test("validateParsedConfig should report missing dependentRequired siblings", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "itemId": { "type": "string" },
+                "itemCount": { "type": "integer" }
+              },
+              "dependentRequired": {
+                "itemId": ["itemCount"]
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  itemId: potion
+`);
+
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].severity, "error");
+    assert.match(diagnostics[0].message, /reward\.itemCount/u);
+    assert.match(diagnostics[0].message, /reward\.itemId/u);
+});
+
+test("validateParsedConfig should accept missing dependentRequired targets when the trigger is absent", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "itemId": { "type": "string" },
+                "itemCount": { "type": "integer" }
+              },
+              "dependentRequired": {
+                "itemId": ["itemCount"]
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+reward:
+  itemCount: 3
+`);
+
+    assert.deepEqual(validateParsedConfig(schema, yaml), []);
 });
 
 test("parseSchemaContent should reject non-object not declarations", () => {
