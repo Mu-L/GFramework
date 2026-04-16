@@ -16,6 +16,9 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
     private const string IStreamRequestHandlerMetadataName = $"{CqrsContractsNamespace}.IStreamRequestHandler`2";
     private const string ICqrsHandlerRegistryMetadataName = $"{CqrsRuntimeNamespace}.ICqrsHandlerRegistry";
 
+    private const string CqrsReflectionFallbackAttributeMetadataName =
+        $"{CqrsRuntimeNamespace}.CqrsReflectionFallbackAttribute";
+
     private const string CqrsHandlerRegistryAttributeMetadataName =
         $"{CqrsRuntimeNamespace}.CqrsHandlerRegistryAttribute";
 
@@ -28,8 +31,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var generationEnabled = context.CompilationProvider
-            .Select(static (compilation, _) => HasRequiredTypes(compilation));
+        var generationEnvironment = context.CompilationProvider
+            .Select(static (compilation, _) => CreateGenerationEnvironment(compilation));
 
         // Restrict semantic analysis to type declarations that can actually contribute implemented interfaces.
         var handlerCandidates = context.SyntaxProvider.CreateSyntaxProvider(
@@ -39,19 +42,24 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             .Collect();
 
         context.RegisterSourceOutput(
-            generationEnabled.Combine(handlerCandidates),
+            generationEnvironment.Combine(handlerCandidates),
             static (productionContext, pair) => Execute(productionContext, pair.Left, pair.Right));
     }
 
-    private static bool HasRequiredTypes(Compilation compilation)
+    private static GenerationEnvironment CreateGenerationEnvironment(Compilation compilation)
     {
-        return compilation.GetTypeByMetadataName(IRequestHandlerMetadataName) is not null &&
-               compilation.GetTypeByMetadataName(INotificationHandlerMetadataName) is not null &&
-               compilation.GetTypeByMetadataName(IStreamRequestHandlerMetadataName) is not null &&
-               compilation.GetTypeByMetadataName(ICqrsHandlerRegistryMetadataName) is not null &&
-               compilation.GetTypeByMetadataName(CqrsHandlerRegistryAttributeMetadataName) is not null &&
-               compilation.GetTypeByMetadataName(ILoggerMetadataName) is not null &&
-               compilation.GetTypeByMetadataName(IServiceCollectionMetadataName) is not null;
+        var generationEnabled = compilation.GetTypeByMetadataName(IRequestHandlerMetadataName) is not null &&
+                                compilation.GetTypeByMetadataName(INotificationHandlerMetadataName) is not null &&
+                                compilation.GetTypeByMetadataName(IStreamRequestHandlerMetadataName) is not null &&
+                                compilation.GetTypeByMetadataName(ICqrsHandlerRegistryMetadataName) is not null &&
+                                compilation.GetTypeByMetadataName(
+                                    CqrsHandlerRegistryAttributeMetadataName) is not null &&
+                                compilation.GetTypeByMetadataName(ILoggerMetadataName) is not null &&
+                                compilation.GetTypeByMetadataName(IServiceCollectionMetadataName) is not null;
+
+        return new GenerationEnvironment(
+            generationEnabled,
+            compilation.GetTypeByMetadataName(CqrsReflectionFallbackAttributeMetadataName) is not null);
     }
 
     private static bool IsHandlerCandidate(SyntaxNode node)
@@ -108,21 +116,25 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             false);
     }
 
-    private static void Execute(SourceProductionContext context, bool generationEnabled,
+    private static void Execute(SourceProductionContext context, GenerationEnvironment generationEnvironment,
         ImmutableArray<HandlerCandidateAnalysis?> candidates)
     {
-        if (!generationEnabled)
+        if (!generationEnvironment.GenerationEnabled)
             return;
 
         var registrations = CollectRegistrations(candidates, out var hasUnsupportedConcreteHandler);
 
-        // If the assembly contains handlers that generated code cannot legally reference
-        // (for example private nested handlers), keep the runtime on the reflection path
-        // so registration behavior remains complete instead of silently dropping handlers.
-        if (hasUnsupportedConcreteHandler || registrations.Count == 0)
+        if (registrations.Count == 0)
             return;
 
-        context.AddSource(HintName, GenerateSource(registrations));
+        // If the runtime contract does not yet expose the reflection fallback marker,
+        // keep the previous all-or-nothing behavior so unsupported handlers are not silently dropped.
+        if (hasUnsupportedConcreteHandler && !generationEnvironment.SupportsReflectionFallbackMarker)
+            return;
+
+        context.AddSource(
+            HintName,
+            GenerateSource(registrations, hasUnsupportedConcreteHandler));
     }
 
     private static List<HandlerRegistrationSpec> CollectRegistrations(
@@ -144,7 +156,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             if (candidate.Value.HasUnsupportedConcreteHandler)
             {
                 hasUnsupportedConcreteHandler = true;
-                return [];
+                continue;
             }
 
             uniqueCandidates[candidate.Value.ImplementationTypeDisplayName] = candidate.Value;
@@ -270,7 +282,9 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         return GetTypeSortKey(type).Replace("global::", string.Empty);
     }
 
-    private static string GenerateSource(IReadOnlyList<HandlerRegistrationSpec> registrations)
+    private static string GenerateSource(
+        IReadOnlyList<HandlerRegistrationSpec> registrations,
+        bool emitReflectionFallbackAttribute)
     {
         var builder = new StringBuilder();
         builder.AppendLine("// <auto-generated />");
@@ -283,6 +297,13 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         builder.Append('.');
         builder.Append(GeneratedTypeName);
         builder.AppendLine("))]");
+        if (emitReflectionFallbackAttribute)
+        {
+            builder.Append("[assembly: global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.AppendLine(".CqrsReflectionFallbackAttribute()]");
+        }
+
         builder.AppendLine();
         builder.Append("namespace ");
         builder.Append(GeneratedNamespace);
@@ -399,4 +420,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             }
         }
     }
+
+    private readonly record struct GenerationEnvironment(
+        bool GenerationEnabled,
+        bool SupportsReflectionFallbackMarker);
 }

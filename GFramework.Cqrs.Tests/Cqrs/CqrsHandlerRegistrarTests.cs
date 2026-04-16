@@ -13,6 +13,9 @@ namespace GFramework.Cqrs.Tests.Cqrs;
 [TestFixture]
 internal sealed class CqrsHandlerRegistrarTests
 {
+    private MicrosoftDiContainer? _container;
+    private ArchitectureContext? _context;
+
     /// <summary>
     ///     初始化测试容器并重置共享状态。
     /// </summary>
@@ -41,9 +44,6 @@ internal sealed class CqrsHandlerRegistrarTests
         _container = null;
         DeterministicNotificationHandlerState.Reset();
     }
-
-    private MicrosoftDiContainer? _container;
-    private ArchitectureContext? _context;
 
     /// <summary>
     ///     验证自动扫描到的通知处理器会按稳定名称顺序执行，而不是依赖反射枚举顺序。
@@ -188,6 +188,50 @@ internal sealed class CqrsHandlerRegistrarTests
             LoggerFactoryResolver.Provider = originalProvider;
         }
     }
+
+    /// <summary>
+    ///     验证当生成注册器显式要求 reflection fallback 时，运行时会补扫剩余 handlers，
+    ///     同时避免把已由生成注册器注册的映射重复写入服务集合。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Combine_Generated_Registry_With_Reflection_Fallback_Without_Duplicates()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.PartialGeneratedRegistryAssembly, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(PartialGeneratedNotificationHandlerRegistry))]);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false))
+            .Returns([new CqrsReflectionFallbackAttribute()]);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetTypes())
+            .Returns(
+            [
+                typeof(GeneratedRegistryNotificationHandler),
+                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType
+            ]);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+
+        var registrations = container.GetServicesUnsafe
+            .Where(static descriptor =>
+                descriptor.ServiceType == typeof(INotificationHandler<GeneratedRegistryNotification>) &&
+                descriptor.ImplementationType is not null)
+            .Select(static descriptor => descriptor.ImplementationType!)
+            .ToList();
+
+        Assert.That(
+            registrations,
+            Is.EqualTo(
+            [
+                typeof(GeneratedRegistryNotificationHandler),
+                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType
+            ]));
+    }
 }
 
 /// <summary>
@@ -322,6 +366,55 @@ internal sealed class GeneratedNotificationHandlerRegistry : ICqrsHandlerRegistr
 {
     /// <summary>
     ///     将测试通知处理器注册到目标服务集合。
+    /// </summary>
+    /// <param name="services">承载处理器映射的服务集合。</param>
+    /// <param name="logger">用于记录注册诊断的日志器。</param>
+    public void Register(IServiceCollection services, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        services.AddTransient(
+            typeof(INotificationHandler<GeneratedRegistryNotification>),
+            typeof(GeneratedRegistryNotificationHandler));
+        logger.Debug(
+            $"Registered CQRS handler {typeof(GeneratedRegistryNotificationHandler).FullName} as {typeof(INotificationHandler<GeneratedRegistryNotification>).FullName}.");
+    }
+}
+
+/// <summary>
+///     用于验证“生成注册器 + reflection fallback”组合路径的私有嵌套处理器容器。
+/// </summary>
+internal sealed class ReflectionFallbackNotificationContainer
+{
+    /// <summary>
+    ///     获取仅能通过反射补扫接入的私有嵌套处理器类型。
+    /// </summary>
+    public static Type ReflectionOnlyHandlerType => typeof(ReflectionOnlyGeneratedRegistryNotificationHandler);
+
+    private sealed class ReflectionOnlyGeneratedRegistryNotificationHandler
+        : INotificationHandler<GeneratedRegistryNotification>
+    {
+        /// <summary>
+        ///     处理测试通知。
+        /// </summary>
+        /// <param name="notification">通知实例。</param>
+        /// <param name="cancellationToken">取消令牌。</param>
+        /// <returns>已完成任务。</returns>
+        public ValueTask Handle(GeneratedRegistryNotification notification, CancellationToken cancellationToken)
+        {
+            return ValueTask.CompletedTask;
+        }
+    }
+}
+
+/// <summary>
+///     模拟局部生成注册器场景中，仅注册“可由生成代码直接引用”的那部分 handlers。
+/// </summary>
+internal sealed class PartialGeneratedNotificationHandlerRegistry : ICqrsHandlerRegistry
+{
+    /// <summary>
+    ///     将生成路径可见的通知处理器注册到目标服务集合。
     /// </summary>
     /// <param name="services">承载处理器映射的服务集合。</param>
     /// <param name="logger">用于记录注册诊断的日志器。</param>
