@@ -400,7 +400,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     /// <param name="assemblies">要接入的程序集集合。</param>
     /// <exception cref="ArgumentNullException"><paramref name="assemblies" /> 为 <see langword="null" />。</exception>
     /// <exception cref="ArgumentNullException"><paramref name="assemblies" /> 中存在 <see langword="null" /> 元素。</exception>
-    /// <exception cref="InvalidOperationException">容器已冻结，无法继续注册 CQRS 处理器。</exception>
+    /// <exception cref="InvalidOperationException">    容器已冻结，无法继续注册 CQRS 处理器。</exception>
     public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
     {
         ArgumentNullException.ThrowIfNull(assemblies);

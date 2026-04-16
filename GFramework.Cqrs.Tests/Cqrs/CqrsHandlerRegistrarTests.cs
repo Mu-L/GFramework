@@ -190,11 +190,11 @@ internal sealed class CqrsHandlerRegistrarTests
     }
 
     /// <summary>
-    ///     验证当生成注册器显式要求 reflection fallback 时，运行时会补扫剩余 handlers，
-    ///     同时避免把已由生成注册器注册的映射重复写入服务集合。
+    ///     验证当生成注册器提供精确 fallback 类型名时，运行时会定向补扫剩余 handlers，
+    ///     而不是重新枚举整个程序集的类型列表。
     /// </summary>
     [Test]
-    public void RegisterHandlers_Should_Combine_Generated_Registry_With_Reflection_Fallback_Without_Duplicates()
+    public void RegisterHandlers_Should_Use_Targeted_Type_Lookups_For_Reflection_Fallback_Without_Duplicates()
     {
         var generatedAssembly = new Mock<Assembly>();
         generatedAssembly
@@ -205,13 +205,65 @@ internal sealed class CqrsHandlerRegistrarTests
             .Returns([new CqrsHandlerRegistryAttribute(typeof(PartialGeneratedNotificationHandlerRegistry))]);
         generatedAssembly
             .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false))
-            .Returns([new CqrsReflectionFallbackAttribute()]);
-        generatedAssembly
-            .Setup(static assembly => assembly.GetTypes())
             .Returns(
+            [
+                new CqrsReflectionFallbackAttribute(
+                    ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!)
+            ]);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetType(
+                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!,
+                false,
+                false))
+            .Returns(ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+
+        var registrations = container.GetServicesUnsafe
+            .Where(static descriptor =>
+                descriptor.ServiceType == typeof(INotificationHandler<GeneratedRegistryNotification>) &&
+                descriptor.ImplementationType is not null)
+            .Select(static descriptor => descriptor.ImplementationType!)
+            .ToList();
+
+        Assert.That(
+            registrations,
+            Is.EqualTo(
             [
                 typeof(GeneratedRegistryNotificationHandler),
                 ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType
+            ]));
+
+        generatedAssembly.Verify(
+            static assembly => assembly.GetType(
+                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!,
+                false,
+                false),
+            Times.Once);
+        generatedAssembly.Verify(static assembly => assembly.GetTypes(), Times.Never);
+    }
+
+    /// <summary>
+    ///     验证手写 fallback metadata 直接提供 handler 类型时，运行时会复用这些类型，
+    ///     而不会再通过程序集名称查找或整程序集扫描补齐映射。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Use_Direct_Fallback_Types_Without_GetType_Or_GetTypes()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns(ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.Assembly.FullName);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(PartialGeneratedNotificationHandlerRegistry))]);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false))
+            .Returns(
+            [
+                new CqrsReflectionFallbackAttribute(
+                    ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType)
             ]);
 
         var container = new MicrosoftDiContainer();
@@ -231,6 +283,14 @@ internal sealed class CqrsHandlerRegistrarTests
                 typeof(GeneratedRegistryNotificationHandler),
                 ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType
             ]));
+
+        generatedAssembly.Verify(
+            static assembly => assembly.GetType(
+                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!,
+                false,
+                false),
+            Times.Never);
+        generatedAssembly.Verify(static assembly => assembly.GetTypes(), Times.Never);
     }
 }
 
