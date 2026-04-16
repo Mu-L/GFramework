@@ -478,7 +478,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                         "object",
                         isRequired ? objectSpec.ClassName : $"{objectSpec.ClassName}?",
                         isRequired ? " = new();" : null,
-                        null,
+                        TryBuildEnumDocumentation(property.Value, "object"),
                         null,
                         null,
                         objectSpec,
@@ -805,6 +805,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                         $"global::System.Collections.Generic.IReadOnlyList<{itemClrType}>",
                         TryBuildArrayInitializer(property.Value, itemType, itemClrType) ??
                         $" = global::System.Array.Empty<{itemClrType}>();",
+                        TryBuildEnumDocumentation(property.Value, "array") ??
                         TryBuildEnumDocumentation(itemsElement, itemType),
                         TryBuildConstraintDocumentation(property.Value, "array"),
                         refTableName,
@@ -856,7 +857,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                         "array",
                         $"global::System.Collections.Generic.IReadOnlyList<{objectSpec.ClassName}>",
                         $" = global::System.Array.Empty<{objectSpec.ClassName}>();",
-                        null,
+                        TryBuildEnumDocumentation(property.Value, "array") ??
+                        TryBuildEnumDocumentation(itemsElement, "object"),
                         TryBuildConstraintDocumentation(property.Value, "array"),
                         null,
                         null,
@@ -865,7 +867,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                             "object",
                             objectSpec.ClassName,
                             null,
-                            null,
+                            TryBuildEnumDocumentation(itemsElement, "object"),
                             null,
                             null,
                             objectSpec,
@@ -2760,7 +2762,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     ///     将 enum 值整理成 XML 文档可读字符串。
     /// </summary>
     /// <param name="element">Schema 节点。</param>
-    /// <param name="schemaType">标量类型。</param>
+    /// <param name="schemaType">当前 schema 类型。</param>
     /// <returns>格式化后的枚举说明。</returns>
     private static string? TryBuildEnumDocumentation(JsonElement element, string schemaType)
     {
@@ -2782,6 +2784,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                 "boolean" when item.ValueKind == JsonValueKind.True => "true",
                 "boolean" when item.ValueKind == JsonValueKind.False => "false",
                 "string" when item.ValueKind == JsonValueKind.String => item.GetString(),
+                "array" when item.ValueKind == JsonValueKind.Array => item.GetRawText(),
+                "object" when item.ValueKind == JsonValueKind.Object => item.GetRawText(),
                 _ => null
             };
 
