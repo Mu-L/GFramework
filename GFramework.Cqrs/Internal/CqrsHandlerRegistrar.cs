@@ -40,7 +40,7 @@ internal static class CqrsHandlerRegistrar
                 container.GetServicesUnsafe,
                 assembly,
                 logger,
-                generatedRegistrationResult.ReflectionFallbackTypeNames);
+                generatedRegistrationResult.ReflectionFallbackMetadata);
         }
     }
 
@@ -106,13 +106,13 @@ internal static class CqrsHandlerRegistrar
                 registry.Register(services, logger);
             }
 
-            var reflectionFallbackTypeNames = GetReflectionFallbackTypeNames(assembly);
-            if (reflectionFallbackTypeNames is not null)
+            var reflectionFallbackMetadata = GetReflectionFallbackMetadata(assembly, logger);
+            if (reflectionFallbackMetadata is not null)
             {
-                if (reflectionFallbackTypeNames.Count > 0)
+                if (reflectionFallbackMetadata.HasExplicitTypes)
                 {
                     logger.Debug(
-                        $"Generated CQRS registry for assembly {assemblyName} requested targeted reflection fallback for {reflectionFallbackTypeNames.Count} unsupported handler type(s).");
+                        $"Generated CQRS registry for assembly {assemblyName} requested targeted reflection fallback for {reflectionFallbackMetadata.Types.Count} unsupported handler type(s).");
                 }
                 else
                 {
@@ -120,7 +120,7 @@ internal static class CqrsHandlerRegistrar
                         $"Generated CQRS registry for assembly {assemblyName} requested full reflection fallback for unsupported handlers.");
                 }
 
-                return GeneratedRegistrationResult.WithReflectionFallback(reflectionFallbackTypeNames);
+                return GeneratedRegistrationResult.WithReflectionFallback(reflectionFallbackMetadata);
             }
 
             return GeneratedRegistrationResult.FullyHandled();
@@ -142,9 +142,9 @@ internal static class CqrsHandlerRegistrar
         IServiceCollection services,
         Assembly assembly,
         ILogger logger,
-        IReadOnlyList<string>? reflectionFallbackTypeNames)
+        ReflectionFallbackMetadata? reflectionFallbackMetadata)
     {
-        foreach (var implementationType in GetCandidateHandlerTypes(assembly, logger, reflectionFallbackTypeNames)
+        foreach (var implementationType in GetCandidateHandlerTypes(assembly, logger, reflectionFallbackMetadata)
                      .Where(IsConcreteHandlerType))
         {
             var handlerInterfaces = implementationType
@@ -180,24 +180,51 @@ internal static class CqrsHandlerRegistrar
     private static IReadOnlyList<Type> GetCandidateHandlerTypes(
         Assembly assembly,
         ILogger logger,
-        IReadOnlyList<string>? reflectionFallbackTypeNames)
+        ReflectionFallbackMetadata? reflectionFallbackMetadata)
     {
-        return reflectionFallbackTypeNames is { Count: > 0 }
-            ? GetNamedFallbackTypes(assembly, reflectionFallbackTypeNames, logger)
+        return reflectionFallbackMetadata is { HasExplicitTypes: true }
+            ? reflectionFallbackMetadata.Types
             : GetLoadableTypes(assembly, logger);
     }
 
     /// <summary>
-    ///     根据生成器记录的类型全名，精确解析仍需运行时补充注册的处理器类型。
+    ///     获取生成注册器要求运行时继续补充反射扫描的 handler 元数据。
     /// </summary>
-    private static IReadOnlyList<Type> GetNamedFallbackTypes(
+    private static ReflectionFallbackMetadata? GetReflectionFallbackMetadata(
         Assembly assembly,
-        IReadOnlyList<string> reflectionFallbackTypeNames,
         ILogger logger)
     {
         var assemblyName = GetAssemblySortKey(assembly);
-        var resolvedTypes = new List<Type>(reflectionFallbackTypeNames.Count);
-        foreach (var typeName in reflectionFallbackTypeNames
+        var fallbackAttributes = assembly
+            .GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), inherit: false)
+            .OfType<CqrsReflectionFallbackAttribute>()
+            .ToList();
+
+        if (fallbackAttributes.Count == 0)
+            return null;
+
+        var resolvedTypes = new List<Type>();
+        foreach (var fallbackType in fallbackAttributes
+                     .SelectMany(static attribute => attribute.FallbackHandlerTypes)
+                     .Where(static type => type is not null)
+                     .Distinct()
+                     .OrderBy(GetTypeSortKey, StringComparer.Ordinal))
+        {
+            if (!string.Equals(
+                    GetAssemblySortKey(fallbackType.Assembly),
+                    assemblyName,
+                    StringComparison.Ordinal))
+            {
+                logger.Warn(
+                    $"Generated CQRS reflection fallback type {fallbackType.FullName} was declared on assembly {assemblyName} but belongs to assembly {GetAssemblySortKey(fallbackType.Assembly)}. Skipping mismatched fallback entry.");
+                continue;
+            }
+
+            resolvedTypes.Add(fallbackType);
+        }
+
+        foreach (var typeName in fallbackAttributes
+                     .SelectMany(static attribute => attribute.FallbackHandlerTypeNames)
                      .Where(static name => !string.IsNullOrWhiteSpace(name))
                      .Distinct(StringComparer.Ordinal)
                      .OrderBy(static name => name, StringComparer.Ordinal))
@@ -221,9 +248,11 @@ internal static class CqrsHandlerRegistrar
             }
         }
 
-        return resolvedTypes
-            .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
-            .ToList();
+        return new ReflectionFallbackMetadata(
+            resolvedTypes
+                .Distinct()
+                .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
+                .ToArray());
     }
 
     /// <summary>
@@ -292,27 +321,6 @@ internal static class CqrsHandlerRegistrar
     }
 
     /// <summary>
-    ///     获取生成注册器要求运行时继续补充反射扫描的 handler 类型名清单。
-    /// </summary>
-    private static IReadOnlyList<string>? GetReflectionFallbackTypeNames(Assembly assembly)
-    {
-        var fallbackAttributes = assembly
-            .GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), inherit: false)
-            .OfType<CqrsReflectionFallbackAttribute>()
-            .ToList();
-
-        if (fallbackAttributes.Count == 0)
-            return null;
-
-        return fallbackAttributes
-            .SelectMany(static attribute => attribute.FallbackHandlerTypeNames)
-            .Where(static typeName => !string.IsNullOrWhiteSpace(typeName))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(static typeName => typeName, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    /// <summary>
     ///     判断同一 handler 映射是否已经由生成注册器或先前扫描步骤写入服务集合。
     /// </summary>
     private static bool IsHandlerMappingAlreadyRegistered(
@@ -346,14 +354,14 @@ internal static class CqrsHandlerRegistrar
     private readonly record struct GeneratedRegistrationResult(
         bool UsedGeneratedRegistry,
         bool RequiresReflectionFallback,
-        IReadOnlyList<string>? ReflectionFallbackTypeNames)
+        ReflectionFallbackMetadata? ReflectionFallbackMetadata)
     {
         public static GeneratedRegistrationResult NoGeneratedRegistry()
         {
             return new GeneratedRegistrationResult(
                 UsedGeneratedRegistry: false,
                 RequiresReflectionFallback: false,
-                ReflectionFallbackTypeNames: null);
+                ReflectionFallbackMetadata: null);
         }
 
         public static GeneratedRegistrationResult FullyHandled()
@@ -361,18 +369,25 @@ internal static class CqrsHandlerRegistrar
             return new GeneratedRegistrationResult(
                 UsedGeneratedRegistry: true,
                 RequiresReflectionFallback: false,
-                ReflectionFallbackTypeNames: null);
+                ReflectionFallbackMetadata: null);
         }
 
         public static GeneratedRegistrationResult WithReflectionFallback(
-            IReadOnlyList<string> reflectionFallbackTypeNames)
+            ReflectionFallbackMetadata reflectionFallbackMetadata)
         {
-            ArgumentNullException.ThrowIfNull(reflectionFallbackTypeNames);
+            ArgumentNullException.ThrowIfNull(reflectionFallbackMetadata);
 
             return new GeneratedRegistrationResult(
                 UsedGeneratedRegistry: true,
                 RequiresReflectionFallback: true,
-                ReflectionFallbackTypeNames: reflectionFallbackTypeNames);
+                ReflectionFallbackMetadata: reflectionFallbackMetadata);
         }
+    }
+
+    private sealed class ReflectionFallbackMetadata(IReadOnlyList<Type> types)
+    {
+        public IReadOnlyList<Type> Types { get; } = types ?? throw new ArgumentNullException(nameof(types));
+
+        public bool HasExplicitTypes => Types.Count > 0;
     }
 }

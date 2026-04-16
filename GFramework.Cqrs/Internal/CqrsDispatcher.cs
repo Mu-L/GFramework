@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Reflection;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
@@ -30,9 +28,21 @@ internal sealed class CqrsDispatcher(
     // 进程级缓存：缓存通知调用委托，复用并发安全字典以支撑多线程发布路径。
     private static readonly ConcurrentDictionary<Type, NotificationInvoker> NotificationInvokers = new();
 
+    // 进程级缓存：缓存通知处理器服务类型，避免每次发布都重复 MakeGenericType。
+    private static readonly ConcurrentDictionary<Type, Type> NotificationHandlerServiceTypes = new();
+
     // 进程级缓存：缓存流式请求调用委托，避免每次创建流时重复解析反射签名。
     private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), StreamInvoker> StreamInvokers =
         new();
+
+    // 进程级缓存：缓存请求处理器与 pipeline 行为的服务类型，减少热路径中的泛型类型构造。
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestServiceTypeSet>
+        RequestServiceTypes = new();
+
+    // 进程级缓存：缓存流式请求处理器服务类型，避免每次建流时重复 MakeGenericType。
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), Type>
+        StreamHandlerServiceTypes =
+            new();
 
     /// <summary>
     ///     发布通知到所有已注册处理器。
@@ -51,7 +61,9 @@ internal sealed class CqrsDispatcher(
         ArgumentNullException.ThrowIfNull(notification);
 
         var notificationType = notification.GetType();
-        var handlerType = typeof(INotificationHandler<>).MakeGenericType(notificationType);
+        var handlerType = NotificationHandlerServiceTypes.GetOrAdd(
+            notificationType,
+            static type => typeof(INotificationHandler<>).MakeGenericType(type));
         var handlers = container.GetAll(handlerType);
 
         if (handlers.Count == 0)
@@ -88,14 +100,18 @@ internal sealed class CqrsDispatcher(
         ArgumentNullException.ThrowIfNull(request);
 
         var requestType = request.GetType();
-        var handlerType = typeof(IRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse));
+        var serviceTypes = RequestServiceTypes.GetOrAdd(
+            (requestType, typeof(TResponse)),
+            static key => new RequestServiceTypeSet(
+                typeof(IRequestHandler<,>).MakeGenericType(key.RequestType, key.ResponseType),
+                typeof(IPipelineBehavior<,>).MakeGenericType(key.RequestType, key.ResponseType)));
+        var handlerType = serviceTypes.HandlerType;
         var handler = container.Get(handlerType)
                       ?? throw new InvalidOperationException(
                           $"No CQRS request handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
-        var behaviorType = typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse));
-        var behaviors = container.GetAll(behaviorType);
+        var behaviors = container.GetAll(serviceTypes.BehaviorType);
 
         foreach (var behavior in behaviors)
             PrepareHandler(behavior, context);
@@ -135,7 +151,9 @@ internal sealed class CqrsDispatcher(
         ArgumentNullException.ThrowIfNull(request);
 
         var requestType = request.GetType();
-        var handlerType = typeof(IStreamRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse));
+        var handlerType = StreamHandlerServiceTypes.GetOrAdd(
+            (requestType, typeof(TResponse)),
+            static key => typeof(IStreamRequestHandler<,>).MakeGenericType(key.RequestType, key.ResponseType));
         var handler = container.Get(handlerType)
                       ?? throw new InvalidOperationException(
                           $"No CQRS stream handler registered for {requestType.FullName}.");
@@ -293,4 +311,6 @@ internal sealed class CqrsDispatcher(
         CancellationToken cancellationToken);
 
     private delegate object StreamInvoker(object handler, object request, CancellationToken cancellationToken);
+
+    private readonly record struct RequestServiceTypeSet(Type HandlerType, Type BehaviorType);
 }
