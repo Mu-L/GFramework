@@ -838,6 +838,7 @@ public class YamlConfigLoaderTests
     /// <param name="value">满足该 format 的 YAML 标量值。</param>
     [TestCase("date", "2026-04-11")]
     [TestCase("date-time", "2026-04-11T08:30:00Z")]
+    [TestCase("duration", "P2DT3H4M5.5S")]
     [TestCase("email", "boss@example.com")]
     [TestCase("time", "08:30:00Z")]
     [TestCase("uri", "https://example.com/loot-table")]
@@ -892,6 +893,7 @@ public class YamlConfigLoaderTests
     /// <param name="value">不满足该 format 的 YAML 标量值。</param>
     [TestCase("date", "2026-02-30")]
     [TestCase("date-time", "2026-04-11T08:30:00")]
+    [TestCase("duration", "P1Y")]
     [TestCase("email", "boss.example.com")]
     [TestCase("time", "08:30:00")]
     [TestCase("uri", "/loot-table")]
@@ -988,6 +990,7 @@ public class YamlConfigLoaderTests
             Assert.That(exception.Diagnostic.RawValue, Is.EqualTo("ipv4"));
             Assert.That(exception.Message, Does.Contain("unsupported string format"));
             Assert.That(exception.Message, Does.Contain("date-time"));
+            Assert.That(exception.Message, Does.Contain("duration"));
             Assert.That(exception.Message, Does.Contain("time"));
         });
     }

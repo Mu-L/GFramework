@@ -18,7 +18,7 @@ internal static class YamlConfigSchemaValidator
     // The runtime intentionally uses the same culture-invariant regex semantics as the
     // JS tooling so grouping and backreferences behave consistently across environments.
     private const RegexOptions SupportedPatternRegexOptions = RegexOptions.CultureInvariant;
-    private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'time', 'uri', 'uuid'";
+    private const string SupportedStringFormatNames = "'date', 'date-time', 'duration', 'email', 'time', 'uri', 'uuid'";
 
     private static readonly Regex ExactDecimalPattern = new(
         @"^(?<sign>[+-]?)(?:(?<integer>\d+)(?:\.(?<fraction>\d*))?|\.(?<fractionOnly>\d+))(?:[eE](?<exponent>[+-]?\d+))?$",
@@ -34,6 +34,10 @@ internal static class YamlConfigSchemaValidator
 
     private static readonly Regex SupportedDateTimeFormatRegex = new(
         @"^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SupportedDurationFormatRegex = new(
+        @"^P(?:(?<days>\d+)D)?(?:T(?:(?<hours>\d+)H)?(?:(?<minutes>\d+)M)?(?:(?<seconds>\d+(?:\.\d+)?)S)?)?$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex SupportedTimeFormatRegex = new(
@@ -1707,6 +1711,10 @@ internal static class YamlConfigSchemaValidator
                 kind = YamlConfigStringFormatKind.DateTime;
                 return true;
 
+            case "duration":
+                kind = YamlConfigStringFormatKind.Duration;
+                return true;
+
             case "email":
                 kind = YamlConfigStringFormatKind.Email;
                 return true;
@@ -2325,6 +2333,7 @@ internal static class YamlConfigSchemaValidator
         {
             YamlConfigStringFormatKind.Date => MatchesSupportedDateFormat(value),
             YamlConfigStringFormatKind.DateTime => MatchesSupportedDateTimeFormat(value),
+            YamlConfigStringFormatKind.Duration => MatchesSupportedDurationFormat(value),
             YamlConfigStringFormatKind.Email => SupportedEmailFormatRegex.IsMatch(value),
             YamlConfigStringFormatKind.Time => MatchesSupportedTimeFormat(value),
             YamlConfigStringFormatKind.Uri => MatchesSupportedUriFormat(value),
@@ -2369,6 +2378,44 @@ internal static class YamlConfigSchemaValidator
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out _);
+    }
+
+    /// <summary>
+    ///     判断字符串是否满足共享支持的 <c>duration</c> 格式。
+    ///     当前共享子集只接受 day-time duration：可声明 <c>D/H/M/S</c>，秒允许小数，
+    ///     但拒绝 <c>Y</c> / <c>M(月)</c> / <c>W</c> 等依赖日历语义的部分，
+    ///     避免不同宿主对“一个月/一年到底多长”出现解释漂移。
+    /// </summary>
+    /// <param name="value">待校验的字符串值。</param>
+    /// <returns>当前值是否是合法持续时间文本。</returns>
+    private static bool MatchesSupportedDurationFormat(string value)
+    {
+        var match = SupportedDurationFormatRegex.Match(value);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var hasDayComponent = match.Groups["days"].Success;
+        var hasHourComponent = match.Groups["hours"].Success;
+        var hasMinuteComponent = match.Groups["minutes"].Success;
+        var hasSecondComponent = match.Groups["seconds"].Success;
+        var hasAnyComponent = hasDayComponent || hasHourComponent || hasMinuteComponent || hasSecondComponent;
+        if (!hasAnyComponent)
+        {
+            return false;
+        }
+
+        var hasTimeSection = value.Contains('T', StringComparison.Ordinal);
+        if (hasTimeSection &&
+            !hasHourComponent &&
+            !hasMinuteComponent &&
+            !hasSecondComponent)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -3752,6 +3799,11 @@ internal enum YamlConfigStringFormatKind
     ///     表示带显式时区偏移的 RFC 3339 日期时间。
     /// </summary>
     DateTime,
+
+    /// <summary>
+    ///     表示 day-time duration 形式的持续时间。
+    /// </summary>
+    Duration,
 
     /// <summary>
     ///     表示基础电子邮件地址格式。

@@ -14,9 +14,11 @@ const UuidFormatPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const DateFormatPattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
 const DateTimeFormatPattern =
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$/u;
+const DurationFormatPattern =
+    /^P(?:(?<days>\d+)D)?(?:T(?:(?<hours>\d+)H)?(?:(?<minutes>\d+)M)?(?:(?<seconds>\d+(?:\.\d+)?)S)?)?$/u;
 const TimeFormatPattern =
     /^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$/u;
-const SupportedStringFormats = new Set(["date", "date-time", "email", "time", "uri", "uuid"]);
+const SupportedStringFormats = new Set(["date", "date-time", "duration", "email", "time", "uri", "uuid"]);
 
 /**
  * Compare two strings using the same UTF-16 code-unit ordering as C#'s
@@ -484,7 +486,7 @@ function normalizeSchemaStringFormat(value, schemaType, displayPath) {
 
     throw new Error(
         `Schema property '${displayPath}' declares unsupported string format '${value}'. ` +
-        "Supported formats are 'date', 'date-time', 'email', 'time', 'uri', and 'uuid'.");
+        "Supported formats are 'date', 'date-time', 'duration', 'email', 'time', 'uri', and 'uuid'.");
 }
 
 /**
@@ -628,6 +630,8 @@ function matchesSchemaStringFormat(scalarValue, formatName) {
             return matchesSchemaDateFormat(scalarValue);
         case "date-time":
             return matchesSchemaDateTimeFormat(scalarValue);
+        case "duration":
+            return matchesSchemaDurationFormat(scalarValue);
         case "email":
             return EmailFormatPattern.test(scalarValue);
         case "time":
@@ -693,6 +697,35 @@ function matchesSchemaDateTimeFormat(scalarValue) {
     const offsetHour = Number.parseInt(offset.slice(1, 3), 10);
     const offsetMinute = Number.parseInt(offset.slice(4, 6), 10);
     return offsetHour <= 23 && offsetMinute <= 59;
+}
+
+/**
+ * Validate one shared day-time duration string.
+ *
+ * @param {string} scalarValue Scalar value from YAML.
+ * @returns {boolean} True when the value stays within the shared day-time subset.
+ */
+function matchesSchemaDurationFormat(scalarValue) {
+    const match = DurationFormatPattern.exec(scalarValue);
+    if (!match || !match.groups) {
+        return false;
+    }
+
+    const hasDayComponent = match.groups.days !== undefined;
+    const hasHourComponent = match.groups.hours !== undefined;
+    const hasMinuteComponent = match.groups.minutes !== undefined;
+    const hasSecondComponent = match.groups.seconds !== undefined;
+    const hasAnyComponent = hasDayComponent || hasHourComponent || hasMinuteComponent || hasSecondComponent;
+    if (!hasAnyComponent) {
+        return false;
+    }
+
+    const hasTimeSection = scalarValue.includes("T");
+    if (hasTimeSection && !hasHourComponent && !hasMinuteComponent && !hasSecondComponent) {
+        return false;
+    }
+
+    return true;
 }
 
 /**
