@@ -1133,6 +1133,7 @@ function parseSchemaNode(rawNode, displayPath) {
         for (const [key, propertyNode] of Object.entries(value.properties || {})) {
             properties[key] = parseSchemaNode(propertyNode, joinPropertyPath(displayPath, key));
         }
+        const dependentRequired = parseDependentRequiredMetadata(value.dependentRequired, displayPath, properties);
 
         return applyEnumMetadata(applyConstMetadata({
             type: "object",
@@ -1141,6 +1142,7 @@ function parseSchemaNode(rawNode, displayPath) {
             properties,
             minProperties: metadata.minProperties,
             maxProperties: metadata.maxProperties,
+            dependentRequired,
             title: metadata.title,
             description: metadata.description,
             defaultValue: metadata.defaultValue,
@@ -1252,6 +1254,72 @@ function parseNegatedSchemaNode(rawNot, displayPath) {
     }
 
     return parseSchemaNode(rawNot, `${displayPath}[not]`);
+}
+
+/**
+ * Parse one object-level `dependentRequired` map and keep it aligned with the
+ * runtime's "declared siblings only" contract.
+ *
+ * @param {unknown} rawDependentRequired Raw dependentRequired node.
+ * @param {string} displayPath Parent schema path.
+ * @param {Record<string, SchemaNode>} properties Declared object properties.
+ * @returns {Record<string, string[]> | undefined} Normalized dependency map.
+ */
+function parseDependentRequiredMetadata(rawDependentRequired, displayPath, properties) {
+    if (rawDependentRequired === undefined) {
+        return undefined;
+    }
+
+    if (!rawDependentRequired ||
+        typeof rawDependentRequired !== "object" ||
+        Array.isArray(rawDependentRequired)) {
+        throw new Error(`Schema property '${displayPath}' must declare 'dependentRequired' as an object.`);
+    }
+
+    const normalized = {};
+    for (const [triggerProperty, rawDependencies] of Object.entries(rawDependentRequired)) {
+        if (!Object.prototype.hasOwnProperty.call(properties, triggerProperty)) {
+            throw new Error(
+                `Schema property '${displayPath}' declares 'dependentRequired' for undeclared property '${triggerProperty}'.`);
+        }
+
+        if (!Array.isArray(rawDependencies)) {
+            throw new Error(
+                `Schema property '${displayPath}' must declare 'dependentRequired' for '${triggerProperty}' as an array of sibling property names.`);
+        }
+
+        const dependencies = [];
+        const seenDependencies = new Set();
+        for (const dependency of rawDependencies) {
+            if (typeof dependency !== "string") {
+                throw new Error(
+                    `Schema property '${displayPath}' must declare 'dependentRequired' entries for '${triggerProperty}' as strings.`);
+            }
+
+            if (dependency.trim().length === 0) {
+                throw new Error(
+                    `Schema property '${displayPath}' cannot declare blank 'dependentRequired' entries for '${triggerProperty}'.`);
+            }
+
+            if (!Object.prototype.hasOwnProperty.call(properties, dependency)) {
+                throw new Error(
+                    `Schema property '${displayPath}' declares 'dependentRequired' target '${dependency}' that is not declared in the same object schema.`);
+            }
+
+            if (!seenDependencies.has(dependency)) {
+                seenDependencies.add(dependency);
+                dependencies.push(dependency);
+            }
+        }
+
+        if (dependencies.length > 0) {
+            normalized[triggerProperty] = dependencies;
+        }
+    }
+
+    return Object.keys(normalized).length > 0
+        ? normalized
+        : undefined;
 }
 
 /**
@@ -1565,6 +1633,11 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
         }
     }
 
+    const reportedMessages = new Set(
+        diagnostics
+            .slice(diagnosticsBeforeNode)
+            .map((diagnostic) => diagnostic.message));
+
     for (const entry of yamlNode.entries) {
         if (!Object.prototype.hasOwnProperty.call(schemaNode.properties, entry.key)) {
             diagnostics.push({
@@ -1582,6 +1655,38 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
             joinPropertyPath(displayPath, entry.key),
             diagnostics,
             localizer);
+    }
+
+    if (schemaNode.dependentRequired && typeof schemaNode.dependentRequired === "object") {
+        for (const [triggerProperty, dependencies] of Object.entries(schemaNode.dependentRequired)) {
+            if (!yamlNode.map.has(triggerProperty)) {
+                continue;
+            }
+
+            for (const dependency of dependencies) {
+                if (yamlNode.map.has(dependency)) {
+                    continue;
+                }
+
+                const localizedMessage = localizeValidationMessage(
+                    ValidationMessageKeys.dependentRequiredViolation,
+                    localizer,
+                    {
+                        displayPath: joinPropertyPath(displayPath, dependency),
+                        triggerProperty: joinPropertyPath(displayPath, triggerProperty)
+                    });
+
+                if (reportedMessages.has(localizedMessage)) {
+                    continue;
+                }
+
+                diagnostics.push({
+                    severity: "error",
+                    message: localizedMessage
+                });
+                reportedMessages.add(localizedMessage);
+            }
+        }
     }
 
     if (typeof schemaNode.minProperties === "number" &&
@@ -1668,6 +1773,20 @@ function matchesSchemaNodeInternal(schemaNode, yamlNode, allowUnknownObjectPrope
             if (yamlNode.map.has(key) &&
                 !matchesSchemaNodeInternal(childSchema, yamlNode.map.get(key), allowUnknownObjectProperties)) {
                 return false;
+            }
+        }
+
+        if (schemaNode.dependentRequired && typeof schemaNode.dependentRequired === "object") {
+            for (const [triggerProperty, dependencies] of Object.entries(schemaNode.dependentRequired)) {
+                if (!yamlNode.map.has(triggerProperty)) {
+                    continue;
+                }
+
+                for (const dependency of dependencies) {
+                    if (!yamlNode.map.has(dependency)) {
+                        return false;
+                    }
+                }
             }
         }
 
@@ -2082,6 +2201,8 @@ function localizeValidationMessage(key, localizer, params) {
         switch (key) {
             case ValidationMessageKeys.constMismatch:
                 return `属性“${params.displayPath}”必须匹配固定值 ${params.value}。`;
+            case ValidationMessageKeys.dependentRequiredViolation:
+                return `属性“${params.triggerProperty}”存在时，必须同时声明属性“${params.displayPath}”。`;
             case ValidationMessageKeys.expectedArray:
                 return `属性“${params.displayPath}”应为数组。`;
             case ValidationMessageKeys.expectedScalarShape:
@@ -2132,6 +2253,8 @@ function localizeValidationMessage(key, localizer, params) {
     switch (key) {
         case ValidationMessageKeys.constMismatch:
             return `Property '${params.displayPath}' must match constant value ${params.value}.`;
+        case ValidationMessageKeys.dependentRequiredViolation:
+            return `Property '${params.displayPath}' is required when sibling property '${params.triggerProperty}' is present.`;
         case ValidationMessageKeys.expectedArray:
             return `Property '${params.displayPath}' is expected to be an array.`;
         case ValidationMessageKeys.expectedScalarShape:
@@ -2880,6 +3003,7 @@ module.exports = {
  *   properties: Record<string, SchemaNode>,
  *   minProperties?: number,
  *   maxProperties?: number,
+ *   dependentRequired?: Record<string, string[]>,
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string,

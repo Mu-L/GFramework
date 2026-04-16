@@ -27,6 +27,7 @@
  GF_ConfigSchema_007        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
  GF_ConfigSchema_008        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
  GF_ConfigSchema_009        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_010        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
  GF_AutoModule_001          | GFramework.SourceGenerators.Architecture | Error    | AutoRegisterModuleDiagnostics  
  GF_AutoModule_002          | GFramework.SourceGenerators.Architecture | Error    | AutoRegisterModuleDiagnostics  
  GF_AutoModule_003          | GFramework.SourceGenerators.Architecture | Error    | AutoRegisterModuleDiagnostics  

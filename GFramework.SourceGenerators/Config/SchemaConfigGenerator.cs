@@ -8,7 +8,8 @@ namespace GFramework.SourceGenerators.Config;
 ///     支持嵌套对象、对象数组、标量数组，以及可映射的 default / enum / const / ref-table 元数据。
 ///     当前共享子集也会把 <c>multipleOf</c>、<c>uniqueItems</c>、
 ///     <c>contains</c> / <c>minContains</c> / <c>maxContains</c>、
-///     <c>minProperties</c>、<c>maxProperties</c> 与稳定字符串 <c>format</c> 子集写入生成代码文档，
+///     <c>minProperties</c>、<c>maxProperties</c>、<c>dependentRequired</c>
+///     与稳定字符串 <c>format</c> 子集写入生成代码文档，
 ///     让消费者能直接在强类型 API 上看到运行时生效的约束。
 /// </summary>
 [Generator]
@@ -138,6 +139,15 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                     out var rootFormatDiagnostic))
             {
                 return SchemaParseResult.FromDiagnostic(rootFormatDiagnostic!);
+            }
+
+            if (!TryValidateDependentRequiredMetadataRecursively(
+                    file.Path,
+                    "<root>",
+                    root,
+                    out var dependentRequiredDiagnostic))
+            {
+                return SchemaParseResult.FromDiagnostic(dependentRequiredDiagnostic!);
             }
 
             var entityName = ToPascalCase(GetSchemaBaseName(file.Path));
@@ -702,6 +712,210 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                 out diagnostic))
         {
             return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     递归验证 schema 树中的对象级 <c>dependentRequired</c> 元数据。
+    ///     该遍历会覆盖根节点、<c>not</c> 子 schema、数组元素与 <c>contains</c> 子 schema，
+    ///     避免生成器在对象字段依赖规则上比运行时和工具侧更宽松。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前节点树的 dependentRequired 元数据是否有效。</returns>
+    private static bool TryValidateDependentRequiredMetadataRecursively(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        diagnostic = null;
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return true;
+        }
+
+        var schemaType = string.Empty;
+        if (element.TryGetProperty("type", out var typeElement) &&
+            typeElement.ValueKind == JsonValueKind.String)
+        {
+            schemaType = typeElement.GetString() ?? string.Empty;
+            if (string.Equals(schemaType, "object", StringComparison.Ordinal) &&
+                !TryValidateDependentRequiredMetadata(filePath, displayPath, element, out diagnostic))
+            {
+                return false;
+            }
+        }
+
+        if (string.Equals(schemaType, "object", StringComparison.Ordinal) &&
+            element.TryGetProperty("properties", out var propertiesElement) &&
+            propertiesElement.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in propertiesElement.EnumerateObject())
+            {
+                if (!TryValidateDependentRequiredMetadataRecursively(
+                        filePath,
+                        CombinePath(displayPath, property.Name),
+                        property.Value,
+                        out diagnostic))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (element.TryGetProperty("not", out var notElement) &&
+            notElement.ValueKind == JsonValueKind.Object &&
+            !TryValidateDependentRequiredMetadataRecursively(
+                filePath,
+                $"{displayPath}[not]",
+                notElement,
+                out diagnostic))
+        {
+            return false;
+        }
+
+        if (!string.Equals(schemaType, "array", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (element.TryGetProperty("items", out var itemsElement) &&
+            itemsElement.ValueKind == JsonValueKind.Object &&
+            !TryValidateDependentRequiredMetadataRecursively(filePath, $"{displayPath}[]", itemsElement, out diagnostic))
+        {
+            return false;
+        }
+
+        if (element.TryGetProperty("contains", out var containsElement) &&
+            containsElement.ValueKind == JsonValueKind.Object &&
+            !TryValidateDependentRequiredMetadataRecursively(
+                filePath,
+                $"{displayPath}[contains]",
+                containsElement,
+                out diagnostic))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     验证单个对象 schema 节点上的 <c>dependentRequired</c> 元数据。
+    ///     生成器只接受“当前对象已声明字段之间”的依赖关系，避免强类型文档描述出运行时无法解析的无效键名。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前对象 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前对象上的 dependentRequired 元数据是否有效。</returns>
+    private static bool TryValidateDependentRequiredMetadata(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        diagnostic = null;
+        if (!element.TryGetProperty("dependentRequired", out var dependentRequiredElement))
+        {
+            return true;
+        }
+
+        if (dependentRequiredElement.ValueKind != JsonValueKind.Object)
+        {
+            diagnostic = Diagnostic.Create(
+                ConfigSchemaDiagnostics.InvalidDependentRequiredMetadata,
+                CreateFileLocation(filePath),
+                Path.GetFileName(filePath),
+                displayPath,
+                "The 'dependentRequired' value must be an object.");
+            return false;
+        }
+
+        if (!element.TryGetProperty("properties", out var propertiesElement) ||
+            propertiesElement.ValueKind != JsonValueKind.Object)
+        {
+            diagnostic = Diagnostic.Create(
+                ConfigSchemaDiagnostics.InvalidDependentRequiredMetadata,
+                CreateFileLocation(filePath),
+                Path.GetFileName(filePath),
+                displayPath,
+                "Object schemas using 'dependentRequired' must also declare an object-valued 'properties' map.");
+            return false;
+        }
+
+        var declaredProperties = new HashSet<string>(
+            propertiesElement
+                .EnumerateObject()
+                .Select(static property => property.Name),
+            StringComparer.Ordinal);
+
+        foreach (var dependency in dependentRequiredElement.EnumerateObject())
+        {
+            if (!declaredProperties.Contains(dependency.Name))
+            {
+                diagnostic = Diagnostic.Create(
+                    ConfigSchemaDiagnostics.InvalidDependentRequiredMetadata,
+                    CreateFileLocation(filePath),
+                    Path.GetFileName(filePath),
+                    displayPath,
+                    $"Trigger property '{dependency.Name}' is not declared in the same object schema.");
+                return false;
+            }
+
+            if (dependency.Value.ValueKind != JsonValueKind.Array)
+            {
+                diagnostic = Diagnostic.Create(
+                    ConfigSchemaDiagnostics.InvalidDependentRequiredMetadata,
+                    CreateFileLocation(filePath),
+                    Path.GetFileName(filePath),
+                    displayPath,
+                    $"Property '{dependency.Name}' must declare 'dependentRequired' as an array of sibling property names.");
+                return false;
+            }
+
+            foreach (var dependencyTarget in dependency.Value.EnumerateArray())
+            {
+                if (dependencyTarget.ValueKind != JsonValueKind.String)
+                {
+                    diagnostic = Diagnostic.Create(
+                        ConfigSchemaDiagnostics.InvalidDependentRequiredMetadata,
+                        CreateFileLocation(filePath),
+                        Path.GetFileName(filePath),
+                        displayPath,
+                        $"Property '{dependency.Name}' must declare 'dependentRequired' entries as strings.");
+                    return false;
+                }
+
+                var dependencyTargetName = dependencyTarget.GetString();
+                if (string.IsNullOrWhiteSpace(dependencyTargetName))
+                {
+                    diagnostic = Diagnostic.Create(
+                        ConfigSchemaDiagnostics.InvalidDependentRequiredMetadata,
+                        CreateFileLocation(filePath),
+                        Path.GetFileName(filePath),
+                        displayPath,
+                        $"Property '{dependency.Name}' cannot declare blank 'dependentRequired' entries.");
+                    return false;
+                }
+
+                var normalizedDependencyTargetName = dependencyTargetName!;
+                if (!declaredProperties.Contains(normalizedDependencyTargetName))
+                {
+                    diagnostic = Diagnostic.Create(
+                        ConfigSchemaDiagnostics.InvalidDependentRequiredMetadata,
+                        CreateFileLocation(filePath),
+                        Path.GetFileName(filePath),
+                        displayPath,
+                        $"Dependent target '{normalizedDependencyTargetName}' is not declared in the same object schema.");
+                    return false;
+                }
+            }
         }
 
         return true;
@@ -2933,7 +3147,56 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             parts.Add($"maxProperties = {maxProperties.ToString(CultureInfo.InvariantCulture)}");
         }
 
+        if (schemaType == "object")
+        {
+            var dependentRequiredDocumentation = TryBuildDependentRequiredDocumentation(element);
+            if (dependentRequiredDocumentation is not null)
+            {
+                parts.Add($"dependentRequired = {dependentRequiredDocumentation}");
+            }
+        }
+
         return parts.Count > 0 ? string.Join(", ", parts) : null;
+    }
+
+    /// <summary>
+    ///     将对象 <c>dependentRequired</c> 依赖关系整理成 XML 文档可读字符串。
+    /// </summary>
+    /// <param name="element">对象 schema 节点。</param>
+    /// <returns>格式化后的 dependentRequired 说明。</returns>
+    private static string? TryBuildDependentRequiredDocumentation(JsonElement element)
+    {
+        if (!element.TryGetProperty("dependentRequired", out var dependentRequiredElement) ||
+            dependentRequiredElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        foreach (var dependency in dependentRequiredElement.EnumerateObject())
+        {
+            if (dependency.Value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var targets = dependency.Value
+                .EnumerateArray()
+                .Where(static item => item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()))
+                .Select(static item => item.GetString()!)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (targets.Length == 0)
+            {
+                continue;
+            }
+
+            parts.Add($"{dependency.Name} => [{string.Join(", ", targets)}]");
+        }
+
+        return parts.Count > 0
+            ? $"{{ {string.Join("; ", parts)} }}"
+            : null;
     }
 
     /// <summary>

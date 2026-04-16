@@ -81,3 +81,21 @@ test("createLocalizer should expose not validation keys", () => {
         chineseLocalizer.t(ValidationMessageKeys.notViolation, {displayPath: "name"}),
         "属性“name”不能匹配被 `not` 禁止的 schema。");
 });
+
+test("createLocalizer should expose dependentRequired validation keys", () => {
+    const englishLocalizer = createLocalizer("en");
+    const chineseLocalizer = createLocalizer("zh-cn");
+
+    assert.equal(
+        englishLocalizer.t(ValidationMessageKeys.dependentRequiredViolation, {
+            displayPath: "reward.itemCount",
+            triggerProperty: "reward.itemId"
+        }),
+        "Property 'reward.itemCount' is required when sibling property 'reward.itemId' is present.");
+    assert.equal(
+        chineseLocalizer.t(ValidationMessageKeys.dependentRequiredViolation, {
+            displayPath: "reward.itemCount",
+            triggerProperty: "reward.itemId"
+        }),
+        "属性“reward.itemId”存在时，必须同时声明属性“reward.itemCount”。");
+});
