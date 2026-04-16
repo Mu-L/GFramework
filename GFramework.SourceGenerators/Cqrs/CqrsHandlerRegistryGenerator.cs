@@ -92,6 +92,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             ImmutableArray.CreateBuilder<ReflectedImplementationRegistrationSpec>(handlerInterfaces.Length);
         var preciseReflectedRegistrations =
             ImmutableArray.CreateBuilder<PreciseReflectedRegistrationSpec>(handlerInterfaces.Length);
+        var runtimeDiscoveredHandlerInterfaceLogNames =
+            ImmutableArray.CreateBuilder<string>(handlerInterfaces.Length);
         var requiresRuntimeInterfaceDiscovery = false;
         foreach (var handlerInterface in handlerInterfaces)
         {
@@ -128,6 +130,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             // 对这些边角场景保留“已知接口静态注册 + 剩余接口运行时补洞”的组合路径，
             // 避免单个未知接口把同实现上的其它已知注册全部拖回整实现反射发现。
             requiresRuntimeInterfaceDiscovery = true;
+            runtimeDiscoveredHandlerInterfaceLogNames.Add(GetLogDisplayName(handlerInterface));
         }
 
         return new HandlerCandidateAnalysis(
@@ -137,7 +140,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             reflectedImplementationRegistrations.ToImmutable(),
             preciseReflectedRegistrations.ToImmutable(),
             canReferenceImplementation ? null : GetReflectionTypeMetadataName(type),
-            requiresRuntimeInterfaceDiscovery);
+            requiresRuntimeInterfaceDiscovery,
+            runtimeDiscoveredHandlerInterfaceLogNames.ToImmutable());
     }
 
     private static void Execute(SourceProductionContext context, GenerationEnvironment generationEnvironment,
@@ -182,7 +186,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 candidate.ReflectedImplementationRegistrations,
                 candidate.PreciseReflectedRegistrations,
                 candidate.ReflectionTypeMetadataName,
-                candidate.RequiresRuntimeInterfaceDiscovery));
+                candidate.RequiresRuntimeInterfaceDiscovery,
+                candidate.RuntimeDiscoveredHandlerInterfaceLogNames));
         }
 
         registrations.Sort(static (left, right) =>
@@ -655,6 +660,13 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             builder.Append("            var ");
             builder.Append(knownServiceTypesVariableName);
             builder.AppendLine(" = new global::System.Collections.Generic.HashSet<global::System.Type>();");
+            foreach (var runtimeDiscoveredHandlerInterfaceLogName in registration
+                         .RuntimeDiscoveredHandlerInterfaceLogNames)
+            {
+                builder.Append("            // Remaining runtime interface discovery target: ");
+                builder.Append(runtimeDiscoveredHandlerInterfaceLogName);
+                builder.AppendLine();
+            }
         }
 
         foreach (var orderedRegistration in orderedRegistrations)
@@ -1090,7 +1102,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         ImmutableArray<ReflectedImplementationRegistrationSpec> ReflectedImplementationRegistrations,
         ImmutableArray<PreciseReflectedRegistrationSpec> PreciseReflectedRegistrations,
         string? ReflectionTypeMetadataName,
-        bool RequiresRuntimeInterfaceDiscovery);
+        bool RequiresRuntimeInterfaceDiscovery,
+        ImmutableArray<string> RuntimeDiscoveredHandlerInterfaceLogNames);
 
     private readonly struct HandlerCandidateAnalysis : IEquatable<HandlerCandidateAnalysis>
     {
@@ -1101,7 +1114,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             ImmutableArray<ReflectedImplementationRegistrationSpec> reflectedImplementationRegistrations,
             ImmutableArray<PreciseReflectedRegistrationSpec> preciseReflectedRegistrations,
             string? reflectionTypeMetadataName,
-            bool requiresRuntimeInterfaceDiscovery)
+            bool requiresRuntimeInterfaceDiscovery,
+            ImmutableArray<string> runtimeDiscoveredHandlerInterfaceLogNames)
         {
             ImplementationTypeDisplayName = implementationTypeDisplayName;
             ImplementationLogName = implementationLogName;
@@ -1110,6 +1124,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             PreciseReflectedRegistrations = preciseReflectedRegistrations;
             ReflectionTypeMetadataName = reflectionTypeMetadataName;
             RequiresRuntimeInterfaceDiscovery = requiresRuntimeInterfaceDiscovery;
+            RuntimeDiscoveredHandlerInterfaceLogNames = runtimeDiscoveredHandlerInterfaceLogNames;
         }
 
         public string ImplementationTypeDisplayName { get; }
@@ -1126,6 +1141,8 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
         public bool RequiresRuntimeInterfaceDiscovery { get; }
 
+        public ImmutableArray<string> RuntimeDiscoveredHandlerInterfaceLogNames { get; }
+
         public bool Equals(HandlerCandidateAnalysis other)
         {
             if (!string.Equals(ImplementationTypeDisplayName, other.ImplementationTypeDisplayName,
@@ -1136,7 +1153,9 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 RequiresRuntimeInterfaceDiscovery != other.RequiresRuntimeInterfaceDiscovery ||
                 Registrations.Length != other.Registrations.Length ||
                 ReflectedImplementationRegistrations.Length != other.ReflectedImplementationRegistrations.Length ||
-                PreciseReflectedRegistrations.Length != other.PreciseReflectedRegistrations.Length)
+                PreciseReflectedRegistrations.Length != other.PreciseReflectedRegistrations.Length ||
+                RuntimeDiscoveredHandlerInterfaceLogNames.Length !=
+                other.RuntimeDiscoveredHandlerInterfaceLogNames.Length)
             {
                 return false;
             }
@@ -1158,6 +1177,17 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             {
                 if (!PreciseReflectedRegistrations[index].Equals(other.PreciseReflectedRegistrations[index]))
                     return false;
+            }
+
+            for (var index = 0; index < RuntimeDiscoveredHandlerInterfaceLogNames.Length; index++)
+            {
+                if (!string.Equals(
+                        RuntimeDiscoveredHandlerInterfaceLogNames[index],
+                        other.RuntimeDiscoveredHandlerInterfaceLogNames[index],
+                        StringComparison.Ordinal))
+                {
+                    return false;
+                }
             }
 
             return true;
@@ -1192,6 +1222,12 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 foreach (var preciseReflectedRegistration in PreciseReflectedRegistrations)
                 {
                     hashCode = (hashCode * 397) ^ preciseReflectedRegistration.GetHashCode();
+                }
+
+                foreach (var runtimeDiscoveredHandlerInterfaceLogName in RuntimeDiscoveredHandlerInterfaceLogNames)
+                {
+                    hashCode = (hashCode * 397) ^
+                               StringComparer.Ordinal.GetHashCode(runtimeDiscoveredHandlerInterfaceLogName);
                 }
 
                 return hashCode;
