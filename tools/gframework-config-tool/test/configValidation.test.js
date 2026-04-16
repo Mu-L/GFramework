@@ -679,6 +679,10 @@ test("validateParsedConfig should enforce supported string formats", () => {
               "type": "string",
               "format": "email"
             },
+            "dailyResetAt": {
+              "type": "string",
+              "format": "time"
+            },
             "catalogUri": {
               "type": "string",
               "format": "uri"
@@ -695,19 +699,21 @@ releaseDate: 2026-02-30
 ancientReleaseDate: 0000-01-01
 publishedAt: 2026-04-11T08:30:00
 contactEmail: boss.example.com
+dailyResetAt: 08:30:00
 catalogUri: /loot-table
 configId: 123e4567e89b12d3a456426614174000
 `);
 
     const diagnostics = validateParsedConfig(schema, yaml);
 
-    assert.equal(diagnostics.length, 6);
+    assert.equal(diagnostics.length, 7);
     assert.match(diagnostics[0].message, /format 'date'|字符串格式“date”/u);
     assert.match(diagnostics[1].message, /format 'date'|字符串格式“date”/u);
     assert.match(diagnostics[2].message, /format 'date-time'|字符串格式“date-time”/u);
     assert.match(diagnostics[3].message, /format 'email'|字符串格式“email”/u);
-    assert.match(diagnostics[4].message, /format 'uri'|字符串格式“uri”/u);
-    assert.match(diagnostics[5].message, /format 'uuid'|字符串格式“uuid”/u);
+    assert.match(diagnostics[4].message, /format 'time'|字符串格式“time”/u);
+    assert.match(diagnostics[5].message, /format 'uri'|字符串格式“uri”/u);
+    assert.match(diagnostics[6].message, /format 'uuid'|字符串格式“uuid”/u);
 });
 
 test("validateParsedConfig should accept supported string formats", () => {
@@ -727,6 +733,10 @@ test("validateParsedConfig should accept supported string formats", () => {
               "type": "string",
               "format": "email"
             },
+            "dailyResetAt": {
+              "type": "string",
+              "format": "time"
+            },
             "catalogUri": {
               "type": "string",
               "format": "uri"
@@ -742,6 +752,7 @@ test("validateParsedConfig should accept supported string formats", () => {
 releaseDate: 2026-04-11
 publishedAt: 2026-04-11T08:30:00Z
 contactEmail: boss@example.com
+dailyResetAt: 08:30:00Z
 catalogUri: https://example.com/loot-table
 configId: 123e4567-e89b-12d3-a456-426614174000
 `);
@@ -1406,7 +1417,7 @@ test("parseSchemaContent should capture supported string format metadata", () =>
               "type": "array",
               "items": {
                 "type": "string",
-                "format": "uuid"
+                "format": "time"
               }
             }
           }
@@ -1414,7 +1425,7 @@ test("parseSchemaContent should capture supported string format metadata", () =>
     `);
 
     assert.equal(schema.properties.contactEmail.format, "email");
-    assert.equal(schema.properties.aliases.items.format, "uuid");
+    assert.equal(schema.properties.aliases.items.format, "time");
 });
 
 test("parseSchemaContent should capture multipleOf and uniqueItems metadata", () => {
@@ -1632,7 +1643,7 @@ test("parseSchemaContent should reject unsupported string format declarations", 
               }
             }
         `),
-        /unsupported string format 'ipv4'/u
+        /unsupported string format 'ipv4'.*'time'/u
     );
 });
 

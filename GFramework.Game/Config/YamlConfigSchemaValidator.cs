@@ -18,7 +18,7 @@ internal static class YamlConfigSchemaValidator
     // The runtime intentionally uses the same culture-invariant regex semantics as the
     // JS tooling so grouping and backreferences behave consistently across environments.
     private const RegexOptions SupportedPatternRegexOptions = RegexOptions.CultureInvariant;
-    private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'uri', 'uuid'";
+    private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'time', 'uri', 'uuid'";
 
     private static readonly Regex ExactDecimalPattern = new(
         @"^(?<sign>[+-]?)(?:(?<integer>\d+)(?:\.(?<fraction>\d*))?|\.(?<fractionOnly>\d+))(?:[eE](?<exponent>[+-]?\d+))?$",
@@ -34,6 +34,10 @@ internal static class YamlConfigSchemaValidator
 
     private static readonly Regex SupportedDateTimeFormatRegex = new(
         @"^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SupportedTimeFormatRegex = new(
+        @"^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex SupportedUriSchemeRegex = new(
@@ -1707,6 +1711,10 @@ internal static class YamlConfigSchemaValidator
                 kind = YamlConfigStringFormatKind.Email;
                 return true;
 
+            case "time":
+                kind = YamlConfigStringFormatKind.Time;
+                return true;
+
             case "uri":
                 kind = YamlConfigStringFormatKind.Uri;
                 return true;
@@ -2318,6 +2326,7 @@ internal static class YamlConfigSchemaValidator
             YamlConfigStringFormatKind.Date => MatchesSupportedDateFormat(value),
             YamlConfigStringFormatKind.DateTime => MatchesSupportedDateTimeFormat(value),
             YamlConfigStringFormatKind.Email => SupportedEmailFormatRegex.IsMatch(value),
+            YamlConfigStringFormatKind.Time => MatchesSupportedTimeFormat(value),
             YamlConfigStringFormatKind.Uri => MatchesSupportedUriFormat(value),
             YamlConfigStringFormatKind.Uuid => Guid.TryParseExact(value, "D", out _),
             _ => false
@@ -2360,6 +2369,40 @@ internal static class YamlConfigSchemaValidator
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out _);
+    }
+
+    /// <summary>
+    ///     判断字符串是否满足共享支持的 <c>time</c> 格式。
+    ///     该格式固定要求显式时区偏移，并只接受 24 小时制的合法时分秒文本，
+    ///     避免不同宿主对“time-only + offset”解析默认日期或时区时产生漂移。
+    /// </summary>
+    /// <param name="value">待校验的字符串值。</param>
+    /// <returns>当前值是否是合法时间文本。</returns>
+    private static bool MatchesSupportedTimeFormat(string value)
+    {
+        var match = SupportedTimeFormatRegex.Match(value);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var hour = int.Parse(match.Groups["hour"].Value, CultureInfo.InvariantCulture);
+        var minute = int.Parse(match.Groups["minute"].Value, CultureInfo.InvariantCulture);
+        var second = int.Parse(match.Groups["second"].Value, CultureInfo.InvariantCulture);
+        if (hour > 23 || minute > 59 || second > 59)
+        {
+            return false;
+        }
+
+        var offset = match.Groups["offset"].Value;
+        if (offset == "Z")
+        {
+            return true;
+        }
+
+        var offsetHour = int.Parse(offset.AsSpan(1, 2), CultureInfo.InvariantCulture);
+        var offsetMinute = int.Parse(offset.AsSpan(4, 2), CultureInfo.InvariantCulture);
+        return offsetHour <= 23 && offsetMinute <= 59;
     }
 
     /// <summary>
@@ -3714,6 +3757,11 @@ internal enum YamlConfigStringFormatKind
     ///     表示基础电子邮件地址格式。
     /// </summary>
     Email,
+
+    /// <summary>
+    ///     表示带显式时区偏移的 RFC 3339 时间。
+    /// </summary>
+    Time,
 
     /// <summary>
     ///     表示绝对 URI。

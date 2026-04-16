@@ -95,7 +95,7 @@ public class SchemaConfigGeneratorTests
     ///     验证共享支持的字符串 <c>format</c> 会写入生成 XML 文档。
     /// </summary>
     [Test]
-    public void Run_Should_Write_Supported_String_Format_Into_Generated_Documentation()
+    public void Run_Should_Write_Supported_Time_Format_Into_Generated_Documentation()
     {
         const string source = """
                               namespace TestApp
@@ -109,12 +109,12 @@ public class SchemaConfigGeneratorTests
         const string schema = """
                               {
                                 "type": "object",
-                                "required": ["id", "contactEmail"],
+                                "required": ["id", "scheduleTime"],
                                 "properties": {
                                   "id": { "type": "integer" },
-                                  "contactEmail": {
+                                  "scheduleTime": {
                                     "type": "string",
-                                    "format": "email"
+                                    "format": "time"
                                   }
                                 }
                               }
@@ -133,7 +133,7 @@ public class SchemaConfigGeneratorTests
                 StringComparer.Ordinal);
 
         Assert.That(result.Results.Single().Diagnostics, Is.Empty);
-        Assert.That(generatedSources["MonsterConfig.g.cs"], Does.Contain("Constraints: format = 'email'."));
+        Assert.That(generatedSources["MonsterConfig.g.cs"], Does.Contain("Constraints: format = 'time'."));
     }
 
     /// <summary>
@@ -178,6 +178,7 @@ public class SchemaConfigGeneratorTests
             Assert.That(diagnostic.GetMessage(), Does.Contain("address"));
             Assert.That(diagnostic.GetMessage(), Does.Contain("ipv4"));
             Assert.That(diagnostic.GetMessage(), Does.Contain("date-time"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("time"));
         });
     }
 

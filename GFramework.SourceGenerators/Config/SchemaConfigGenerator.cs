@@ -30,7 +30,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     private const string LookupIndexReferencePropertyMessage =
         "Reference properties are excluded from generated lookup indexes because they already carry cross-table semantics.";
 
-    private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'uri', and 'uuid'";
+    private const string SupportedStringFormatNames = "'date', 'date-time', 'email', 'time', 'uri', and 'uuid'";
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -708,6 +708,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             "date" => true,
             "date-time" => true,
             "email" => true,
+            "time" => true,
             "uri" => true,
             "uuid" => true,
             _ => false

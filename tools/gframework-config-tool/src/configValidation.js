@@ -14,7 +14,9 @@ const UuidFormatPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const DateFormatPattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
 const DateTimeFormatPattern =
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$/u;
-const SupportedStringFormats = new Set(["date", "date-time", "email", "uri", "uuid"]);
+const TimeFormatPattern =
+    /^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$/u;
+const SupportedStringFormats = new Set(["date", "date-time", "email", "time", "uri", "uuid"]);
 
 /**
  * Compare two strings using the same UTF-16 code-unit ordering as C#'s
@@ -482,7 +484,7 @@ function normalizeSchemaStringFormat(value, schemaType, displayPath) {
 
     throw new Error(
         `Schema property '${displayPath}' declares unsupported string format '${value}'. ` +
-        "Supported formats are 'date', 'date-time', 'email', 'uri', and 'uuid'.");
+        "Supported formats are 'date', 'date-time', 'email', 'time', 'uri', and 'uuid'.");
 }
 
 /**
@@ -628,6 +630,8 @@ function matchesSchemaStringFormat(scalarValue, formatName) {
             return matchesSchemaDateTimeFormat(scalarValue);
         case "email":
             return EmailFormatPattern.test(scalarValue);
+        case "time":
+            return matchesSchemaTimeFormat(scalarValue);
         case "uri":
             return matchesSchemaUriFormat(scalarValue);
         case "uuid":
@@ -671,6 +675,35 @@ function matchesSchemaDateTimeFormat(scalarValue) {
     const month = Number.parseInt(match.groups.month, 10);
     const day = Number.parseInt(match.groups.day, 10);
     if (!isValidCalendarDate(year, month, day)) {
+        return false;
+    }
+
+    const hour = Number.parseInt(match.groups.hour, 10);
+    const minute = Number.parseInt(match.groups.minute, 10);
+    const second = Number.parseInt(match.groups.second, 10);
+    if (hour > 23 || minute > 59 || second > 59) {
+        return false;
+    }
+
+    const offset = match.groups.offset;
+    if (offset === "Z") {
+        return true;
+    }
+
+    const offsetHour = Number.parseInt(offset.slice(1, 3), 10);
+    const offsetMinute = Number.parseInt(offset.slice(4, 6), 10);
+    return offsetHour <= 23 && offsetMinute <= 59;
+}
+
+/**
+ * Validate one RFC 3339 full-time string with explicit timezone offset.
+ *
+ * @param {string} scalarValue Scalar value from YAML.
+ * @returns {boolean} True when the value is structurally valid.
+ */
+function matchesSchemaTimeFormat(scalarValue) {
+    const match = TimeFormatPattern.exec(scalarValue);
+    if (!match || !match.groups) {
         return false;
     }
 
