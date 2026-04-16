@@ -645,6 +645,47 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         JsonElement element,
         out Diagnostic? diagnostic)
     {
+        return TryTraverseSchemaRecursively(
+            filePath,
+            displayPath,
+            element,
+            static (currentFilePath, currentDisplayPath, currentElement, schemaType) =>
+            {
+                if (string.IsNullOrWhiteSpace(schemaType))
+                {
+                    return (true, (Diagnostic?)null);
+                }
+
+                return TryValidateStringFormatMetadata(
+                    currentFilePath,
+                    currentDisplayPath,
+                    currentElement,
+                    schemaType,
+                    out var currentDiagnostic)
+                    ? (true, (Diagnostic?)null)
+                    : (false, currentDiagnostic);
+            },
+            out diagnostic);
+    }
+
+    /// <summary>
+    ///     以统一顺序递归遍历 schema 树，并把每个节点交给调用方提供的校验逻辑。
+    ///     该遍历覆盖对象属性、<c>not</c> 子 schema、数组 <c>items</c> 与 <c>contains</c>，
+    ///     避免不同关键字验证器在同一棵 schema 树上各自维护一份容易漂移的递归流程。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="nodeValidator">当前节点的关键字校验回调。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前节点树是否通过指定关键字的校验。</returns>
+    private static bool TryTraverseSchemaRecursively(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        Func<string, string, JsonElement, string, (bool IsValid, Diagnostic? Diagnostic)> nodeValidator,
+        out Diagnostic? diagnostic)
+    {
         diagnostic = null;
         if (element.ValueKind != JsonValueKind.Object)
         {
@@ -656,11 +697,13 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             typeElement.ValueKind == JsonValueKind.String)
         {
             schemaType = typeElement.GetString() ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(schemaType) &&
-                !TryValidateStringFormatMetadata(filePath, displayPath, element, schemaType, out diagnostic))
-            {
-                return false;
-            }
+        }
+
+        var nodeValidationResult = nodeValidator(filePath, displayPath, element, schemaType);
+        if (!nodeValidationResult.IsValid)
+        {
+            diagnostic = nodeValidationResult.Diagnostic;
+            return false;
         }
 
         if (string.Equals(schemaType, "object", StringComparison.Ordinal) &&
@@ -669,10 +712,11 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         {
             foreach (var property in propertiesElement.EnumerateObject())
             {
-                if (!TryValidateStringFormatMetadataRecursively(
+                if (!TryTraverseSchemaRecursively(
                         filePath,
                         CombinePath(displayPath, property.Name),
                         property.Value,
+                        nodeValidator,
                         out diagnostic))
                 {
                     return false;
@@ -682,10 +726,11 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
 
         if (element.TryGetProperty("not", out var notElement) &&
             notElement.ValueKind == JsonValueKind.Object &&
-            !TryValidateStringFormatMetadataRecursively(
+            !TryTraverseSchemaRecursively(
                 filePath,
                 $"{displayPath}[not]",
                 notElement,
+                nodeValidator,
                 out diagnostic))
         {
             return false;
@@ -698,17 +743,23 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
 
         if (element.TryGetProperty("items", out var itemsElement) &&
             itemsElement.ValueKind == JsonValueKind.Object &&
-            !TryValidateStringFormatMetadataRecursively(filePath, $"{displayPath}[]", itemsElement, out diagnostic))
+            !TryTraverseSchemaRecursively(
+                filePath,
+                $"{displayPath}[]",
+                itemsElement,
+                nodeValidator,
+                out diagnostic))
         {
             return false;
         }
 
         if (element.TryGetProperty("contains", out var containsElement) &&
             containsElement.ValueKind == JsonValueKind.Object &&
-            !TryValidateStringFormatMetadataRecursively(
+            !TryTraverseSchemaRecursively(
                 filePath,
                 $"{displayPath}[contains]",
                 containsElement,
+                nodeValidator,
                 out diagnostic))
         {
             return false;
@@ -733,76 +784,26 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         JsonElement element,
         out Diagnostic? diagnostic)
     {
-        diagnostic = null;
-        if (element.ValueKind != JsonValueKind.Object)
-        {
-            return true;
-        }
-
-        var schemaType = string.Empty;
-        if (element.TryGetProperty("type", out var typeElement) &&
-            typeElement.ValueKind == JsonValueKind.String)
-        {
-            schemaType = typeElement.GetString() ?? string.Empty;
-            if (string.Equals(schemaType, "object", StringComparison.Ordinal) &&
-                !TryValidateDependentRequiredMetadata(filePath, displayPath, element, out diagnostic))
+        return TryTraverseSchemaRecursively(
+            filePath,
+            displayPath,
+            element,
+            static (currentFilePath, currentDisplayPath, currentElement, schemaType) =>
             {
-                return false;
-            }
-        }
-
-        if (string.Equals(schemaType, "object", StringComparison.Ordinal) &&
-            element.TryGetProperty("properties", out var propertiesElement) &&
-            propertiesElement.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var property in propertiesElement.EnumerateObject())
-            {
-                if (!TryValidateDependentRequiredMetadataRecursively(
-                        filePath,
-                        CombinePath(displayPath, property.Name),
-                        property.Value,
-                        out diagnostic))
+                if (!string.Equals(schemaType, "object", StringComparison.Ordinal))
                 {
-                    return false;
+                    return (true, (Diagnostic?)null);
                 }
-            }
-        }
 
-        if (element.TryGetProperty("not", out var notElement) &&
-            notElement.ValueKind == JsonValueKind.Object &&
-            !TryValidateDependentRequiredMetadataRecursively(
-                filePath,
-                $"{displayPath}[not]",
-                notElement,
-                out diagnostic))
-        {
-            return false;
-        }
-
-        if (!string.Equals(schemaType, "array", StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        if (element.TryGetProperty("items", out var itemsElement) &&
-            itemsElement.ValueKind == JsonValueKind.Object &&
-            !TryValidateDependentRequiredMetadataRecursively(filePath, $"{displayPath}[]", itemsElement, out diagnostic))
-        {
-            return false;
-        }
-
-        if (element.TryGetProperty("contains", out var containsElement) &&
-            containsElement.ValueKind == JsonValueKind.Object &&
-            !TryValidateDependentRequiredMetadataRecursively(
-                filePath,
-                $"{displayPath}[contains]",
-                containsElement,
-                out diagnostic))
-        {
-            return false;
-        }
-
-        return true;
+                return TryValidateDependentRequiredMetadata(
+                    currentFilePath,
+                    currentDisplayPath,
+                    currentElement,
+                    out var currentDiagnostic)
+                    ? (true, (Diagnostic?)null)
+                    : (false, currentDiagnostic);
+            },
+            out diagnostic);
     }
 
     /// <summary>

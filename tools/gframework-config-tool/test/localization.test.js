@@ -87,6 +87,18 @@ test("createLocalizer should expose dependentRequired validation keys", () => {
     const chineseLocalizer = createLocalizer("zh-cn");
 
     assert.equal(
+        englishLocalizer.t("webview.hint.dependentRequired", {
+            trigger: "reward.itemId",
+            dependencies: "reward.itemCount, reward.bonusCount"
+        }),
+        "When reward.itemId is set: require reward.itemCount, reward.bonusCount");
+    assert.equal(
+        chineseLocalizer.t("webview.hint.dependentRequired", {
+            trigger: "reward.itemId",
+            dependencies: "reward.itemCount, reward.bonusCount"
+        }),
+        "当 reward.itemId 出现时：还必须声明 reward.itemCount, reward.bonusCount");
+    assert.equal(
         englishLocalizer.t(ValidationMessageKeys.dependentRequiredViolation, {
             displayPath: "reward.itemCount",
             triggerProperty: "reward.itemId"

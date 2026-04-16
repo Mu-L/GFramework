@@ -230,6 +230,57 @@ public sealed class YamlConfigLoaderDependentRequiredTests
     }
 
     /// <summary>
+    ///     验证 dependentRequired 的 schema 诊断会保留对象路径原始大小写，避免作者难以定位大小写敏感的坏元数据。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Preserve_Object_Path_Casing_In_DependentRequired_Diagnostics()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            Reward:
+              ItemId: potion
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "Reward"],
+              "properties": {
+                "id": { "type": "integer" },
+                "Reward": {
+                  "type": "object",
+                  "properties": {
+                    "ItemId": { "type": "string" },
+                    "ItemCount": { "type": "integer" }
+                  },
+                  "dependentRequired": {
+                    "ItemId": [42]
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = CreateCaseSensitiveRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("Reward"));
+            Assert.That(exception.Message, Does.Contain("Property 'ItemId' in property 'Reward'"));
+            Assert.That(exception.Message, Does.Not.Contain("property 'reward'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证 dependentRequired 只能引用同一对象内已声明的字段。
     /// </summary>
     [Test]
@@ -318,6 +369,17 @@ public sealed class YamlConfigLoaderDependentRequiredTests
     }
 
     /// <summary>
+    ///     创建使用大小写敏感对象路径的加载器，验证 schema 诊断不会篡改原始字段名。
+    /// </summary>
+    /// <returns>已注册 PascalCase 奖励节点的加载器。</returns>
+    private YamlConfigLoader CreateCaseSensitiveRewardLoader()
+    {
+        return new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterPascalCaseRewardConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+    }
+
+    /// <summary>
     ///     创建新的配置注册表，确保每个用例从干净状态开始。
     /// </summary>
     /// <returns>空的配置注册表。</returns>
@@ -346,6 +408,38 @@ public sealed class YamlConfigLoaderDependentRequiredTests
     ///     表示对象 dependentRequired 回归测试中的奖励节点。
     /// </summary>
     private sealed class RewardConfigStub
+    {
+        /// <summary>
+        ///     获取或设置掉落物 ID。
+        /// </summary>
+        public string ItemId { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     获取或设置掉落物数量。
+        /// </summary>
+        public int ItemCount { get; set; }
+    }
+
+    /// <summary>
+    ///     用于验证大小写敏感字段路径诊断的配置类型。
+    /// </summary>
+    private sealed class MonsterPascalCaseRewardConfigStub
+    {
+        /// <summary>
+        ///     获取或设置主键。
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        ///     获取或设置使用 PascalCase 字段名的奖励对象。
+        /// </summary>
+        public PascalCaseRewardConfigStub Reward { get; set; } = new();
+    }
+
+    /// <summary>
+    ///     表示使用 PascalCase 字段路径的奖励节点。
+    /// </summary>
+    private sealed class PascalCaseRewardConfigStub
     {
         /// <summary>
         ///     获取或设置掉落物 ID。

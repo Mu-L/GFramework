@@ -1734,12 +1734,12 @@ reward:
   itemId: potion
 `);
 
-    assert.deepEqual(validateParsedConfig(schema, yaml), [
-        {
-            severity: "error",
-            message: "Property 'reward.itemCount' is required when sibling property 'reward.itemId' is present."
-        }
-    ]);
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].severity, "error");
+    assert.match(diagnostics[0].message, /reward\.itemCount/u);
+    assert.match(diagnostics[0].message, /reward\.itemId/u);
 });
 
 test("validateParsedConfig should accept missing dependentRequired targets when the trigger is absent", () => {

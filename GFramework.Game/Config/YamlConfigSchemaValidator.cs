@@ -1631,7 +1631,7 @@ internal static class YamlConfigSchemaValidator
                 throw ConfigLoadExceptionFactory.Create(
                     ConfigLoadFailureKind.SchemaUnsupported,
                     tableName,
-                    $"Property '{dependency.Name}' in {DescribeObjectSchemaTarget(propertyPath).ToLowerInvariant()} of schema file '{schemaPath}' must declare 'dependentRequired' as an array of sibling property names.",
+                    $"Property '{dependency.Name}' in {DescribeObjectSchemaTargetInClause(propertyPath)} of schema file '{schemaPath}' must declare 'dependentRequired' as an array of sibling property names.",
                     schemaPath: schemaPath,
                     displayPath: GetDiagnosticPath(propertyPath));
             }
@@ -1645,7 +1645,7 @@ internal static class YamlConfigSchemaValidator
                     throw ConfigLoadExceptionFactory.Create(
                         ConfigLoadFailureKind.SchemaUnsupported,
                         tableName,
-                        $"Property '{dependency.Name}' in {DescribeObjectSchemaTarget(propertyPath).ToLowerInvariant()} of schema file '{schemaPath}' must declare 'dependentRequired' entries as strings.",
+                        $"Property '{dependency.Name}' in {DescribeObjectSchemaTargetInClause(propertyPath)} of schema file '{schemaPath}' must declare 'dependentRequired' entries as strings.",
                         schemaPath: schemaPath,
                         displayPath: GetDiagnosticPath(propertyPath));
                 }
@@ -1656,7 +1656,7 @@ internal static class YamlConfigSchemaValidator
                     throw ConfigLoadExceptionFactory.Create(
                         ConfigLoadFailureKind.SchemaUnsupported,
                         tableName,
-                        $"Property '{dependency.Name}' in {DescribeObjectSchemaTarget(propertyPath).ToLowerInvariant()} of schema file '{schemaPath}' cannot declare blank 'dependentRequired' entries.",
+                        $"Property '{dependency.Name}' in {DescribeObjectSchemaTargetInClause(propertyPath)} of schema file '{schemaPath}' cannot declare blank 'dependentRequired' entries.",
                         schemaPath: schemaPath,
                         displayPath: GetDiagnosticPath(propertyPath));
                 }
@@ -2071,6 +2071,19 @@ internal static class YamlConfigSchemaValidator
         return string.IsNullOrWhiteSpace(propertyPath)
             ? "Root object"
             : $"Property '{propertyPath}'";
+    }
+
+    /// <summary>
+    ///     为插入句中位置的对象级 schema 关键字构造稳定描述。
+    ///     这里只调整语法前缀大小写，不改变真实字段路径，避免诊断消息把 schema 作者声明的大小写一起改写。
+    /// </summary>
+    /// <param name="propertyPath">对象字段路径。</param>
+    /// <returns>可直接拼接到句中介词后的对象主体描述。</returns>
+    private static string DescribeObjectSchemaTargetInClause(string propertyPath)
+    {
+        return string.IsNullOrWhiteSpace(propertyPath)
+            ? "root object"
+            : $"property '{propertyPath}'";
     }
 
     /// <summary>
