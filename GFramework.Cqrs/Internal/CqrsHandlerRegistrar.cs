@@ -1,4 +1,3 @@
-using System.Reflection;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
@@ -32,7 +31,9 @@ internal static class CqrsHandlerRegistrar
                      .Distinct()
                      .OrderBy(GetAssemblySortKey, StringComparer.Ordinal))
         {
-            if (TryRegisterGeneratedHandlers(container.GetServicesUnsafe, assembly, logger))
+            var generatedRegistrationResult =
+                TryRegisterGeneratedHandlers(container.GetServicesUnsafe, assembly, logger);
+            if (generatedRegistrationResult == GeneratedRegistrationResult.FullyHandled)
                 continue;
 
             RegisterAssemblyHandlers(container.GetServicesUnsafe, assembly, logger);
@@ -45,8 +46,11 @@ internal static class CqrsHandlerRegistrar
     /// <param name="services">目标服务集合。</param>
     /// <param name="assembly">当前要处理的程序集。</param>
     /// <param name="logger">日志记录器。</param>
-    /// <returns>当成功使用生成注册器时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
-    private static bool TryRegisterGeneratedHandlers(IServiceCollection services, Assembly assembly, ILogger logger)
+    /// <returns>生成注册器的使用结果。</returns>
+    private static GeneratedRegistrationResult TryRegisterGeneratedHandlers(
+        IServiceCollection services,
+        Assembly assembly,
+        ILogger logger)
     {
         var assemblyName = GetAssemblySortKey(assembly);
 
@@ -62,7 +66,7 @@ internal static class CqrsHandlerRegistrar
                 .ToList();
 
             if (registryTypes.Count == 0)
-                return false;
+                return GeneratedRegistrationResult.NoGeneratedRegistry;
 
             var registries = new List<ICqrsHandlerRegistry>(registryTypes.Count);
             foreach (var registryType in registryTypes)
@@ -71,21 +75,21 @@ internal static class CqrsHandlerRegistrar
                 {
                     logger.Warn(
                         $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it does not implement {typeof(ICqrsHandlerRegistry).FullName}.");
-                    return false;
+                    return GeneratedRegistrationResult.NoGeneratedRegistry;
                 }
 
                 if (registryType.IsAbstract)
                 {
                     logger.Warn(
                         $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it is abstract.");
-                    return false;
+                    return GeneratedRegistrationResult.NoGeneratedRegistry;
                 }
 
                 if (Activator.CreateInstance(registryType, nonPublic: true) is not ICqrsHandlerRegistry registry)
                 {
                     logger.Warn(
                         $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it could not be instantiated.");
-                    return false;
+                    return GeneratedRegistrationResult.NoGeneratedRegistry;
                 }
 
                 registries.Add(registry);
@@ -98,7 +102,14 @@ internal static class CqrsHandlerRegistrar
                 registry.Register(services, logger);
             }
 
-            return true;
+            if (RequiresReflectionFallback(assembly))
+            {
+                logger.Debug(
+                    $"Generated CQRS registry for assembly {assemblyName} requested reflection fallback for unsupported handlers.");
+                return GeneratedRegistrationResult.RequiresReflectionFallback;
+            }
+
+            return GeneratedRegistrationResult.FullyHandled;
         }
         catch (Exception exception)
         {
@@ -106,7 +117,7 @@ internal static class CqrsHandlerRegistrar
                 $"Generated CQRS handler registry discovery failed for assembly {assemblyName}. Falling back to reflection scan.");
             logger.Warn(
                 $"Failed to use generated CQRS handler registry for assembly {assemblyName}: {exception.Message}");
-            return false;
+            return GeneratedRegistrationResult.NoGeneratedRegistry;
         }
     }
 
@@ -128,6 +139,13 @@ internal static class CqrsHandlerRegistrar
 
             foreach (var handlerInterface in handlerInterfaces)
             {
+                if (IsHandlerMappingAlreadyRegistered(services, handlerInterface, implementationType))
+                {
+                    logger.Debug(
+                        $"Skipping duplicate CQRS handler {implementationType.FullName} as {handlerInterface.FullName}.");
+                    continue;
+                }
+
                 // Request/notification handlers receive context injection before every dispatch.
                 // Transient registration avoids sharing mutable Context across concurrent requests.
                 services.AddTransient(handlerInterface, implementationType);
@@ -203,6 +221,29 @@ internal static class CqrsHandlerRegistrar
     }
 
     /// <summary>
+    ///     判断生成注册器是否要求运行时继续补充反射扫描。
+    /// </summary>
+    private static bool RequiresReflectionFallback(Assembly assembly)
+    {
+        return assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), inherit: false)?.Length > 0;
+    }
+
+    /// <summary>
+    ///     判断同一 handler 映射是否已经由生成注册器或先前扫描步骤写入服务集合。
+    /// </summary>
+    private static bool IsHandlerMappingAlreadyRegistered(
+        IServiceCollection services,
+        Type handlerInterface,
+        Type implementationType)
+    {
+        // 这里保持线性扫描，避免为常见的小到中等规模程序集长期维护额外索引。
+        // 若未来大型服务集合出现热点，可在更高层批处理中引入 HashSet<(Type, Type)> 做 O(1) 去重。
+        return services.Any(descriptor =>
+            descriptor.ServiceType == handlerInterface &&
+            descriptor.ImplementationType == implementationType);
+    }
+
+    /// <summary>
     ///     生成程序集排序键，保证跨运行环境的处理器注册顺序稳定。
     /// </summary>
     private static string GetAssemblySortKey(Assembly assembly)
@@ -216,5 +257,12 @@ internal static class CqrsHandlerRegistrar
     private static string GetTypeSortKey(Type type)
     {
         return type.FullName ?? type.Name;
+    }
+
+    private enum GeneratedRegistrationResult
+    {
+        NoGeneratedRegistry,
+        FullyHandled,
+        RequiresReflectionFallback
     }
 }

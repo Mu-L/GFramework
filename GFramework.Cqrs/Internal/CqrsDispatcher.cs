@@ -1,17 +1,17 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using GFramework.Core.Abstractions.Architectures;
-using GFramework.Core.Abstractions.Cqrs;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using ICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
 
 namespace GFramework.Cqrs.Internal;
 
 /// <summary>
 ///     GFramework 自有 CQRS 运行时分发器。
-///     该类型负责解析请求/通知处理器，并在调用前为上下文感知对象注入当前架构上下文。
+///     该类型负责解析请求/通知处理器，并在调用前为上下文感知对象注入当前 CQRS 分发上下文。
 /// </summary>
 internal sealed class CqrsDispatcher(
     IIocContainer container,
@@ -38,11 +38,11 @@ internal sealed class CqrsDispatcher(
     ///     发布通知到所有已注册处理器。
     /// </summary>
     /// <typeparam name="TNotification">通知类型。</typeparam>
-    /// <param name="context">当前架构上下文，用于上下文感知处理器注入。</param>
+    /// <param name="context">当前 CQRS 分发上下文，用于上下文感知处理器注入。</param>
     /// <param name="notification">通知对象。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     public async ValueTask PublishAsync<TNotification>(
-        IArchitectureContext context,
+        ICqrsContext context,
         TNotification notification,
         CancellationToken cancellationToken = default)
         where TNotification : INotification
@@ -75,12 +75,12 @@ internal sealed class CqrsDispatcher(
     ///     发送请求并返回结果。
     /// </summary>
     /// <typeparam name="TResponse">响应类型。</typeparam>
-    /// <param name="context">当前架构上下文，用于上下文感知处理器注入。</param>
+    /// <param name="context">当前 CQRS 分发上下文，用于上下文感知处理器注入。</param>
     /// <param name="request">请求对象。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求响应。</returns>
     public async ValueTask<TResponse> SendAsync<TResponse>(
-        IArchitectureContext context,
+        ICqrsContext context,
         IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
@@ -122,12 +122,12 @@ internal sealed class CqrsDispatcher(
     ///     创建流式请求并返回异步响应序列。
     /// </summary>
     /// <typeparam name="TResponse">响应元素类型。</typeparam>
-    /// <param name="context">当前架构上下文，用于上下文感知处理器注入。</param>
+    /// <param name="context">当前 CQRS 分发上下文，用于上下文感知处理器注入。</param>
     /// <param name="request">流式请求对象。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>异步响应序列。</returns>
     public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
-        IArchitectureContext context,
+        ICqrsContext context,
         IStreamRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
@@ -150,14 +150,20 @@ internal sealed class CqrsDispatcher(
     }
 
     /// <summary>
-    ///     为上下文感知处理器注入当前架构上下文。
+    ///     为上下文感知处理器注入当前 CQRS 分发上下文。
     /// </summary>
     /// <param name="handler">处理器实例。</param>
-    /// <param name="context">当前架构上下文。</param>
-    private static void PrepareHandler(object handler, IArchitectureContext context)
+    /// <param name="context">当前 CQRS 分发上下文。</param>
+    private static void PrepareHandler(object handler, ICqrsContext context)
     {
         if (handler is IContextAware contextAware)
-            contextAware.SetContext(context);
+        {
+            if (context is not IArchitectureContext architectureContext)
+                throw new InvalidOperationException(
+                    "The current CQRS context does not implement IArchitectureContext, so it cannot be injected into IContextAware handlers.");
+
+            contextAware.SetContext(architectureContext);
+        }
     }
 
     /// <summary>

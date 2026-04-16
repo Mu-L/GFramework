@@ -4,8 +4,8 @@ using GFramework.Core.Abstractions.Bases;
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Systems;
-using GFramework.Core.Logging;
 using GFramework.Core.Rule;
+using GFramework.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
 
 namespace GFramework.Core.Ioc;
@@ -35,6 +35,14 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
 
     #endregion
 
+    /// <summary>
+    ///     记录某个实例在未冻结查询中可见的服务类型分组信息。
+    /// </summary>
+    /// <param name="ServiceType">当前分组对应的服务类型。</param>
+    /// <param name="Count">该服务类型下的描述符数量。</param>
+    /// <param name="FirstIndex">该服务类型首次出现的位置，用于稳定打破并列。</param>
+    private sealed record VisibleServiceTypeGroup(Type ServiceType, int Count, int FirstIndex);
+
     #region Fields
 
     /// <summary>
@@ -56,12 +64,6 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     /// 已注册实例的集合，用于快速检查实例是否存在
     /// </summary>
     private readonly HashSet<object> _registeredInstances = [];
-
-    /// <summary>
-    /// 已接入 CQRS handler 注册流程的程序集键集合。
-    /// 使用稳定字符串键而不是 Assembly 引用本身，以避免默认路径和显式扩展路径使用不同 Assembly 对象时重复注册。
-    /// </summary>
-    private readonly HashSet<string> _registeredCqrsHandlerAssemblyKeys = new(StringComparer.Ordinal);
 
     /// <summary>
     /// 日志记录器，用于记录容器操作日志
@@ -397,35 +399,22 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     /// </summary>
     /// <param name="assemblies">要接入的程序集集合。</param>
     /// <exception cref="ArgumentNullException"><paramref name="assemblies" /> 为 <see langword="null" />。</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="assemblies" /> 中存在 <see langword="null" /> 元素。</exception>
     /// <exception cref="InvalidOperationException">容器已冻结，无法继续注册 CQRS 处理器。</exception>
     public void RegisterCqrsHandlersFromAssemblies(IEnumerable<Assembly> assemblies)
     {
         ArgumentNullException.ThrowIfNull(assemblies);
+        var assemblyArray = assemblies.ToArray();
+        foreach (var assembly in assemblyArray)
+        {
+            ArgumentNullException.ThrowIfNull(assembly);
+        }
 
         _lock.EnterWriteLock();
         try
         {
             ThrowIfFrozen();
-
-            var processedAssemblyKeys = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var assembly in assemblies
-                         .Where(static assembly => assembly is not null)
-                         .OrderBy(GetCqrsAssemblyRegistrationKey, StringComparer.Ordinal))
-            {
-                var assemblyKey = GetCqrsAssemblyRegistrationKey(assembly);
-                if (!processedAssemblyKeys.Add(assemblyKey))
-                    continue;
-
-                if (_registeredCqrsHandlerAssemblyKeys.Contains(assemblyKey))
-                {
-                    _logger.Debug(
-                        $"Skipping CQRS handler registration for assembly {assemblyKey} because it was already registered.");
-                    continue;
-                }
-
-                ResolveCqrsHandlerRegistrar().RegisterHandlers([assembly]);
-                _registeredCqrsHandlerAssemblyKeys.Add(assemblyKey);
-            }
+            ResolveCqrsRegistrationService().RegisterHandlers(assemblyArray);
         }
         finally
         {
@@ -456,22 +445,22 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     #region Get
 
     /// <summary>
-    ///     获取当前容器中已注册的 CQRS 处理器注册器。
+    ///     获取当前容器中已注册的 CQRS 程序集注册协调器。
     ///     该方法仅供容器内部在注册阶段使用，因此直接读取服务描述符中的实例绑定，
     ///     避免在容器未冻结前依赖完整的服务提供者构建流程。
     /// </summary>
-    /// <returns>已注册的 CQRS 处理器注册器实例。</returns>
-    /// <exception cref="InvalidOperationException">未找到可用的 CQRS 处理器注册器实例时抛出。</exception>
-    private ICqrsHandlerRegistrar ResolveCqrsHandlerRegistrar()
+    /// <returns>已注册的 CQRS 程序集注册协调器实例。</returns>
+    /// <exception cref="InvalidOperationException">未找到可用的 CQRS 程序集注册协调器实例时抛出。</exception>
+    private ICqrsRegistrationService ResolveCqrsRegistrationService()
     {
         var descriptor = GetServicesUnsafe.LastOrDefault(static service =>
-            service.ServiceType == typeof(ICqrsHandlerRegistrar));
+            service.ServiceType == typeof(ICqrsRegistrationService));
 
-        if (descriptor?.ImplementationInstance is ICqrsHandlerRegistrar registrar)
-            return registrar;
+        if (descriptor?.ImplementationInstance is ICqrsRegistrationService registrationService)
+            return registrationService;
 
         const string errorMessage =
-            "ICqrsHandlerRegistrar not registered. Ensure the CQRS runtime module has been installed before registering handlers.";
+            "ICqrsRegistrationService not registered. Ensure the CQRS runtime module has been installed before registering handlers.";
         _logger.Error(errorMessage);
         throw new InvalidOperationException(errorMessage);
     }
@@ -618,29 +607,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         {
             if (_provider == null)
             {
-                // 如果容器未冻结，从服务集合中获取已注册的实例
-                var serviceType = typeof(T);
-                var registeredServices = GetServicesUnsafe
-                    .Where(s => s.ServiceType == serviceType || serviceType.IsAssignableFrom(s.ServiceType)).ToList();
-
-                var result = new List<T>();
-                foreach (var descriptor in registeredServices)
-                {
-                    if (descriptor.ImplementationInstance is T instance)
-                    {
-                        result.Add(instance);
-                    }
-                    else if (descriptor.ImplementationFactory != null)
-                    {
-                        // 在未冻结状态下无法调用工厂方法，跳过
-                    }
-                    else if (descriptor.ImplementationType != null)
-                    {
-                        // 在未冻结状态下无法创建实例，跳过
-                    }
-                }
-
-                return result;
+                return CollectRegisteredImplementationInstances(typeof(T)).Cast<T>().ToList();
             }
 
             var services = _provider!.GetServices<T>().ToList();
@@ -658,37 +625,17 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     /// </summary>
     /// <param name="type">服务类型</param>
     /// <returns>只读的服务实例列表</returns>
-    /// <exception cref="InvalidOperationException">当容器未冻结时抛出</exception>
+    /// <exception cref="ArgumentNullException">当 <paramref name="type" /> 为 <see langword="null" /> 时抛出</exception>
     public IReadOnlyList<object> GetAll(Type type)
     {
+        ArgumentNullException.ThrowIfNull(type);
+
         _lock.EnterReadLock();
         try
         {
             if (_provider == null)
             {
-                // 如果容器未冻结，从服务集合中获取已注册的实例
-                var registeredServices = GetServicesUnsafe
-                    .Where(s => s.ServiceType == type || type.IsAssignableFrom(s.ServiceType))
-                    .ToList();
-
-                var result = new List<object>();
-                foreach (var descriptor in registeredServices)
-                {
-                    if (descriptor.ImplementationInstance != null)
-                    {
-                        result.Add(descriptor.ImplementationInstance);
-                    }
-                    else if (descriptor.ImplementationFactory != null)
-                    {
-                        // 在未冻结状态下无法调用工厂方法，跳过
-                    }
-                    else if (descriptor.ImplementationType != null)
-                    {
-                        // 在未冻结状态下无法创建实例，跳过
-                    }
-                }
-
-                return result;
+                return CollectRegisteredImplementationInstances(type);
             }
 
             var services = _provider!.GetServices(type).ToList();
@@ -699,6 +646,108 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         {
             _lock.ExitReadLock();
         }
+    }
+
+    /// <summary>
+    ///     在容器未冻结时，从服务描述符中收集当前可直接观察到的实例绑定。
+    /// </summary>
+    /// <param name="requestedServiceType">调用方请求的服务类型。</param>
+    /// <returns>按当前未冻结语义可见的实例列表。</returns>
+    /// <remarks>
+    ///     该方法只读取 <see cref="ServiceDescriptor.ImplementationInstance" />，因为未冻结路径不会主动执行工厂方法，
+    ///     也不会提前构造 <see cref="ServiceDescriptor.ImplementationType" />。
+    ///     若同一实例同时经由多个可赋值的 <see cref="ServiceDescriptor.ServiceType" /> 暴露，
+    ///     这里会把它视为兼容别名并只保留一个规范服务类型对应的结果；
+    ///     但同一 <see cref="ServiceDescriptor.ServiceType" /> 的重复显式注册仍会完整保留，以维持注册顺序和多次注册语义。
+    /// </remarks>
+    private List<object> CollectRegisteredImplementationInstances(Type requestedServiceType)
+    {
+        ArgumentNullException.ThrowIfNull(requestedServiceType);
+
+        var matchingDescriptors = GetServicesUnsafe
+            .Where(descriptor =>
+                descriptor.ServiceType == requestedServiceType ||
+                requestedServiceType.IsAssignableFrom(descriptor.ServiceType))
+            .ToList();
+
+        if (matchingDescriptors.Count == 0)
+            return [];
+
+        var preferredServiceTypes = BuildPreferredVisibleServiceTypes(matchingDescriptors, requestedServiceType);
+        var result = new List<object>();
+        foreach (var descriptor in matchingDescriptors)
+        {
+            if (descriptor.ImplementationInstance is { } instance)
+            {
+                if (preferredServiceTypes.TryGetValue(instance, out var preferredServiceType) &&
+                    preferredServiceType == descriptor.ServiceType)
+                {
+                    result.Add(instance);
+                }
+            }
+            else if (descriptor.ImplementationFactory != null)
+            {
+                // 在未冻结状态下无法调用工厂方法，跳过。
+            }
+            else if (descriptor.ImplementationType != null)
+            {
+                // 在未冻结状态下无法创建实例，跳过。
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///     为每个可见实例选择一个规范服务类型，避免同一实例因兼容别名重复出现在未冻结查询结果中。
+    /// </summary>
+    /// <param name="matchingDescriptors">已按请求类型过滤过的服务描述符集合。</param>
+    /// <param name="requestedServiceType">调用方请求的服务类型。</param>
+    /// <returns>实例到其规范服务类型的映射。</returns>
+    private static Dictionary<object, Type> BuildPreferredVisibleServiceTypes(
+        IReadOnlyList<ServiceDescriptor> matchingDescriptors,
+        Type requestedServiceType)
+    {
+        var preferredServiceTypes = new Dictionary<object, Type>(ReferenceEqualityComparer.Instance);
+        foreach (var instanceGroup in matchingDescriptors
+                     .Where(static descriptor => descriptor.ImplementationInstance is not null)
+                     .GroupBy(static descriptor => descriptor.ImplementationInstance!,
+                         ReferenceEqualityComparer.Instance))
+        {
+            preferredServiceTypes.Add(
+                instanceGroup.Key,
+                SelectPreferredVisibleServiceType(instanceGroup, requestedServiceType));
+        }
+
+        return preferredServiceTypes;
+    }
+
+    /// <summary>
+    ///     在“同一实例被多个服务类型暴露”的场景下，选择未冻结查询结果应保留的规范服务类型。
+    /// </summary>
+    /// <param name="descriptorsForInstance">引用同一实例的服务描述符。</param>
+    /// <param name="requestedServiceType">调用方请求的服务类型。</param>
+    /// <returns>应在结果中保留的服务类型。</returns>
+    private static Type SelectPreferredVisibleServiceType(
+        IEnumerable<ServiceDescriptor> descriptorsForInstance,
+        Type requestedServiceType)
+    {
+        var serviceTypeGroups = descriptorsForInstance
+            .GroupBy(static descriptor => descriptor.ServiceType)
+            .Select((group, index) => new VisibleServiceTypeGroup(group.Key, group.Count(), index))
+            .ToList();
+
+        // 若调用方请求的正是其中一个服务类型，优先保留它，使未冻结行为尽量贴近冻结后的精确服务解析口径。
+        var requestedGroup = serviceTypeGroups.FirstOrDefault(group => group.ServiceType == requestedServiceType);
+        if (requestedGroup is not null)
+            return requestedGroup.ServiceType;
+
+        // 否则优先保留“同一服务类型下注册次数最多”的那组，避免显式多次注册被较宽泛的别名折叠掉。
+        return serviceTypeGroups
+            .OrderByDescending(static group => group.Count)
+            .ThenBy(static group => group.FirstIndex)
+            .First()
+            .ServiceType;
     }
 
     /// <summary>
@@ -827,7 +876,6 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
 
             GetServicesUnsafe.Clear();
             _registeredInstances.Clear();
-            _registeredCqrsHandlerAssemblyKeys.Clear();
             _provider = null;
             _logger.Info("Container cleared");
         }
@@ -897,17 +945,6 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         {
             _lock.ExitReadLock();
         }
-    }
-
-    /// <summary>
-    ///     生成 CQRS handler 注册用的稳定程序集键。
-    ///     该键需要同时兼顾真实程序集与测试中使用的 mocked Assembly，避免仅靠引用比较导致重复接入。
-    /// </summary>
-    /// <param name="assembly">目标程序集。</param>
-    /// <returns>稳定的程序集标识字符串。</returns>
-    private static string GetCqrsAssemblyRegistrationKey(Assembly assembly)
-    {
-        return assembly.FullName ?? assembly.GetName().Name ?? assembly.ToString();
     }
 
     #endregion
