@@ -1,7 +1,6 @@
 using System.Reflection;
 using GFramework.SourceGenerators.Cqrs;
 using GFramework.SourceGenerators.Tests.Core;
-using Microsoft.CodeAnalysis.CSharp;
 
 namespace GFramework.SourceGenerators.Tests.Cqrs;
 
@@ -1155,7 +1154,11 @@ public class CqrsHandlerRegistryGeneratorTests
         var compilationErrors = updatedCompilation.GetDiagnostics()
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .ToArray();
-        Assert.That(compilationErrors, Is.Empty, string.Join(Environment.NewLine, compilationErrors));
+        Assert.That(
+            compilationErrors,
+            Is.Empty,
+            () =>
+                $"编译生成的代码时出现错误:{Environment.NewLine}{string.Join(Environment.NewLine, compilationErrors.Select(static diagnostic => diagnostic.ToString()))}");
 
         var runResult = driver.GetRunResult();
         Assert.That(runResult.Results, Has.Length.EqualTo(1));

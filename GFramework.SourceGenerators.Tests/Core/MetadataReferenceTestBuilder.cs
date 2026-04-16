@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.IO;
-using Microsoft.CodeAnalysis.CSharp;
 
 namespace GFramework.SourceGenerators.Tests.Core;
 
@@ -9,6 +8,11 @@ namespace GFramework.SourceGenerators.Tests.Core;
 /// </summary>
 public static class MetadataReferenceTestBuilder
 {
+    // Reuse the runtime reference set across generator tests to avoid reparsing TRUSTED_PLATFORM_ASSEMBLIES
+    // for every in-memory compilation.
+    private static readonly Lazy<ImmutableArray<MetadataReference>> CachedRuntimeReferences =
+        new(CreateRuntimeMetadataReferences);
+
     /// <summary>
     ///     将给定源码编译为内存程序集，并返回可供测试编译消费的元数据引用。
     /// </summary>
@@ -22,7 +26,7 @@ public static class MetadataReferenceTestBuilder
         params MetadataReference[] additionalReferences)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
-        var references = GetRuntimeMetadataReferences()
+        var references = CachedRuntimeReferences.Value
             .Concat(additionalReferences)
             .ToImmutableArray();
         var compilation = CSharpCompilation.Create(
@@ -53,6 +57,11 @@ public static class MetadataReferenceTestBuilder
     /// </summary>
     /// <returns>当前运行时可信平台程序集对应的元数据引用。</returns>
     public static ImmutableArray<MetadataReference> GetRuntimeMetadataReferences()
+    {
+        return CachedRuntimeReferences.Value;
+    }
+
+    private static ImmutableArray<MetadataReference> CreateRuntimeMetadataReferences()
     {
         var trustedPlatformAssemblies = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))?
                                         .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
