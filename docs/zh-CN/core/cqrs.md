@@ -83,6 +83,7 @@ public class GetPlayerQuery : QueryBase<GetPlayerInput, PlayerData>
 处理器负责执行命令或查询的具体逻辑：
 
 ```csharp
+using GFramework.Cqrs.Command;
 using GFramework.Cqrs.Cqrs.Command;
 
 // 命令处理器

@@ -51,6 +51,39 @@ internal sealed class WeakKeyCache<TKey, TValue>
     }
 
     /// <summary>
+    ///     获取指定键对应的缓存值；若当前未命中，则在锁保护下使用附加状态创建并写入。
+    /// </summary>
+    /// <typeparam name="TState">创建缓存值时需要携带的附加状态类型。</typeparam>
+    /// <param name="key">缓存键。</param>
+    /// <param name="state">创建缓存值时复用的附加状态。</param>
+    /// <param name="valueFactory">基于键与附加状态创建缓存值的工厂方法。</param>
+    /// <returns>已存在或新创建的缓存值。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="key" /> 或 <paramref name="valueFactory" /> 为 <see langword="null" />。
+    /// </exception>
+    public TValue GetOrAdd<TState>(TKey key, TState state, Func<TKey, TState, TValue> valueFactory)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(valueFactory);
+
+        var entries = Volatile.Read(ref _entries);
+        if (entries.TryGetValue(key, out var cachedValue))
+            return cachedValue;
+
+        lock (_gate)
+        {
+            entries = _entries;
+            if (entries.TryGetValue(key, out cachedValue))
+                return cachedValue;
+
+            var createdValue = valueFactory(key, state);
+            ArgumentNullException.ThrowIfNull(createdValue);
+            entries.Add(key, createdValue);
+            return createdValue;
+        }
+    }
+
+    /// <summary>
     ///     尝试读取当前缓存中的值，而不触发新的创建逻辑。
     /// </summary>
     /// <param name="key">缓存键。</param>
@@ -125,7 +158,8 @@ internal sealed class WeakTypePairCache<TValue>
         var secondaryEntries = _entries.GetOrAdd(primaryType, static _ => new WeakKeyCache<Type, TValue>());
         return secondaryEntries.GetOrAdd(
             secondaryType,
-            _ => valueFactory(primaryType, secondaryType));
+            (PrimaryType: primaryType, Factory: valueFactory),
+            static (cachedSecondaryType, state) => state.Factory(state.PrimaryType, cachedSecondaryType));
     }
 
     /// <summary>

@@ -387,32 +387,69 @@ internal sealed class CqrsDispatcher(
         }
     }
 
+    /// <summary>
+    ///     保存通知分发路径所需的服务类型与强类型调用委托。
+    ///     该绑定把“容器解析哪个服务类型”与“如何调用处理器”聚合到同一缓存项中。
+    /// </summary>
     private sealed class NotificationDispatchBinding(Type handlerType, NotificationInvoker invoker)
     {
+        /// <summary>
+        ///     获取通知处理器在容器中的服务类型。
+        /// </summary>
         public Type HandlerType { get; } = handlerType;
 
+        /// <summary>
+        ///     获取执行通知处理器的强类型调用委托。
+        /// </summary>
         public NotificationInvoker Invoker { get; } = invoker;
     }
 
+    /// <summary>
+    ///     保存流式请求分发路径所需的服务类型与调用委托。
+    ///     该绑定让建流热路径只需一次缓存命中即可获得解析与调用所需元数据。
+    /// </summary>
     private sealed class StreamDispatchBinding(Type handlerType, StreamInvoker invoker)
     {
+        /// <summary>
+        ///     获取流式请求处理器在容器中的服务类型。
+        /// </summary>
         public Type HandlerType { get; } = handlerType;
 
+        /// <summary>
+        ///     获取执行流式请求处理器的调用委托。
+        /// </summary>
         public StreamInvoker Invoker { get; } = invoker;
     }
 
+    /// <summary>
+    ///     保存普通请求分发路径所需的 handler 服务类型、pipeline 服务类型与强类型调用委托。
+    ///     该绑定同时覆盖“直接请求处理”和“带 pipeline 的请求处理”两条路径。
+    /// </summary>
+    /// <typeparam name="TResponse">请求响应类型。</typeparam>
     private sealed class RequestDispatchBinding<TResponse>(
         Type handlerType,
         Type behaviorType,
         RequestInvoker<TResponse> requestInvoker,
         RequestPipelineInvoker<TResponse> pipelineInvoker)
     {
+        /// <summary>
+        ///     获取请求处理器在容器中的服务类型。
+        /// </summary>
         public Type HandlerType { get; } = handlerType;
 
+        /// <summary>
+        ///     获取 pipeline 行为在容器中的服务类型。
+        /// </summary>
         public Type BehaviorType { get; } = behaviorType;
 
+        /// <summary>
+        ///     获取直接调用请求处理器的强类型委托。
+        /// </summary>
         public RequestInvoker<TResponse> RequestInvoker { get; } = requestInvoker;
 
+        /// <summary>
+        ///     获取执行 pipeline 行为链的强类型委托。
+        /// </summary>
         public RequestPipelineInvoker<TResponse> PipelineInvoker { get; } = pipelineInvoker;
     }
 }
