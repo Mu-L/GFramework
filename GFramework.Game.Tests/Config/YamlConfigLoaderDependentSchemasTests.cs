@@ -10,6 +10,26 @@ namespace GFramework.Game.Tests.Config;
 [TestFixture]
 public sealed class YamlConfigLoaderDependentSchemasTests
 {
+    private const string DefaultRewardPropertiesJson = """
+                                                    {
+                                                      "itemId": { "type": "string" },
+                                                      "itemCount": { "type": "integer" },
+                                                      "bonus": { "type": "integer" }
+                                                    }
+                                                    """;
+
+    private const string DefaultDependentSchemasJson = """
+                                                      {
+                                                        "itemId": {
+                                                          "type": "object",
+                                                          "required": ["itemCount"],
+                                                          "properties": {
+                                                            "itemCount": { "type": "integer" }
+                                                          }
+                                                        }
+                                                      }
+                                                      """;
+
     private string? _rootPath;
 
     /// <summary>
@@ -43,39 +63,13 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     {
         CreateConfigFile(
             "monster/slime.yaml",
-            """
-            id: 1
-            reward:
-              itemId: potion
-            """);
+            BuildMonsterConfigYaml(
+                """
+                itemId: potion
+                """));
         CreateSchemaFile(
             "schemas/monster.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "reward"],
-              "properties": {
-                "id": { "type": "integer" },
-                "reward": {
-                  "type": "object",
-                  "properties": {
-                    "itemId": { "type": "string" },
-                    "itemCount": { "type": "integer" },
-                    "bonus": { "type": "integer" }
-                  },
-                  "dependentSchemas": {
-                    "itemId": {
-                      "type": "object",
-                      "required": ["itemCount"],
-                      "properties": {
-                        "itemCount": { "type": "integer" }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            """);
+            BuildMonsterSchema(DefaultRewardPropertiesJson, DefaultDependentSchemasJson));
 
         var loader = CreateMonsterRewardLoader();
         var registry = CreateRegistry();
@@ -101,39 +95,13 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     {
         CreateConfigFile(
             "monster/slime.yaml",
-            """
-            id: 1
-            reward:
-              bonus: 2
-            """);
+            BuildMonsterConfigYaml(
+                """
+                bonus: 2
+                """));
         CreateSchemaFile(
             "schemas/monster.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "reward"],
-              "properties": {
-                "id": { "type": "integer" },
-                "reward": {
-                  "type": "object",
-                  "properties": {
-                    "itemId": { "type": "string" },
-                    "itemCount": { "type": "integer" },
-                    "bonus": { "type": "integer" }
-                  },
-                  "dependentSchemas": {
-                    "itemId": {
-                      "type": "object",
-                      "required": ["itemCount"],
-                      "properties": {
-                        "itemCount": { "type": "integer" }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            """);
+            BuildMonsterSchema(DefaultRewardPropertiesJson, DefaultDependentSchemasJson));
 
         var loader = CreateMonsterRewardLoader();
         var registry = CreateRegistry();
@@ -152,41 +120,15 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     {
         CreateConfigFile(
             "monster/slime.yaml",
-            """
-            id: 1
-            reward:
-              itemId: potion
-              itemCount: 3
-              bonus: 1
-            """);
+            BuildMonsterConfigYaml(
+                """
+                itemId: potion
+                itemCount: 3
+                bonus: 1
+                """));
         CreateSchemaFile(
             "schemas/monster.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "reward"],
-              "properties": {
-                "id": { "type": "integer" },
-                "reward": {
-                  "type": "object",
-                  "properties": {
-                    "itemId": { "type": "string" },
-                    "itemCount": { "type": "integer" },
-                    "bonus": { "type": "integer" }
-                  },
-                  "dependentSchemas": {
-                    "itemId": {
-                      "type": "object",
-                      "required": ["itemCount"],
-                      "properties": {
-                        "itemCount": { "type": "integer" }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            """);
+            BuildMonsterSchema(DefaultRewardPropertiesJson, DefaultDependentSchemasJson));
 
         var loader = CreateMonsterRewardLoader();
         var registry = CreateRegistry();
@@ -212,30 +154,22 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     {
         CreateConfigFile(
             "monster/slime.yaml",
-            """
-            id: 1
-            reward:
-              itemId: potion
-            """);
+            BuildMonsterConfigYaml(
+                """
+                itemId: potion
+                """));
         CreateSchemaFile(
             "schemas/monster.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "reward"],
-              "properties": {
-                "id": { "type": "integer" },
-                "reward": {
-                  "type": "object",
-                  "properties": {
-                    "itemId": { "type": "string" },
-                    "itemCount": { "type": "integer" }
-                  },
-                  "dependentSchemas": ["itemId"]
+            BuildMonsterSchema(
+                """
+                {
+                  "itemId": { "type": "string" },
+                  "itemCount": { "type": "integer" }
                 }
-              }
-            }
-            """);
+                """,
+                """
+                ["itemId"]
+                """));
 
         var loader = CreateMonsterRewardLoader();
         var registry = CreateRegistry();
@@ -260,36 +194,28 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     {
         CreateConfigFile(
             "monster/slime.yaml",
-            """
-            id: 1
-            reward:
-              itemId: potion
-            """);
+            BuildMonsterConfigYaml(
+                """
+                itemId: potion
+                """));
         CreateSchemaFile(
             "schemas/monster.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "reward"],
-              "properties": {
-                "id": { "type": "integer" },
-                "reward": {
-                  "type": "object",
-                  "properties": {
-                    "itemCount": { "type": "integer" }
-                  },
-                  "dependentSchemas": {
-                    "itemId": {
-                      "type": "object",
-                      "properties": {
-                        "itemCount": { "type": "integer" }
-                      }
+            BuildMonsterSchema(
+                """
+                {
+                  "itemCount": { "type": "integer" }
+                }
+                """,
+                """
+                {
+                  "itemId": {
+                    "type": "object",
+                    "properties": {
+                      "itemCount": { "type": "integer" }
                     }
                   }
                 }
-              }
-            }
-            """);
+                """));
 
         var loader = CreateMonsterRewardLoader();
         var registry = CreateRegistry();
@@ -314,34 +240,26 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     {
         CreateConfigFile(
             "monster/slime.yaml",
-            """
-            id: 1
-            reward:
-              itemId: potion
-            """);
+            BuildMonsterConfigYaml(
+                """
+                itemId: potion
+                """));
         CreateSchemaFile(
             "schemas/monster.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "reward"],
-              "properties": {
-                "id": { "type": "integer" },
-                "reward": {
-                  "type": "object",
-                  "properties": {
-                    "itemId": { "type": "string" }
-                  },
-                  "dependentSchemas": {
-                    "itemId": {
-                      "type": "string",
-                      "const": "potion"
-                    }
+            BuildMonsterSchema(
+                """
+                {
+                  "itemId": { "type": "string" }
+                }
+                """,
+                """
+                {
+                  "itemId": {
+                    "type": "string",
+                    "const": "potion"
                   }
                 }
-              }
-            }
-            """);
+                """));
 
         var loader = CreateMonsterRewardLoader();
         var registry = CreateRegistry();
@@ -385,6 +303,48 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     private void CreateSchemaFile(string relativePath, string content)
     {
         CreateConfigFile(relativePath, content);
+    }
+
+    private static string BuildMonsterConfigYaml(string rewardYaml)
+    {
+        return $$"""
+                id: 1
+                reward:
+                {{IndentLines(rewardYaml, 2)}}
+                """;
+    }
+
+    private static string BuildMonsterSchema(
+        string rewardPropertiesJson,
+        string dependentSchemasJson)
+    {
+        return $$"""
+                {
+                  "type": "object",
+                  "required": ["id", "reward"],
+                  "properties": {
+                    "id": { "type": "integer" },
+                    "reward": {
+                      "type": "object",
+                      "properties": {{rewardPropertiesJson}},
+                      "dependentSchemas": {{dependentSchemasJson}}
+                    }
+                  }
+                }
+                """;
+    }
+
+    private static string IndentLines(string text, int indentLevel)
+    {
+        var indentation = new string(' ', indentLevel);
+        var lines = text
+            .Trim()
+            .Split('\n', StringSplitOptions.None)
+            .Select(static line => line.TrimEnd('\r'));
+
+        return string.Join(
+            Environment.NewLine,
+            lines.Select(line => $"{indentation}{line}"));
     }
 
     /// <summary>
