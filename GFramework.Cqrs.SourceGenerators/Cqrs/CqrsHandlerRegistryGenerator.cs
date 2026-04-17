@@ -28,6 +28,14 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
     private const string GeneratedTypeName = "__GFrameworkGeneratedCqrsHandlerRegistry";
     private const string HintName = "CqrsHandlerRegistry.g.cs";
 
+    private static readonly DiagnosticDescriptor MissingReflectionFallbackContractDiagnostic = new(
+        "GF_Cqrs_001",
+        "Cannot emit CQRS registry without reflection fallback contract",
+        "Cannot generate CQRS handler registry because fallback metadata is required for handler(s): {0}, but runtime contract '{1}' is unavailable",
+        "GFramework.Cqrs.SourceGenerators",
+        DiagnosticSeverity.Error,
+        true);
+
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -169,6 +177,9 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 generationEnvironment.SupportsReflectionFallbackAttribute,
                 fallbackHandlerTypeMetadataNames.Length))
         {
+            ReportMissingReflectionFallbackContractDiagnostic(
+                context,
+                fallbackHandlerTypeMetadataNames);
             return;
         }
 
@@ -195,6 +206,25 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         int fallbackHandlerTypeCount)
     {
         return fallbackHandlerTypeCount == 0 || supportsReflectionFallbackAttribute;
+    }
+
+    /// <summary>
+    ///     报告当前轮次因缺少 fallback 元数据承载契约而无法安全生成注册器的诊断。
+    /// </summary>
+    /// <param name="context">源生产上下文。</param>
+    /// <param name="fallbackHandlerTypeMetadataNames">需要通过程序集级 reflection fallback 元数据恢复的 handler 元数据名称。</param>
+    private static void ReportMissingReflectionFallbackContractDiagnostic(
+        SourceProductionContext context,
+        IReadOnlyList<string> fallbackHandlerTypeMetadataNames)
+    {
+        var handlerList = string.Join(
+            ", ",
+            fallbackHandlerTypeMetadataNames.OrderBy(static name => name, StringComparer.Ordinal));
+        context.ReportDiagnostic(Diagnostic.Create(
+            MissingReflectionFallbackContractDiagnostic,
+            Location.None,
+            handlerList,
+            CqrsReflectionFallbackAttributeMetadataName));
     }
 
     private static List<ImplementationRegistrationSpec> CollectRegistrations(

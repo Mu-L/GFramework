@@ -205,7 +205,8 @@ public sealed class EnumExtensionsGenerator : AttributeEnumGeneratorBase
         builder.AppendLine("        /// 判断给定值是否属于指定候选集合。");
         builder.AppendLine("        /// </summary>");
         builder.AppendLine("        /// <param name=\"value\">要检查的枚举值。</param>");
-        builder.AppendLine("        /// <param name=\"values\">用于匹配的候选枚举值集合。</param>");
+        builder.AppendLine(
+            "        /// <param name=\"values\">用于匹配的候选枚举值集合；当为 <see langword=\"null\" /> 时返回 <see langword=\"false\" />。</param>");
         builder.AppendLine(
             "        /// <returns>当 <paramref name=\"value\" /> 命中任一候选值时返回 <see langword=\"true\" />；否则返回 <see langword=\"false\" />。</returns>");
         builder.AppendLine(

@@ -99,6 +99,14 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine("/// <summary>");
         sb.AppendLine("/// 为当前规则类型补充自动生成的架构上下文访问实现。");
         sb.AppendLine("/// </summary>");
+        sb.AppendLine("/// <remarks>");
+        sb.AppendLine(
+            "/// 生成代码会在实例级缓存首次解析到的上下文，并在未显式配置提供者时回退到 <see cref=\"GFramework.Core.Architectures.GameContextProvider\" />。");
+        sb.AppendLine(
+            "/// 同一生成类型的所有实例共享一个静态上下文提供者；切换或重置提供者只会影响尚未缓存上下文的新实例或未初始化实例，");
+        sb.AppendLine(
+            "/// 已缓存的实例上下文需要通过 <see cref=\"GFramework.Core.Abstractions.Rule.IContextAware.SetContext(GFramework.Core.Abstractions.Architectures.IArchitectureContext)\" /> 显式覆盖。");
+        sb.AppendLine("/// </remarks>");
         sb.AppendLine($"partial class {symbol.Name} : {interfaceName}");
         sb.AppendLine("{");
 
@@ -134,8 +142,18 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine("    private static readonly object _contextSync = new();");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// 自动获取的架构上下文（懒加载，默认使用 GameContextProvider）");
+        sb.AppendLine("    /// 获取当前实例绑定的架构上下文。");
         sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <remarks>");
+        sb.AppendLine(
+            "    /// 该属性会先返回通过 <c>IContextAware.SetContext(...)</c> 显式注入的实例上下文；若尚未设置，则在同一个同步域内惰性初始化共享提供者。");
+        sb.AppendLine(
+            "    /// 当静态提供者尚未配置时，生成代码会回退到 <see cref=\"GFramework.Core.Architectures.GameContextProvider\" />。");
+        sb.AppendLine(
+            "    /// 一旦某个实例成功缓存上下文，后续 <see cref=\"SetContextProvider(GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider)\" />");
+        sb.AppendLine(
+            "    /// 或 <see cref=\"ResetContextProvider\" /> 不会自动清除此缓存；如需覆盖，请显式调用 <c>IContextAware.SetContext(...)</c>。");
+        sb.AppendLine("    /// </remarks>");
         sb.AppendLine("    protected global::GFramework.Core.Abstractions.Architectures.IArchitectureContext Context");
         sb.AppendLine("    {");
         sb.AppendLine("        get");
@@ -158,9 +176,15 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// 配置上下文提供者（用于测试或多架构场景）");
+        sb.AppendLine("    /// 配置当前生成类型共享的上下文提供者。");
         sb.AppendLine("    /// </summary>");
-        sb.AppendLine("    /// <param name=\"provider\">上下文提供者实例</param>");
+        sb.AppendLine("    /// <param name=\"provider\">后续懒加载上下文时要使用的提供者实例。</param>");
+        sb.AppendLine("    /// <remarks>");
+        sb.AppendLine("    /// 该方法使用与 <see cref=\"Context\" /> 相同的同步锁，避免提供者切换与惰性初始化交错。");
+        sb.AppendLine(
+            "    /// 已经缓存上下文的实例不会因为提供者切换而自动失效；该变更仅影响尚未初始化上下文的新实例或未缓存实例。");
+        sb.AppendLine("    /// 如需覆盖已有实例的上下文，请显式调用 <c>IContextAware.SetContext(...)</c>。");
+        sb.AppendLine("    /// </remarks>");
         sb.AppendLine(
             "    public static void SetContextProvider(global::GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider provider)");
         sb.AppendLine("    {");
@@ -171,8 +195,14 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// 重置上下文提供者为默认值（用于测试清理）");
+        sb.AppendLine("    /// 重置共享上下文提供者，使后续懒加载回退到默认提供者。");
         sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <remarks>");
+        sb.AppendLine("    /// 该方法主要用于测试清理或跨用例恢复默认行为。");
+        sb.AppendLine(
+            "    /// 它不会清除已经缓存到实例字段中的上下文；只有后续尚未初始化上下文的实例会重新回退到 <see cref=\"GFramework.Core.Architectures.GameContextProvider\" />。");
+        sb.AppendLine("    /// 如需覆盖已有实例的上下文，请显式调用 <c>IContextAware.SetContext(...)</c>。");
+        sb.AppendLine("    /// </remarks>");
         sb.AppendLine("    public static void ResetContextProvider()");
         sb.AppendLine("    {");
         sb.AppendLine("        lock (_contextSync)");
@@ -248,7 +278,11 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         switch (method.Name)
         {
             case "SetContext":
-                sb.AppendLine("        _context = context;");
+                sb.AppendLine("        // 与 Context getter 共享同一同步协议，避免显式注入被并发懒加载覆盖。");
+                sb.AppendLine("        lock (_contextSync)");
+                sb.AppendLine("        {");
+                sb.AppendLine("            _context = context;");
+                sb.AppendLine("        }");
                 break;
 
             case "GetContext":

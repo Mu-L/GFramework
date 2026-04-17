@@ -39,7 +39,7 @@ namespace TestApp
         /// 判断给定值是否属于指定候选集合。
         /// </summary>
         /// <param name="value">要检查的枚举值。</param>
-        /// <param name="values">用于匹配的候选枚举值集合。</param>
+        /// <param name="values">用于匹配的候选枚举值集合；当为 <see langword="null" /> 时返回 <see langword="false" />。</param>
         /// <returns>当 <paramref name="value" /> 命中任一候选值时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
         public static bool IsIn(this TestApp.Permissions value, params TestApp.Permissions[] values)
         {

@@ -10,12 +10,19 @@ public static class GeneratorSnapshotTest<TGenerator>
     where TGenerator : new()
 {
     /// <summary>
-    ///     运行源代码生成器的快照测试
+    ///     运行指定源生成器的端到端快照测试。
     /// </summary>
-    /// <param name="source">输入的源代码字符串</param>
-    /// <param name="snapshotFolder">快照文件存储的文件夹路径</param>
+    /// <param name="source">输入的源代码字符串。</param>
+    /// <param name="snapshotFolder">用于存放已提交快照文件的根目录。</param>
     /// <param name="snapshotFileNameSelector">将生成文件名映射为快照文件名的规则；为空时使用原始生成文件名。</param>
-    /// <returns>异步任务</returns>
+    /// <returns>当所有生成输出都通过快照校验后完成的异步任务。</returns>
+    /// <remarks>
+    ///     该辅助器会手动构建 Roslyn 编译并执行生成器，然后依次验证生成器自身诊断、更新后编译诊断、生成输出数量和快照内容。
+    ///     若生成器报告错误、生成后的编译出现错误、生成器没有任何输出，或首次运行缺少快照文件，测试都会失败。
+    ///     首次缺少快照时，本方法会先将当前输出写入 <paramref name="snapshotFolder" />，再通过断言中断测试，提示调用方提交快照资产。
+    ///     <paramref name="snapshotFileNameSelector" /> 的返回值还必须保持在 <paramref name="snapshotFolder" /> 根目录之内，否则会抛出异常。
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">当快照文件名映射结果为空、为绝对路径，或逃逸出快照根目录时抛出。</exception>
     public static async Task RunAsync(
         string source,
         string snapshotFolder,
@@ -33,7 +40,16 @@ public static class GeneratorSnapshotTest<TGenerator>
         driver = driver.RunGeneratorsAndUpdateCompilation(
             compilation,
             out var updatedCompilation,
-            out _);
+            out var generatorDiagnostics);
+
+        var generatorErrors = generatorDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.That(
+            generatorErrors,
+            Is.Empty,
+            () =>
+                $"执行生成器时出现错误：{Environment.NewLine}{string.Join(Environment.NewLine, generatorErrors.Select(static diagnostic => diagnostic.ToString()))}");
 
         var compilationErrors = updatedCompilation.GetDiagnostics()
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)

@@ -1169,28 +1169,95 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
-    ///     验证当某轮生成仍然需要程序集级 reflection fallback 元数据时，
-    ///     若 runtime 合同未提供对应特性契约，生成器会放弃输出注册器以避免静默漏注册。
+    ///     验证当某轮生成仍然需要程序集级 reflection fallback 元数据，且 runtime 合同缺少承载该元数据的特性时，
+    ///     生成器会给出明确诊断并停止输出注册器。
     /// </summary>
     [Test]
     public void
-        Rejects_Registry_Emission_When_Fallback_Metadata_Is_Required_But_Runtime_Contract_Lacks_Fallback_Attribute()
+        Reports_Diagnostic_And_Skips_Registry_When_Fallback_Metadata_Is_Required_But_Runtime_Contract_Lacks_Fallback_Attribute()
     {
-        var method = typeof(CqrsHandlerRegistryGenerator).GetMethod(
-            "CanEmitGeneratedRegistry",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        const string source = """
+                              using System;
 
-        Assert.That(method, Is.Not.Null);
+                              namespace Microsoft.Extensions.DependencyInjection
+                              {
+                                  public interface IServiceCollection { }
 
-        var canEmitWithoutFallbackRequirement = (bool?)method!.Invoke(null, [false, 0]);
-        var canEmitWithSupportedFallbackAttribute = (bool?)method.Invoke(null, [true, 1]);
-        var canEmitWithoutSupportedFallbackAttribute = (bool?)method.Invoke(null, [false, 1]);
+                                  public static class ServiceCollectionServiceExtensions
+                                  {
+                                      public static void AddTransient(IServiceCollection services, Type serviceType, Type implementationType) { }
+                                  }
+                              }
+
+                              namespace GFramework.Core.Abstractions.Logging
+                              {
+                                  public interface ILogger
+                                  {
+                                      void Debug(string msg);
+                                  }
+                              }
+
+                              namespace GFramework.Cqrs.Abstractions.Cqrs
+                              {
+                                  public interface IRequest<TResponse> { }
+                                  public interface INotification { }
+                                  public interface IStreamRequest<TResponse> { }
+
+                                  public interface IRequestHandler<in TRequest, TResponse> where TRequest : IRequest<TResponse> { }
+                                  public interface INotificationHandler<in TNotification> where TNotification : INotification { }
+                                  public interface IStreamRequestHandler<in TRequest, out TResponse> where TRequest : IStreamRequest<TResponse> { }
+                              }
+
+                              namespace GFramework.Cqrs
+                              {
+                                  public interface ICqrsHandlerRegistry
+                                  {
+                                      void Register(Microsoft.Extensions.DependencyInjection.IServiceCollection services, GFramework.Core.Abstractions.Logging.ILogger logger);
+                                  }
+
+                                  [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+                                  public sealed class CqrsHandlerRegistryAttribute : Attribute
+                                  {
+                                      public CqrsHandlerRegistryAttribute(Type registryType) { }
+                                  }
+                              }
+
+                              namespace TestApp
+                              {
+                                  using GFramework.Cqrs.Abstractions.Cqrs;
+
+                                  public sealed class Container
+                                  {
+                                      private unsafe struct HiddenResponse
+                                      {
+                                      }
+
+                                      private unsafe sealed record HiddenRequest() : IRequest<HiddenResponse*>;
+
+                                      public unsafe sealed class HiddenHandler : IRequestHandler<HiddenRequest, HiddenResponse*>
+                                      {
+                                      }
+                                  }
+                              }
+                              """;
+
+        var execution = ExecuteGenerator(source);
+        var generatorErrors = execution.GeneratorDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        var missingContractDiagnostic =
+            generatorErrors.SingleOrDefault(static diagnostic => diagnostic.Id == "GF_Cqrs_001");
 
         Assert.Multiple(() =>
         {
-            Assert.That(canEmitWithoutFallbackRequirement, Is.True);
-            Assert.That(canEmitWithSupportedFallbackAttribute, Is.True);
-            Assert.That(canEmitWithoutSupportedFallbackAttribute, Is.False);
+            Assert.That(execution.GeneratedSources, Is.Empty);
+            Assert.That(missingContractDiagnostic, Is.Not.Null);
+            Assert.That(
+                missingContractDiagnostic!.GetMessage(),
+                Does.Contain("TestApp.Container+HiddenHandler"));
+            Assert.That(
+                missingContractDiagnostic.GetMessage(),
+                Does.Contain("GFramework.Cqrs.CqrsReflectionFallbackAttribute"));
         });
     }
 
@@ -1220,6 +1287,40 @@ public class CqrsHandlerRegistryGeneratorTests
         string source,
         params MetadataReference[] additionalReferences)
     {
+        var execution = ExecuteGenerator(
+            source,
+            additionalReferences);
+        var generatorErrors = execution.GeneratorDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.That(
+            generatorErrors,
+            Is.Empty,
+            () =>
+                $"执行生成器时出现错误:{Environment.NewLine}{string.Join(Environment.NewLine, generatorErrors.Select(static diagnostic => diagnostic.ToString()))}");
+        var compilationErrors = execution.CompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.That(
+            compilationErrors,
+            Is.Empty,
+            () =>
+                $"编译生成的代码时出现错误:{Environment.NewLine}{string.Join(Environment.NewLine, compilationErrors.Select(static diagnostic => diagnostic.ToString()))}");
+        Assert.That(execution.GeneratedSources, Has.Length.EqualTo(1));
+
+        return execution.GeneratedSources[0].content;
+    }
+
+    /// <summary>
+    ///     运行 CQRS handler registry generator，并返回生成输出及相关诊断。
+    /// </summary>
+    /// <param name="source">输入源码。</param>
+    /// <param name="additionalReferences">附加元数据引用，用于构造跨程序集场景。</param>
+    /// <returns>包含生成源、生成器诊断和更新后编译诊断的执行结果。</returns>
+    private static GeneratorExecutionResult ExecuteGenerator(
+        string source,
+        params MetadataReference[] additionalReferences)
+    {
         var syntaxTree = CSharpSyntaxTree.ParseText(source);
         var compilation = CSharpCompilation.Create(
             "TestProject",
@@ -1233,21 +1334,28 @@ public class CqrsHandlerRegistryGeneratorTests
         driver = driver.RunGeneratorsAndUpdateCompilation(
             compilation,
             out var updatedCompilation,
-            out _);
-
-        var compilationErrors = updatedCompilation.GetDiagnostics()
-            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
-            .ToArray();
-        Assert.That(
-            compilationErrors,
-            Is.Empty,
-            () =>
-                $"编译生成的代码时出现错误:{Environment.NewLine}{string.Join(Environment.NewLine, compilationErrors.Select(static diagnostic => diagnostic.ToString()))}");
+            out var generatorDiagnostics);
 
         var runResult = driver.GetRunResult();
         Assert.That(runResult.Results, Has.Length.EqualTo(1));
-        Assert.That(runResult.Results[0].GeneratedSources, Has.Length.EqualTo(1));
-
-        return runResult.Results[0].GeneratedSources[0].SourceText.ToString();
+        var generatedSources = runResult.Results[0].GeneratedSources
+            .Select(static sourceResult =>
+                (filename: sourceResult.HintName, content: sourceResult.SourceText.ToString()))
+            .ToArray();
+        return new GeneratorExecutionResult(
+            generatedSources,
+            generatorDiagnostics.ToArray(),
+            updatedCompilation.GetDiagnostics().ToArray());
     }
+
+    /// <summary>
+    ///     封装 CQRS handler registry generator 的单次执行结果。
+    /// </summary>
+    /// <param name="GeneratedSources">本轮生成产生的源文件集合。</param>
+    /// <param name="GeneratorDiagnostics">生成器自身报告的诊断集合。</param>
+    /// <param name="CompilationDiagnostics">将生成结果并回编译后的编译诊断集合。</param>
+    private sealed record GeneratorExecutionResult(
+        (string filename, string content)[] GeneratedSources,
+        Diagnostic[] GeneratorDiagnostics,
+        Diagnostic[] CompilationDiagnostics);
 }
