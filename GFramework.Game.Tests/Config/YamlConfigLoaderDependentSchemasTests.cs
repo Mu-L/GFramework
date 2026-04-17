@@ -253,6 +253,60 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     }
 
     /// <summary>
+    ///     验证 dependentSchemas 的触发字段必须在同级 properties 中显式声明。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_DependentSchemas_Trigger_Is_Not_Declared()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            reward:
+              itemId: potion
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "reward"],
+              "properties": {
+                "id": { "type": "integer" },
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  },
+                  "dependentSchemas": {
+                    "itemId": {
+                      "type": "object",
+                      "properties": {
+                        "itemCount": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Message, Does.Contain("dependentSchemas' for undeclared property 'itemId'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证 dependentSchemas 只接受 object-typed 条件子 schema。
     /// </summary>
     [Test]
