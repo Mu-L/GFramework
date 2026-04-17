@@ -133,6 +133,7 @@ public class UiRouterInteractionTests
     /// <summary>
     ///     验证弹出栈顶页面后，恢复下层页面时不会重复触发恢复逻辑。
     /// </summary>
+    /// <returns>表示异步测试执行过程的任务。</returns>
     [Test]
     public async Task PopAsync_WhenPageResumesDuringShow_DoesNotCallResumeTwice()
     {
@@ -343,7 +344,9 @@ public class UiRouterInteractionTests
 
             // The Godot page behavior resumes from OnShow(), so the router must not call OnResume() again on top.
             if (ResumeFromShow)
+            {
                 OnResume();
+            }
         }
 
         /// <inheritdoc />
