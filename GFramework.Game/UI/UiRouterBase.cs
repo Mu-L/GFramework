@@ -1,3 +1,4 @@
+using GFramework.Core.Abstractions.Pause;
 using GFramework.Core.Extensions;
 using GFramework.Game.Abstractions.Enums;
 using GFramework.Game.Abstractions.UI;

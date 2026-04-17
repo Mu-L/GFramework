@@ -11,9 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using System.Reflection;
-using GFramework.Game.UI;
-
 namespace GFramework.Game.Tests.UI;
 
 /// <summary>
