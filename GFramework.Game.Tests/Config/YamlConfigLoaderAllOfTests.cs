@@ -381,6 +381,86 @@ public sealed class YamlConfigLoaderAllOfTests
     }
 
     /// <summary>
+    ///     验证 allOf 条目的 <c>required</c> 项必须是字符串字段名。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_AllOf_Entry_Required_Item_Is_Not_A_String()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            BuildMonsterConfigYaml(
+                """
+                itemCount: 3
+                """));
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            BuildMonsterSchema(
+                DefaultRewardPropertiesJson,
+                """
+                [
+                  {
+                    "type": "object",
+                    "required": [1]
+                  }
+                ]
+                """));
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward[allOf[0]]"));
+            Assert.That(exception.Message, Does.Contain("must declare 'required' entries as property-name strings"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证 allOf 条目的 <c>required</c> 不允许空白字段名。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_AllOf_Entry_Required_Item_Is_Blank()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            BuildMonsterConfigYaml(
+                """
+                itemCount: 3
+                """));
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            BuildMonsterSchema(
+                DefaultRewardPropertiesJson,
+                """
+                [
+                  {
+                    "type": "object",
+                    "required": [""]
+                  }
+                ]
+                """));
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward[allOf[0]]"));
+            Assert.That(exception.Message, Does.Contain("cannot declare blank property names in 'required'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证 allOf 条目不能要求父对象未声明的字段。
     /// </summary>
     [Test]

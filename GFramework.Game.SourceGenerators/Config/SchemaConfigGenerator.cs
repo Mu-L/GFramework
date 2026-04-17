@@ -1407,13 +1407,25 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         {
             if (requiredProperty.ValueKind != JsonValueKind.String)
             {
-                continue;
+                diagnostic = Diagnostic.Create(
+                    ConfigSchemaDiagnostics.InvalidAllOfMetadata,
+                    CreateFileLocation(filePath),
+                    Path.GetFileName(filePath),
+                    allOfEntryPath,
+                    $"Entry #{allOfIndex + 1} in 'allOf' must declare 'required' entries as parent property-name strings.");
+                return false;
             }
 
             var requiredPropertyName = requiredProperty.GetString();
             if (string.IsNullOrWhiteSpace(requiredPropertyName))
             {
-                continue;
+                diagnostic = Diagnostic.Create(
+                    ConfigSchemaDiagnostics.InvalidAllOfMetadata,
+                    CreateFileLocation(filePath),
+                    Path.GetFileName(filePath),
+                    allOfEntryPath,
+                    $"Entry #{allOfIndex + 1} in 'allOf' cannot declare blank property names in 'required'.");
+                return false;
             }
 
             var normalizedRequiredPropertyName = requiredPropertyName!;
