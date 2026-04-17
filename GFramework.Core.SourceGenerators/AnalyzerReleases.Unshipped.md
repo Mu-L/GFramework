@@ -18,6 +18,17 @@
  GF_ContextRegistration_001 | GFramework.SourceGenerators.rule         | Warning  | ContextRegistrationDiagnostics 
  GF_ContextRegistration_002 | GFramework.SourceGenerators.rule         | Warning  | ContextRegistrationDiagnostics 
  GF_ContextRegistration_003 | GFramework.SourceGenerators.rule         | Warning  | ContextRegistrationDiagnostics 
+ GF_ConfigSchema_001        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_002        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_003        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_004        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_005        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_006        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_007        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_008        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_009        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_010        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
+ GF_ConfigSchema_011        | GFramework.SourceGenerators.Config       | Error    | ConfigSchemaDiagnostics        
  GF_AutoModule_001          | GFramework.SourceGenerators.Architecture | Error    | AutoRegisterModuleDiagnostics  
  GF_AutoModule_002          | GFramework.SourceGenerators.Architecture | Error    | AutoRegisterModuleDiagnostics  
  GF_AutoModule_003          | GFramework.SourceGenerators.Architecture | Error    | AutoRegisterModuleDiagnostics  

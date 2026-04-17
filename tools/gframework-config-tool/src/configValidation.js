@@ -1134,6 +1134,7 @@ function parseSchemaNode(rawNode, displayPath) {
             properties[key] = parseSchemaNode(propertyNode, joinPropertyPath(displayPath, key));
         }
         const dependentRequired = parseDependentRequiredMetadata(value.dependentRequired, displayPath, properties);
+        const dependentSchemas = parseDependentSchemasMetadata(value.dependentSchemas, displayPath, properties);
 
         return applyEnumMetadata(applyConstMetadata({
             type: "object",
@@ -1143,6 +1144,7 @@ function parseSchemaNode(rawNode, displayPath) {
             minProperties: metadata.minProperties,
             maxProperties: metadata.maxProperties,
             dependentRequired,
+            dependentSchemas,
             title: metadata.title,
             description: metadata.description,
             defaultValue: metadata.defaultValue,
@@ -1315,6 +1317,56 @@ function parseDependentRequiredMetadata(rawDependentRequired, displayPath, prope
         if (dependencies.length > 0) {
             normalized[triggerProperty] = dependencies;
         }
+    }
+
+    return Object.keys(normalized).length > 0
+        ? normalized
+        : undefined;
+}
+
+/**
+ * Parse one object-level `dependentSchemas` map and keep it aligned with the
+ * runtime's "declared siblings trigger object-typed inline schemas" contract.
+ *
+ * @param {unknown} rawDependentSchemas Raw dependentSchemas node.
+ * @param {string} displayPath Parent schema path.
+ * @param {Record<string, SchemaNode>} properties Declared object properties.
+ * @returns {Record<string, SchemaNode> | undefined} Normalized dependency schema map.
+ */
+function parseDependentSchemasMetadata(rawDependentSchemas, displayPath, properties) {
+    if (rawDependentSchemas === undefined) {
+        return undefined;
+    }
+
+    if (!rawDependentSchemas ||
+        typeof rawDependentSchemas !== "object" ||
+        Array.isArray(rawDependentSchemas)) {
+        throw new Error(`Schema property '${displayPath}' must declare 'dependentSchemas' as an object.`);
+    }
+
+    const normalized = {};
+    for (const [triggerProperty, rawDependencySchema] of Object.entries(rawDependentSchemas)) {
+        if (!Object.prototype.hasOwnProperty.call(properties, triggerProperty)) {
+            throw new Error(
+                `Schema property '${displayPath}' declares 'dependentSchemas' for undeclared property '${triggerProperty}'.`);
+        }
+
+        if (!rawDependencySchema ||
+            typeof rawDependencySchema !== "object" ||
+            Array.isArray(rawDependencySchema)) {
+            throw new Error(
+                `Schema property '${displayPath}' must declare 'dependentSchemas' for '${triggerProperty}' as an object-valued schema.`);
+        }
+
+        const dependencySchema = parseSchemaNode(
+            rawDependencySchema,
+            `${displayPath}[dependentSchemas:${triggerProperty}]`);
+        if (dependencySchema.type !== "object") {
+            throw new Error(
+                `Schema property '${displayPath}' must declare an object-typed 'dependentSchemas' schema for '${triggerProperty}'.`);
+        }
+
+        normalized[triggerProperty] = dependencySchema;
     }
 
     return Object.keys(normalized).length > 0
@@ -1689,6 +1741,33 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
         }
     }
 
+    if (schemaNode.dependentSchemas && typeof schemaNode.dependentSchemas === "object") {
+        for (const [triggerProperty, dependentSchema] of Object.entries(schemaNode.dependentSchemas)) {
+            if (!yamlNode.map.has(triggerProperty) ||
+                matchesSchemaNode(dependentSchema, yamlNode, true)) {
+                continue;
+            }
+
+            const localizedMessage = localizeValidationMessage(
+                ValidationMessageKeys.dependentSchemasViolation,
+                localizer,
+                {
+                    displayPath: displayPath || "<root>",
+                    triggerProperty: joinPropertyPath(displayPath, triggerProperty)
+                });
+
+            if (reportedMessages.has(localizedMessage)) {
+                continue;
+            }
+
+            diagnostics.push({
+                severity: "error",
+                message: localizedMessage
+            });
+            reportedMessages.add(localizedMessage);
+        }
+    }
+
     if (typeof schemaNode.minProperties === "number" &&
         propertyCount < schemaNode.minProperties) {
         diagnostics.push({
@@ -1786,6 +1865,15 @@ function matchesSchemaNodeInternal(schemaNode, yamlNode, allowUnknownObjectPrope
                     if (!yamlNode.map.has(dependency)) {
                         return false;
                     }
+                }
+            }
+        }
+
+        if (schemaNode.dependentSchemas && typeof schemaNode.dependentSchemas === "object") {
+            for (const [triggerProperty, dependentSchema] of Object.entries(schemaNode.dependentSchemas)) {
+                if (yamlNode.map.has(triggerProperty) &&
+                    !matchesSchemaNodeInternal(dependentSchema, yamlNode, true)) {
+                    return false;
                 }
             }
         }
@@ -2203,6 +2291,8 @@ function localizeValidationMessage(key, localizer, params) {
                 return `属性“${params.displayPath}”必须匹配固定值 ${params.value}。`;
             case ValidationMessageKeys.dependentRequiredViolation:
                 return `属性“${params.triggerProperty}”存在时，必须同时声明属性“${params.displayPath}”。`;
+            case ValidationMessageKeys.dependentSchemasViolation:
+                return `对象“${params.displayPath}”在属性“${params.triggerProperty}”存在时，必须满足对应的 dependent schema。`;
             case ValidationMessageKeys.expectedArray:
                 return `属性“${params.displayPath}”应为数组。`;
             case ValidationMessageKeys.expectedScalarShape:
@@ -2255,6 +2345,8 @@ function localizeValidationMessage(key, localizer, params) {
             return `Property '${params.displayPath}' must match constant value ${params.value}.`;
         case ValidationMessageKeys.dependentRequiredViolation:
             return `Property '${params.displayPath}' is required when sibling property '${params.triggerProperty}' is present.`;
+        case ValidationMessageKeys.dependentSchemasViolation:
+            return `Object '${params.displayPath}' must satisfy the dependent schema triggered by sibling property '${params.triggerProperty}'.`;
         case ValidationMessageKeys.expectedArray:
             return `Property '${params.displayPath}' is expected to be an array.`;
         case ValidationMessageKeys.expectedScalarShape:
@@ -3004,6 +3096,7 @@ module.exports = {
  *   minProperties?: number,
  *   maxProperties?: number,
  *   dependentRequired?: Record<string, string[]>,
+ *   dependentSchemas?: Record<string, SchemaNode>,
  *   title?: string,
  *   description?: string,
  *   defaultValue?: string,
