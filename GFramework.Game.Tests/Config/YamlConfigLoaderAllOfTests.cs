@@ -60,7 +60,14 @@ public sealed class YamlConfigLoaderAllOfTests
         if (!string.IsNullOrEmpty(_rootPath) &&
             Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            try
+            {
+                Directory.Delete(_rootPath, true);
+            }
+            catch (Exception)
+            {
+                // Ignore cleanup failures in test teardown
+            }
         }
     }
 
