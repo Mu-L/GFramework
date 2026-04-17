@@ -155,7 +155,41 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             reflectionFallbackHandlerTypeMetadataName);
     }
 
-    private static void Execute(SourceProductionContext context, GenerationEnvironment generationEnvironment,
+    /// <summary>
+    ///     执行 CQRS handler registry 生成管线的最终发射阶段，负责将候选 handler 分析结果汇总为单个
+    ///     <c>CqrsHandlerRegistry.g.cs</c>，并在需要时附带程序集级 reflection fallback 元数据。
+    /// </summary>
+    /// <param name="context">用于报告诊断并发射生成源码的源生产上下文。</param>
+    /// <param name="generationEnvironment">
+    ///     当前编译轮次可用的 runtime 合同快照。
+    ///     只有当 CQRS 注册器生成所需的基础契约齐备时，才允许继续生成；当存在
+    ///     <c>CqrsReflectionFallbackAttribute</c> 时，才允许输出依赖 fallback 元数据恢复的注册结果。
+    /// </param>
+    /// <param name="candidates">
+    ///     来自语法和语义分析阶段的 handler 候选结果。
+    ///     集合中可能包含 <see langword="null" /> 占位项，且同一实现类型可能因 partial 声明重复出现，后续会统一去重并聚合。
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         该方法负责发射两类生成结果：注册器类型本体，以及在静态类型信息不足时用于运行时补全注册的程序集级
+    ///         <c>CqrsReflectionFallbackAttribute</c> 元数据。生成这些结果的目标是把可静态确定的 handler 注册尽量前移到编译期，
+    ///         从而减少运行时程序集扫描成本，同时保留对少数复杂类型形态的兼容回退路径。
+    ///     </para>
+    ///     <para>
+    ///         该阶段依赖两个语义前提：一是 runtime 已提供 CQRS 注册器生成所需的基础合同；二是只要存在任何 handler
+    ///         需要通过 reflection fallback 恢复，就必须同时存在承载该元数据的
+    ///         <c>CqrsReflectionFallbackAttribute</c>。如果基础合同缺失，生成器会静默跳过本轮发射；如果候选集合去重后没有任何可注册
+    ///         handler，也会直接跳过 <c>AddSource</c>，避免输出空注册器。
+    ///     </para>
+    ///     <para>
+    ///         当 fallback handler 元数据非空但 runtime 缺少 <c>CqrsReflectionFallbackAttribute</c> 时，
+    ///         该方法会报告 <c>GF_Cqrs_001</c> 并停止发射源码。这样可以避免生成一个表面可用、但会静默漏掉部分 handler 注册的半成品
+    ///         registry。只有在静态注册结果与 fallback 契约同时成立时，才允许调用 <c>AddSource</c>。
+    ///     </para>
+    /// </remarks>
+    private static void Execute(
+        SourceProductionContext context,
+        GenerationEnvironment generationEnvironment,
         ImmutableArray<HandlerCandidateAnalysis?> candidates)
     {
         if (!generationEnvironment.GenerationEnabled)

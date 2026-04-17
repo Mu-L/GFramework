@@ -1244,6 +1244,9 @@ public class CqrsHandlerRegistryGeneratorTests
         var execution = ExecuteGenerator(
             source,
             allowUnsafe: true);
+        var generatedCompilationErrors = execution.GeneratedCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
         var generatorErrors = execution.GeneratorDiagnostics
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .ToArray();
@@ -1252,6 +1255,7 @@ public class CqrsHandlerRegistryGeneratorTests
 
         Assert.Multiple(() =>
         {
+            Assert.That(generatedCompilationErrors, Is.Empty);
             Assert.That(execution.GeneratedSources, Is.Empty);
             Assert.That(missingContractDiagnostic, Is.Not.Null);
             Assert.That(
@@ -1355,12 +1359,16 @@ public class CqrsHandlerRegistryGeneratorTests
         var execution = ExecuteGenerator(
             source,
             allowUnsafe: true);
+        var generatedCompilationErrors = execution.GeneratedCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
         var generatorErrors = execution.GeneratorDiagnostics
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .ToArray();
 
         Assert.Multiple(() =>
         {
+            Assert.That(generatedCompilationErrors, Is.Empty);
             Assert.That(generatorErrors, Is.Empty);
             Assert.That(execution.GeneratedSources, Has.Length.EqualTo(1));
             Assert.That(execution.GeneratedSources[0].filename, Is.EqualTo("CqrsHandlerRegistry.g.cs"));
@@ -1464,14 +1472,24 @@ public class CqrsHandlerRegistryGeneratorTests
 
         var runResult = driver.GetRunResult();
         Assert.That(runResult.Results, Has.Length.EqualTo(1));
+        var generatedSyntaxTrees = runResult.Results[0].GeneratedSources
+            .Select(static sourceResult => sourceResult.SyntaxTree)
+            .ToHashSet();
         var generatedSources = runResult.Results[0].GeneratedSources
             .Select(static sourceResult =>
                 (filename: sourceResult.HintName, content: sourceResult.SourceText.ToString()))
             .ToArray();
+        var compilationDiagnostics = updatedCompilation.GetDiagnostics().ToArray();
+        var generatedCompilationDiagnostics = compilationDiagnostics
+            .Where(diagnostic =>
+                diagnostic.Location.SourceTree is not null &&
+                generatedSyntaxTrees.Contains(diagnostic.Location.SourceTree))
+            .ToArray();
         return new GeneratorExecutionResult(
             generatedSources,
             generatorDiagnostics.ToArray(),
-            updatedCompilation.GetDiagnostics().ToArray());
+            compilationDiagnostics,
+            generatedCompilationDiagnostics);
     }
 
     /// <summary>
@@ -1479,9 +1497,11 @@ public class CqrsHandlerRegistryGeneratorTests
     /// </summary>
     /// <param name="GeneratedSources">本轮生成产生的源文件集合。</param>
     /// <param name="GeneratorDiagnostics">生成器自身报告的诊断集合。</param>
-    /// <param name="CompilationDiagnostics">将生成结果并回编译后的编译诊断集合。</param>
+    /// <param name="CompilationDiagnostics">将生成结果并回编译后的完整编译诊断集合。</param>
+    /// <param name="GeneratedCompilationDiagnostics">仅来自生成源文件的编译诊断集合。</param>
     private sealed record GeneratorExecutionResult(
         (string filename, string content)[] GeneratedSources,
         Diagnostic[] GeneratorDiagnostics,
-        Diagnostic[] CompilationDiagnostics);
+        Diagnostic[] CompilationDiagnostics,
+        Diagnostic[] GeneratedCompilationDiagnostics);
 }
