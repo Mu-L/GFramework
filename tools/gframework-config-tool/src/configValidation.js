@@ -1742,9 +1742,8 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
     }
 
     if (schemaNode.dependentSchemas && typeof schemaNode.dependentSchemas === "object") {
-        for (const [triggerProperty, dependentSchema] of Object.entries(schemaNode.dependentSchemas)) {
-            if (!yamlNode.map.has(triggerProperty) ||
-                matchesSchemaNode(dependentSchema, yamlNode, true)) {
+        for (const [triggerProperty, dependentSchema] of getTriggeredDependentSchemas(schemaNode, yamlNode)) {
+            if (matchesSchemaNode(dependentSchema, yamlNode, true)) {
                 continue;
             }
 
@@ -1793,6 +1792,32 @@ function validateObjectNode(schemaNode, yamlNode, displayPath, diagnostics, loca
     validateEnumComparableValue(schemaNode, yamlNode, displayPath, diagnostics, localizer, diagnosticsBeforeNode);
     validateConstComparableValue(schemaNode, yamlNode, displayPath, diagnostics, localizer);
     validateNotSchemaMatch(schemaNode, yamlNode, displayPath, diagnostics, localizer);
+}
+
+/**
+ * Enumerate object-level `dependentSchemas` entries whose trigger property is
+ * present on the current YAML object.
+ *
+ * @param {SchemaNode} schemaNode Schema node.
+ * @param {YamlNode} yamlNode YAML node.
+ * @returns {Array<[string, SchemaNode]>} Triggered dependent schema entries.
+ */
+function getTriggeredDependentSchemas(schemaNode, yamlNode) {
+    if (!schemaNode.dependentSchemas ||
+        typeof schemaNode.dependentSchemas !== "object" ||
+        !yamlNode ||
+        yamlNode.kind !== "object") {
+        return [];
+    }
+
+    const triggeredSchemas = [];
+    for (const [triggerProperty, dependentSchema] of Object.entries(schemaNode.dependentSchemas)) {
+        if (yamlNode.map.has(triggerProperty)) {
+            triggeredSchemas.push([triggerProperty, dependentSchema]);
+        }
+    }
+
+    return triggeredSchemas;
 }
 
 /**
@@ -1869,12 +1894,9 @@ function matchesSchemaNodeInternal(schemaNode, yamlNode, allowUnknownObjectPrope
             }
         }
 
-        if (schemaNode.dependentSchemas && typeof schemaNode.dependentSchemas === "object") {
-            for (const [triggerProperty, dependentSchema] of Object.entries(schemaNode.dependentSchemas)) {
-                if (yamlNode.map.has(triggerProperty) &&
-                    !matchesSchemaNodeInternal(dependentSchema, yamlNode, true)) {
-                    return false;
-                }
+        for (const [, dependentSchema] of getTriggeredDependentSchemas(schemaNode, yamlNode)) {
+            if (!matchesSchemaNodeInternal(dependentSchema, yamlNode, true)) {
+                return false;
             }
         }
 

@@ -585,6 +585,55 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证只有 object 节点允许声明 <c>dependentSchemas</c>。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_NonObject_Schema_Declares_DependentSchemas()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "tag"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "tag": {
+                                    "type": "string",
+                                    "dependentSchemas": {
+                                      "itemId": {
+                                        "type": "object",
+                                        "properties": {}
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_011"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("tag"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("Only object schemas can declare 'dependentSchemas'."));
+        });
+    }
+
+    /// <summary>
     ///     验证 <c>dependentSchemas</c> 子 schema 内的非法 <c>format</c> 也会在生成阶段直接给出诊断。
     /// </summary>
     [Test]

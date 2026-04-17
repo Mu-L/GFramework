@@ -959,6 +959,44 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     验证当前 schema 节点是否以运行时支持的方式声明了 <c>dependentSchemas</c>。
+    ///     只有 object 节点允许挂载该关键字；一旦关键字出现，就继续复用对象节点的形状校验，
+    ///     保证发布到 XML 文档和运行时的约束解释范围保持一致。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="schemaType">当前节点声明的 schema 类型。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前节点上的 dependentSchemas 声明是否有效。</returns>
+    private static bool TryValidateDependentSchemasDeclaration(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        string? schemaType,
+        out Diagnostic? diagnostic)
+    {
+        diagnostic = null;
+        if (!element.TryGetProperty("dependentSchemas", out _))
+        {
+            return true;
+        }
+
+        if (!string.Equals(schemaType, "object", StringComparison.Ordinal))
+        {
+            diagnostic = Diagnostic.Create(
+                ConfigSchemaDiagnostics.InvalidDependentSchemasMetadata,
+                CreateFileLocation(filePath),
+                Path.GetFileName(filePath),
+                displayPath,
+                "Only object schemas can declare 'dependentSchemas'.");
+            return false;
+        }
+
+        return TryValidateDependentSchemasMetadata(filePath, displayPath, element, out diagnostic);
+    }
+
+    /// <summary>
     ///     递归验证 schema 树中的对象级 <c>dependentSchemas</c> 元数据。
     ///     该遍历会覆盖根节点、<c>not</c>、数组元素、<c>contains</c> 与嵌套 <c>dependentSchemas</c>，
     ///     确保生成器对条件对象子 schema 的接受范围不会比运行时更宽松。
@@ -980,15 +1018,11 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             element,
             static (currentFilePath, currentDisplayPath, currentElement, schemaType) =>
             {
-                if (!string.Equals(schemaType, "object", StringComparison.Ordinal))
-                {
-                    return (true, (Diagnostic?)null);
-                }
-
-                return TryValidateDependentSchemasMetadata(
+                return TryValidateDependentSchemasDeclaration(
                     currentFilePath,
                     currentDisplayPath,
                     currentElement,
+                    schemaType,
                     out var currentDiagnostic)
                     ? (true, (Diagnostic?)null)
                     : (false, currentDiagnostic);
@@ -3447,6 +3481,9 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     ///     该摘要复用现有 enum / const / 约束文档构造器，避免 contains / not 与主属性文档逐渐漂移。
     /// </summary>
     /// <param name="schemaElement">内联子 schema。</param>
+    /// <param name="includeRequiredProperties">
+    ///     为对象摘要额外输出 <c>required</c> 信息时返回 <see langword="true" />。
+    /// </param>
     /// <returns>格式化后的摘要字符串。</returns>
     private static string? TryBuildInlineSchemaSummary(
         JsonElement schemaElement,

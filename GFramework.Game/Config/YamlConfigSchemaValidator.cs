@@ -813,15 +813,20 @@ internal static class YamlConfigSchemaValidator
     }
 
     /// <summary>
-    ///     校验对象节点声明的属性数量约束。
+    ///     校验对象节点声明的数量约束与条件对象约束。
+    ///     该阶段除了检查 <c>minProperties</c> / <c>maxProperties</c>，还会复用同一份 sibling 集合处理
+    ///     <c>dependentRequired</c>，并在 <c>dependentSchemas</c> 命中时以 focused constraint block 语义
+    ///     对整个 <paramref name="mappingNode" /> 做额外试匹配。
     /// </summary>
     /// <param name="tableName">所属配置表名称。</param>
     /// <param name="yamlPath">YAML 文件路径。</param>
     /// <param name="displayPath">对象字段路径；根对象时为空。</param>
-    /// <param name="mappingNode">当前 YAML 对象节点。</param>
+    /// <param name="mappingNode">当前 YAML 对象节点；用于让条件子 schema 在完整对象视图上做匹配。</param>
     /// <param name="seenProperties">当前对象已出现的属性集合。</param>
     /// <param name="schemaNode">对象 schema 节点。</param>
-    /// <param name="references">可选的跨表引用收集器。</param>
+    /// <param name="references">
+    ///     可选的跨表引用收集器；当 <c>dependentSchemas</c> 命中且匹配成功时，只会回写该条件分支新增的引用。
+    /// </param>
     private static void ValidateObjectConstraints(
         string tableName,
         string yamlPath,
@@ -924,6 +929,9 @@ internal static class YamlConfigSchemaValidator
             // dependentSchemas acts as an additional conditional constraint block on the
             // current object. Keep undeclared sibling fields outside the dependent sub-schema
             // from blocking the match so schema authors can express focused follow-up rules.
+            // The trial matcher merges only new reference usages back into the outer collector,
+            // so re-checking the same scalar via a conditional sub-schema does not duplicate
+            // cross-table validation work later in the loader pipeline.
             if (TryMatchSchemaNode(
                     tableName,
                     yamlPath,
@@ -3138,10 +3146,7 @@ internal static class YamlConfigSchemaValidator
             if (references is not null &&
                 matchedReferences is not null)
             {
-                foreach (var referenceUsage in matchedReferences)
-                {
-                    references.Add(referenceUsage);
-                }
+                AddUniqueReferenceUsages(references, matchedReferences);
             }
 
             return true;
@@ -3151,6 +3156,50 @@ internal static class YamlConfigSchemaValidator
         {
             return false;
         }
+    }
+
+    /// <summary>
+    ///     将试匹配分支采集到的引用回写到外层集合，并按结构化标识去重。
+    /// </summary>
+    /// <param name="references">外层引用集合。</param>
+    /// <param name="matchedReferences">当前成功匹配分支采集到的引用。</param>
+    private static void AddUniqueReferenceUsages(
+        ICollection<YamlConfigReferenceUsage> references,
+        IEnumerable<YamlConfigReferenceUsage> matchedReferences)
+    {
+        foreach (var referenceUsage in matchedReferences)
+        {
+            if (!ContainsReferenceUsage(references, referenceUsage))
+            {
+                references.Add(referenceUsage);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     判断外层引用集合中是否已经存在同一条引用使用记录。
+    /// </summary>
+    /// <param name="references">要检查的引用集合。</param>
+    /// <param name="candidate">当前待合并的引用记录。</param>
+    /// <returns>当集合中已存在语义相同的记录时返回 <see langword="true" />。</returns>
+    private static bool ContainsReferenceUsage(
+        IEnumerable<YamlConfigReferenceUsage> references,
+        YamlConfigReferenceUsage candidate)
+    {
+        foreach (var referenceUsage in references)
+        {
+            if (string.Equals(referenceUsage.YamlPath, candidate.YamlPath, StringComparison.Ordinal) &&
+                string.Equals(referenceUsage.SchemaPath, candidate.SchemaPath, StringComparison.Ordinal) &&
+                string.Equals(referenceUsage.PropertyPath, candidate.PropertyPath, StringComparison.Ordinal) &&
+                string.Equals(referenceUsage.RawValue, candidate.RawValue, StringComparison.Ordinal) &&
+                string.Equals(referenceUsage.ReferencedTableName, candidate.ReferencedTableName, StringComparison.Ordinal) &&
+                referenceUsage.ValueType == candidate.ValueType)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -10,7 +10,7 @@ namespace GFramework.Game.Tests.Config;
 [TestFixture]
 public sealed class YamlConfigLoaderDependentSchemasTests
 {
-    private string _rootPath = null!;
+    private string? _rootPath;
 
     /// <summary>
     ///     为每个用例创建隔离的临时目录，避免不同 dependentSchemas 场景互相污染。
@@ -28,7 +28,8 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     [TearDown]
     public void TearDown()
     {
-        if (Directory.Exists(_rootPath))
+        if (!string.IsNullOrEmpty(_rootPath) &&
+            Directory.Exists(_rootPath))
         {
             Directory.Delete(_rootPath, true);
         }
@@ -310,6 +311,8 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     /// <param name="content">要写入的 YAML 或 schema 内容。</param>
     private void CreateConfigFile(string relativePath, string content)
     {
+        ArgumentNullException.ThrowIfNull(_rootPath);
+
         var filePath = Path.Combine(_rootPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
         var directoryPath = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrEmpty(directoryPath))
@@ -336,6 +339,8 @@ public sealed class YamlConfigLoaderDependentSchemasTests
     /// <returns>已注册测试表与 schema 路径的加载器。</returns>
     private YamlConfigLoader CreateMonsterRewardLoader()
     {
+        ArgumentNullException.ThrowIfNull(_rootPath);
+
         return new YamlConfigLoader(_rootPath)
             .RegisterTable<int, MonsterDependentSchemasConfigStub>(
                 "monster",
