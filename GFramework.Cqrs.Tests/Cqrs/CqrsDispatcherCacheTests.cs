@@ -7,14 +7,11 @@ using GFramework.Cqrs.Abstractions.Cqrs;
 namespace GFramework.Cqrs.Tests.Cqrs;
 
 /// <summary>
-///     验证 CQRS dispatcher 会缓存热路径中的服务类型与调用委托。
+///     验证 CQRS dispatcher 会缓存热路径中的 dispatch binding。
 /// </summary>
 [TestFixture]
 internal sealed class CqrsDispatcherCacheTests
 {
-    private MicrosoftDiContainer? _container;
-    private ArchitectureContext? _context;
-
     /// <summary>
     ///     初始化测试上下文。
     /// </summary>
@@ -45,40 +42,31 @@ internal sealed class CqrsDispatcherCacheTests
         _container = null;
     }
 
+    private MicrosoftDiContainer? _container;
+    private ArchitectureContext? _context;
+
     /// <summary>
-    ///     验证相同消息类型重复分发时，不会重复扩张服务类型与调用委托缓存。
+    ///     验证相同消息类型重复分发时，不会重复扩张 dispatch binding 缓存。
     /// </summary>
     [Test]
-    public async Task Dispatcher_Should_Cache_Service_Types_After_First_Dispatch()
+    public async Task Dispatcher_Should_Cache_Dispatch_Bindings_After_First_Dispatch()
     {
-        var notificationServiceTypes = GetCacheField("NotificationHandlerServiceTypes");
-        var requestServiceTypes = GetCacheField("RequestServiceTypes");
-        var streamServiceTypes = GetCacheField("StreamHandlerServiceTypes");
-        var requestInvokers = GetGenericCacheField("RequestInvokerCache`1", typeof(int), "Invokers");
-        var requestPipelineInvokers = GetGenericCacheField("RequestPipelineInvokerCache`1", typeof(int), "Invokers");
-        var notificationInvokers = GetCacheField("NotificationInvokers");
-        var streamInvokers = GetCacheField("StreamInvokers");
+        var notificationBindings = GetCacheField("NotificationDispatchBindings");
+        var requestBindings = GetGenericCacheField("RequestDispatchBindingCache`1", typeof(int), "Bindings");
+        var streamBindings = GetCacheField("StreamDispatchBindings");
 
-        var notificationBefore = notificationServiceTypes.Count;
-        var requestBefore = requestServiceTypes.Count;
-        var streamBefore = streamServiceTypes.Count;
-        var requestInvokersBefore = requestInvokers.Count;
-        var requestPipelineInvokersBefore = requestPipelineInvokers.Count;
-        var notificationInvokersBefore = notificationInvokers.Count;
-        var streamInvokersBefore = streamInvokers.Count;
+        var notificationBefore = notificationBindings.Count;
+        var requestBefore = requestBindings.Count;
+        var streamBefore = streamBindings.Count;
 
         await _context!.SendRequestAsync(new DispatcherCacheRequest());
         await _context.SendRequestAsync(new DispatcherPipelineCacheRequest());
         await _context.PublishAsync(new DispatcherCacheNotification());
         await DrainAsync(_context.CreateStream(new DispatcherCacheStreamRequest()));
 
-        var notificationAfterFirstDispatch = notificationServiceTypes.Count;
-        var requestAfterFirstDispatch = requestServiceTypes.Count;
-        var streamAfterFirstDispatch = streamServiceTypes.Count;
-        var requestInvokersAfterFirstDispatch = requestInvokers.Count;
-        var requestPipelineInvokersAfterFirstDispatch = requestPipelineInvokers.Count;
-        var notificationInvokersAfterFirstDispatch = notificationInvokers.Count;
-        var streamInvokersAfterFirstDispatch = streamInvokers.Count;
+        var notificationAfterFirstDispatch = notificationBindings.Count;
+        var requestAfterFirstDispatch = requestBindings.Count;
+        var streamAfterFirstDispatch = streamBindings.Count;
 
         await _context.SendRequestAsync(new DispatcherCacheRequest());
         await _context.SendRequestAsync(new DispatcherPipelineCacheRequest());
@@ -90,38 +78,30 @@ internal sealed class CqrsDispatcherCacheTests
             Assert.That(notificationAfterFirstDispatch, Is.EqualTo(notificationBefore + 1));
             Assert.That(requestAfterFirstDispatch, Is.EqualTo(requestBefore + 2));
             Assert.That(streamAfterFirstDispatch, Is.EqualTo(streamBefore + 1));
-            Assert.That(requestInvokersAfterFirstDispatch, Is.EqualTo(requestInvokersBefore + 1));
-            Assert.That(requestPipelineInvokersAfterFirstDispatch, Is.EqualTo(requestPipelineInvokersBefore + 1));
-            Assert.That(notificationInvokersAfterFirstDispatch, Is.EqualTo(notificationInvokersBefore + 1));
-            Assert.That(streamInvokersAfterFirstDispatch, Is.EqualTo(streamInvokersBefore + 1));
 
-            Assert.That(notificationServiceTypes.Count, Is.EqualTo(notificationAfterFirstDispatch));
-            Assert.That(requestServiceTypes.Count, Is.EqualTo(requestAfterFirstDispatch));
-            Assert.That(streamServiceTypes.Count, Is.EqualTo(streamAfterFirstDispatch));
-            Assert.That(requestInvokers.Count, Is.EqualTo(requestInvokersAfterFirstDispatch));
-            Assert.That(requestPipelineInvokers.Count, Is.EqualTo(requestPipelineInvokersAfterFirstDispatch));
-            Assert.That(notificationInvokers.Count, Is.EqualTo(notificationInvokersAfterFirstDispatch));
-            Assert.That(streamInvokers.Count, Is.EqualTo(streamInvokersAfterFirstDispatch));
+            Assert.That(notificationBindings.Count, Is.EqualTo(notificationAfterFirstDispatch));
+            Assert.That(requestBindings.Count, Is.EqualTo(requestAfterFirstDispatch));
+            Assert.That(streamBindings.Count, Is.EqualTo(streamAfterFirstDispatch));
         });
     }
 
     /// <summary>
-    ///     验证 request 调用委托会按响应类型分别缓存，避免不同响应类型共用 object 结果桥接。
+    ///     验证 request dispatch binding 会按响应类型分别缓存，避免不同响应类型共用 object 结果桥接。
     /// </summary>
     [Test]
-    public async Task Dispatcher_Should_Cache_Request_Invokers_Per_Response_Type()
+    public async Task Dispatcher_Should_Cache_Request_Dispatch_Bindings_Per_Response_Type()
     {
-        var intRequestInvokers = GetGenericCacheField("RequestInvokerCache`1", typeof(int), "Invokers");
-        var stringRequestInvokers = GetGenericCacheField("RequestInvokerCache`1", typeof(string), "Invokers");
+        var intRequestBindings = GetGenericCacheField("RequestDispatchBindingCache`1", typeof(int), "Bindings");
+        var stringRequestBindings = GetGenericCacheField("RequestDispatchBindingCache`1", typeof(string), "Bindings");
 
-        var intBefore = intRequestInvokers.Count;
-        var stringBefore = stringRequestInvokers.Count;
+        var intBefore = intRequestBindings.Count;
+        var stringBefore = stringRequestBindings.Count;
 
         await _context!.SendRequestAsync(new DispatcherCacheRequest());
         await _context.SendRequestAsync(new DispatcherStringCacheRequest());
 
-        var intAfterFirstDispatch = intRequestInvokers.Count;
-        var stringAfterFirstDispatch = stringRequestInvokers.Count;
+        var intAfterFirstDispatch = intRequestBindings.Count;
+        var stringAfterFirstDispatch = stringRequestBindings.Count;
 
         await _context.SendRequestAsync(new DispatcherCacheRequest());
         await _context.SendRequestAsync(new DispatcherStringCacheRequest());
@@ -130,8 +110,8 @@ internal sealed class CqrsDispatcherCacheTests
         {
             Assert.That(intAfterFirstDispatch, Is.EqualTo(intBefore + 1));
             Assert.That(stringAfterFirstDispatch, Is.EqualTo(stringBefore + 1));
-            Assert.That(intRequestInvokers.Count, Is.EqualTo(intAfterFirstDispatch));
-            Assert.That(stringRequestInvokers.Count, Is.EqualTo(stringAfterFirstDispatch));
+            Assert.That(intRequestBindings.Count, Is.EqualTo(intAfterFirstDispatch));
+            Assert.That(stringRequestBindings.Count, Is.EqualTo(stringAfterFirstDispatch));
         });
     }
 
@@ -157,15 +137,10 @@ internal sealed class CqrsDispatcherCacheTests
     /// </summary>
     private static void ClearDispatcherCaches()
     {
-        GetCacheField("NotificationHandlerServiceTypes").Clear();
-        GetCacheField("RequestServiceTypes").Clear();
-        GetCacheField("StreamHandlerServiceTypes").Clear();
-        GetCacheField("NotificationInvokers").Clear();
-        GetCacheField("StreamInvokers").Clear();
-        GetGenericCacheField("RequestInvokerCache`1", typeof(int), "Invokers").Clear();
-        GetGenericCacheField("RequestInvokerCache`1", typeof(string), "Invokers").Clear();
-        GetGenericCacheField("RequestPipelineInvokerCache`1", typeof(int), "Invokers").Clear();
-        GetGenericCacheField("RequestPipelineInvokerCache`1", typeof(string), "Invokers").Clear();
+        GetCacheField("NotificationDispatchBindings").Clear();
+        GetCacheField("StreamDispatchBindings").Clear();
+        GetGenericCacheField("RequestDispatchBindingCache`1", typeof(int), "Bindings").Clear();
+        GetGenericCacheField("RequestDispatchBindingCache`1", typeof(string), "Bindings").Clear();
     }
 
     /// <summary>

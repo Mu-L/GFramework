@@ -15,24 +15,13 @@ internal sealed class CqrsDispatcher(
     IIocContainer container,
     ILogger logger) : ICqrsRuntime
 {
-    // 进程级缓存：缓存通知调用委托，复用并发安全字典以支撑多线程发布路径。
-    private static readonly ConcurrentDictionary<Type, NotificationInvoker> NotificationInvokers = new();
+    // 进程级缓存：把通知服务类型与调用委托绑定到同一项，减少发布热路径上的重复字典查询。
+    private static readonly ConcurrentDictionary<Type, NotificationDispatchBinding>
+        NotificationDispatchBindings = new();
 
-    // 进程级缓存：缓存通知处理器服务类型，避免每次发布都重复 MakeGenericType。
-    private static readonly ConcurrentDictionary<Type, Type> NotificationHandlerServiceTypes = new();
-
-    // 进程级缓存：缓存流式请求调用委托，避免每次创建流时重复解析反射签名。
-    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), StreamInvoker> StreamInvokers =
-        new();
-
-    // 进程级缓存：缓存请求处理器与 pipeline 行为的服务类型，减少热路径中的泛型类型构造。
-    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), RequestServiceTypeSet>
-        RequestServiceTypes = new();
-
-    // 进程级缓存：缓存流式请求处理器服务类型，避免每次建流时重复 MakeGenericType。
-    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), Type>
-        StreamHandlerServiceTypes =
-            new();
+    // 进程级缓存：把流式处理器服务类型与调用委托绑定到同一项，减少建流热路径上的重复字典查询。
+    private static readonly ConcurrentDictionary<(Type RequestType, Type ResponseType), StreamDispatchBinding>
+        StreamDispatchBindings = new();
 
     // 静态方法定义缓存：这些反射查找与消息类型无关，只需解析一次即可复用。
     private static readonly MethodInfo RequestHandlerInvokerMethodDefinition = typeof(CqrsDispatcher)
@@ -64,10 +53,10 @@ internal sealed class CqrsDispatcher(
         ArgumentNullException.ThrowIfNull(notification);
 
         var notificationType = notification.GetType();
-        var handlerType = NotificationHandlerServiceTypes.GetOrAdd(
+        var dispatchBinding = NotificationDispatchBindings.GetOrAdd(
             notificationType,
-            static type => typeof(INotificationHandler<>).MakeGenericType(type));
-        var handlers = container.GetAll(handlerType);
+            CreateNotificationDispatchBinding);
+        var handlers = container.GetAll(dispatchBinding.HandlerType);
 
         if (handlers.Count == 0)
         {
@@ -75,14 +64,10 @@ internal sealed class CqrsDispatcher(
             return;
         }
 
-        var invoker = NotificationInvokers.GetOrAdd(
-            notificationType,
-            CreateNotificationInvoker);
-
         foreach (var handler in handlers)
         {
             PrepareHandler(handler, context);
-            await invoker(handler, notification, cancellationToken);
+            await dispatchBinding.Invoker(handler, notification, cancellationToken);
         }
     }
 
@@ -103,36 +88,23 @@ internal sealed class CqrsDispatcher(
         ArgumentNullException.ThrowIfNull(request);
 
         var requestType = request.GetType();
-        var serviceTypes = RequestServiceTypes.GetOrAdd(
-            (requestType, typeof(TResponse)),
-            static key => new RequestServiceTypeSet(
-                typeof(IRequestHandler<,>).MakeGenericType(key.RequestType, key.ResponseType),
-                typeof(IPipelineBehavior<,>).MakeGenericType(key.RequestType, key.ResponseType)));
-        var handlerType = serviceTypes.HandlerType;
-        var handler = container.Get(handlerType)
+        var dispatchBinding = RequestDispatchBindingCache<TResponse>.Bindings.GetOrAdd(
+            requestType,
+            CreateRequestDispatchBinding<TResponse>);
+        var handler = container.Get(dispatchBinding.HandlerType)
                       ?? throw new InvalidOperationException(
                           $"No CQRS request handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
-        var behaviors = container.GetAll(serviceTypes.BehaviorType);
+        var behaviors = container.GetAll(dispatchBinding.BehaviorType);
 
         foreach (var behavior in behaviors)
             PrepareHandler(behavior, context);
 
         if (behaviors.Count == 0)
-        {
-            var invoker = RequestInvokerCache<TResponse>.Invokers.GetOrAdd(
-                requestType,
-                CreateRequestInvoker<TResponse>);
+            return await dispatchBinding.RequestInvoker(handler, request, cancellationToken);
 
-            return await invoker(handler, request, cancellationToken);
-        }
-
-        var pipelineInvoker = RequestPipelineInvokerCache<TResponse>.Invokers.GetOrAdd(
-            requestType,
-            CreateRequestPipelineInvoker<TResponse>);
-
-        return await pipelineInvoker(handler, behaviors, request, cancellationToken);
+        return await dispatchBinding.PipelineInvoker(handler, behaviors, request, cancellationToken);
     }
 
     /// <summary>
@@ -152,20 +124,16 @@ internal sealed class CqrsDispatcher(
         ArgumentNullException.ThrowIfNull(request);
 
         var requestType = request.GetType();
-        var handlerType = StreamHandlerServiceTypes.GetOrAdd(
+        var dispatchBinding = StreamDispatchBindings.GetOrAdd(
             (requestType, typeof(TResponse)),
-            static key => typeof(IStreamRequestHandler<,>).MakeGenericType(key.RequestType, key.ResponseType));
-        var handler = container.Get(handlerType)
+            static key => CreateStreamDispatchBinding(key.RequestType, key.ResponseType));
+        var handler = container.Get(dispatchBinding.HandlerType)
                       ?? throw new InvalidOperationException(
                           $"No CQRS stream handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
 
-        var invoker = StreamInvokers.GetOrAdd(
-            (requestType, typeof(TResponse)),
-            static key => CreateStreamInvoker(key.RequestType, key.ResponseType));
-
-        return (IAsyncEnumerable<TResponse>)invoker(handler, request, cancellationToken);
+        return (IAsyncEnumerable<TResponse>)dispatchBinding.Invoker(handler, request, cancellationToken);
     }
 
     /// <summary>
@@ -183,6 +151,38 @@ internal sealed class CqrsDispatcher(
 
             contextAware.SetContext(architectureContext);
         }
+    }
+
+    /// <summary>
+    ///     为指定请求类型构造完整分发绑定，把服务类型与强类型调用委托一次性收敛到同一缓存项。
+    /// </summary>
+    private static RequestDispatchBinding<TResponse> CreateRequestDispatchBinding<TResponse>(Type requestType)
+    {
+        return new RequestDispatchBinding<TResponse>(
+            typeof(IRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse)),
+            typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse)),
+            CreateRequestInvoker<TResponse>(requestType),
+            CreateRequestPipelineInvoker<TResponse>(requestType));
+    }
+
+    /// <summary>
+    ///     为指定通知类型构造完整分发绑定，把服务类型与调用委托聚合到同一缓存项。
+    /// </summary>
+    private static NotificationDispatchBinding CreateNotificationDispatchBinding(Type notificationType)
+    {
+        return new NotificationDispatchBinding(
+            typeof(INotificationHandler<>).MakeGenericType(notificationType),
+            CreateNotificationInvoker(notificationType));
+    }
+
+    /// <summary>
+    ///     为指定流式请求类型构造完整分发绑定，把服务类型与调用委托聚合到同一缓存项。
+    /// </summary>
+    private static StreamDispatchBinding CreateStreamDispatchBinding(Type requestType, Type responseType)
+    {
+        return new StreamDispatchBinding(
+            typeof(IStreamRequestHandler<,>).MakeGenericType(requestType, responseType),
+            CreateStreamInvoker(requestType, responseType));
     }
 
     /// <summary>
@@ -312,22 +312,22 @@ internal sealed class CqrsDispatcher(
     private delegate object StreamInvoker(object handler, object request, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     按响应类型分层缓存 request 处理器调用委托，避免 value-type 响应在 object 桥接中产生装箱。
+    ///     按响应类型分层缓存 request 分发绑定，既避免 value-type 响应走 object 桥接，
+    ///     也让 handler/pipeline 服务类型与调用委托在热路径上只命中一次缓存。
     /// </summary>
     /// <typeparam name="TResponse">请求响应类型。</typeparam>
-    private static class RequestInvokerCache<TResponse>
+    private static class RequestDispatchBindingCache<TResponse>
     {
-        internal static readonly ConcurrentDictionary<Type, RequestInvoker<TResponse>> Invokers = new();
+        internal static readonly ConcurrentDictionary<Type, RequestDispatchBinding<TResponse>> Bindings = new();
     }
 
-    /// <summary>
-    ///     按响应类型分层缓存带 pipeline 的 request 调用委托，避免 pipeline 热路径上的额外装箱。
-    /// </summary>
-    /// <typeparam name="TResponse">请求响应类型。</typeparam>
-    private static class RequestPipelineInvokerCache<TResponse>
-    {
-        internal static readonly ConcurrentDictionary<Type, RequestPipelineInvoker<TResponse>> Invokers = new();
-    }
+    private readonly record struct NotificationDispatchBinding(Type HandlerType, NotificationInvoker Invoker);
 
-    private readonly record struct RequestServiceTypeSet(Type HandlerType, Type BehaviorType);
+    private readonly record struct StreamDispatchBinding(Type HandlerType, StreamInvoker Invoker);
+
+    private readonly record struct RequestDispatchBinding<TResponse>(
+        Type HandlerType,
+        Type BehaviorType,
+        RequestInvoker<TResponse> RequestInvoker,
+        RequestPipelineInvoker<TResponse> PipelineInvoker);
 }
