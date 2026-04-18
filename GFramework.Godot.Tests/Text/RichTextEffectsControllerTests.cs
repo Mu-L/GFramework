@@ -1,4 +1,5 @@
-using GFramework.Godot.Text;
+using Godot;
+using Godot.Collections;
 using Array = Godot.Collections.Array;
 
 namespace GFramework.Godot.Tests.Text;
@@ -115,7 +116,7 @@ public sealed class RichTextEffectsControllerTests
         {
             CapturedProfiles.Add(profile);
             CapturedAnimatedEffectsEnabled.Add(animatedEffectsEnabled);
-            return Array.Empty<RichTextEffect>();
+            return new Array<RichTextEffect>();
         }
 
         public RichTextEffect? CreateEffect(string key, bool animatedEffectsEnabled)
