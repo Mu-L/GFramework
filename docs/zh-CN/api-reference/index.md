@@ -434,9 +434,11 @@ Godot 引擎集成模块。
 
 ## 源码生成器
 
-### GFramework.SourceGenerators
+### Source Generators 家族
 
-自动代码生成工具。
+自动代码生成工具按模块拆分为 `GFramework.Core.SourceGenerators`、`GFramework.Game.SourceGenerators`、
+`GFramework.Godot.SourceGenerators` 与 `GFramework.Cqrs.SourceGenerators`。面向业务代码声明的 Attribute
+主要来自 `GFramework.Core.SourceGenerators.Abstractions.*` 与对应模块的 runtime/generator 包。
 
 #### 支持的生成器
 

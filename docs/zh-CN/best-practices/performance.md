@@ -278,7 +278,7 @@ public class PoolMonitorSystem : AbstractSystem
 
 ```csharp
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 // ✅ 好的做法：正确管理事件订阅
 [ContextAware]

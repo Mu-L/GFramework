@@ -390,7 +390,7 @@ using GFramework.Core.Abstractions.Controller;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Events;
 using GFramework.Core.Extensions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerPanelController : IController

@@ -109,7 +109,7 @@ event EventHandler<PauseStateChangedEventArgs>? OnPauseStateChanged;
 ### 1. 获取暂停管理器
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameController : IController
@@ -127,7 +127,7 @@ public partial class GameController : IController
 ### 2. 简单的暂停/恢复
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PauseMenuController : IController
@@ -163,7 +163,7 @@ public partial class PauseMenuController : IController
 ### 3. 使用作用域自动管理
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class DialogController : IController
@@ -215,7 +215,7 @@ public class GameplaySystem : AbstractSystem
 ### 1. 嵌套暂停
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class UIManager : IController
@@ -254,7 +254,7 @@ public partial class UIManager : IController
 ### 2. 分组暂停
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class GameManager : IController
@@ -362,7 +362,7 @@ public class GameInitializer
 ### 4. 监听暂停状态变化
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PauseIndicator : IController
@@ -404,7 +404,7 @@ public partial class PauseIndicator : IController
 ### 5. 调试暂停状态
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PauseDebugger : IController
@@ -441,7 +441,7 @@ public partial class PauseDebugger : IController
 ### 6. 紧急恢复
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class EmergencyController : IController
@@ -682,7 +682,7 @@ public class ThreadSafeUsage
 在组件销毁时注销处理器和事件：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class ProperCleanup : IController
@@ -784,7 +784,7 @@ public class SelectiveSystem : AbstractSystem
 A: 暂停系统控制是否执行，时间缩放需要使用时间系统：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class SlowMotionController : IController
@@ -829,7 +829,7 @@ _pauseManager.Push("AI 系统", PauseGroup.Custom3);
 A: 使用 `PauseScope` 配合 `async/await`：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class AsyncPauseExample : IController

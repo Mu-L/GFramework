@@ -324,7 +324,7 @@ namespace MyGame.Systems
 ```csharp
 using GFramework.Core.Abstractions.Pause;
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 namespace MyGame.Controllers
 {
@@ -664,7 +664,7 @@ namespace MyGame
 ```csharp
 using GFramework.Core.Abstractions.Pause;
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using System.Threading.Tasks;
 
 namespace MyGame.Controllers

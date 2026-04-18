@@ -1,6 +1,6 @@
 # 日志生成器
 
-> GFramework.SourceGenerators 自动生成日志代码，减少样板代码
+> GFramework.Core.SourceGenerators 自动生成日志代码，减少样板代码
 
 ## 概述
 
@@ -11,7 +11,7 @@
 ### 标记类
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Logging;
+using GFramework.Core.SourceGenerators.Abstractions.Logging;
 
 [Log]
 public partial class MyService
@@ -165,8 +165,8 @@ public partial class MySystem : AbstractSystem
 
 ```csharp
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Logging;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Logging;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [Log]
 [ContextAware]

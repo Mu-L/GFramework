@@ -145,7 +145,7 @@ public class LoadPlayerDataQuery : AbstractAsyncQuery<LoadPlayerDataInput, Playe
 
 ```csharp
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class ShopUI : IController

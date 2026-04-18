@@ -21,7 +21,7 @@ ContextAware 生成器为标记了 `[ContextAware]` 属性的类自动生成 `IC
 使用 `[ContextAware]` 属性标记需要访问架构上下文的类：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using GFramework.Core.Abstractions.Controller;
 
 [ContextAware]
@@ -233,7 +233,7 @@ public partial class GameFlowController : IController
 
 ```csharp
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerController : Node, IController

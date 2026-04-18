@@ -398,7 +398,7 @@ using GFramework.Core.Abstractions.State;
 using GFramework.Core.Extensions;
 using MyGame.States;
 using System.Threading.Tasks;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 namespace MyGame.Controllers
 {

@@ -474,7 +474,7 @@ namespace MyShooterGame.Systems
 // Scripts/Controllers/PlayerController.cs
 using GFramework.Core.Abstractions.Controller;
 using GFramework.Core.Extensions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using MyShooterGame.Architecture;
 using MyShooterGame.Models;
 using Godot;
@@ -630,7 +630,7 @@ public partial class Main : Node
 using Godot;
 using GFramework.Core.Abstractions.Controller;
 using GFramework.Core.Extensions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using MyShooterGame.Architecture;
 using MyShooterGame.Systems;
 
@@ -673,7 +673,7 @@ using Godot;
 using GFramework.Core.Abstractions.Controller;
 using GFramework.Core.Abstractions.Architecture;
 using GFramework.Core.Extensions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using MyShooterGame.Architecture;
 using MyShooterGame.Systems;
 using MyShooterGame.Models;

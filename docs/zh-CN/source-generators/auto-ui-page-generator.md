@@ -126,7 +126,7 @@ partial class MainMenu
 ```csharp
 using GFramework.Godot.SourceGenerators.Abstractions.UI;
 using GFramework.Game.Abstractions.Enums;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using Godot;
 
 [ContextAware]

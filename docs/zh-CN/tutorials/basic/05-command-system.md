@@ -174,7 +174,7 @@ public class DecreaseCountCommand : AbstractCommand
 ```csharp
 using GFramework.Core.Abstractions.Controller;
 using GFramework.Core.Extensions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using Godot;
 using MyGFrameworkGame.scripts.Command;
 using MyGFrameworkGame.scripts.Model;

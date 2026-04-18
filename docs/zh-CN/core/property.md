@@ -240,7 +240,7 @@ public class PlayerModel : AbstractModel
 
 ```csharp
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerUI : Control, IController
@@ -384,7 +384,7 @@ public class PlayerModel : AbstractModel
 
 ```c#
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class CombatController : Node, IController

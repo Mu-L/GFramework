@@ -187,7 +187,7 @@ architecture.RegisterModel<ICounterModel>(new CounterModel());
 ```csharp
 using GFramework.Core.Abstractions.Controller;
 using GFramework.Core.Extensions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using Godot;
 using MyGFrameworkGame.scripts.Model;
 
@@ -219,7 +219,7 @@ public partial class App : Control, IController  // ← 实现 IController 接�
 ```csharp
 using GFramework.Core.Abstractions.Controller;
 using GFramework.Core.Extensions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using Godot;
 using MyGFrameworkGame.scripts.Model;
 
