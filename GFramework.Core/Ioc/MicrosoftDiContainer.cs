@@ -394,7 +394,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         {
             if (assembly is null)
             {
-                throw new ArgumentException("Assemblies collection cannot contain null items.", nameof(assemblies));
+                throw new ArgumentNullException(nameof(assemblies), "Assemblies collection cannot contain null items.");
             }
         }
 

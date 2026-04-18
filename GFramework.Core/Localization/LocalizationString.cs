@@ -9,10 +9,25 @@ namespace GFramework.Core.Localization;
 public class LocalizationString : ILocalizationString
 {
     /// <summary>
+    /// 正则分组名：变量名。
+    /// </summary>
+    private const string VariableGroupName = "variable";
+
+    /// <summary>
+    /// 正则分组名：格式化器名。
+    /// </summary>
+    private const string FormatterGroupName = "formatter";
+
+    /// <summary>
+    /// 正则分组名：格式化器参数。
+    /// </summary>
+    private const string FormatterArgsGroupName = "args";
+
+    /// <summary>
     /// 匹配 {variableName} 或 {variableName:formatter:args} 的正则表达式模式
     /// </summary>
     private const string FormatVariablePattern =
-        @"\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?)?\}";
+        @"\{(?<variable>[a-zA-Z_][a-zA-Z0-9_]*)(?::(?<formatter>[a-zA-Z_][a-zA-Z0-9_]*)(?::(?<args>[^}]+))?)?\}";
 
     /// <summary>
     /// 预编译的静态正则表达式，用于格式化字符串中的变量替换
@@ -157,13 +172,13 @@ public class LocalizationString : ILocalizationString
         Dictionary<string, object> variables,
         ILocalizationManager manager)
     {
-        var variableName = match.Groups[1].Value;
+        var variableName = match.Groups[VariableGroupName].Value;
         if (!variables.TryGetValue(variableName, out var value))
         {
             return match.Value;
         }
 
-        var formatterName = GetOptionalGroupValue(match, 2);
+        var formatterName = GetOptionalGroupValue(match, FormatterGroupName);
         if (string.IsNullOrEmpty(formatterName))
         {
             return FormatValue(value, manager);
@@ -190,7 +205,7 @@ public class LocalizationString : ILocalizationString
         ILocalizationManager manager,
         out string result)
     {
-        var formatterArgs = GetOptionalGroupValue(match, 3) ?? string.Empty;
+        var formatterArgs = GetOptionalGroupValue(match, FormatterArgsGroupName) ?? string.Empty;
         if (GetFormatter(manager, formatterName) is { } formatter &&
             formatter.TryFormat(formatterArgs, value, manager.CurrentCulture, out result))
         {
@@ -220,11 +235,11 @@ public class LocalizationString : ILocalizationString
     /// 获取正则表达式匹配组中的可选值
     /// </summary>
     /// <param name="match">正则表达式匹配结果</param>
-    /// <param name="groupIndex">要获取的组索引</param>
+    /// <param name="groupName">要获取的命名组</param>
     /// <returns>如果该组匹配成功则返回其值；否则返回 null</returns>
-    private static string? GetOptionalGroupValue(Match match, int groupIndex)
+    private static string? GetOptionalGroupValue(Match match, string groupName)
     {
-        return match.Groups[groupIndex].Success ? match.Groups[groupIndex].Value : null;
+        return match.Groups[groupName].Success ? match.Groups[groupName].Value : null;
     }
 
     /// <summary>

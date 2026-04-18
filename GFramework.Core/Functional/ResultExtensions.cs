@@ -177,7 +177,7 @@ public static class ResultExtensions
         return result.Match(
             succ: value => predicate(value)
                 ? result
-                : Result<T>.Fail(new ArgumentException(errorMessage, nameof(errorMessage))),
+                : Result<T>.Fail(new ArgumentException(errorMessage)),
             fail: _ => result
         );
     }
