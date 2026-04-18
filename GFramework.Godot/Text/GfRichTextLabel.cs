@@ -45,6 +45,36 @@ public partial class GfRichTextLabel : RichTextLabel, IRichTextEffectHost
     }
 
     /// <summary>
+    ///     根据控制器提供的配置参数在适配层实例化 Godot 原生效果，并写回标签宿主。
+    ///     这样控制器与测试替身不需要直接触碰 <see cref="RichTextEffect" /> 或
+    ///     <see cref="global::Godot.Collections.Array" />，而真正依赖 Godot runtime 的工作只发生在节点边界上。
+    /// </summary>
+    /// <param name="profile">需要安装的纯托管效果计划。</param>
+    /// <param name="animatedEffectsEnabled">当前是否允许字符级动态效果生效。</param>
+    void IRichTextEffectHost.ApplyEffects(RichTextEffectPlan profile, bool animatedEffectsEnabled)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        var registry = EffectRegistry;
+        var effects = registry.CreateEffects(RichTextProfile.FromPlan(profile), animatedEffectsEnabled);
+        var customEffects = new global::Godot.Collections.Array();
+        foreach (var effect in effects)
+        {
+            customEffects.Add(effect);
+        }
+
+        CustomEffects = customEffects;
+    }
+
+    /// <summary>
+    ///     清空标签当前持有的自定义效果集合。
+    /// </summary>
+    void IRichTextEffectHost.ClearCustomEffects()
+    {
+        CustomEffects = new global::Godot.Collections.Array();
+    }
+
+    /// <summary>
     ///     节点就绪时初始化控制器并安装效果集合。
     /// </summary>
     public override void _Ready()
@@ -69,8 +99,7 @@ public partial class GfRichTextLabel : RichTextLabel, IRichTextEffectHost
     {
         return _effectsController ??= new RichTextEffectsController(
             this,
-            () => EffectRegistry,
-            () => Profile,
+            () => Profile is null ? null : RichTextEffectPlan.FromProfile(Profile),
             () => EnableFrameworkEffects,
             () => AnimatedEffectsEnabled);
     }

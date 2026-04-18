@@ -159,6 +159,7 @@ jobs:
             "GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj:sg"
             "GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj:cqrs"
             "GFramework.Ecs.Arch.Tests/GFramework.Ecs.Arch.Tests.csproj:ecs-arch"
+            "GFramework.Godot.Tests/GFramework.Godot.Tests.csproj:godot"
             "GFramework.Godot.SourceGenerators.Tests/GFramework.Godot.SourceGenerators.Tests.csproj:godot-sg"
           )
 
@@ -221,7 +222,7 @@ jobs:
           done
 
       - name: Run GFramework.Godot.Tests Diagnostics
-        if: always()
+        if: always() && contains(steps.test_all_projects.outputs.failed_projects, 'GFramework.Godot.Tests/GFramework.Godot.Tests.csproj')
         continue-on-error: true
         run: |
           mkdir -p TestResults
