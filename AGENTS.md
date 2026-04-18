@@ -44,7 +44,7 @@ All AI agents and contributors must follow these rules when writing, reviewing, 
   `按 boot 开始`、`先看 AGENTS`、`继续当前任务`.
 - The boot skill is a startup convenience layer, not a replacement for this document. If the skill and `AGENTS.md`
   diverge, follow `AGENTS.md` first and update the skill in the same change.
-- The boot skill MUST read `AGENTS.md`、`.ai/environment/tools.ai.yaml` and the relevant `local-plan/` artifacts before
+- The boot skill MUST read `AGENTS.md`、`.ai/environment/tools.ai.yaml` and the relevant `ai-plan/` artifacts before
   substantive execution.
 
 ## Subagent Usage Rules
@@ -329,17 +329,28 @@ bash scripts/validate-csharp-naming.sh
 
 ### Task Tracking
 
+- `ai-plan/` is split by intent:
+  - `ai-plan/public/todos/`: repository-safe recovery documents that may be committed and shared across worktrees
+  - `ai-plan/public/traces/`: repository-safe execution traces that may be committed and shared across worktrees
+  - `ai-plan/private/`: worktree-private recovery artifacts; keep these untracked and scoped to the current worktree
+- Contributors MUST keep committed `ai-plan/public/**` content safe to publish in Git history.
+- Never write secrets, tokens, credentials, private keys, machine usernames, home-directory paths, hostnames, IP
+  addresses, proprietary URLs, or other sensitive environment details into any `ai-plan/**` file.
+- Never record absolute file-system paths in `ai-plan/**`; use repository-relative paths, branch names, PR numbers, or
+  stable document identifiers instead.
+- Use `ai-plan/public/**` only for durable, handoff-safe task state. Put temporary notes, local experiments, or
+  worktree-specific scratch recovery data under `ai-plan/private/`.
 - When working from a tracked implementation plan, contributors MUST update the corresponding tracking document under
-  `local-plan/todos/` in the same change.
+  `ai-plan/public/todos/` in the same change.
 - Tracking updates MUST reflect completed work, newly discovered issues, validation results, and the next recommended
   recovery point.
 - Completing code changes without updating the active tracking document is considered incomplete work.
 - For any multi-step refactor, migration, or cross-module task, contributors MUST create or adopt a dedicated recovery
-  document under `local-plan/todos/` before making substantive code changes.
+  document under `ai-plan/public/todos/` before making substantive code changes.
 - Recovery documents MUST record the current phase, the active recovery point identifier, known risks, and the next
   recommended resume step so another contributor or subagent can continue the work safely.
-- Contributors MUST maintain a matching execution trace under `local-plan/traces/` for complex work. The trace should
-  record the current date, key decisions, validation milestones, and the immediate next step.
+- Contributors MUST maintain a matching execution trace under `ai-plan/public/traces/` for complex work. The trace
+  should record the current date, key decisions, validation milestones, and the immediate next step.
 - When a task spans multiple commits or is likely to exceed a single agent context window, update both the recovery
   document and the trace at each meaningful milestone before pausing or handing work off.
 - If subagents are used on a complex task, the main agent MUST capture the delegated scope and any accepted findings in

@@ -58,8 +58,8 @@
 
 ### Phase 0：工作流基础
 
-- [x] 在 `local-plan/todos/` 建立本任务跟踪文档
-- [x] 在 `local-plan/traces/` 建立本任务追踪文档
+- [x] 在 `ai-plan/public/todos/` 建立本任务跟踪文档
+- [x] 在 `ai-plan/public/traces/` 建立本任务追踪文档
 - [x] 将恢复点 / trace / subagent 协作规范写入 `AGENTS.md`
 
 ### Phase 1：本地验证链路
@@ -128,7 +128,7 @@
 
 ### Phase 8：方向修正后的收敛
 
-- [x] 将 `local-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 的目标边界正式改写为：
+- [x] 将 `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 的目标边界正式改写为：
   - `GFramework.Core.Abstractions -> GFramework.Cqrs.Abstractions`
   - `GFramework.Core -> GFramework.Cqrs`
   - `Core` 默认集成 CQRS，但不依赖其细节结构
@@ -295,7 +295,7 @@
 - `GFramework.Core/Services/Modules/CqrsRuntimeModule.cs` 已新增，并由 `ServiceModuleManager` 纳入 built-in modules，确保默认架构启动路径继续自动具备 CQRS runtime 与 handler 注册能力。
 - `GFramework.Core.Tests/CqrsTestRuntime.cs` 已补充裸测试容器的 CQRS seam 注册辅助，以便不经过 `ServiceModuleManager` 的单元测试继续观察正式 runtime 行为。
 - `GFramework.Core.Tests/Ioc/MicrosoftDiContainerTests.cs` 中“Clear 后重新接入 handler”回归已适配 seam 方案：在裸容器 `Clear()` 后显式补回测试基础设施，再验证程序集去重状态重置。
-- `local-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 已新增，完成 Phase 5 的模块边界评估、依赖倒置方案与包拆分草案输出。
+- `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 已新增，完成 Phase 5 的模块边界评估、依赖倒置方案与包拆分草案输出。
 - Phase 5 结论已收敛为“两阶段拆分”：
   - 先做 `Core -> runtime abstraction` 的 seam 改造
   - 再拆 `GFramework.Cqrs.Abstractions` / `GFramework.Cqrs` 项目与 public runtime 类型归属
@@ -468,9 +468,9 @@
 
 若本轮中断，优先从以下顺序恢复：
 
-1. 查看 `local-plan/traces/cqrs-rewrite-migration-trace.md`
+1. 查看 `ai-plan/public/traces/cqrs-rewrite-migration-trace.md`
 2. 确认当前恢复点 `CQRS-REWRITE-RP-015` 已对应到最新提交
-3. 优先继续执行 `local-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 中的 Phase 7：
+3. 优先继续执行 `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 中的 Phase 7：
    - 先决定是否正式支持旧 `GFramework.Core.Abstractions.Cqrs*` / `GFramework.Core.Cqrs.Extensions` public namespace 兼容，还是明确要求消费端迁到当前 `GFramework.Cqrs*` 路径
    - 再评估 `CqrsCoroutineExtensions` 是否保留在 `GFramework.Core`，或连同所需协程辅助一起形成更小的可迁移边界
 4. 在 runtime 项目真正承接实现后，再处理 source-generator、meta package 与消费端 transitive 依赖的迁移
@@ -659,7 +659,7 @@
 - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
   - 结果：通过
   - 备注：存在既有 `MA0051` 与 `MA0158` analyzer warnings，无新增构建错误
-- `rg -n "ai-libs/Mediator|只读|第三方项目源码副本" AGENTS.md local-plan/todos/cqrs-rewrite-migration-tracking.md local-plan/traces/cqrs-rewrite-migration-trace.md`
+- `rg -n "ai-libs/Mediator|只读|第三方项目源码副本" AGENTS.md ai-plan/public/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/traces/cqrs-rewrite-migration-trace.md`
   - 结果：通过
   - 备注：`AGENTS.md`、tracking 与 trace 均已命中新规则和本地参考路径说明
 

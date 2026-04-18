@@ -4,14 +4,15 @@
 
 - `AGENTS.md`
 - `.ai/environment/tools.ai.yaml`
-- `local-plan/todos/`
-- `local-plan/traces/`
+- `ai-plan/public/todos/`
+- `ai-plan/public/traces/`
 
-## Local-Plan Selection Heuristics
+## AI-Plan Selection Heuristics
 
-- Match the user's wording against todo and trace file names first.
+- Match the user's wording against public todo and trace file names first.
 - Prefer the newest matching trace when several candidates describe the same feature area.
 - If one file records a clearer recovery point than a newer but vague file, prefer the clearer recovery point.
+- If a matching `ai-plan/private/<branch-or-worktree>/` directory exists, use it only as private context for the current worktree.
 
 ## Complexity Defaults
 
@@ -28,4 +29,4 @@
 
 Use a short update before execution:
 
-`Read AGENTS.md, the environment inventory, and the relevant local-plan artifacts. This looks like a <task-state> <complexity> task. I will <delegate-or-not> and start with <first-step>.`
+`Read AGENTS.md, the environment inventory, and the relevant public ai-plan artifacts. This looks like a <task-state> <complexity> task. I will <delegate-or-not> and start with <first-step>.`

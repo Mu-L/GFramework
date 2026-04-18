@@ -541,7 +541,7 @@
 ### 阶段：CQRS 模块边界评估
 
 - 建立 `CQRS-REWRITE-RP-010` 恢复点
-- 已完成 Phase 5 的模块边界再评估，并新增 `local-plan/migration/CQRS_MODULE_SPLIT_PLAN.md`
+- 已完成 Phase 5 的模块边界再评估，并新增 `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md`
 - 本轮结论：
   - 将 CQRS 拆为独立 abstractions/runtime 模块是成立的
   - 但当前不能直接做“搬项目”式拆分，必须先完成 `GFramework.Core -> CQRS runtime abstraction` 的依赖倒置
@@ -1327,7 +1327,7 @@
 - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
   - 结果：通过
   - 备注：存在既有 `MA0051` 与 `MA0158` analyzer warnings，无新增构建错误
-- `rg -n "ai-libs/|ai-libs/Mediator|只读|第三方源码参考区|第三方项目源码副本" AGENTS.md local-plan/todos/cqrs-rewrite-migration-tracking.md local-plan/traces/cqrs-rewrite-migration-trace.md`
+- `rg -n "ai-libs/|ai-libs/Mediator|只读|第三方源码参考区|第三方项目源码副本" AGENTS.md ai-plan/public/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/traces/cqrs-rewrite-migration-trace.md`
   - 结果：通过
   - 备注：三处文档都已命中 `ai-libs` 只读规则与 `ai-libs/Mediator` 参考路径
 
@@ -1380,7 +1380,7 @@
   - PR 页面当前无 `Failed Tests`，CTRF 测试报告显示 `2103 passed / 0 failed`
   - `Failed checks` 仅剩 `Title check` warning，属于 GitHub PR 标题元数据问题，不是本地代码缺陷
 - 已按 PR `#253` 的公开建议完成本地修正：
-  - `gframework-boot` 的恢复 heuristics 改为“先检索 `local-plan/`，再判定 `resume` 或 `recovery`”
+  - `gframework-boot` 的恢复 heuristics 改为“先检索 `ai-plan/`，再判定 `resume` 或 `recovery`”
   - `AGENTS.md` 将 `ai-libs/**` 观察写入 active plan/trace 的要求收窄到“多步/复杂任务或已有 active tracking document”
   - `Godot` 模板与 `IController` 文档注释中的旧
     `GFramework.SourceGenerators.Abstractions.Rule` 引用已收口到
