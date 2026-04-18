@@ -1,5 +1,4 @@
 using GFramework.Godot.Text;
-using Godot;
 using Array = Godot.Collections.Array;
 
 namespace GFramework.Godot.Tests.Text;
@@ -28,7 +27,8 @@ public sealed class RichTextEffectsControllerTests
         controller.RefreshEffects();
 
         Assert.That(host.BbcodeEnabled, Is.True);
-        Assert.That(registry.CapturedAnimatedEffectsEnabled, Is.False);
+        Assert.That(registry.CapturedAnimatedEffectsEnabled, Has.Count.EqualTo(1));
+        Assert.That(registry.CapturedAnimatedEffectsEnabled[0], Is.False);
         Assert.That(registry.CapturedProfiles, Has.Count.EqualTo(1));
         Assert.That(registry.CapturedProfiles[0].Effects.Select(static entry => entry.Key), Is.EqualTo(new[]
         {
@@ -109,13 +109,13 @@ public sealed class RichTextEffectsControllerTests
     {
         public List<RichTextProfile> CapturedProfiles { get; } = [];
 
-        public bool CapturedAnimatedEffectsEnabled { get; private set; }
+        public List<bool> CapturedAnimatedEffectsEnabled { get; } = [];
 
         public IReadOnlyList<RichTextEffect> CreateEffects(RichTextProfile profile, bool animatedEffectsEnabled)
         {
             CapturedProfiles.Add(profile);
-            CapturedAnimatedEffectsEnabled = animatedEffectsEnabled;
-            return System.Array.Empty<RichTextEffect>();
+            CapturedAnimatedEffectsEnabled.Add(animatedEffectsEnabled);
+            return Array.Empty<RichTextEffect>();
         }
 
         public RichTextEffect? CreateEffect(string key, bool animatedEffectsEnabled)
