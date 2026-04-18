@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
   security-events: write
 
 jobs:
@@ -145,11 +146,12 @@ jobs:
         run: dotnet build GFramework.sln -c Release --no-restore
 
       # 运行单元测试，输出TRX格式结果到TestResults目录
-      # 在同一个 step 中并发执行所有测试以加快速度
+      # 顺序执行各测试项目，避免并发 dotnet test 进程导致“TRX 全绿但 step 仍返回失败”的假红状态
       - name: Test All Projects
         id: test_all_projects
         run: |
           set -euo pipefail
+          mkdir -p TestResults
 
           test_projects=(
             "GFramework.Core.Tests/GFramework.Core.Tests.csproj:core"
@@ -161,29 +163,49 @@ jobs:
             "GFramework.Godot.SourceGenerators.Tests/GFramework.Godot.SourceGenerators.Tests.csproj:godot-sg"
           )
 
-          pids=()
+          failed=0
+          failed_projects=()
+          failed_log_paths=()
+
           for entry in "${test_projects[@]}"; do
             project="${entry%%:*}"
             name="${entry##*:}"
+            log_path="TestResults/${name}.console.log"
 
-            dotnet test "$project" \
+            echo "::group::dotnet test $project"
+            if ! dotnet test "$project" \
               -c Release \
               --no-build \
-              --logger "trx;LogFileName=${name}-$RANDOM.trx" \
-              --results-directory TestResults &
-
-            pids+=("$!")
-          done
-
-          failed=0
-          for pid in "${pids[@]}"; do
-            if ! wait "$pid"; then
+              --logger "trx;LogFileName=${name}.trx" \
+              --results-directory TestResults \
+              2>&1 | tee "$log_path"; then
               failed=1
+              failed_projects+=("$project")
+              failed_log_paths+=("$log_path")
+              echo "::error title=Test project failed::$project returned a non-zero exit code."
             fi
+            echo "::endgroup::"
           done
 
-          echo "failed=$failed" >> "$GITHUB_OUTPUT"
-          
+          if [ "$failed" -eq 1 ]; then
+            printf 'Failed test projects:\n'
+            printf '  %s\n' "${failed_projects[@]}"
+          fi
+
+          {
+            echo "failed=$failed"
+            echo "failed_projects<<EOF"
+            if [ "${#failed_projects[@]}" -gt 0 ]; then
+              printf '%s\n' "${failed_projects[@]}"
+            fi
+            echo "EOF"
+            echo "failed_log_paths<<EOF"
+            if [ "${#failed_log_paths[@]}" -gt 0 ]; then
+              printf '%s\n' "${failed_log_paths[@]}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Generate CTRF report
         run: |
           mkdir -p ctrf
@@ -198,6 +220,20 @@ jobs:
               -d ctrf \
               -f "$name.json"
           done
+
+      - name: Run GFramework.Godot.Tests Diagnostics
+        if: always() && contains(steps.test_all_projects.outputs.failed_projects, 'GFramework.Godot.Tests/GFramework.Godot.Tests.csproj')
+        continue-on-error: true
+        run: |
+          mkdir -p TestResults
+          dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj \
+            -c Release \
+            --no-build \
+            --blame-crash \
+            --diag TestResults/godot-testhost-diag.log \
+            --logger "trx;LogFileName=godot-diagnostic.trx" \
+            --results-directory TestResults \
+            2>&1 | tee TestResults/godot-diagnostic.console.log
       
       
       # 生成并发布测试报告，无论测试成功或失败都会执行
@@ -213,7 +249,7 @@ jobs:
         with:
           report-path: './ctrf/*.json'
           github-report: true
-          pull-request-report: true
+          pull-request-report: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           summary-delta-report: true
           insights-report: true
           flaky-rate-report: true
@@ -227,4 +263,19 @@ jobs:
 
       - name: Fail if any test project failed
         if: always() && steps.test_all_projects.outputs.failed == '1'
-        run: exit 1
+        env:
+          FAILED_PROJECTS: ${{ steps.test_all_projects.outputs.failed_projects }}
+          FAILED_LOG_PATHS: ${{ steps.test_all_projects.outputs.failed_log_paths }}
+        run: |
+          echo "The following test projects returned non-zero exit codes:"
+          printf '%s\n' "$FAILED_PROJECTS"
+          echo
+          echo "Captured dotnet test output:"
+          while IFS= read -r log_path; do
+            if [ -n "$log_path" ] && [ -f "$log_path" ]; then
+              echo "--- BEGIN $log_path ---"
+              cat "$log_path"
+              echo "--- END $log_path ---"
+            fi
+          done <<< "$FAILED_LOG_PATHS"
+          exit 1
