@@ -54,14 +54,16 @@ internal sealed class ConfigurableLoggerFactory : ILoggerFactory, IDisposable
     ///     为指定名称创建日志记录器，并应用最匹配的命名空间级别配置。
     /// </summary>
     /// <param name="name">日志记录器名称。</param>
-    /// <param name="minLevel">调用方要求的最小日志级别下限；最终级别不会低于该值。</param>
+    /// <param name="minLevel">调用方要求的最小日志级别下限；在未命中命名空间覆盖时生效。</param>
     /// <returns>可写入日志的记录器实例。</returns>
     /// <remarks>
     ///     当配置文件与调用方同时提供默认级别时，会取两者中更严格的那一个；
-    ///     若命中更具体的命名空间级别覆盖，则以该覆盖配置为准。
+    ///     若命中更具体的命名空间级别覆盖，则以该覆盖配置为准，即使其低于调用方传入的默认下限。
     /// </remarks>
     public ILogger GetLogger(string name, LogLevel minLevel = LogLevel.Info)
     {
+        ArgumentNullException.ThrowIfNull(name);
+
         var effectiveLevel = _config.MinLevel > minLevel ? _config.MinLevel : minLevel;
         var bestMatchLength = -1;
 

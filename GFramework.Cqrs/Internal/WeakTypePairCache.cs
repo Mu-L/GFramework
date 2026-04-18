@@ -34,10 +34,12 @@ internal sealed class WeakTypePairCache<TValue>
         ArgumentNullException.ThrowIfNull(secondaryType);
         ArgumentNullException.ThrowIfNull(valueFactory);
 
+        // 第一层按 primaryType 定位或创建二级缓存，避免每次命中都重新分配容器。
         var secondaryEntries = _entries.GetOrAdd(primaryType, static _ => new WeakKeyCache<Type, TValue>());
         return secondaryEntries.GetOrAdd(
             secondaryType,
             (PrimaryType: primaryType, Factory: valueFactory),
+            // 使用 static lambda + state 传参，避免热路径上的闭包捕获与额外分配。
             static (cachedSecondaryType, state) => state.Factory(state.PrimaryType, cachedSecondaryType));
     }
 

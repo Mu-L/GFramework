@@ -1,7 +1,5 @@
-using System.Reflection;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging;
-using GFramework.Core.Logging.Appenders;
 
 namespace GFramework.Core.Tests.Logging;
 
@@ -39,7 +37,7 @@ public sealed class ConfigurableLoggerFactoryTests
     }
 
     /// <summary>
-    ///     验证调用方传入的默认最小级别会作为配置级别的下限参与最终 logger 级别计算。
+    ///     验证在未命中命名空间覆盖时，调用方传入的默认最小级别会作为最终 logger 级别的下限参与计算。
     /// </summary>
     [Test]
     public void GetLogger_ShouldHonorStricterCallerMinLevelWhenNoOverrideMatches()
@@ -69,7 +67,51 @@ public sealed class ConfigurableLoggerFactoryTests
     }
 
     /// <summary>
-    ///     验证工厂释放时会兼容释放未实现 <see cref="IDisposable" /> 的 <see cref="AsyncLogAppender" />。
+    ///     验证命名空间覆盖级别会优先于调用方传入的默认最小级别，确保覆盖配置保持最高优先级。
+    /// </summary>
+    [Test]
+    public void GetLogger_ShouldPreferNamespaceOverrideOverCallerMinLevel()
+    {
+        var config = LoggingConfigurationLoader.LoadFromJsonString(
+            """
+            {
+              "minLevel": "Info",
+              "appenders": [
+                {
+                  "type": "Console",
+                  "formatter": "Default",
+                  "useColors": false
+                }
+              ],
+              "loggerLevels": {
+                "MyApp.Services": "Debug"
+              }
+            }
+            """);
+
+        var factory = LoggingConfigurationLoader.CreateFactory(config);
+        var logger = factory.GetLogger("MyApp.Services.OrderService", LogLevel.Fatal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(logger.IsDebugEnabled(), Is.True);
+            Assert.That(logger.IsTraceEnabled(), Is.False);
+        });
+    }
+
+    /// <summary>
+    ///     验证调用方传入空 logger 名称时，会得到显式的参数异常而不是后续字符串操作的空引用异常。
+    /// </summary>
+    [Test]
+    public void GetLogger_WithNullName_ShouldThrowArgumentNullException()
+    {
+        var factory = LoggingConfigurationLoader.CreateFactory(new LoggingConfiguration());
+
+        Assert.Throws<ArgumentNullException>(() => factory.GetLogger(null!));
+    }
+
+    /// <summary>
+    ///     验证工厂释放时会兼容释放未实现 <see cref="IDisposable" /> 的异步 appender，并让既有 logger 观察到已释放状态。
     /// </summary>
     [Test]
     public void Dispose_ShouldDisposeAsyncLogAppenderCreatedFromConfiguration()
@@ -93,25 +135,11 @@ public sealed class ConfigurableLoggerFactoryTests
 
         var factory = LoggingConfigurationLoader.CreateFactory(config);
         var logger = factory.GetLogger("AsyncLogger");
-        var asyncAppender = GetSingleAsyncAppender(factory);
 
         logger.Info("dispose-path");
 
         ((IDisposable)factory).Dispose();
 
-        Assert.That(asyncAppender.IsCompleted, Is.True);
-    }
-
-    private static AsyncLogAppender GetSingleAsyncAppender(ILoggerFactory factory)
-    {
-        var appendersField = factory.GetType().GetField("_appenders", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(appendersField, Is.Not.Null);
-
-        var appenders = appendersField!.GetValue(factory) as ILogAppender[];
-        Assert.That(appenders, Is.Not.Null);
-        Assert.That(appenders, Has.Length.EqualTo(1));
-        Assert.That(appenders![0], Is.TypeOf<AsyncLogAppender>());
-
-        return (AsyncLogAppender)appenders[0];
+        Assert.Throws<ObjectDisposedException>(() => logger.Info("after-dispose"));
     }
 }
