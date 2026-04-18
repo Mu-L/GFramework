@@ -188,7 +188,14 @@ jobs:
             printf '  %s\n' "${failed_projects[@]}"
           fi
 
-          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          {
+            echo "failed=$failed"
+            echo "failed_projects<<EOF"
+            if [ "${#failed_projects[@]}" -gt 0 ]; then
+              printf '%s\n' "${failed_projects[@]}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           
       - name: Generate CTRF report
         run: |
@@ -233,4 +240,9 @@ jobs:
 
       - name: Fail if any test project failed
         if: always() && steps.test_all_projects.outputs.failed == '1'
-        run: exit 1
+        env:
+          FAILED_PROJECTS: ${{ steps.test_all_projects.outputs.failed_projects }}
+        run: |
+          echo "The following test projects returned non-zero exit codes:"
+          printf '%s\n' "$FAILED_PROJECTS"
+          exit 1
