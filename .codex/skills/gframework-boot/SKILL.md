@@ -45,7 +45,7 @@ For multi-step, cross-module, or interruption-prone work, maintain the repositor
 
 ## Recovery Heuristics
 
-- If the user says `next step`, `continue`, `继续`, or similar resume language, assume recovery mode and search `local-plan/` first.
+- If the user says `next step`, `continue`, `继续`, or similar resume language, search `local-plan/` first, then classify the task as `resume` or `recovery` based on artifact clarity and continuity.
 - If the current branch and the newest recovery documents describe the same feature area, prefer resuming that thread.
 - If the repository state suggests in-flight work but no recovery document matches, reconstruct the safest next step from code, tests, and Git state before asking the user for clarification.
 

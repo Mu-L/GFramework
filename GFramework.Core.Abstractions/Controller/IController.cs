@@ -13,7 +13,7 @@
 ///     自动生成上下文访问能力：
 ///     </para>
 ///     <code>
-///     using GFramework.SourceGenerators.Abstractions.Rule;
+///     using GFramework.Core.SourceGenerators.Abstractions.Rule;
 ///
 ///     [ContextAware]
 ///     public partial class PlayerController : IController

@@ -1,0 +1,4 @@
+interface:
+  display_name: "GFramework PR Review"
+  short_description: "Inspect the current PR and CodeRabbit findings"
+  default_prompt: "Use $gframework-pr-review to inspect the current branch PR, extract CodeRabbit comments, and summarize failed checks or failed tests."
