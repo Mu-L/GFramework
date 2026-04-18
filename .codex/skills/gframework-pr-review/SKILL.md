@@ -51,6 +51,8 @@ The script should produce:
 
 ## Example Triggers
 
+- 'fix pr review'
+- 'Use FPR'
 - `Use $gframework-pr-review on the current branch`
 - `Check the current PR and extract CodeRabbit suggestions`
 - `Look for Failed Tests on the PR page`
