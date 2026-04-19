@@ -172,7 +172,7 @@ public partial class Example : Control
 
 ```csharp
 using GFramework.Godot.SourceGenerators.Abstractions;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using Godot;
 
 [ContextAware]

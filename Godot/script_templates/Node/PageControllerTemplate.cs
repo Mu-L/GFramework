@@ -7,7 +7,7 @@ using GFramework.Game.Abstractions.UI;
 using GFramework.Godot.UI;
 using GFramework.Godot.SourceGenerators.Abstractions;
 using GFramework.SourceGenerators.Abstractions.Logging;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 
 [ContextAware]

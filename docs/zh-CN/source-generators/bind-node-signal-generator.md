@@ -640,7 +640,7 @@ private void OnQuitButtonPressed() { }
 在需要架构访问的场景中，与 `[ContextAware]` 结合：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using GFramework.Godot.SourceGenerators.Abstractions;
 
 [ContextAware]

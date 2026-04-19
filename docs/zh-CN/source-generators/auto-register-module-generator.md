@@ -29,7 +29,7 @@ using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
-using GFramework.SourceGenerators.Abstractions.Architectures;
+using GFramework.Core.SourceGenerators.Abstractions.Architectures;
 
 public sealed class RunStateModel : IModel
 {

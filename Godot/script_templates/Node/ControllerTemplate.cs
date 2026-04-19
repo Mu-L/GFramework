@@ -4,7 +4,7 @@ using Godot;
 using GFramework.Core.Abstractions.Controller;
 using GFramework.Godot.SourceGenerators.Abstractions;
 using GFramework.SourceGenerators.Abstractions.Logging;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 
 [ContextAware]
@@ -28,4 +28,3 @@ public partial class _CLASS_ :_BASE_,IController
     {
     }
 }
-

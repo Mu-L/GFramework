@@ -657,7 +657,7 @@ public partial class UIController : IController
 ### 事件组合
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 // 使用 OrEvent 组合多个事件
 [ContextAware]

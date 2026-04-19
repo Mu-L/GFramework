@@ -33,7 +33,7 @@ public class CombatSystem : AbstractSystem
 }
 
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class PlayerController : IController
@@ -182,7 +182,7 @@ public class StorageUtility : IUtility { }
 
 ```csharp
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class MyController : IController

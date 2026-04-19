@@ -164,7 +164,7 @@ public class GameArchitecture : Architecture
 ```csharp
 using Arch.Core;
 using GFramework.Core.Abstractions.Rule;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 using MyGame.Components;
 
 [ContextAware]
@@ -508,7 +508,7 @@ World.Query(in query, (Entity entity, ref Position pos) =>
 
 ```csharp
 using GFramework.Core.Abstractions.bases;
-using GFramework.SourceGenerators.Abstractions.bases;
+using GFramework.Core.SourceGenerators.Abstractions.Bases;
 
 // 使用 Priority 特性设置优先级
 [Priority(10)]  // 高优先级，先执行

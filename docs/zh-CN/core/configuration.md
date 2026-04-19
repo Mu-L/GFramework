@@ -622,7 +622,7 @@ public class SettingsSystem : AbstractSystem
 ### 在 Controller 中使用
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class SettingsController : IController

@@ -12,7 +12,7 @@
 ## 基础使用
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Enums;
+using GFramework.Core.SourceGenerators.Abstractions.Enums;
 
 [GenerateEnumExtensions]
 public enum GameState

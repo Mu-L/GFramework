@@ -341,7 +341,7 @@ public class GameArchitecture : AbstractArchitecture
 ```csharp
 using Godot;
 using GFramework.Core.Abstractions.Controller;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class Player : CharacterBody2D, IController
@@ -519,7 +519,7 @@ public partial class GameRoot : Node
 使用 `[ContextAware]` 特性或直接使用单例：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 // 方式 1: 使用 [ContextAware] 特性（推荐）
 [ContextAware]

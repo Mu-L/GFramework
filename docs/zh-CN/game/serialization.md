@@ -94,7 +94,7 @@ public class GameArchitecture : Architecture
 使用泛型 API 序列化对象：
 
 ```csharp
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 public class PlayerData
 {
@@ -175,7 +175,7 @@ public void SerializeRuntimeType()
 ```csharp
 using GFramework.Core.Abstractions.Storage;
 using GFramework.Game.Storage;
-using GFramework.SourceGenerators.Abstractions.Rule;
+using GFramework.Core.SourceGenerators.Abstractions.Rule;
 
 [ContextAware]
 public partial class DataManager : IController
