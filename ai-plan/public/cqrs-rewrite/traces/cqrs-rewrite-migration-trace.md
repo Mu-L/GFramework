@@ -1412,3 +1412,33 @@
 
 1. 若继续沿用当前 PR 驱动修复流程，可直接用 `$gframework-pr-review` 复查后续 PR 的 CodeRabbit 评论与测试状态
 2. 若要验证本轮本地修正已经消除远端 latest head review threads，需要在提交并推送当前分支后重新执行 `$gframework-pr-review`
+
+## 2026-04-19
+
+### 阶段：PR review 复核与 FPR 输出澄清（RP-043）
+
+- 建立 `CQRS-REWRITE-RP-043` 恢复点
+- 复核 PR `#253` 时确认：
+  - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md` 的“下次恢复建议”仍把主线写成 `Phase 7`
+  - 这与 tracking 顶部当前阶段 `Phase 8` 不一致，恢复时会造成执行顺序歧义
+- 进一步检查 `$gframework-pr-review` 脚本后确认：
+  - 该评论并非“未覆盖”，而是已出现在 latest head commit 的 open review threads 中
+  - 我先前误把评论正文里可见的 `Addressed in commit ...` 文案当成了“已经本地验证修复”
+  - 实际脚本只会在 CodeRabbit thread 带有隐藏 marker `<!-- <review_comment_addressed> -->` 时才将状态归类为 `addressed`
+- 已据此完成两项修正：
+  - 将 tracking 中的恢复主线更新为 `Phase 8（当前主线）`
+  - 调整 `fetch_current_pr_review.py` 输出：当 open thread 里出现 `Addressed in commit ...` 文案但线程并未真正 closed/addressed 时，显式提示“仍需本地验证，不要视为已解决”
+
+### 验证
+
+- `sed -n '469,475p' ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md`
+  - 结果：通过
+  - 备注：恢复建议已切到 `Phase 8（当前主线）`
+- `python3 -m py_compile .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py`
+  - 结果：通过
+  - 备注：脚本语法正确
+
+### 下一步
+
+1. 推送当前分支后重新执行 `$gframework-pr-review`，确认 PR `#253` 的 latest head review threads 是否已收敛
+2. 若后续仍保留 CodeRabbit 的 `Addressed in commit ...` 文案但 thread 继续 open，优先以 latest thread 状态和本地文件事实为准，不再按文案字面判定

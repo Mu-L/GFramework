@@ -25,6 +25,7 @@ GIT_ENVIRONMENT_KEY = "GFRAMEWORK_WINDOWS_GIT"
 USER_AGENT = "codex-gframework-pr-review"
 CODERABBIT_LOGIN = "coderabbitai[bot]"
 REVIEW_COMMENT_ADDRESSED_MARKER = "<!-- <review_comment_addressed> -->"
+VISIBLE_ADDRESSED_IN_COMMIT_PATTERN = re.compile(r"✅\s*Addressed in commit\s+[0-9a-f]{7,40}", re.I)
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 60
 REQUEST_TIMEOUT_ENVIRONMENT_KEY = "GFRAMEWORK_PR_REVIEW_TIMEOUT_SECONDS"
 
@@ -359,6 +360,10 @@ def classify_review_thread_status(latest_comment: dict[str, Any]) -> str:
     return "open"
 
 
+def contains_visible_addressed_commit_text(body: str) -> bool:
+    return bool(VISIBLE_ADDRESSED_IN_COMMIT_PATTERN.search(body))
+
+
 def build_latest_commit_review_threads(comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     comment_threads: dict[int, dict[str, Any]] = {}
 
@@ -557,6 +562,12 @@ def format_text(result: dict[str, Any]) -> str:
             lines.append(f"  Root by {root_comment['user']}: {collapse_whitespace(root_comment['body'])}")
             if latest_comment["id"] != root_comment["id"]:
                 lines.append(f"  Latest by {latest_comment['user']}: {collapse_whitespace(latest_comment['body'])}")
+            if contains_visible_addressed_commit_text(root_comment["body"]) or contains_visible_addressed_commit_text(
+                latest_comment["body"]
+            ):
+                lines.append(
+                    "  Note: thread is still open; treat the visible 'Addressed in commit ...' text as unverified until local code matches."
+                )
 
     lines.append("")
     lines.append(f"Test reports: {len(result['test_reports'])}")

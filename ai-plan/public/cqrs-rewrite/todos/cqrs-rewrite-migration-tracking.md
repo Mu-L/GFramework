@@ -470,7 +470,7 @@
 
 1. 查看 `ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
 2. 确认当前恢复点 `CQRS-REWRITE-RP-042` 已对应到最新提交
-3. 优先继续执行 `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 中的 Phase 7：
+3. 优先继续执行 `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 中的 Phase 8（当前主线）：
    - 先决定是否正式支持旧 `GFramework.Core.Abstractions.Cqrs*` / `GFramework.Core.Cqrs.Extensions` public namespace 兼容，还是明确要求消费端迁到当前 `GFramework.Cqrs*` 路径
    - 再评估 `CqrsCoroutineExtensions` 是否保留在 `GFramework.Core`，或连同所需协程辅助一起形成更小的可迁移边界
 4. 在 runtime 项目真正承接实现后，再处理 source-generator、meta package 与消费端 transitive 依赖的迁移
