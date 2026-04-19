@@ -686,7 +686,7 @@
 
 ### 阶段：RP-041 验证
 
-- `rg -n "using GFramework\\.SourceGenerators\\.Abstractions\\.|### GFramework\\.SourceGenerators|GFramework\\.SourceGenerators 自动生成|`GFramework\\.SourceGenerators` 现在还会分析" docs/zh-CN`
+- `rg -n "using GFramework\\.SourceGenerators\\.Abstractions\\.|### GFramework\\.SourceGenerators|GFramework\\.SourceGenerators 自动生成|GFramework\\.SourceGenerators 现在还会分析" docs/zh-CN`
   - 结果：通过
   - 备注：`docs/zh-CN/**` 中上述旧公开命名空间与旧聚合表述已清理完毕
 
