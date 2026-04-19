@@ -451,7 +451,7 @@
 - `ArchitectureConfigIntegrationTests` 的临时目录清理改为同时兜底 `IOException` 与 `UnauthorizedAccessException`，降低测试在不同文件系统环境下的偶发失败
 - `SchemaConfigGenerator` 新增项目级聚合输出 `GeneratedConfigCatalog` 与 `RegisterAllGeneratedConfigTables()`，让消费者项目可以一行注册当前编译中全部生成表
 
-### 2026-04-09
+### 2026-04-09（生命周期与同步桥接）
 
 - `GameConfigModule` 现在会在安装前显式拒绝已离开 `ArchitecturePhase.None` 的架构，避免错过 `BeforeUtilityInit` 首载窗口
 - `GameConfigModule.Install(...)` 现在会先完成无副作用阶段校验，再先注册 `IConfigRegistry` / 生命周期 utility、最后注册生命周期钩子；一旦进入注册阶段即把模块实例视为已消耗，避免任何不可回滚的部分安装失败后重复暴露 utility 或重复挂钩子
@@ -460,7 +460,7 @@
 - `ArchitectureConfigIntegrationTests` 统一为 PascalCase 命名，并新增“阻塞同步上下文下通过真实架构生命周期桥接完成初始化”和“迟到安装失败不消耗模块实例”的回归测试
 - 已执行：`dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureConfigIntegrationTests"`
 
-### 2026-04-08
+### 2026-04-08（索引构建逻辑修复与聚合注册能力）
 
 - 修复 `SchemaConfigGenerator` 生成的索引构建逻辑：`BuildLookupIndex<TProperty>` 现在会跳过运行时空 key，并在生成代码 XML 注释中说明这是为了避免 `Lazy<T>` 因格式错误配置而永久缓存异常
 - 收紧生成器内部的索引查询空值守卫分类逻辑：不再依赖“只有 `string` 是引用类型”的静默假设，而是显式枚举当前支持的标量映射；未来新增标量若未同步分类，将在生成期直接失败
@@ -511,9 +511,9 @@
 - 已执行：`dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~SchemaConfigGenerator"`
 - 已执行：`node --test ./test/configValidation.test.js`（`tools/gframework-config-tool`）
 
-### 2026-04-08
+### 2026-04-08（索引能力）
 
-- `SchemaConfigGenerator` 新增 schema 元数据 `x-gframework-index`，允许对“顶层、必填、非主键、非引用标量字段”生成可选只读精确匹配索引
+- `SchemaConfigGenerator` 新增 schema 元数据 `x-gframework-index`，允许对"顶层、必填、非主键、非引用标量字段"生成可选只读精确匹配索引
 - 生成的 `FindBy*` / `TryFindFirstBy*` 对显式声明索引的字段会改为惰性构建只读 bucket 字典；未声明字段继续保持 `All()` 线性扫描契约
 - `ConfigSchemaDiagnostics` 新增 `GF_ConfigSchema_008`，在 `x-gframework-index` 类型错误或落到不支持字段时提供稳定诊断
 - `GFramework.SourceGenerators.Tests/Config` 新增索引元数据诊断测试，并扩展查询辅助生成测试断言索引字段只为显式 opt-in 的属性生成
@@ -524,7 +524,7 @@
 - 已执行：`dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~GeneratedConfigConsumerIntegrationTests"`
 - 已执行：`bash scripts/validate-csharp-naming.sh`
 
-### 2026-04-09
+### 2026-04-09（目录辅助与模块化接入）
 
 - `GeneratedConfigCatalog` 继续补齐启动与诊断辅助，新增 `GetTablesInConfigDomain(...)`、`GetTablesForRegistration(...)` 与 `MatchesRegistrationOptions(...)`
 - 聚合注册入口 `RegisterAllGeneratedConfigTables(...)` 改为复用 `GeneratedConfigCatalog.MatchesRegistrationOptions(...)`，让启动日志、诊断输出和真实注册路径共享同一套筛选逻辑

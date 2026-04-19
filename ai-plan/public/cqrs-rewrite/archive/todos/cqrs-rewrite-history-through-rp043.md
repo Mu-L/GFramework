@@ -381,12 +381,8 @@
   - `dotnet build GFramework/GFramework.sln` 通过
   - `dotnet test GFramework/GFramework.Core.Tests/GFramework.Core.Tests.csproj --no-build` 通过，`1621` 个测试全部通过
   - `dotnet build CoreGrid-Migration/CoreGrid.sln` 通过
-  -
-  `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Core.Tests.Cqrs.CqrsHandlerRegistrarTests|FullyQualifiedName~GFramework.Core.Tests.Architectures.ArchitectureModulesBehaviorTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorAdvancedFeaturesTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorArchitectureIntegrationTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorComprehensiveTests"`
-  通过，`49` 个测试全部通过
-  -
-  `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Core.Tests.Cqrs.CqrsHandlerRegistrarTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorComprehensiveTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorArchitectureIntegrationTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorAdvancedFeaturesTests"`
-  通过，`47` 个测试全部通过
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Core.Tests.Cqrs.CqrsHandlerRegistrarTests|FullyQualifiedName~GFramework.Core.Tests.Architectures.ArchitectureModulesBehaviorTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorAdvancedFeaturesTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorArchitectureIntegrationTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorComprehensiveTests"` 通过，`49` 个测试全部通过
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Core.Tests.Cqrs.CqrsHandlerRegistrarTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorComprehensiveTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorArchitectureIntegrationTests|FullyQualifiedName~GFramework.Core.Tests.Mediator.MediatorAdvancedFeaturesTests"` 通过，`47` 个测试全部通过
   - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release` 通过
   - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build` 通过，`1624` 个测试全部通过
   - `dotnet build CoreGrid-Migration/CoreGrid.sln` 通过，仅存在既有 analyzer warnings 与 Godot generator warning

@@ -93,3 +93,20 @@
   - `tools/gframework-config-tool/src/configValidation.js`
   - `tools/gframework-config-tool/src/extension.js`
   - `docs/zh-CN/game/config-system.md`
+
+### 恢复块
+
+- 恢复点编号：`AI-FIRST-CONFIG-RP-002`
+- 当前阶段：`C# Runtime + Source Generator + Consumer DX`
+- 已知风险：
+  - 语义一致性风险：`if` / `then` / `else` 在 Runtime / Generator / Tooling 三端语义不一致的风险，需要先验证是否能在不引入生成类型形状漂移的前提下落地
+  - 工具链非阻塞风险：将 VS Code 功能标为非阻塞后，可能导致 C# 主线补齐新关键字时缺少工具侧同步验证
+  - 复杂关键字回退风险：`allOf` 已收敛为 object-focused constraint block，未来新增组合关键字时需明确是否同样限制范围
+- 最近验证：
+  - 时间：2026-04-17
+  - 内容：截至该日期的历史跟踪与执行 trace 已归档到主题内归档目录
+  - 结果：通过
+- 下一步：
+  1. 检查 `YamlConfigSchemaValidator.cs`、`SchemaConfigGenerator.cs`、`configValidation.js` 中当前已支持的关键字列表
+  2. 评估 `if` / `then` / `else` 是否能在三端保持一致语义且不改变生成类型形状
+  3. 若结论否定，选择下一批共享解释关键字而不是先回工具 UI

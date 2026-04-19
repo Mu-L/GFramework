@@ -18,6 +18,16 @@
 - 历史 trace 归档：
   - `ai-plan/public/ai-first-config-system/archive/traces/ai-first-config-system-history-through-2026-04-17.md`
 
+### 验证
+
+- 2026-04-19：入口归档收口验证
+  - 执行命令：`wc -l ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`
+  - 结果：通过
+  - 备注：active 入口文件行数显著减少，已完成阶段详细历史已移至归档
+- 2026-04-17 之前：详细实现与定向验证命令
+  - 参考：`ai-plan/public/ai-first-config-system/archive/todos/ai-first-config-system-history-through-2026-04-17.md`
+  - 备注：包含 Runtime / Generator / Tooling 三端同步落地的每日验证记录与具体测试命令
+
 ### 下一步
 
 1. 从 `ai-first-config-system-csharp-experience-next.md` 读取当前 backlog，而不是继续翻已完成历史

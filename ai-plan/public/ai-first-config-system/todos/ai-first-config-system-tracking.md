@@ -14,6 +14,15 @@
   - 优先考察 `if` / `then` / `else` 是否能在 Runtime / Generator / Tooling 三端保持一致语义
   - 继续把 VS Code 工具能力视为非阻塞项，不让复杂 UI 编辑器需求反过来拖慢 C# 主线
 
+### 已知风险
+
+- 语义一致性风险：`if` / `then` / `else` 在 Runtime / Generator / Tooling 三端语义不一致的风险
+  - 缓解措施：先验证是否能在不引入生成类型形状漂移的前提下落地，若否则选择下一批共享解释关键字
+- 工具链验证风险：VS Code 与 CI / 发布管道验证覆盖不足
+  - 缓解措施：继续为新增共享关键字补齐三端测试覆盖，优先保证 C# Runtime 与 Generator 回归通过
+- 非阻塞项回退风险：将 VS Code 功能标为非阻塞但导致主线回退的风险
+  - 缓解措施：C# 主线补齐新关键字时仍需在 `configValidation.js` 与 `extension.js` 中同步落地，只是不让复杂表单控件阻塞发布
+
 ## 当前状态
 
 - 已完成 Runtime、YAML Loader、Source Generator 与 VS Code Extension 的首轮可用版本
