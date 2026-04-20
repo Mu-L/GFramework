@@ -441,9 +441,9 @@ internal static partial class YamlConfigSchemaValidator
             throw ConfigLoadExceptionFactory.Create(
                 ConfigLoadFailureKind.SchemaUnsupported,
                 tableName,
-                $"{DescribeObjectSchemaTarget(propertyPath)} in schema file '{schemaPath}' must declare '{keywordName}' as an object-valued schema.",
+                $"{DescribeObjectSchemaTarget(conditionalSchemaPath)} in schema file '{schemaPath}' must declare '{keywordName}' as an object-valued schema.",
                 schemaPath: schemaPath,
-                displayPath: GetDiagnosticPath(propertyPath));
+                displayPath: GetDiagnosticPath(conditionalSchemaPath));
         }
 
         ValidateInlineObjectSchemaTargetsAgainstParentObject(

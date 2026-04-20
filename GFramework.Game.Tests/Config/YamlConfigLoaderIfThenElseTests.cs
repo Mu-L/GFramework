@@ -314,6 +314,47 @@ public sealed class YamlConfigLoaderIfThenElseTests
     }
 
     /// <summary>
+    ///     验证缺少 <c>if</c> 却声明 <c>else</c> 时，会在 schema 解析阶段被拒绝。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Else_Is_Declared_Without_If()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            BuildMonsterConfigYaml(
+                """
+                bonus: 1
+                """));
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            BuildMonsterSchema(
+                DefaultRewardPropertiesJson,
+                """
+                "else": {
+                  "type": "object",
+                  "required": ["bonus"],
+                  "properties": {
+                    "bonus": { "type": "integer" }
+                  }
+                }
+                """));
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(async () => await loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Message, Does.Contain("must declare 'if' when using 'then' or 'else'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证条件分支不能要求父对象未声明的字段。
     /// </summary>
     [Test]

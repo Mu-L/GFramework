@@ -78,20 +78,24 @@
   - rebase 过程中 Git 跳过了远端已具备的 commit `76488dc`
   - 当前分支已不再 behind 远端，仅保留本地领先提交
 
-### 验证
+### PR `#262` review follow-up 验证
 
 - 2026-04-20：`python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py`
   - 结果：通过
-  - 备注：输出 `CodeRabbit nitpick comments: 5 declared, 5 parsed`
+  - 备注：输出 `CodeRabbit actionable comments: 2`、`CodeRabbit nitpick comments: 2 declared, 1 parsed`，并暴露剩余 review follow-up
+- 2026-04-20：运行时条件分支 follow-up
+  - 结果：已补齐
+  - 备注：`YamlConfigSchemaValidator` 现对非 object 的 `if` / `then` / `else` 使用分支级诊断路径；运行时测试新增 `else` 缺失 `if` 回归
 - 2026-04-20：`bun run test`（`tools/gframework-config-tool`）
   - 结果：通过（118 tests）
 - 2026-04-20：`dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~SchemaConfigGeneratorTests"`
   - 结果：通过（46 tests）
 - 2026-04-20：`dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~YamlConfigLoaderIfThenElseTests"`
-  - 结果：通过（7 tests）
+  - 结果：通过（8 tests）
+  - 备注：新增 `LoadAsync_Should_Throw_When_Else_Is_Declared_Without_If` 后，运行时回归覆盖保持对称
 - 2026-04-20：`dotnet build GFramework.sln -c Release`
-  - 结果：通过
-  - 备注：存在仓库既有 analyzer warning，但无新增错误
+  - 结果：通过（历史记录）
+  - 备注：存在仓库既有 analyzer warning，但无新增错误；本轮只需重新验证受影响测试切片
 
 ### 下一步
 
