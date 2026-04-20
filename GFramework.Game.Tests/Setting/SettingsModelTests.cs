@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Threading;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Lifecycle;
 using GFramework.Core.Abstractions.Rule;
@@ -109,6 +111,66 @@ public sealed class SettingsModelTests
         });
     }
 
+    [Test]
+    public async Task RegisterMigration_During_Cache_Rebuild_Should_Not_Leave_Stale_Type_Cache()
+    {
+        var locationProvider = new TestDataLocationProvider();
+        var repository = new FakeSettingsDataRepository();
+        var model = new SettingsModel<FakeSettingsDataRepository>(locationProvider, repository);
+        ((IContextAware)model).SetContext(new Mock<IArchitectureContext>(MockBehavior.Loose).Object);
+
+        _ = model.GetData<TestLatestSettingsData>();
+        ((IInitializable)model).Initialize();
+
+        model.RegisterMigration(new TestLatestSettingsMigrationV1ToV2());
+
+        repository.Stored["TestLatestSettingsData"] = new TestLatestSettingsData
+        {
+            Version = 1,
+            Value = "legacy"
+        };
+
+        var lockField = typeof(SettingsModel<FakeSettingsDataRepository>)
+            .GetField("_migrationMapLock", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(lockField, Is.Not.Null);
+
+        var migrationMapLock = lockField!.GetValue(model);
+        Assert.That(migrationMapLock, Is.Not.Null);
+
+        Task initializeTask;
+        Task registerTask;
+        lock (migrationMapLock!)
+        {
+            initializeTask = Task.Run(() => model.InitializeAsync());
+            registerTask = Task.Run(() => model.RegisterMigration(new TestLatestSettingsMigrationV2ToV3()));
+
+            Thread.Sleep(50);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(initializeTask.IsCompleted, Is.False);
+                Assert.That(registerTask.IsCompleted, Is.False);
+            });
+        }
+
+        await Task.WhenAll(initializeTask, registerTask);
+
+        repository.Stored["TestLatestSettingsData"] = new TestLatestSettingsData
+        {
+            Version = 1,
+            Value = "legacy"
+        };
+
+        await model.InitializeAsync();
+
+        var current = model.GetData<TestLatestSettingsData>();
+        Assert.Multiple(() =>
+        {
+            Assert.That(current.Version, Is.EqualTo(3));
+            Assert.That(current.Value, Is.EqualTo("legacy-migrated-v3"));
+        });
+    }
+
     private sealed class TestSettingsData : ISettingsData
     {
         public string Value { get; set; } = "default";
@@ -195,6 +257,25 @@ public sealed class SettingsModelTests
             {
                 Version = 2,
                 Value = $"{data.Value}-migrated"
+            };
+        }
+    }
+
+    private sealed class TestLatestSettingsMigrationV2ToV3 : ISettingsMigration
+    {
+        public Type SettingsType => typeof(TestLatestSettingsData);
+
+        public int FromVersion => 2;
+
+        public int ToVersion => 3;
+
+        public ISettingsSection Migrate(ISettingsSection oldData)
+        {
+            var data = (TestLatestSettingsData)oldData;
+            return new TestLatestSettingsData
+            {
+                Version = 3,
+                Value = $"{data.Value}-v3"
             };
         }
     }

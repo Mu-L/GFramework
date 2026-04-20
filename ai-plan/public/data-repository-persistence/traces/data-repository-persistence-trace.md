@@ -107,3 +107,24 @@
 
 1. 回到 codec / persistence pipeline 边界评估
 2. 继续判断压缩、加密、元数据与备份策略是否需要新的 dedicated pipeline abstraction
+
+### 阶段：SettingsModel 迁移缓存并发修复（RP-001）
+
+- 重新使用 `$gframework-pr-review` 复核 PR #260 后确认：此前遗漏了一条仍然 open 的 `SettingsModel.cs` major comment，
+  问题点不是迁移执行本身，而是 `_migrations` 与 `_migrationCache` 在并发注册和 cache miss 重建交错时，可能把旧快照写回缓存
+- 确认该 comment 来自 `2026-04-20T04:23:09Z` 的 CodeRabbit review run；当前修复策略采用同一把私有锁串行化：
+  - `RegisterMigration` 中的 `_migrations.TryAdd(...)` 与 `_migrationCache.TryRemove(...)`
+  - `MigrateIfNeeded` 在 cache miss 时按类型重建 `versionMap` 并写回 `_migrationCache`
+- 同步补充源码注释与 XML remarks，明确运行时注册与缓存重建共享同一并发语义
+- 计划新增 `SettingsModelTests` 回归测试，验证 cache rebuild 与运行时注册在同一把锁前排队后，后续初始化能看到新增迁移而不会留下 stale cache
+
+### 验证：SettingsModel 迁移缓存并发修复
+
+1. `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~SettingsModelTests" -m:1 -nodeReuse:false` 已通过（5/5）
+2. 本轮验证中未再出现 `SettingsModel` 新增的 nullable warning；输出中的 analyzer warning 仍为仓库既有项加上新的 `MA0158`
+   建议，后者来自本轮新增对象锁
+
+### 下一步：SettingsModel 迁移缓存并发修复
+
+1. 若继续收口 analyzer 反馈，可评估是否将 `_migrationMapLock` 升级为 `System.Threading.Lock`，同时保留可验证的并发回归测试策略
+2. 否则恢复到 codec / persistence pipeline 边界评估

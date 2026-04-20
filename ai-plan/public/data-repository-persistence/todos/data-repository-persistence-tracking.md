@@ -14,7 +14,7 @@
     `ai-plan/public/data-repository-persistence/`
   - 第一轮 settings / persistence / serialization 修复、测试与文档同步已完成，并收入主题内 `archive/`
   - 已完成 `SettingsModel` / `SaveRepository<T>` 共享迁移执行器收敛与契约补强
-  - 已完成 PR #260 的 review follow-up：迁移链快照一致性、XML docs 补齐与文档安全示例修正
+  - 已完成 PR #260 的追加 review follow-up：`SettingsModel` 迁移缓存并发一致性
   - 下一轮需要继续评估 codec / persistence pipeline 边界
 
 ## 当前状态摘要
@@ -35,6 +35,8 @@
 - `SaveRepository<T>` 继续在 `LoadAsync(slot)` 期间迁移并回写，但其核心链式校验已与设置迁移共用同一实现
 - PR #260 review follow-up 已完成：`VersionedMigrationRunner` / `SettingsModel` 的 XML 异常契约已补齐，
   `SaveRepository<T>` 单次加载已切换为迁移表快照，避免并发注册期间读取变化中的迁移链
+- `SettingsModel` 现已通过 `_migrationMapLock` 串行化迁移注册与 cache miss 时的按类型缓存重建，
+  避免并发注册把旧快照重新写回 `_migrationCache`
 - `docs/zh-CN/game/index.md` 当前仍承担最低接入示例，因此其中的 `JsonSerializer` 配置必须避免鼓励对
   用户可篡改存档启用不受限的多态反序列化
 
@@ -61,6 +63,9 @@
 - 已完成 PR #260 follow-up，并新增定向回归测试锁定迁移快照与失败不污染持久化数据的约束
 - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~SettingsModelTests|FullyQualifiedName~PersistenceTests" -m:1 -nodeReuse:false`
   已通过（21/21）
+- 已新增 `SettingsModelTests` 并发回归测试，锁定迁移注册与 cache miss 重建不会留下 stale cache
+- `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~SettingsModelTests" -m:1 -nodeReuse:false`
+  已通过（5/5）
 - 本次定向验证过程中出现的 analyzer warning 来自仓库既有代码，不属于本轮新增问题
 
 ## 下一步

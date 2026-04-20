@@ -29,6 +29,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
 
     private readonly ConcurrentDictionary<Type, ISettingsData> _data = new();
     private readonly ConcurrentDictionary<Type, Dictionary<int, ISettingsMigration>> _migrationCache = new();
+    private readonly object _migrationMapLock = new();
     private readonly ConcurrentDictionary<(Type type, int from), ISettingsMigration> _migrations = new();
     private volatile bool _initialized;
 
@@ -124,6 +125,10 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
     /// <exception cref="InvalidOperationException">
     ///     同一设置类型与源版本已经注册过迁移器时抛出。
     /// </exception>
+    /// <remarks>
+    ///     迁移注册表与按类型缓存的版本映射需要保持一致；因此注册与 cache miss 时的缓存重建
+    ///     统一通过 <see cref="_migrationMapLock" /> 串行化，避免并发加载把旧快照重新写回缓存。
+    /// </remarks>
     public ISettingsModel RegisterMigration(ISettingsMigration migration)
     {
         ArgumentNullException.ThrowIfNull(migration);
@@ -135,13 +140,17 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
             migration.ToVersion,
             nameof(migration));
 
-        if (!_migrations.TryAdd((migration.SettingsType, migration.FromVersion), migration))
+        lock (_migrationMapLock)
         {
-            throw new InvalidOperationException(
-                $"Duplicate settings migration registration for {migration.SettingsType.Name} from version {migration.FromVersion}.");
+            if (!_migrations.TryAdd((migration.SettingsType, migration.FromVersion), migration))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate settings migration registration for {migration.SettingsType.Name} from version {migration.FromVersion}.");
+            }
+
+            _migrationCache.TryRemove(migration.SettingsType, out _);
         }
 
-        _migrationCache.TryRemove(migration.SettingsType, out _);
         return this;
     }
 
@@ -310,18 +319,28 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
     /// <remarks>
     ///     该方法按设置类型缓存迁移表，并始终以 <paramref name="latestData" /> 的版本作为目标运行时版本，
     ///     避免把旧文件中的版本号误当成当前版本。具体的缺链、版本一致性与前进性校验都委托给
-    ///     <see cref="VersionedMigrationRunner" /> 统一处理。
+    ///     <see cref="VersionedMigrationRunner" /> 统一处理。缓存重建与迁移注册共用
+    ///     <see cref="_migrationMapLock" />，确保运行中的初始化不会把过期迁移快照写回缓存。
     /// </remarks>
     private ISettingsData MigrateIfNeeded(ISettingsData data, ISettingsData latestData)
     {
         var type = data.GetType();
-        if (!_migrationCache.TryGetValue(type, out var versionMap))
+        Dictionary<int, ISettingsMigration> versionMap;
+        lock (_migrationMapLock)
         {
-            versionMap = _migrations
-                .Where(kv => kv.Key.type == type)
-                .ToDictionary(kv => kv.Key.from, kv => kv.Value);
+            if (!_migrationCache.TryGetValue(type, out var cachedVersionMap))
+            {
+                // cache miss 与 RegisterMigration 共用同一把锁，避免注册新迁移后又被旧快照覆盖回缓存。
+                versionMap = _migrations
+                    .Where(kv => kv.Key.type == type)
+                    .ToDictionary(kv => kv.Key.from, kv => kv.Value);
 
-            _migrationCache[type] = versionMap;
+                _migrationCache[type] = versionMap;
+            }
+            else
+            {
+                versionMap = cachedVersionMap;
+            }
         }
 
         return VersionedMigrationRunner.MigrateToTargetVersion(
