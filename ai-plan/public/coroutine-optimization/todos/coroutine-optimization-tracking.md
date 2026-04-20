@@ -13,6 +13,7 @@
   - 已为 `Timing` 补齐纯托管测试宿主入口，允许在 `dotnet test` 下验证 Godot 协程宿主阶段语义，而不依赖原生 `Node` 构造
   - 已补充 `GFramework.Godot.Tests/Coroutine/TimingTests.cs`，锁定暂停、segment 路由和阶段型等待指令的回归覆盖
   - 已根据 PR #259 的最新 CodeRabbit review 收口测试宿主清理对称性，并将 `TimingTests` 固定为非并行执行
+  - 已根据 PR #259 的 `MegaLinter analysis: Success with warnings` 结果修复 `dotnet format` workspace 歧义，并增强 PR review skill 以提取此类 CI warning
   - 下一轮优先补“仍需真实场景树参与”的归属协程 / 退树语义，或转入文档迁移收口，不再回到“Godot 宿主没有自动化回归”的旧状态
 
 ## 当前状态摘要
@@ -36,6 +37,9 @@
 - 针对 PR #259 的最新未解决 review 线程，已补充两项收口：
   - `TimingTests` 已添加 `[NonParallelizable]`，避免共享静态实例槽位在 NUnit 并行执行时互相污染
   - `Timing` 的测试清理与运行时退树清理现仅在当前实例持有共享 `_instance` 引用时才会清空单例状态
+- 针对 PR #259 的 `MegaLinter` warning，已补充两项收口：
+  - `.mega-linter.yml` 现为 `CSHARP_DOTNET_FORMAT_ARGUMENTS` 显式指定 `GFramework.sln`，避免仓库根目录同时存在 `*.sln` 与 `*.csproj` 时触发 workspace 歧义
+  - `.codex/skills/gframework-pr-review/` 现会抓取并解析 `github-actions[bot]` 发布的 `MegaLinter analysis: Success with warnings` comment，默认把其中的 detailed issues 视为待验证输入
 - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --no-restore` 当前通过，合计 `58` 个测试
 
 ## 当前风险
@@ -65,9 +69,12 @@
 - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter "FullyQualifiedName~TimingTests" --no-restore`
   - 结果：通过
   - 备注：针对 PR #259 review 修复后的 `TimingTests` 共 `5` 个测试全部通过
+- `dotnet build GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --no-restore`
+  - 结果：通过
+  - 备注：CI/MegaLinter 配置与 PR review skill 更新后，目标测试项目仍保持 `0 warning / 0 error`
 
 ## 下一步
 
 1. 若继续补验证，优先只做真实场景树相关的节点归属 / 退树 / `queue_free` 回归，不再重新设计 `Timing` 纯托管宿主
-2. 当前 PR 合并前可直接回到 GitHub 处理这两条 review 线程的回复与 resolve，避免后续重复审阅同一问题
+2. 当前 PR 合并前可直接回到 GitHub 确认最新 push 是否已消除 `MegaLinter analysis` warning，并顺手处理 review 线程的回复与 resolve
 3. 若转入文档收口，优先清理其余 `StartCoroutine()/StopCoroutine()` 残留，并补 Godot 新入口与阶段等待的迁移对照

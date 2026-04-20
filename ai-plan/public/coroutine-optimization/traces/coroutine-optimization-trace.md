@@ -55,6 +55,14 @@
   - 将 `Timing` 的 `_instance` 清理改为“仅当当前实例仍持有共享单例引用时才执行”，同时覆盖运行时 `_ExitTree()` 与测试入口 `DisposeForTests()`
 - 额外完成验证：
   - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter "FullyQualifiedName~TimingTests" --no-restore`
+- 同日继续收口 PR #259 页面上的 `MegaLinter analysis: Success with warnings`：
+  - 确认 detailed issue 实际不是格式差异，而是 `dotnet format` 在仓库根目录同时发现 `GFramework.sln` 与 `GFramework.csproj` 后因未指定 workspace 直接抛异常
+  - 更新 `.mega-linter.yml`，为 `CSHARP_DOTNET_FORMAT_ARGUMENTS` 显式指定 `GFramework.sln`
+  - 更新 `.codex/skills/gframework-pr-review/SKILL.md` 与 `scripts/fetch_current_pr_review.py`，使 skill 默认抓取并输出 `github-actions[bot]` 的 MegaLinter comments 和 detailed issues
+- 额外完成验证：
+  - `python3 -c "from pathlib import Path; compile(Path('.codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py').read_text(encoding='utf-8'), '.codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py', 'exec'); print('syntax-ok')"`
+  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --branch feat/coroutine-optimization --format json`
+  - `dotnet build GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --no-restore`
 
 ### 下一步
 
