@@ -7,11 +7,11 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-044`
+- 恢复点编号：`CQRS-REWRITE-RP-045`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
-  - 短期上先处理 `PR #253` 的 latest head review thread 复核，确认当前本地修正是否已在远端收敛
+  - 已完成 `PR #253` 的 latest head review thread 复核，确认远端剩余 open thread 属于未关闭的 stale review 噪音
   - 中期上继续 `Phase 8` 主线：参考 `ai-libs/Mediator`，扩大 generator 覆盖、减少 dispatch/invoker 热路径反射，并继续收口 package / facade / 兼容层
 
 ## 当前状态摘要
@@ -25,10 +25,10 @@ CQRS 迁移与收敛。
 ## 当前活跃事实
 
 - `Phase 8` 仍是当前主线，不再回退到 `Phase 7`
-- 最近一轮功能恢复点是 `RP-043`：
-  - tracking 顶部阶段与恢复建议已对齐到 `Phase 8`
-  - `$gframework-pr-review` 会在 open thread 中显式提醒“`Addressed in commit ...` 文案不等于线程已关闭”
-- 若当前分支已推送，应优先重新执行 `$gframework-pr-review`，确认 PR `#253` 的 latest head review threads 是否已收敛
+- `2026-04-20` 已重新执行 `$gframework-pr-review`：
+  - `PR #253` 当前状态为 `CLOSED`
+  - latest reviewed commit 仍显示 `1` 条 open thread，但其内容针对的是已过时的 `Phase 7` 恢复建议
+  - 当前 active tracking / trace 已统一到 `Phase 8`，因此该 thread 不再作为当前主线阻塞项
 - 若 PR review 噪音已收敛，再回到以下主线优先级：
   - generator 覆盖面继续扩大
   - dispatch/invoker 反射占比继续下降
@@ -53,6 +53,6 @@ CQRS 迁移与收敛。
 
 ## 下一步
 
-1. 推送当前分支后重新执行 `$gframework-pr-review`，确认 `PR #253` 的 latest head review threads 是否已收敛
-2. 若 PR review 已收敛，回到 `Phase 8` 主线，优先选择一个收益明确的反射收敛点继续推进
-3. 若继续文档主线，优先再扫 `docs/zh-CN/api-reference` 与教程入口页，补齐仍过时的 CQRS API / 命名空间表述
+1. 回到 `Phase 8` 主线，优先选择一个收益明确的反射收敛点继续推进
+2. 若继续文档主线，优先再扫 `docs/zh-CN/api-reference` 与教程入口页，补齐仍过时的 CQRS API / 命名空间表述
+3. 若后续再出现新的 PR review 或 review thread 变化，再重新执行 `$gframework-pr-review` 作为独立验证步骤
