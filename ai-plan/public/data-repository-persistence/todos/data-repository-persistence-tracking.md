@@ -33,8 +33,8 @@
 - `GFramework.Game.Internal.VersionedMigrationRunner` 已统一前向迁移注册校验、缺链失败、声明版本一致性与非递增防护
 - `SettingsModel` 现在以当前内存设置实例的 `Version` 作为目标运行时版本；若迁移失败则保留当前实例并记录错误日志
 - `SaveRepository<T>` 继续在 `LoadAsync(slot)` 期间迁移并回写，但其核心链式校验已与设置迁移共用同一实现
-- PR #260 最新 review 仍要求补齐 `VersionedMigrationRunner` / `SettingsModel` 的 XML 异常契约，并确保
-  `SaveRepository<T>` 单次加载不会在并发注册期间读取到变化中的迁移链
+- PR #260 review follow-up 已完成：`VersionedMigrationRunner` / `SettingsModel` 的 XML 异常契约已补齐，
+  `SaveRepository<T>` 单次加载已切换为迁移表快照，避免并发注册期间读取变化中的迁移链
 - `docs/zh-CN/game/index.md` 当前仍承担最低接入示例，因此其中的 `JsonSerializer` 配置必须避免鼓励对
   用户可篡改存档启用不受限的多态反序列化
 

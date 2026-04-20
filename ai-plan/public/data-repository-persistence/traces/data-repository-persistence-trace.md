@@ -24,7 +24,7 @@
 - 历史 trace 归档：
   - `ai-plan/public/data-repository-persistence/archive/traces/data-repository-persistence-history-pre-rp001.md`
 
-### 下一步
+### 下一步：JsonSerializer 配置契约补充
 
 1. 后续继续该主题时，只从 `ai-plan/public/data-repository-persistence/` 进入，不再恢复 `local-plan/`
 2. 若 active 入口再次积累多轮已完成且已验证阶段，继续按同一模式迁入该主题自己的 `archive/`
@@ -40,7 +40,7 @@
   - 在定向单测中固定“序列化器暴露活动配置实例”的当前契约
   - 在 `docs/zh-CN/game/serialization.md`、`docs/zh-CN/game/index.md` 与 `GFramework.Game/README.md` 中同步修正接入建议
 
-### 下一步
+### 下一步：JsonSerializer 配置契约补充
 
 1. `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~JsonSerializerTests"` 已通过（9/9）
 2. 验证过程中出现的 analyzer warning 为仓库既有 warning，未在本轮扩大
@@ -66,12 +66,12 @@
   - `SettingsModelTests`：重复注册拒绝、不完整链路保持当前实例、缓存失效场景
   - `PersistenceTests`：迁移结果版本与声明版本不一致时显式失败
 
-### 验证
+### 验证：迁移执行器统一收敛
 
 1. `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~SettingsModelTests|FullyQualifiedName~PersistenceTests"` 已通过（20/20）
 2. 过程中出现的 analyzer warning 来自仓库既有项，未在本轮扩大
 
-### 下一步
+### 下一步：迁移执行器统一收敛
 
 1. 进入 codec / persistence pipeline 边界评估
 2. 重点查看压缩、加密、元数据、备份是否仍然跨越 `Serializer` / `Storage` / `Repository` 多层分散
@@ -98,12 +98,12 @@
   - `PersistenceTests` 已新增“迁移失败不污染持久化数据”断言，以及并发注册下固定迁移快照的回归测试
   - `docs/zh-CN/game/index.md` 的 `JsonSerializer` 接入示例已改为 `TypeNameHandling.None`，并补充白名单 binder 说明
 
-### 验证
+### 验证：PR #260 review follow-up
 
 1. `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~SettingsModelTests|FullyQualifiedName~PersistenceTests" -m:1 -nodeReuse:false` 已通过（21/21）
 2. 本次验证未再出现本轮新增的 XML doc warning；输出中的 analyzer warning 仍为仓库既有项
 
-### 下一步
+### 下一步：PR #260 review follow-up
 
 1. 回到 codec / persistence pipeline 边界评估
 2. 继续判断压缩、加密、元数据与备份策略是否需要新的 dedicated pipeline abstraction
