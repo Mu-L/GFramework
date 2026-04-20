@@ -7,12 +7,13 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-045`
+- 恢复点编号：`CQRS-REWRITE-RP-046`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
-  - 已完成 `PR #253` 的 latest head review thread 复核，确认远端剩余 open thread 属于未关闭的 stale review 噪音
-  - 中期上继续 `Phase 8` 主线：参考 `ai-libs/Mediator`，扩大 generator 覆盖、减少 dispatch/invoker 热路径反射，并继续收口 package / facade / 兼容层
+  - 已完成 generated registry 激活路径收敛：`CqrsHandlerRegistrar` 现优先复用缓存工厂委托，避免重复 `ConstructorInfo.Invoke`
+  - 已补充私有无参构造 generated registry 的回归测试，确保兼容现有生成器产物
+  - 中期上继续 `Phase 8` 主线：参考 `ai-libs/Mediator`，继续扩大 generator 覆盖，并选择下一个收益明确的 dispatch / invoker 反射收敛点
 
 ## 当前状态摘要
 
@@ -29,7 +30,11 @@ CQRS 迁移与收敛。
   - `PR #253` 当前状态为 `CLOSED`
   - latest reviewed commit 仍显示 `1` 条 open thread，但其内容针对的是已过时的 `Phase 7` 恢复建议
   - 当前 active tracking / trace 已统一到 `Phase 8`，因此该 thread 不再作为当前主线阻塞项
-- 若 PR review 噪音已收敛，再回到以下主线优先级：
+- `2026-04-20` 已完成一轮冷启动反射收敛：
+  - generated registry 类型首次分析后，会缓存一个可复用的激活工厂，而不是在后续容器注册时重复走 `ConstructorInfo.Invoke`
+  - 若运行环境不允许动态方法，仍保留原有的反射激活回退，避免阻塞 generated registry 路径
+  - `GFramework.Cqrs.Tests` 已补充“私有无参构造 registry 仍可激活”的回归覆盖
+- 当前主线优先级：
   - generator 覆盖面继续扩大
   - dispatch/invoker 反射占比继续下降
   - package / facade / 兼容层继续收口
@@ -50,9 +55,12 @@ CQRS 迁移与收敛。
 
 - `RP-043` 之前的详细阶段记录、定向验证命令和阶段性决策均已移入主题内归档
 - active 跟踪文件只保留当前恢复点、当前活跃事实、风险和下一步，避免 `boot` 在默认入口中重复扫描 1000+ 行历史 trace
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false`
+  - 结果：通过
+  - 备注：`63/63` 测试通过；当前沙箱限制了 MSBuild named pipe，验证需在提权环境下运行
 
 ## 下一步
 
-1. 回到 `Phase 8` 主线，优先选择一个收益明确的反射收敛点继续推进
+1. 继续 `Phase 8` 主线，优先选择下一个收益明确的 dispatch / invoker 反射收敛点继续推进
 2. 若继续文档主线，优先再扫 `docs/zh-CN/api-reference` 与教程入口页，补齐仍过时的 CQRS API / 命名空间表述
 3. 若后续再出现新的 PR review 或 review thread 变化，再重新执行 `$gframework-pr-review` 作为独立验证步骤

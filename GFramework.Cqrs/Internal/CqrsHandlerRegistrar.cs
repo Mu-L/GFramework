@@ -1,6 +1,7 @@
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using System.Reflection.Emit;
 
 namespace GFramework.Cqrs.Internal;
 
@@ -323,7 +324,51 @@ internal static class CqrsHandlerRegistrar
             : new RegistryActivationMetadata(
                 true,
                 false,
-                () => (ICqrsHandlerRegistry)constructor.Invoke(null));
+                CreateRegistryFactory(registryType, constructor));
+    }
+
+    /// <summary>
+    ///     为生成注册器创建可复用的激活工厂，优先使用一次性编译的动态方法，
+    ///     避免后续每次命中缓存时仍走 <see cref="ConstructorInfo" /> 的反射激活路径。
+    /// </summary>
+    /// <param name="registryType">生成注册器类型。</param>
+    /// <param name="constructor">已解析的无参构造函数。</param>
+    /// <returns>可直接实例化注册器的工厂委托。</returns>
+    private static Func<ICqrsHandlerRegistry> CreateRegistryFactory(
+        Type registryType,
+        ConstructorInfo constructor)
+    {
+        ArgumentNullException.ThrowIfNull(registryType);
+        ArgumentNullException.ThrowIfNull(constructor);
+
+        try
+        {
+            // 生成器产物通常是稳定的无参 registry；这里把构造反射收敛为一次性 IL 工厂，
+            // 这样同一 registry 类型在多个容器间复用缓存时不会重复付出 ConstructorInfo.Invoke 成本。
+            var dynamicMethod = new DynamicMethod(
+                $"Create_{registryType.Name}_CqrsHandlerRegistry",
+                typeof(ICqrsHandlerRegistry),
+                Type.EmptyTypes,
+                registryType.Module,
+                skipVisibility: true);
+            var il = dynamicMethod.GetILGenerator();
+            il.Emit(OpCodes.Newobj, constructor);
+
+            if (registryType.IsValueType)
+            {
+                il.Emit(OpCodes.Box, registryType);
+            }
+
+            il.Emit(OpCodes.Castclass, typeof(ICqrsHandlerRegistry));
+            il.Emit(OpCodes.Ret);
+
+            return (Func<ICqrsHandlerRegistry>)dynamicMethod.CreateDelegate(typeof(Func<ICqrsHandlerRegistry>));
+        }
+        catch
+        {
+            // 某些受限运行环境若不允许动态方法，仍保留原有的反射激活语义，避免阻塞 generated registry 路径。
+            return () => (ICqrsHandlerRegistry)constructor.Invoke(null);
+        }
     }
 
     /// <summary>

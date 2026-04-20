@@ -141,6 +141,31 @@ internal sealed class CqrsHandlerRegistrarTests
     }
 
     /// <summary>
+    ///     验证 generated registry 使用私有无参构造器时，运行时仍可激活它并完成处理器注册。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Activate_Generated_Registry_With_Private_Parameterless_Constructor()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.PrivateGeneratedRegistryAssembly, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(PrivateConstructorNotificationHandlerRegistry))]);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var handlers = container.GetAll<INotificationHandler<GeneratedRegistryNotification>>();
+
+        Assert.That(
+            handlers.Select(static handler => handler.GetType()),
+            Is.EqualTo([typeof(GeneratedRegistryNotificationHandler)]));
+    }
+
+    /// <summary>
     ///     验证当生成注册器元数据损坏时，运行时会记录告警并回退到反射扫描路径。
     /// </summary>
     [Test]
@@ -593,6 +618,36 @@ internal sealed class PartialGeneratedNotificationHandlerRegistry : ICqrsHandler
 {
     /// <summary>
     ///     将生成路径可见的通知处理器注册到目标服务集合。
+    /// </summary>
+    /// <param name="services">承载处理器映射的服务集合。</param>
+    /// <param name="logger">用于记录注册诊断的日志器。</param>
+    public void Register(IServiceCollection services, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        services.AddTransient(
+            typeof(INotificationHandler<GeneratedRegistryNotification>),
+            typeof(GeneratedRegistryNotificationHandler));
+        logger.Debug(
+            $"Registered CQRS handler {typeof(GeneratedRegistryNotificationHandler).FullName} as {typeof(INotificationHandler<GeneratedRegistryNotification>).FullName}.");
+    }
+}
+
+/// <summary>
+///     模拟生成注册器使用私有无参构造器的场景，验证运行时仍可通过缓存工厂激活它。
+/// </summary>
+internal sealed class PrivateConstructorNotificationHandlerRegistry : ICqrsHandlerRegistry
+{
+    /// <summary>
+    ///     初始化一个新的私有生成注册器实例。
+    /// </summary>
+    private PrivateConstructorNotificationHandlerRegistry()
+    {
+    }
+
+    /// <summary>
+    ///     将测试通知处理器注册到目标服务集合。
     /// </summary>
     /// <param name="services">承载处理器映射的服务集合。</param>
     /// <param name="logger">用于记录注册诊断的日志器。</param>
