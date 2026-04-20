@@ -45,6 +45,9 @@ ENABLE_LINTERS:
 # 设置 C# 代码风格检查的参数和验证级别
 # ========================
 CSHARP_DOTNET_FORMAT_ARGUMENTS:
+  # 仓库根目录同时存在 GFramework.sln 与 GFramework.csproj；
+  # 显式指定 workspace，避免 dotnet format 在 CI 中因自动探测歧义直接异常退出。
+  - "GFramework.sln"
   - "--severity"
   - "info"
   - "--verify-no-changes"
@@ -83,4 +86,3 @@ GITHUB_COMMENT_REPORTER: true
 PARALLEL: true
 SHOW_ELAPSED_TIME: true
 VALIDATE_ALL_CODEBASE: false
-

@@ -24,6 +24,7 @@ DEFAULT_WINDOWS_GIT = "/mnt/d/Tool/Development Tools/Git/cmd/git.exe"
 GIT_ENVIRONMENT_KEY = "GFRAMEWORK_WINDOWS_GIT"
 USER_AGENT = "codex-gframework-pr-review"
 CODERABBIT_LOGIN = "coderabbitai[bot]"
+GITHUB_ACTIONS_LOGIN = "github-actions[bot]"
 REVIEW_COMMENT_ADDRESSED_MARKER = "<!-- <review_comment_addressed> -->"
 VISIBLE_ADDRESSED_IN_COMMIT_PATTERN = re.compile(r"✅\s*Addressed in commit\s+[0-9a-f]{7,40}", re.I)
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 60
@@ -156,6 +157,10 @@ def strip_tags(text: str) -> str:
     return collapse_whitespace(re.sub(r"<[^>]+>", " ", text))
 
 
+def strip_markdown_links(text: str) -> str:
+    return re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+
+
 def extract_section(text: str, start_marker: str, end_markers: list[str]) -> str | None:
     start = text.find(start_marker)
     if start < 0:
@@ -250,6 +255,60 @@ def parse_actionable_comments(actionable_block: str) -> dict[str, Any]:
         "all_comments_prompt": prompt_match.group(1).strip() if prompt_match else "",
         "raw": actionable_block.strip(),
     }
+
+
+def parse_megalinter_comment(comment_body: str) -> dict[str, Any]:
+    normalized_body = html.unescape(comment_body).strip()
+    summary_match = re.search(
+        r"##\s*(?P<badges>.*?)\[MegaLinter\]\([^)]+\)\s+analysis:\s+\[(?P<status>[^\]]+)\]\((?P<run_url>[^)]+)\)",
+        normalized_body,
+    )
+
+    report: dict[str, Any] = {
+        "status": summary_match.group("status").strip() if summary_match else "",
+        "run_url": summary_match.group("run_url").strip() if summary_match else "",
+        "badges": collapse_whitespace(summary_match.group("badges")) if summary_match else "",
+        "descriptor_rows": [],
+        "detailed_issues": [],
+        "raw": normalized_body,
+    }
+
+    table_match = re.search(
+        r"\| Descriptor .*?\|\n\|[-| :]+\|\n(?P<rows>(?:\|.*\|\n?)+)",
+        normalized_body,
+        re.S,
+    )
+    if table_match is not None:
+        for raw_line in table_match.group("rows").splitlines():
+            line = raw_line.strip()
+            if not line.startswith("|"):
+                continue
+
+            parts = [collapse_whitespace(strip_markdown_links(part)) for part in line.strip("|").split("|")]
+            if len(parts) != 7:
+                continue
+
+            report["descriptor_rows"].append(
+                {
+                    "descriptor": parts[0],
+                    "linter": parts[1],
+                    "files": parts[2],
+                    "fixed": parts[3],
+                    "errors": parts[4],
+                    "warnings": parts[5],
+                    "elapsed_time": parts[6],
+                }
+            )
+
+    for summary, details in re.findall(r"<summary>(.*?)</summary>\s*```(.*?)```", normalized_body, re.S):
+        report["detailed_issues"].append(
+            {
+                "summary": collapse_whitespace(strip_tags(summary)),
+                "details": details.strip(),
+            }
+        )
+
+    return report
 
 
 def parse_test_report(block: str) -> dict[str, Any]:
@@ -475,11 +534,18 @@ def build_result(pr_number: int, branch: str) -> dict[str, Any]:
         issue_comments,
         lambda body: "CTRF PR COMMENT TAG:" in body or "### Test Results" in body,
     )
+    megalinter_block = select_latest_comment_body(
+        issue_comments,
+        lambda body: "MegaLinter" in body and "Detailed Issues" in body,
+        required_user=GITHUB_ACTIONS_LOGIN,
+    )
 
     if not summary_block:
         warnings.append("CodeRabbit summary block was not found in issue comments.")
     if not test_blocks:
         warnings.append("PR test-report block was not found in issue comments.")
+    if not megalinter_block:
+        warnings.append("MegaLinter report block was not found in issue comments.")
 
     latest_commit_review: dict[str, Any] = {}
     try:
@@ -506,6 +572,7 @@ def build_result(pr_number: int, branch: str) -> dict[str, Any]:
         },
         "coderabbit_comments": parse_actionable_comments(actionable_block) if actionable_block else {},
         "latest_commit_review": latest_commit_review,
+        "megalinter_report": parse_megalinter_comment(megalinter_block) if megalinter_block else {},
         "test_reports": [parse_test_report(block) for block in test_blocks],
         "parse_warnings": warnings,
     }
@@ -568,6 +635,31 @@ def format_text(result: dict[str, Any]) -> str:
                 lines.append(
                     "  Note: thread is still open; treat the visible 'Addressed in commit ...' text as unverified until local code matches."
                 )
+
+    megalinter_report = result.get("megalinter_report", {})
+    if megalinter_report:
+        lines.append("")
+        lines.append(
+            "MegaLinter: "
+            f"{megalinter_report.get('status', 'unknown')}"
+            + (
+                f" ({megalinter_report.get('run_url', '')})"
+                if megalinter_report.get("run_url")
+                else ""
+            )
+        )
+
+        descriptor_rows = megalinter_report.get("descriptor_rows", [])
+        for descriptor_row in descriptor_rows:
+            lines.append(
+                "- "
+                f"{descriptor_row['descriptor']} / {descriptor_row['linter']}: "
+                f"errors={descriptor_row['errors']} warnings={descriptor_row['warnings']} files={descriptor_row['files']}"
+            )
+
+        for issue in megalinter_report.get("detailed_issues", []):
+            lines.append(f"- Detailed issue: {issue['summary']}")
+            lines.append(f"  {collapse_whitespace(issue['details'])}")
 
     lines.append("")
     lines.append(f"Test reports: {len(result['test_reports'])}")

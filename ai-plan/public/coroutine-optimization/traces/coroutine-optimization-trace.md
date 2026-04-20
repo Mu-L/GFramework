@@ -32,3 +32,39 @@
 1. 后续若继续 coroutine 主题，只从 `ai-plan/public/coroutine-optimization/` 进入，不再恢复 `local-plan/`
 2. 下一轮只选择一个主切入点推进，避免语义、宿主、测试和文档扩面同时发生
 3. 若 active 入口后续积累多轮已完成且已验证阶段，再按同一模式迁入该主题自己的 `archive/`
+
+## 2026-04-20
+
+### 阶段：Godot 宿主回归覆盖补齐（RP-002）
+
+- 选择只推进 `Tests And Regressions` 切面，不同时改动协程语义与迁移文档
+- 新增 `GFramework.Godot/Coroutine/Timing.Testing.cs`，为 `Timing` 提供仅供测试使用的纯托管初始化与帧推进入口
+- 新增 `GFramework.Godot.Tests/Coroutine/TimingTests.cs`，覆盖：
+  - 暂停时 `Process` 与 `ProcessIgnorePause` 的推进差异
+  - `Process` / `PhysicsProcess` / `DeferredProcess` 的执行边界与顺序
+  - `WaitForFixedUpdate` 与 `WaitForEndOfFrame` 的阶段型等待语义
+- 关键决策：在 `dotnet test` 宿主中不直接运行 `Timing : Node` 的原生构造，而是使用未初始化对象配合测试入口补齐纯托管字段
+  - 原因：直接构造 `Godot.Node` 派生类型会导致 VSTest test host 崩溃，无法作为稳定回归路径
+  - 约束：当前测试覆盖的是宿主调度语义，不覆盖真实场景树信号、节点归属与退树回调
+- 为支持上述测试入口，将 `Timing` 的节点归属字典从只读字段调整为可在测试初始化阶段重建的私有字段，未改动任何公共 API
+- 完成验证：
+  - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter "FullyQualifiedName~TimingTests" --no-restore`
+  - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --no-restore`
+- 同日根据 PR #259 的最新 unresolved CodeRabbit review 继续收口：
+  - 在 `GFramework.Godot.Tests/Coroutine/TimingTests.cs` 为 fixture 添加 `[NonParallelizable]`，避免静态实例槽位在 NUnit 并行执行时互相污染
+  - 将 `Timing` 的 `_instance` 清理改为“仅当当前实例仍持有共享单例引用时才执行”，同时覆盖运行时 `_ExitTree()` 与测试入口 `DisposeForTests()`
+- 额外完成验证：
+  - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter "FullyQualifiedName~TimingTests" --no-restore`
+- 同日继续收口 PR #259 页面上的 `MegaLinter analysis: Success with warnings`：
+  - 确认 detailed issue 实际不是格式差异，而是 `dotnet format` 在仓库根目录同时发现 `GFramework.sln` 与 `GFramework.csproj` 后因未指定 workspace 直接抛异常
+  - 更新 `.mega-linter.yml`，为 `CSHARP_DOTNET_FORMAT_ARGUMENTS` 显式指定 `GFramework.sln`
+  - 更新 `.codex/skills/gframework-pr-review/SKILL.md` 与 `scripts/fetch_current_pr_review.py`，使 skill 默认抓取并输出 `github-actions[bot]` 的 MegaLinter comments 和 detailed issues
+- 额外完成验证：
+  - `python3 -c "from pathlib import Path; compile(Path('.codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py').read_text(encoding='utf-8'), '.codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py', 'exec'); print('syntax-ok')"`
+  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --branch feat/coroutine-optimization --format json`
+  - `dotnet build GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --no-restore`
+
+### 下一步
+
+1. 若继续补验证，优先规划真实场景树参与的节点归属 / 退树 / `queue_free` 测试宿主
+2. 若转入文档收口，优先清理仍引用 `StartCoroutine()/StopCoroutine()` 的教程残留，并补迁移对照
