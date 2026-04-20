@@ -746,6 +746,109 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
+    ///     验证当 handler 合同把 pointer 响应类型放进 CQRS 泛型参数时，
+    ///     生成器会保守回退而不是继续发射不可构造的精确注册代码。
+    /// </summary>
+    [Test]
+    public void Reports_Compilation_Error_And_Skips_Precise_Registration_For_Hidden_Pointer_Response()
+    {
+        const string source = """
+                              using System;
+
+                              namespace Microsoft.Extensions.DependencyInjection
+                              {
+                                  public interface IServiceCollection { }
+
+                                  public static class ServiceCollectionServiceExtensions
+                                  {
+                                      public static void AddTransient(IServiceCollection services, Type serviceType, Type implementationType) { }
+                                  }
+                              }
+
+                              namespace GFramework.Core.Abstractions.Logging
+                              {
+                                  public interface ILogger
+                                  {
+                                      void Debug(string msg);
+                                  }
+                              }
+
+                              namespace GFramework.Cqrs.Abstractions.Cqrs
+                              {
+                                  public interface IRequest<TResponse> { }
+                                  public interface INotification { }
+                                  public interface IStreamRequest<TResponse> { }
+
+                                  public interface IRequestHandler<in TRequest, TResponse> where TRequest : IRequest<TResponse> { }
+                                  public interface INotificationHandler<in TNotification> where TNotification : INotification { }
+                                  public interface IStreamRequestHandler<in TRequest, out TResponse> where TRequest : IStreamRequest<TResponse> { }
+                              }
+
+                              namespace GFramework.Cqrs
+                              {
+                                  public interface ICqrsHandlerRegistry
+                                  {
+                                      void Register(Microsoft.Extensions.DependencyInjection.IServiceCollection services, GFramework.Core.Abstractions.Logging.ILogger logger);
+                                  }
+
+                                  [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+                                  public sealed class CqrsHandlerRegistryAttribute : Attribute
+                                  {
+                                      public CqrsHandlerRegistryAttribute(Type registryType) { }
+                                  }
+                              }
+
+                              namespace TestApp
+                              {
+                                  using GFramework.Cqrs.Abstractions.Cqrs;
+
+                                  public sealed class Container
+                                  {
+                                      private unsafe struct HiddenResponse
+                                      {
+                                      }
+
+                                      private unsafe sealed record HiddenRequest() : IRequest<HiddenResponse*>;
+
+                                      public unsafe sealed class HiddenHandler : IRequestHandler<HiddenRequest, HiddenResponse*>
+                                      {
+                                      }
+                                  }
+                              }
+                              """;
+
+        var execution = ExecuteGenerator(
+            source,
+            allowUnsafe: true);
+        var inputCompilationErrors = execution.InputCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        var generatedCompilationErrors = execution.GeneratedCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        var generatorErrors = execution.GeneratorDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        var missingContractDiagnostic =
+            generatorErrors.SingleOrDefault(static diagnostic =>
+                string.Equals(diagnostic.Id, "GF_Cqrs_001", StringComparison.Ordinal));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(inputCompilationErrors.Select(static diagnostic => diagnostic.Id), Does.Contain("CS0306"));
+            Assert.That(generatedCompilationErrors, Is.Empty);
+            Assert.That(execution.GeneratedSources, Is.Empty);
+            Assert.That(missingContractDiagnostic, Is.Not.Null);
+            Assert.That(
+                missingContractDiagnostic!.GetMessage(),
+                Does.Contain("TestApp.Container+HiddenHandler"));
+            Assert.That(
+                missingContractDiagnostic.GetMessage(),
+                Does.Contain("GFramework.Cqrs.CqrsReflectionFallbackAttribute"));
+        });
+    }
+
+    /// <summary>
     ///     验证同一个 implementation 同时包含可直接注册接口与需精确重建接口时，
     ///     生成器会保留两类注册，并继续按 handler interface 名称稳定排序。
     /// </summary>
@@ -1232,9 +1335,9 @@ public class CqrsHandlerRegistryGeneratorTests
                                       {
                                       }
 
-                                      private unsafe sealed record HiddenRequest() : IRequest<HiddenResponse*>;
+                                      private unsafe sealed record HiddenRequest() : IRequest<delegate* unmanaged<HiddenResponse>>;
 
-                                      public unsafe sealed class HiddenHandler : IRequestHandler<HiddenRequest, HiddenResponse*>
+                                      public unsafe sealed class HiddenHandler : IRequestHandler<HiddenRequest, delegate* unmanaged<HiddenResponse>>
                                       {
                                       }
                                   }
@@ -1244,6 +1347,9 @@ public class CqrsHandlerRegistryGeneratorTests
         var execution = ExecuteGenerator(
             source,
             allowUnsafe: true);
+        var inputCompilationErrors = execution.InputCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
         var generatedCompilationErrors = execution.GeneratedCompilationDiagnostics
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .ToArray();
@@ -1251,10 +1357,12 @@ public class CqrsHandlerRegistryGeneratorTests
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .ToArray();
         var missingContractDiagnostic =
-            generatorErrors.SingleOrDefault(static diagnostic => diagnostic.Id == "GF_Cqrs_001");
+            generatorErrors.SingleOrDefault(static diagnostic =>
+                string.Equals(diagnostic.Id, "GF_Cqrs_001", StringComparison.Ordinal));
 
         Assert.Multiple(() =>
         {
+            Assert.That(inputCompilationErrors.Select(static diagnostic => diagnostic.Id), Does.Contain("CS0306"));
             Assert.That(generatedCompilationErrors, Is.Empty);
             Assert.That(execution.GeneratedSources, Is.Empty);
             Assert.That(missingContractDiagnostic, Is.Not.Null);
@@ -1341,15 +1449,15 @@ public class CqrsHandlerRegistryGeneratorTests
                                       {
                                       }
 
-                                      private unsafe sealed record AlphaRequest() : IRequest<AlphaResponse*>;
+                                      private unsafe sealed record AlphaRequest() : IRequest<delegate* unmanaged<AlphaResponse>>;
 
-                                      private unsafe sealed record BetaRequest() : IRequest<BetaResponse*>;
+                                      private unsafe sealed record BetaRequest() : IRequest<delegate* unmanaged<BetaResponse>>;
 
-                                      public unsafe sealed class BetaHandler : IRequestHandler<BetaRequest, BetaResponse*>
+                                      public unsafe sealed class BetaHandler : IRequestHandler<BetaRequest, delegate* unmanaged<BetaResponse>>
                                       {
                                       }
 
-                                      public unsafe sealed class AlphaHandler : IRequestHandler<AlphaRequest, AlphaResponse*>
+                                      public unsafe sealed class AlphaHandler : IRequestHandler<AlphaRequest, delegate* unmanaged<AlphaResponse>>
                                       {
                                       }
                                   }
@@ -1359,6 +1467,9 @@ public class CqrsHandlerRegistryGeneratorTests
         var execution = ExecuteGenerator(
             source,
             allowUnsafe: true);
+        var inputCompilationErrors = execution.InputCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
         var generatedCompilationErrors = execution.GeneratedCompilationDiagnostics
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .ToArray();
@@ -1368,6 +1479,7 @@ public class CqrsHandlerRegistryGeneratorTests
 
         Assert.Multiple(() =>
         {
+            Assert.That(inputCompilationErrors.Select(static diagnostic => diagnostic.Id), Does.Contain("CS0306"));
             Assert.That(generatedCompilationErrors, Is.Empty);
             Assert.That(generatorErrors, Is.Empty);
             Assert.That(execution.GeneratedSources, Has.Length.EqualTo(1));
@@ -1480,6 +1592,11 @@ public class CqrsHandlerRegistryGeneratorTests
                 (filename: sourceResult.HintName, content: sourceResult.SourceText.ToString()))
             .ToArray();
         var compilationDiagnostics = updatedCompilation.GetDiagnostics().ToArray();
+        var inputCompilationDiagnostics = compilationDiagnostics
+            .Where(diagnostic =>
+                diagnostic.Location.SourceTree is null ||
+                !generatedSyntaxTrees.Contains(diagnostic.Location.SourceTree))
+            .ToArray();
         var generatedCompilationDiagnostics = compilationDiagnostics
             .Where(diagnostic =>
                 diagnostic.Location.SourceTree is not null &&
@@ -1489,6 +1606,7 @@ public class CqrsHandlerRegistryGeneratorTests
             generatedSources,
             generatorDiagnostics.ToArray(),
             compilationDiagnostics,
+            inputCompilationDiagnostics,
             generatedCompilationDiagnostics);
     }
 
@@ -1498,10 +1616,12 @@ public class CqrsHandlerRegistryGeneratorTests
     /// <param name="GeneratedSources">本轮生成产生的源文件集合。</param>
     /// <param name="GeneratorDiagnostics">生成器自身报告的诊断集合。</param>
     /// <param name="CompilationDiagnostics">将生成结果并回编译后的完整编译诊断集合。</param>
+    /// <param name="InputCompilationDiagnostics">仅来自输入源文件的编译诊断集合。</param>
     /// <param name="GeneratedCompilationDiagnostics">仅来自生成源文件的编译诊断集合。</param>
     private sealed record GeneratorExecutionResult(
         (string filename, string content)[] GeneratedSources,
         Diagnostic[] GeneratorDiagnostics,
         Diagnostic[] CompilationDiagnostics,
+        Diagnostic[] InputCompilationDiagnostics,
         Diagnostic[] GeneratedCompilationDiagnostics);
 }

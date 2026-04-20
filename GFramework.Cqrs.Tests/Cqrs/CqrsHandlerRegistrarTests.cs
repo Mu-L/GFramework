@@ -32,6 +32,7 @@ internal sealed class CqrsHandlerRegistrarTests
 
         _container.Freeze();
         _context = new ArchitectureContext(_container);
+        ClearRegistrarCaches();
     }
 
     /// <summary>
@@ -43,6 +44,7 @@ internal sealed class CqrsHandlerRegistrarTests
         _context = null;
         _container = null;
         DeterministicNotificationHandlerState.Reset();
+        ClearRegistrarCaches();
     }
 
     /// <summary>
@@ -128,6 +130,31 @@ internal sealed class CqrsHandlerRegistrarTests
         generatedAssembly
             .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
             .Returns([new CqrsHandlerRegistryAttribute(typeof(GeneratedNotificationHandlerRegistry))]);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var handlers = container.GetAll<INotificationHandler<GeneratedRegistryNotification>>();
+
+        Assert.That(
+            handlers.Select(static handler => handler.GetType()),
+            Is.EqualTo([typeof(GeneratedRegistryNotificationHandler)]));
+    }
+
+    /// <summary>
+    ///     验证 generated registry 使用私有无参构造器时，运行时仍可激活它并完成处理器注册。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Activate_Generated_Registry_With_Private_Parameterless_Constructor()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.PrivateGeneratedRegistryAssembly, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(PrivateConstructorNotificationHandlerRegistry))]);
 
         var container = new MicrosoftDiContainer();
         CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
@@ -410,6 +437,150 @@ internal sealed class CqrsHandlerRegistrarTests
 
         partiallyLoadableAssembly.Verify(static assembly => assembly.GetTypes(), Times.Once);
     }
+
+    /// <summary>
+    ///     验证同一 handler 类型跨容器重复注册时，会复用已筛选的 supported handler interface 列表，
+    ///     而不是为每个容器重新执行接口反射分析。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Cache_Supported_Handler_Interfaces_Across_Containers()
+    {
+        var supportedHandlerInterfacesCache = GetRegistrarCacheField("SupportedHandlerInterfacesCache");
+        var firstHandlerType = typeof(AlphaDeterministicNotificationHandler);
+        var secondHandlerType = typeof(ZetaDeterministicNotificationHandler);
+        var handlerAssembly = new Mock<Assembly>();
+        handlerAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.CachedHandlerInterfacesAssembly, Version=1.0.0.0");
+        handlerAssembly
+            .Setup(static assembly => assembly.GetTypes())
+            .Returns([firstHandlerType, secondHandlerType]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(GetSingleKeyCacheValue(supportedHandlerInterfacesCache, firstHandlerType), Is.Null);
+            Assert.That(GetSingleKeyCacheValue(supportedHandlerInterfacesCache, secondHandlerType), Is.Null);
+        });
+
+        var firstContainer = new MicrosoftDiContainer();
+        var secondContainer = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(firstContainer, handlerAssembly.Object);
+        var firstHandlerInterfaces =
+            GetSingleKeyCacheValue(supportedHandlerInterfacesCache, firstHandlerType);
+        var secondHandlerInterfaces =
+            GetSingleKeyCacheValue(supportedHandlerInterfacesCache, secondHandlerType);
+
+        CqrsTestRuntime.RegisterHandlers(secondContainer, handlerAssembly.Object);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstHandlerInterfaces, Is.Not.Null);
+            Assert.That(secondHandlerInterfaces, Is.Not.Null);
+            Assert.That(
+                GetSingleKeyCacheValue(supportedHandlerInterfacesCache, firstHandlerType),
+                Is.SameAs(firstHandlerInterfaces));
+            Assert.That(
+                GetSingleKeyCacheValue(supportedHandlerInterfacesCache, secondHandlerType),
+                Is.SameAs(secondHandlerInterfaces));
+        });
+
+        handlerAssembly.Verify(static assembly => assembly.GetTypes(), Times.Once);
+    }
+
+    /// <summary>
+    ///     验证当程序集枚举结果包含重复 handler 类型时，registrar 仍只会写入一份 handler 映射。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Skip_Duplicate_Handler_Mappings_When_Assembly_Returns_Duplicate_Types()
+    {
+        var handlerType = typeof(AlphaDeterministicNotificationHandler);
+        var handlerAssembly = new Mock<Assembly>();
+        handlerAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.DuplicateHandlerMappingsAssembly, Version=1.0.0.0");
+        handlerAssembly
+            .Setup(static assembly => assembly.GetTypes())
+            .Returns([handlerType, handlerType]);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, handlerAssembly.Object);
+
+        var registrations = container.GetServicesUnsafe
+            .Where(static descriptor =>
+                descriptor.ServiceType == typeof(INotificationHandler<DeterministicOrderNotification>) &&
+                descriptor.ImplementationType == typeof(AlphaDeterministicNotificationHandler))
+            .ToArray();
+
+        Assert.That(registrations, Has.Length.EqualTo(1));
+    }
+
+    /// <summary>
+    ///     清空本测试依赖的 registrar 静态缓存，避免跨用例共享进程级状态导致断言漂移。
+    /// </summary>
+    private static void ClearRegistrarCaches()
+    {
+        ClearCache(GetRegistrarCacheField("AssemblyMetadataCache"));
+        ClearCache(GetRegistrarCacheField("RegistryActivationMetadataCache"));
+        ClearCache(GetRegistrarCacheField("LoadableTypesCache"));
+        ClearCache(GetRegistrarCacheField("SupportedHandlerInterfacesCache"));
+    }
+
+    /// <summary>
+    ///     通过反射读取 registrar 的静态缓存对象。
+    /// </summary>
+    private static object GetRegistrarCacheField(string fieldName)
+    {
+        var registrarType = GetRegistrarType();
+        var field = registrarType.GetField(
+            fieldName,
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.That(field, Is.Not.Null, $"Missing registrar cache field {fieldName}.");
+
+        return field!.GetValue(null)
+               ?? throw new InvalidOperationException(
+                   $"Registrar cache field {fieldName} returned null.");
+    }
+
+    /// <summary>
+    ///     清空指定缓存对象。
+    /// </summary>
+    private static void ClearCache(object cache)
+    {
+        _ = InvokeInstanceMethod(cache, "Clear");
+    }
+
+    /// <summary>
+    ///     读取单键缓存中当前保存的对象。
+    /// </summary>
+    private static object? GetSingleKeyCacheValue(object cache, Type key)
+    {
+        return InvokeInstanceMethod(cache, "GetValueOrDefaultForTesting", key);
+    }
+
+    /// <summary>
+    ///     调用缓存对象上的实例方法。
+    /// </summary>
+    private static object? InvokeInstanceMethod(object target, string methodName, params object[] arguments)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        Assert.That(method, Is.Not.Null, $"Missing cache method {target.GetType().FullName}.{methodName}.");
+
+        return method!.Invoke(target, arguments);
+    }
+
+    /// <summary>
+    ///     获取 CQRS handler registrar 运行时类型。
+    /// </summary>
+    private static Type GetRegistrarType()
+    {
+        return typeof(CqrsReflectionFallbackAttribute).Assembly
+            .GetType("GFramework.Cqrs.Internal.CqrsHandlerRegistrar", throwOnError: true)!;
+    }
 }
 
 /// <summary>
@@ -593,6 +764,36 @@ internal sealed class PartialGeneratedNotificationHandlerRegistry : ICqrsHandler
 {
     /// <summary>
     ///     将生成路径可见的通知处理器注册到目标服务集合。
+    /// </summary>
+    /// <param name="services">承载处理器映射的服务集合。</param>
+    /// <param name="logger">用于记录注册诊断的日志器。</param>
+    public void Register(IServiceCollection services, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        services.AddTransient(
+            typeof(INotificationHandler<GeneratedRegistryNotification>),
+            typeof(GeneratedRegistryNotificationHandler));
+        logger.Debug(
+            $"Registered CQRS handler {typeof(GeneratedRegistryNotificationHandler).FullName} as {typeof(INotificationHandler<GeneratedRegistryNotification>).FullName}.");
+    }
+}
+
+/// <summary>
+///     模拟生成注册器使用私有无参构造器的场景，验证运行时仍可通过缓存工厂激活它。
+/// </summary>
+internal sealed class PrivateConstructorNotificationHandlerRegistry : ICqrsHandlerRegistry
+{
+    /// <summary>
+    ///     初始化一个新的私有生成注册器实例。
+    /// </summary>
+    private PrivateConstructorNotificationHandlerRegistry()
+    {
+    }
+
+    /// <summary>
+    ///     将测试通知处理器注册到目标服务集合。
     /// </summary>
     /// <param name="services">承载处理器映射的服务集合。</param>
     /// <param name="logger">用于记录注册诊断的日志器。</param>

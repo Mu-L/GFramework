@@ -1,6 +1,7 @@
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using System.Reflection.Emit;
 
 namespace GFramework.Cqrs.Internal;
 
@@ -23,6 +24,11 @@ internal static class CqrsHandlerRegistrar
     // 卸载安全的进程级缓存：可加载类型列表只在程序集存活期间保留；
     // 若程序集卸载，后续重新加载后的首次注册会重新执行 GetTypes()/恢复逻辑。
     private static readonly WeakKeyCache<Assembly, IReadOnlyList<Type>> LoadableTypesCache =
+        new();
+
+    // 卸载安全的进程级缓存：同一 handler 类型跨容器重复注册时，
+    // 复用已筛选且排序好的 supported handler interface 列表，避免重复执行 GetInterfaces()。
+    private static readonly WeakKeyCache<Type, IReadOnlyList<Type>> SupportedHandlerInterfacesCache =
         new();
 
     /// <summary>
@@ -159,21 +165,18 @@ internal static class CqrsHandlerRegistrar
         ILogger logger,
         ReflectionFallbackMetadata? reflectionFallbackMetadata)
     {
+        var registeredMappings = CreateRegisteredHandlerMappings(services);
         foreach (var implementationType in GetCandidateHandlerTypes(assembly, logger, reflectionFallbackMetadata)
                      .Where(IsConcreteHandlerType))
         {
-            var handlerInterfaces = implementationType
-                .GetInterfaces()
-                .Where(IsSupportedHandlerInterface)
-                .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
-                .ToList();
+            var handlerInterfaces = GetSupportedHandlerInterfaces(implementationType);
 
             if (handlerInterfaces.Count == 0)
                 continue;
 
             foreach (var handlerInterface in handlerInterfaces)
             {
-                if (IsHandlerMappingAlreadyRegistered(services, handlerInterface, implementationType))
+                if (!registeredMappings.Add(new HandlerMapping(handlerInterface, implementationType)))
                 {
                     logger.Debug(
                         $"Skipping duplicate CQRS handler {implementationType.FullName} as {handlerInterface.FullName}.");
@@ -183,10 +186,43 @@ internal static class CqrsHandlerRegistrar
                 // Request/notification handlers receive context injection before every dispatch.
                 // Transient registration avoids sharing mutable Context across concurrent requests.
                 services.AddTransient(handlerInterface, implementationType);
-                logger.Debug(
+            logger.Debug(
                     $"Registered CQRS handler {implementationType.FullName} as {handlerInterface.FullName}.");
             }
         }
+    }
+
+    /// <summary>
+    ///     获取指定实现类型上所有受支持的 CQRS handler 接口，并缓存筛选与排序结果。
+    /// </summary>
+    /// <param name="implementationType">要分析的处理器实现类型。</param>
+    /// <returns>当前实现类型声明的受支持 handler 接口列表。</returns>
+    private static IReadOnlyList<Type> GetSupportedHandlerInterfaces(Type implementationType)
+    {
+        ArgumentNullException.ThrowIfNull(implementationType);
+
+        return SupportedHandlerInterfacesCache.GetOrAdd(
+            implementationType,
+            static key => key
+                .GetInterfaces()
+                .Where(IsSupportedHandlerInterface)
+                .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    /// <summary>
+    ///     根据当前服务集合创建已注册 handler 映射的快速索引，避免 reflection fallback 路径重复线性扫描服务描述符。
+    /// </summary>
+    /// <param name="services">当前容器的服务描述符集合。</param>
+    /// <returns>已存在的 handler 映射集合。</returns>
+    private static HashSet<HandlerMapping> CreateRegisteredHandlerMappings(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        return services
+            .Where(static descriptor => descriptor.ImplementationType is not null)
+            .Select(static descriptor => new HandlerMapping(descriptor.ServiceType, descriptor.ImplementationType!))
+            .ToHashSet();
     }
 
     /// <summary>
@@ -323,7 +359,51 @@ internal static class CqrsHandlerRegistrar
             : new RegistryActivationMetadata(
                 true,
                 false,
-                () => (ICqrsHandlerRegistry)constructor.Invoke(null));
+                CreateRegistryFactory(registryType, constructor));
+    }
+
+    /// <summary>
+    ///     为生成注册器创建可复用的激活工厂，优先使用一次性编译的动态方法，
+    ///     避免后续每次命中缓存时仍走 <see cref="ConstructorInfo" /> 的反射激活路径。
+    /// </summary>
+    /// <param name="registryType">生成注册器类型。</param>
+    /// <param name="constructor">已解析的无参构造函数。</param>
+    /// <returns>可直接实例化注册器的工厂委托。</returns>
+    private static Func<ICqrsHandlerRegistry> CreateRegistryFactory(
+        Type registryType,
+        ConstructorInfo constructor)
+    {
+        ArgumentNullException.ThrowIfNull(registryType);
+        ArgumentNullException.ThrowIfNull(constructor);
+
+        try
+        {
+            // 生成器产物通常是稳定的无参 registry；这里把构造反射收敛为一次性 IL 工厂，
+            // 这样同一 registry 类型在多个容器间复用缓存时不会重复付出 ConstructorInfo.Invoke 成本。
+            var dynamicMethod = new DynamicMethod(
+                $"Create_{registryType.Name}_CqrsHandlerRegistry",
+                typeof(ICqrsHandlerRegistry),
+                Type.EmptyTypes,
+                registryType.Module,
+                skipVisibility: true);
+            var il = dynamicMethod.GetILGenerator();
+            il.Emit(OpCodes.Newobj, constructor);
+
+            if (registryType.IsValueType)
+            {
+                il.Emit(OpCodes.Box, registryType);
+            }
+
+            il.Emit(OpCodes.Castclass, typeof(ICqrsHandlerRegistry));
+            il.Emit(OpCodes.Ret);
+
+            return (Func<ICqrsHandlerRegistry>)dynamicMethod.CreateDelegate(typeof(Func<ICqrsHandlerRegistry>));
+        }
+        catch
+        {
+            // 某些受限运行环境若不允许动态方法，仍保留原有的反射激活语义，避免阻塞 generated registry 路径。
+            return () => (ICqrsHandlerRegistry)constructor.Invoke(null);
+        }
     }
 
     /// <summary>
@@ -392,21 +472,6 @@ internal static class CqrsHandlerRegistrar
     }
 
     /// <summary>
-    ///     判断同一 handler 映射是否已经由生成注册器或先前扫描步骤写入服务集合。
-    /// </summary>
-    private static bool IsHandlerMappingAlreadyRegistered(
-        IServiceCollection services,
-        Type handlerInterface,
-        Type implementationType)
-    {
-        // 这里保持线性扫描，避免为常见的小到中等规模程序集长期维护额外索引。
-        // 若未来大型服务集合出现热点，可在更高层批处理中引入 HashSet<(Type, Type)> 做 O(1) 去重。
-        return services.Any(descriptor =>
-            descriptor.ServiceType == handlerInterface &&
-            descriptor.ImplementationType == implementationType);
-    }
-
-    /// <summary>
     ///     生成程序集排序键，保证跨运行环境的处理器注册顺序稳定。
     /// </summary>
     private static string GetAssemblySortKey(Assembly assembly)
@@ -421,6 +486,8 @@ internal static class CqrsHandlerRegistrar
     {
         return type.FullName ?? type.Name;
     }
+
+    private readonly record struct HandlerMapping(Type ServiceType, Type ImplementationType);
 
     private readonly record struct GeneratedRegistrationResult(
         bool UsedGeneratedRegistry,
