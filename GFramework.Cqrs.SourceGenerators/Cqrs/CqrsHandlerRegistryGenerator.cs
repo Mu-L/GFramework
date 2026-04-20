@@ -412,6 +412,13 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             return true;
         }
 
+        if (type is IPointerTypeSymbol pointerType &&
+            TryCreateRuntimeTypeReference(compilation, pointerType.PointedAtType, out var pointedAtTypeReference))
+        {
+            runtimeTypeReference = RuntimeTypeReferenceSpec.FromPointer(pointedAtTypeReference!);
+            return true;
+        }
+
         if (type is INamedTypeSymbol genericNamedType &&
             genericNamedType.IsGenericType &&
             !genericNamedType.IsUnboundGenericType &&
@@ -520,6 +527,17 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 return true;
             case IPointerTypeSymbol pointerType:
                 return CanReferenceFromGeneratedRegistry(compilation, pointerType.PointedAtType);
+            case IFunctionPointerTypeSymbol functionPointerType:
+                if (!CanReferenceFromGeneratedRegistry(compilation, functionPointerType.Signature.ReturnType))
+                    return false;
+
+                foreach (var parameter in functionPointerType.Signature.Parameters)
+                {
+                    if (!CanReferenceFromGeneratedRegistry(compilation, parameter.Type))
+                        return false;
+                }
+
+                return true;
             case ITypeParameterSymbol:
                 return false;
             default:
@@ -975,6 +993,18 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 : $"{elementExpression}.MakeArrayType({runtimeTypeReference.ArrayRank})";
         }
 
+        if (runtimeTypeReference.PointerElementTypeReference is not null)
+        {
+            var pointedAtExpression = AppendRuntimeTypeReferenceResolution(
+                builder,
+                runtimeTypeReference.PointerElementTypeReference,
+                $"{variableBaseName}PointedAt",
+                reflectedArgumentNames,
+                indent);
+
+            return $"{pointedAtExpression}.MakePointerType()";
+        }
+
         if (runtimeTypeReference.GenericTypeDefinitionReference is not null)
         {
             var genericTypeDefinitionExpression = AppendRuntimeTypeReferenceResolution(
@@ -1091,6 +1121,12 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             return true;
         }
 
+        if (runtimeTypeReference.PointerElementTypeReference is not null &&
+            ContainsExternalAssemblyTypeLookup(runtimeTypeReference.PointerElementTypeReference))
+        {
+            return true;
+        }
+
         if (runtimeTypeReference.GenericTypeDefinitionReference is not null &&
             ContainsExternalAssemblyTypeLookup(runtimeTypeReference.GenericTypeDefinitionReference))
         {
@@ -1129,18 +1165,19 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         string? ReflectionAssemblyName,
         RuntimeTypeReferenceSpec? ArrayElementTypeReference,
         int ArrayRank,
+        RuntimeTypeReferenceSpec? PointerElementTypeReference,
         RuntimeTypeReferenceSpec? GenericTypeDefinitionReference,
         ImmutableArray<RuntimeTypeReferenceSpec> GenericTypeArguments)
     {
         public static RuntimeTypeReferenceSpec FromDirectReference(string typeDisplayName)
         {
-            return new RuntimeTypeReferenceSpec(typeDisplayName, null, null, null, 0, null,
+            return new RuntimeTypeReferenceSpec(typeDisplayName, null, null, null, 0, null, null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
 
         public static RuntimeTypeReferenceSpec FromReflectionLookup(string reflectionTypeMetadataName)
         {
-            return new RuntimeTypeReferenceSpec(null, reflectionTypeMetadataName, null, null, 0, null,
+            return new RuntimeTypeReferenceSpec(null, reflectionTypeMetadataName, null, null, 0, null, null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
 
@@ -1149,13 +1186,19 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             string reflectionTypeMetadataName)
         {
             return new RuntimeTypeReferenceSpec(null, reflectionTypeMetadataName, reflectionAssemblyName, null, 0,
-                null,
+                null, null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
 
         public static RuntimeTypeReferenceSpec FromArray(RuntimeTypeReferenceSpec elementTypeReference, int arrayRank)
         {
-            return new RuntimeTypeReferenceSpec(null, null, null, elementTypeReference, arrayRank, null,
+            return new RuntimeTypeReferenceSpec(null, null, null, elementTypeReference, arrayRank, null, null,
+                ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
+        }
+
+        public static RuntimeTypeReferenceSpec FromPointer(RuntimeTypeReferenceSpec pointedAtTypeReference)
+        {
+            return new RuntimeTypeReferenceSpec(null, null, null, null, 0, pointedAtTypeReference, null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
 
@@ -1163,7 +1206,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             RuntimeTypeReferenceSpec genericTypeDefinitionReference,
             ImmutableArray<RuntimeTypeReferenceSpec> genericTypeArguments)
         {
-            return new RuntimeTypeReferenceSpec(null, null, null, null, 0, genericTypeDefinitionReference,
+            return new RuntimeTypeReferenceSpec(null, null, null, null, 0, null, genericTypeDefinitionReference,
                 genericTypeArguments);
         }
     }

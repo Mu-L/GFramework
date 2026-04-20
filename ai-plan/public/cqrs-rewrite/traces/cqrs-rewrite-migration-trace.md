@@ -2,6 +2,18 @@
 
 ## 2026-04-20
 
+### 阶段：pointer precise runtime type 覆盖扩展（CQRS-REWRITE-RP-047）
+
+- 已在 `CqrsHandlerRegistryGenerator` 中补充 pointer 类型的 runtime type 递归建模与源码发射，precise registration 现可通过 `MakePointerType()` 还原隐藏 pointer 响应类型
+- 已同步收紧 function pointer 签名的可直接生成判定，只有当签名中的返回值与参数类型均可从 generated registry 安全引用时才走静态注册
+- 已保留含隐藏类型 function pointer handler 的 fallback / 诊断回归覆盖，确保 pointer 支持扩展不会误删原有程序集级 fallback 契约边界
+- 定向验证与 `CqrsHandlerRegistryGeneratorTests` 全组验证均已通过：
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~Generates_Precise_Service_Type_For_Hidden_Pointer_Response|FullyQualifiedName~Reports_Diagnostic_And_Skips_Registry_When_Fallback_Metadata_Is_Required_But_Runtime_Contract_Lacks_Fallback_Attribute|FullyQualifiedName~Emits_Assembly_Level_Fallback_Metadata_When_Fallback_Is_Required_And_Runtime_Contract_Is_Available"`
+  - `3/3` passed
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - `14/14` passed
+  - 当前沙箱限制 MSBuild named pipe，因此验证在提权环境下执行
+
 ### 阶段：generated registry 激活反射收敛（CQRS-REWRITE-RP-046）
 
 - 已在 `CqrsHandlerRegistrar` 中将 generated registry 的无参构造激活改为类型级缓存工厂
