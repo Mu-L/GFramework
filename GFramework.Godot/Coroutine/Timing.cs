@@ -20,8 +20,8 @@ public partial class Timing : Node
 
     private static readonly Timing?[] ActiveInstances = new Timing?[16];
     private static Timing? _instance;
-    private readonly Dictionary<CoroutineHandle, OwnedCoroutineRegistration> _ownedCoroutineRegistrations = new();
-    private readonly Dictionary<ulong, HashSet<CoroutineHandle>> _ownedCoroutinesByNode = new();
+    private Dictionary<CoroutineHandle, OwnedCoroutineRegistration> _ownedCoroutineRegistrations = new();
+    private Dictionary<ulong, HashSet<CoroutineHandle>> _ownedCoroutinesByNode = new();
     private GodotTimeSource? _deferredRealtimeTimeSource;
     private CoroutineScheduler? _deferredScheduler;
     private GodotTimeSource? _deferredTimeSource;
