@@ -115,6 +115,15 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
     /// <returns>
     ///     返回当前 ISettingsModel 实例，支持链式调用。
     /// </returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="migration" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    ///     迁移声明的目标版本不大于源版本时抛出。
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    ///     同一设置类型与源版本已经注册过迁移器时抛出。
+    /// </exception>
     public ISettingsModel RegisterMigration(ISettingsMigration migration)
     {
         ArgumentNullException.ThrowIfNull(migration);
@@ -292,6 +301,17 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
         _repository.RegisterDataType(location, type);
     }
 
+    /// <summary>
+    ///     将已加载的设置数据迁移到当前运行时实例声明的目标版本。
+    /// </summary>
+    /// <param name="data">从仓库读取的设置数据。</param>
+    /// <param name="latestData">当前内存中的设置实例，其 <c>Version</c> 值代表目标版本。</param>
+    /// <returns>迁移后的设置数据；如果无需迁移则返回原对象。</returns>
+    /// <remarks>
+    ///     该方法按设置类型缓存迁移表，并始终以 <paramref name="latestData" /> 的版本作为目标运行时版本，
+    ///     避免把旧文件中的版本号误当成当前版本。具体的缺链、版本一致性与前进性校验都委托给
+    ///     <see cref="VersionedMigrationRunner" /> 统一处理。
+    /// </remarks>
     private ISettingsData MigrateIfNeeded(ISettingsData data, ISettingsData latestData)
     {
         var type = data.GetType();

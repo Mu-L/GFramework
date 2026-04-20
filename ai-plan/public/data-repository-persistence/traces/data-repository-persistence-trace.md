@@ -75,3 +75,35 @@
 
 1. 进入 codec / persistence pipeline 边界评估
 2. 重点查看压缩、加密、元数据、备份是否仍然跨越 `Serializer` / `Storage` / `Repository` 多层分散
+
+### 阶段：PR #260 review follow-up（RP-001）
+
+- 复核当前 PR review 后确认两条未解决 inline 线程仍成立：
+  - `SaveRepository<T>.MigrateIfNeededAsync` 在每一步迁移时都现查 `_migrations`，会让并发 `RegisterMigration`
+    把同一次加载暴露给变化中的迁移链
+  - `VersionedMigrationRunner.MigrateToTargetVersion` 的 XML docs 仍缺少参数校验异常契约
+- 同步接受两条 outside-diff / nitpick 中仍然成立且低成本的 follow-up：
+  - `SettingsModel.RegisterMigration` 与 `MigrateIfNeeded` 需要补齐 XML 文档，和当前迁移约束保持一致
+  - `PersistenceTests` 需要锁定“迁移失败后不会污染已持久化存档”的行为
+- 额外复核 `docs/zh-CN/game/index.md` 后确认：最低接入示例仍把 `TypeNameHandling.Auto` 用在用户可编辑的存档场景，
+  这与当前仓库安全约束不一致，因此一并改为默认安全配置并补充白名单说明
+- 本轮实现计划：
+  - `SaveRepository<T>` 在加载前复制迁移表快照，再把 resolver 切换到快照读取
+  - 新增并发回归测试，证明加载过程不会在迁移途中读到后续注册的链路
+  - 补齐 `VersionedMigrationRunner` / `SettingsModel` XML docs
+  - 更新 `docs/zh-CN/game/index.md` 示例与 active tracking
+- 实际落地结果：
+  - `SaveRepository<T>` 已切换为在加载前复制 `_migrations` 快照，并在同一次迁移链执行中只读取快照
+  - `VersionedMigrationRunner`、`SettingsModel.RegisterMigration` 与 `SettingsModel.MigrateIfNeeded` 已补齐缺失 XML docs
+  - `PersistenceTests` 已新增“迁移失败不污染持久化数据”断言，以及并发注册下固定迁移快照的回归测试
+  - `docs/zh-CN/game/index.md` 的 `JsonSerializer` 接入示例已改为 `TypeNameHandling.None`，并补充白名单 binder 说明
+
+### 验证
+
+1. `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~SettingsModelTests|FullyQualifiedName~PersistenceTests" -m:1 -nodeReuse:false` 已通过（21/21）
+2. 本次验证未再出现本轮新增的 XML doc warning；输出中的 analyzer warning 仍为仓库既有项
+
+### 下一步
+
+1. 回到 codec / persistence pipeline 边界评估
+2. 继续判断压缩、加密、元数据与备份策略是否需要新的 dedicated pipeline abstraction

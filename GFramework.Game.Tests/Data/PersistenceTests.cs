@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Abstractions.Rule;
 using GFramework.Core.Abstractions.Storage;
@@ -218,7 +219,68 @@ public class PersistenceTests
             .RegisterMigration(new TestSaveMigrationV1ToV2ReturningV3());
 
         var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await repository.LoadAsync(1));
-        Assert.That(exception!.Message, Does.Contain("declared target version 2"));
+        var persisted = await storage.ReadAsync<TestVersionedSaveData>("saves/slot_1/save");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception!.Message, Does.Contain("declared target version 2"));
+            Assert.That(persisted.Version, Is.EqualTo(1));
+            Assert.That(persisted.Name, Is.EqualTo("legacy"));
+            Assert.That(persisted.Level, Is.EqualTo(3));
+            Assert.That(persisted.Experience, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证加载流程会在开始迁移前固定迁移表快照，避免并发注册让同一次加载看到变化中的链路。
+    /// </summary>
+    /// <returns>表示异步测试完成的任务。</returns>
+    /// <exception cref="InvalidOperationException">当快照中缺少后续迁移链时抛出。</exception>
+    [Test]
+    public async Task SaveRepository_LoadAsync_Should_Use_Migration_Snapshot_When_Registrations_Change_Concurrently()
+    {
+        var root = CreateTempRoot();
+        using var storage = new FileStorage(root, new JsonSerializer());
+        var config = new SaveConfiguration
+        {
+            SaveRoot = "saves",
+            SaveSlotPrefix = "slot_",
+            SaveFileName = "save"
+        };
+
+        var writer = new SaveRepository<TestVersionedSaveData>(storage, config);
+        await writer.SaveAsync(1, new TestVersionedSaveData
+        {
+            Name = "legacy",
+            Level = 3,
+            Experience = 0,
+            Version = 1
+        });
+
+        using var migrationStarted = new ManualResetEventSlim(false);
+        using var continueMigration = new ManualResetEventSlim(false);
+
+        var repository = new SaveRepository<TestVersionedSaveData>(storage, config)
+            .RegisterMigration(new BlockingSaveMigrationV1ToV2(migrationStarted, continueMigration));
+
+        var loadTask = repository.LoadAsync(1);
+
+        Assert.That(migrationStarted.Wait(TimeSpan.FromSeconds(5)), Is.True, "First migration step did not start in time.");
+
+        repository.RegisterMigration(new TestSaveMigrationV2ToV3());
+        continueMigration.Set();
+
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await loadTask);
+        var persisted = await storage.ReadAsync<TestVersionedSaveData>("saves/slot_1/save");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception!.Message, Does.Contain("from version 2"));
+            Assert.That(persisted.Version, Is.EqualTo(1));
+            Assert.That(persisted.Name, Is.EqualTo("legacy"));
+            Assert.That(persisted.Level, Is.EqualTo(3));
+            Assert.That(persisted.Experience, Is.EqualTo(0));
+        });
     }
 
     /// <summary>
@@ -691,6 +753,34 @@ public class PersistenceTests
 
         public TestVersionedSaveData Migrate(TestVersionedSaveData oldData)
         {
+            return new TestVersionedSaveData
+            {
+                Name = $"{oldData.Name}-v2",
+                Level = oldData.Level,
+                Experience = oldData.Level * 100,
+                Version = 2,
+                LastModified = oldData.LastModified
+            };
+        }
+    }
+
+    private sealed class BlockingSaveMigrationV1ToV2(
+        ManualResetEventSlim migrationStarted,
+        ManualResetEventSlim continueMigration) : ISaveMigration<TestVersionedSaveData>
+    {
+        public int FromVersion => 1;
+
+        public int ToVersion => 2;
+
+        public TestVersionedSaveData Migrate(TestVersionedSaveData oldData)
+        {
+            migrationStarted.Set();
+
+            if (!continueMigration.Wait(TimeSpan.FromSeconds(5)))
+            {
+                throw new InvalidOperationException("Timed out while waiting to continue the save migration test.");
+            }
+
             return new TestVersionedSaveData
             {
                 Name = $"{oldData.Name}-v2",

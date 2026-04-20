@@ -690,7 +690,7 @@ public class GameDataSerializer
             Formatting = Formatting.Indented,
             NullValueHandling = NullValueHandling.Ignore,
             DefaultValueHandling = DefaultValueHandling.Populate,
-            TypeNameHandling = TypeNameHandling.Auto
+            TypeNameHandling = TypeNameHandling.None
         });
         
         // 自定义转换器
@@ -728,6 +728,9 @@ public class GameDataSerializer
     }
 }
 ```
+
+对于玩家可直接编辑的存档文件，默认应保持 `TypeNameHandling.None`。只有确实需要多态反序列化时，才应配合
+白名单 `SerializationBinder` 显式限制允许的类型集合。
 
 ### 自定义 JSON 转换器
 

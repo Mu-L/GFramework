@@ -62,8 +62,8 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
     /// </exception>
     /// <exception cref="ArgumentException">迁移器的目标版本不大于源版本。</exception>
     /// <remarks>
-    ///     迁移注册表是可变共享状态。注册与加载可以并发发生，因此所有访问都通过 <see cref="_migrationsLock" />
-    ///     串行化，避免读写竞争和“部分可见”的迁移链。
+    ///     迁移注册表是可变共享状态。注册路径通过 <see cref="_migrationsLock" /> 串行化；
+    ///     加载路径会在同一把锁下复制一次快照，保证单次加载始终使用同一个迁移链视图。
     /// </remarks>
     public ISaveRepository<TSaveData> RegisterMigration(ISaveMigration<TSaveData> migration)
     {
@@ -228,20 +228,19 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
 
         EnsureVersionedSaveType();
 
+        Dictionary<int, ISaveMigration<TSaveData>> migrationsSnapshot;
+        lock (_migrationsLock)
+        {
+            migrationsSnapshot = new Dictionary<int, ISaveMigration<TSaveData>>(_migrations);
+        }
+
         // 迁移链按“当前版本 -> 下一个已注册迁移器”推进；任何缺口都表示运行时无法安全解释旧存档。
-        // 读取迁移表时使用同一把锁，保证并发注册不会让加载线程看到不一致的链路状态。
+        // 这里先对迁移表拍快照，避免并发注册让同一次加载在不同步骤看到不同版本的链路。
         var migrated = VersionedMigrationRunner.MigrateToTargetVersion(
             data,
             targetVersion,
             static saveData => ((IVersionedData)saveData).Version,
-            fromVersion =>
-            {
-                lock (_migrationsLock)
-                {
-                    _migrations.TryGetValue(fromVersion, out var migration);
-                    return migration;
-                }
-            },
+            fromVersion => migrationsSnapshot.TryGetValue(fromVersion, out var migration) ? migration : null,
             static migration => migration.ToVersion,
             static (migration, currentData) => migration.Migrate(currentData),
             $"{typeof(TSaveData).Name} in slot {slot}",

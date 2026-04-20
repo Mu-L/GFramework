@@ -61,6 +61,13 @@ internal static class VersionedMigrationRunner
     /// <param name="subjectName">迁移主体名称，用于异常消息。</param>
     /// <param name="migrationKind">迁移类别名称，用于异常消息。</param>
     /// <returns>迁移到目标版本后的数据；如果已经是最新版本，则返回原对象。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="data" />、<paramref name="getVersion" />、<paramref name="resolveMigration" />、
+    ///     <paramref name="getToVersion" /> 或 <paramref name="applyMigration" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="subjectName" /> 或 <paramref name="migrationKind" /> 为空白时抛出。
+    /// </exception>
     /// <exception cref="InvalidOperationException">
     ///     数据版本高于当前运行时、迁移链缺失、迁移器返回 <see langword="null" />、
     ///     迁移结果版本与声明不一致、版本未前进或超出目标版本时抛出。
