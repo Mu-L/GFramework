@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-047`
+- 恢复点编号：`CQRS-REWRITE-RP-048`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
@@ -15,6 +15,7 @@ CQRS 迁移与收敛。
   - 已补充私有无参构造 generated registry 的回归测试，确保兼容现有生成器产物
   - 已补充 pointer 响应类型的 precise runtime type 生成，避免这类 handler 再退回程序集级 reflection fallback
   - 已收紧 function pointer 签名的可直接生成判定，仅在其返回值与参数类型都可安全引用时才走静态注册路径
+  - 已为 registrar 的 reflection 注册路径补充 handler-interface 元数据缓存，减少跨容器重复注册时的 `GetInterfaces()` 反射
   - 中期上继续 `Phase 8` 主线：参考 `ai-libs/Mediator`，继续扩大 generator 覆盖，并选择下一个收益明确的 dispatch / invoker 反射收敛点
 
 ## 当前状态摘要
@@ -40,6 +41,10 @@ CQRS 迁移与收敛。
   - `CqrsHandlerRegistryGenerator` 现可为 pointer 类型递归重建 runtime type，并通过 `MakePointerType()` 生成精确 service type
   - function pointer 签名不再默认视为“可直接引用”；只有当返回值与每个参数类型都可从 generated registry 安全引用时，才允许直接生成
   - 含隐藏类型的 function pointer handler 仍会保留原有 fallback / 诊断路径，避免此次覆盖扩展误伤已有回退边界
+- `2026-04-20` 已完成一轮 registrar reflection 路径收敛：
+  - `CqrsHandlerRegistrar` 现会按 `Type` 弱键缓存已筛选且排序好的 supported handler interface 列表
+  - 同一 handler 类型跨容器重复注册时，不再重复执行 `GetInterfaces()` 与支持接口筛选
+  - `GFramework.Cqrs.Tests` 已补充 registrar 静态缓存隔离与 supported interface 缓存复用回归
 - 当前主线优先级：
   - generator 覆盖面继续扩大
   - dispatch/invoker 反射占比继续下降
@@ -67,6 +72,9 @@ CQRS 迁移与收敛。
 - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
   - 结果：通过
   - 备注：`14/14` 测试通过；本轮覆盖 pointer precise registration 与 function pointer fallback 边界
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
+  - 结果：通过
+  - 备注：`10/10` 测试通过；本轮覆盖 registrar 的 supported handler interface 缓存
 
 ## 下一步
 

@@ -32,6 +32,7 @@ internal sealed class CqrsHandlerRegistrarTests
 
         _container.Freeze();
         _context = new ArchitectureContext(_container);
+        ClearRegistrarCaches();
     }
 
     /// <summary>
@@ -43,6 +44,7 @@ internal sealed class CqrsHandlerRegistrarTests
         _context = null;
         _container = null;
         DeterministicNotificationHandlerState.Reset();
+        ClearRegistrarCaches();
     }
 
     /// <summary>
@@ -434,6 +436,123 @@ internal sealed class CqrsHandlerRegistrarTests
         });
 
         partiallyLoadableAssembly.Verify(static assembly => assembly.GetTypes(), Times.Once);
+    }
+
+    /// <summary>
+    ///     验证同一 handler 类型跨容器重复注册时，会复用已筛选的 supported handler interface 列表，
+    ///     而不是为每个容器重新执行接口反射分析。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Cache_Supported_Handler_Interfaces_Across_Containers()
+    {
+        var supportedHandlerInterfacesCache = GetRegistrarCacheField("SupportedHandlerInterfacesCache");
+        var firstHandlerType = typeof(AlphaDeterministicNotificationHandler);
+        var secondHandlerType = typeof(ZetaDeterministicNotificationHandler);
+        var handlerAssembly = new Mock<Assembly>();
+        handlerAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.CachedHandlerInterfacesAssembly, Version=1.0.0.0");
+        handlerAssembly
+            .Setup(static assembly => assembly.GetTypes())
+            .Returns([firstHandlerType, secondHandlerType]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(GetSingleKeyCacheValue(supportedHandlerInterfacesCache, firstHandlerType), Is.Null);
+            Assert.That(GetSingleKeyCacheValue(supportedHandlerInterfacesCache, secondHandlerType), Is.Null);
+        });
+
+        var firstContainer = new MicrosoftDiContainer();
+        var secondContainer = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(firstContainer, handlerAssembly.Object);
+        var firstHandlerInterfaces =
+            GetSingleKeyCacheValue(supportedHandlerInterfacesCache, firstHandlerType);
+        var secondHandlerInterfaces =
+            GetSingleKeyCacheValue(supportedHandlerInterfacesCache, secondHandlerType);
+
+        CqrsTestRuntime.RegisterHandlers(secondContainer, handlerAssembly.Object);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstHandlerInterfaces, Is.Not.Null);
+            Assert.That(secondHandlerInterfaces, Is.Not.Null);
+            Assert.That(
+                GetSingleKeyCacheValue(supportedHandlerInterfacesCache, firstHandlerType),
+                Is.SameAs(firstHandlerInterfaces));
+            Assert.That(
+                GetSingleKeyCacheValue(supportedHandlerInterfacesCache, secondHandlerType),
+                Is.SameAs(secondHandlerInterfaces));
+        });
+
+        handlerAssembly.Verify(static assembly => assembly.GetTypes(), Times.Once);
+    }
+
+    /// <summary>
+    ///     清空本测试依赖的 registrar 静态缓存，避免跨用例共享进程级状态导致断言漂移。
+    /// </summary>
+    private static void ClearRegistrarCaches()
+    {
+        ClearCache(GetRegistrarCacheField("AssemblyMetadataCache"));
+        ClearCache(GetRegistrarCacheField("RegistryActivationMetadataCache"));
+        ClearCache(GetRegistrarCacheField("LoadableTypesCache"));
+        ClearCache(GetRegistrarCacheField("SupportedHandlerInterfacesCache"));
+    }
+
+    /// <summary>
+    ///     通过反射读取 registrar 的静态缓存对象。
+    /// </summary>
+    private static object GetRegistrarCacheField(string fieldName)
+    {
+        var registrarType = GetRegistrarType();
+        var field = registrarType.GetField(
+            fieldName,
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.That(field, Is.Not.Null, $"Missing registrar cache field {fieldName}.");
+
+        return field!.GetValue(null)
+               ?? throw new InvalidOperationException(
+                   $"Registrar cache field {fieldName} returned null.");
+    }
+
+    /// <summary>
+    ///     清空指定缓存对象。
+    /// </summary>
+    private static void ClearCache(object cache)
+    {
+        _ = InvokeInstanceMethod(cache, "Clear");
+    }
+
+    /// <summary>
+    ///     读取单键缓存中当前保存的对象。
+    /// </summary>
+    private static object? GetSingleKeyCacheValue(object cache, Type key)
+    {
+        return InvokeInstanceMethod(cache, "GetValueOrDefaultForTesting", key);
+    }
+
+    /// <summary>
+    ///     调用缓存对象上的实例方法。
+    /// </summary>
+    private static object? InvokeInstanceMethod(object target, string methodName, params object[] arguments)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        Assert.That(method, Is.Not.Null, $"Missing cache method {target.GetType().FullName}.{methodName}.");
+
+        return method!.Invoke(target, arguments);
+    }
+
+    /// <summary>
+    ///     获取 CQRS handler registrar 运行时类型。
+    /// </summary>
+    private static Type GetRegistrarType()
+    {
+        return typeof(CqrsReflectionFallbackAttribute).Assembly
+            .GetType("GFramework.Cqrs.Internal.CqrsHandlerRegistrar", throwOnError: true)!;
     }
 }
 

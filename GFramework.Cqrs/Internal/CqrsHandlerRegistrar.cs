@@ -26,6 +26,11 @@ internal static class CqrsHandlerRegistrar
     private static readonly WeakKeyCache<Assembly, IReadOnlyList<Type>> LoadableTypesCache =
         new();
 
+    // 卸载安全的进程级缓存：同一 handler 类型跨容器重复注册时，
+    // 复用已筛选且排序好的 supported handler interface 列表，避免重复执行 GetInterfaces()。
+    private static readonly WeakKeyCache<Type, IReadOnlyList<Type>> SupportedHandlerInterfacesCache =
+        new();
+
     /// <summary>
     ///     扫描指定程序集并注册所有 CQRS 请求/通知/流式处理器。
     /// </summary>
@@ -163,11 +168,7 @@ internal static class CqrsHandlerRegistrar
         foreach (var implementationType in GetCandidateHandlerTypes(assembly, logger, reflectionFallbackMetadata)
                      .Where(IsConcreteHandlerType))
         {
-            var handlerInterfaces = implementationType
-                .GetInterfaces()
-                .Where(IsSupportedHandlerInterface)
-                .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
-                .ToList();
+            var handlerInterfaces = GetSupportedHandlerInterfaces(implementationType);
 
             if (handlerInterfaces.Count == 0)
                 continue;
@@ -184,10 +185,28 @@ internal static class CqrsHandlerRegistrar
                 // Request/notification handlers receive context injection before every dispatch.
                 // Transient registration avoids sharing mutable Context across concurrent requests.
                 services.AddTransient(handlerInterface, implementationType);
-                logger.Debug(
+            logger.Debug(
                     $"Registered CQRS handler {implementationType.FullName} as {handlerInterface.FullName}.");
             }
         }
+    }
+
+    /// <summary>
+    ///     获取指定实现类型上所有受支持的 CQRS handler 接口，并缓存筛选与排序结果。
+    /// </summary>
+    /// <param name="implementationType">要分析的处理器实现类型。</param>
+    /// <returns>当前实现类型声明的受支持 handler 接口列表。</returns>
+    private static IReadOnlyList<Type> GetSupportedHandlerInterfaces(Type implementationType)
+    {
+        ArgumentNullException.ThrowIfNull(implementationType);
+
+        return SupportedHandlerInterfacesCache.GetOrAdd(
+            implementationType,
+            static key => key
+                .GetInterfaces()
+                .Where(IsSupportedHandlerInterface)
+                .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
+                .ToArray());
     }
 
     /// <summary>

@@ -2,6 +2,16 @@
 
 ## 2026-04-20
 
+### 阶段：registrar handler-interface 反射缓存（CQRS-REWRITE-RP-048）
+
+- 已在 `CqrsHandlerRegistrar` 中新增按 `Type` 弱键缓存的 supported handler interface 元数据，reflection 注册路径现会复用已筛选且排序好的接口列表
+- 同一 handler 类型跨容器重复注册时，不再重复执行 `GetInterfaces()` 与支持接口筛选；缓存仍保持卸载安全，不会长期钉住 collectible 类型
+- `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs` 已补充 registrar 静态缓存清理与 supported interface 缓存复用回归
+- 定向验证已通过：
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
+  - `10/10` passed
+  - 当前沙箱限制 MSBuild named pipe，因此验证在提权环境下执行
+
 ### 阶段：pointer precise runtime type 覆盖扩展（CQRS-REWRITE-RP-047）
 
 - 已在 `CqrsHandlerRegistryGenerator` 中补充 pointer 类型的 runtime type 递归建模与源码发射，precise registration 现可通过 `MakePointerType()` 还原隐藏 pointer 响应类型
