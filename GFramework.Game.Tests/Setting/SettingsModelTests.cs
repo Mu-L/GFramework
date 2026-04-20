@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Threading;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Lifecycle;
 using GFramework.Core.Abstractions.Rule;
@@ -47,6 +49,7 @@ public sealed class SettingsModelTests
         await model.InitializeAsync();
         Assert.That(model.GetData<TestSettingsData>().Version, Is.EqualTo(1));
 
+        model.GetData<TestSettingsData>().Version = 2;
         model.RegisterMigration(new TestSettingsMigration());
 
         repository.Stored["TestSettingsData"] = new TestSettingsData
@@ -62,6 +65,109 @@ public sealed class SettingsModelTests
         {
             Assert.That(current.Version, Is.EqualTo(2));
             Assert.That(current.Value, Is.EqualTo("legacy-migrated"));
+        });
+    }
+
+    [Test]
+    public void RegisterMigration_Should_Reject_Duplicate_FromVersion_For_Same_SettingsType()
+    {
+        var locationProvider = new TestDataLocationProvider();
+        var repository = new FakeSettingsDataRepository();
+        var model = new SettingsModel<FakeSettingsDataRepository>(locationProvider, repository);
+
+        model.RegisterMigration(new TestSettingsMigration());
+
+        var exception = Assert.Throws<InvalidOperationException>(() => model.RegisterMigration(new TestSettingsMigration()));
+
+        Assert.That(exception!.Message, Does.Contain("Duplicate settings migration registration"));
+    }
+
+    [Test]
+    public async Task InitializeAsync_Should_Keep_Current_Instance_When_Migration_Chain_Is_Incomplete()
+    {
+        var locationProvider = new TestDataLocationProvider();
+        var repository = new FakeSettingsDataRepository();
+        var model = new SettingsModel<FakeSettingsDataRepository>(locationProvider, repository);
+        ((IContextAware)model).SetContext(new Mock<IArchitectureContext>(MockBehavior.Loose).Object);
+
+        _ = model.GetData<TestLatestSettingsData>();
+        ((IInitializable)model).Initialize();
+
+        repository.Stored["TestLatestSettingsData"] = new TestLatestSettingsData
+        {
+            Version = 1,
+            Value = "legacy"
+        };
+
+        model.RegisterMigration(new TestLatestSettingsMigrationV1ToV2());
+
+        await model.InitializeAsync();
+
+        var current = model.GetData<TestLatestSettingsData>();
+        Assert.Multiple(() =>
+        {
+            Assert.That(current.Version, Is.EqualTo(3));
+            Assert.That(current.Value, Is.EqualTo("default-v3"));
+        });
+    }
+
+    [Test]
+    public async Task RegisterMigration_During_Cache_Rebuild_Should_Not_Leave_Stale_Type_Cache()
+    {
+        var locationProvider = new TestDataLocationProvider();
+        var repository = new FakeSettingsDataRepository();
+        var model = new SettingsModel<FakeSettingsDataRepository>(locationProvider, repository);
+        ((IContextAware)model).SetContext(new Mock<IArchitectureContext>(MockBehavior.Loose).Object);
+
+        _ = model.GetData<TestLatestSettingsData>();
+        ((IInitializable)model).Initialize();
+
+        model.RegisterMigration(new TestLatestSettingsMigrationV1ToV2());
+
+        repository.Stored["TestLatestSettingsData"] = new TestLatestSettingsData
+        {
+            Version = 1,
+            Value = "legacy"
+        };
+
+        var lockField = typeof(SettingsModel<FakeSettingsDataRepository>)
+            .GetField("_migrationMapLock", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(lockField, Is.Not.Null);
+
+        var migrationMapLock = lockField!.GetValue(model);
+        Assert.That(migrationMapLock, Is.Not.Null);
+
+        Task initializeTask;
+        Task registerTask;
+        lock (migrationMapLock!)
+        {
+            initializeTask = Task.Run(() => model.InitializeAsync());
+            registerTask = Task.Run(() => model.RegisterMigration(new TestLatestSettingsMigrationV2ToV3()));
+
+            Thread.Sleep(50);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(initializeTask.IsCompleted, Is.False);
+                Assert.That(registerTask.IsCompleted, Is.False);
+            });
+        }
+
+        await Task.WhenAll(initializeTask, registerTask);
+
+        repository.Stored["TestLatestSettingsData"] = new TestLatestSettingsData
+        {
+            Version = 1,
+            Value = "legacy"
+        };
+
+        await model.InitializeAsync();
+
+        var current = model.GetData<TestLatestSettingsData>();
+        Assert.Multiple(() =>
+        {
+            Assert.That(current.Version, Is.EqualTo(3));
+            Assert.That(current.Value, Is.EqualTo("legacy-migrated-v3"));
         });
     }
 
@@ -106,6 +212,70 @@ public sealed class SettingsModelTests
             {
                 Version = 2,
                 Value = $"{data.Value}-migrated"
+            };
+        }
+    }
+
+    private sealed class TestLatestSettingsData : ISettingsData
+    {
+        public string Value { get; set; } = "default-v3";
+
+        public int Version { get; set; } = 3;
+
+        public DateTime LastModified { get; } = DateTime.UtcNow;
+
+        public void Reset()
+        {
+            Value = "default-v3";
+            Version = 3;
+        }
+
+        public void LoadFrom(ISettingsData source)
+        {
+            if (source is not TestLatestSettingsData data)
+            {
+                return;
+            }
+
+            Value = data.Value;
+            Version = data.Version;
+        }
+    }
+
+    private sealed class TestLatestSettingsMigrationV1ToV2 : ISettingsMigration
+    {
+        public Type SettingsType => typeof(TestLatestSettingsData);
+
+        public int FromVersion => 1;
+
+        public int ToVersion => 2;
+
+        public ISettingsSection Migrate(ISettingsSection oldData)
+        {
+            var data = (TestLatestSettingsData)oldData;
+            return new TestLatestSettingsData
+            {
+                Version = 2,
+                Value = $"{data.Value}-migrated"
+            };
+        }
+    }
+
+    private sealed class TestLatestSettingsMigrationV2ToV3 : ISettingsMigration
+    {
+        public Type SettingsType => typeof(TestLatestSettingsData);
+
+        public int FromVersion => 2;
+
+        public int ToVersion => 3;
+
+        public ISettingsSection Migrate(ISettingsSection oldData)
+        {
+            var data = (TestLatestSettingsData)oldData;
+            return new TestLatestSettingsData
+            {
+                Version = 3,
+                Value = $"{data.Value}-v3"
             };
         }
     }

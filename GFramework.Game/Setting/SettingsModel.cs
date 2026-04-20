@@ -4,6 +4,7 @@ using GFramework.Core.Logging;
 using GFramework.Core.Model;
 using GFramework.Game.Abstractions.Data;
 using GFramework.Game.Abstractions.Setting;
+using GFramework.Game.Internal;
 using GFramework.Game.Setting.Events;
 
 namespace GFramework.Game.Setting;
@@ -28,6 +29,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
 
     private readonly ConcurrentDictionary<Type, ISettingsData> _data = new();
     private readonly ConcurrentDictionary<Type, Dictionary<int, ISettingsMigration>> _migrationCache = new();
+    private readonly object _migrationMapLock = new();
     private readonly ConcurrentDictionary<(Type type, int from), ISettingsMigration> _migrations = new();
     private volatile bool _initialized;
 
@@ -114,10 +116,41 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
     /// <returns>
     ///     返回当前 ISettingsModel 实例，支持链式调用。
     /// </returns>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="migration" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    ///     迁移声明的目标版本不大于源版本时抛出。
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    ///     同一设置类型与源版本已经注册过迁移器时抛出。
+    /// </exception>
+    /// <remarks>
+    ///     迁移注册表与按类型缓存的版本映射需要保持一致；因此注册与 cache miss 时的缓存重建
+    ///     统一通过 <see cref="_migrationMapLock" /> 串行化，避免并发加载把旧快照重新写回缓存。
+    /// </remarks>
     public ISettingsModel RegisterMigration(ISettingsMigration migration)
     {
-        _migrations[(migration.SettingsType, migration.FromVersion)] = migration;
-        _migrationCache.TryRemove(migration.SettingsType, out _);
+        ArgumentNullException.ThrowIfNull(migration);
+
+        VersionedMigrationRunner.ValidateForwardOnlyRegistration(
+            migration.SettingsType.Name,
+            "Settings migration",
+            migration.FromVersion,
+            migration.ToVersion,
+            nameof(migration));
+
+        lock (_migrationMapLock)
+        {
+            if (!_migrations.TryAdd((migration.SettingsType, migration.FromVersion), migration))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate settings migration registration for {migration.SettingsType.Name} from version {migration.FromVersion}.");
+            }
+
+            _migrationCache.TryRemove(migration.SettingsType, out _);
+        }
+
         return this;
     }
 
@@ -156,7 +189,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
                 if (raw is not ISettingsData loaded)
                     continue;
 
-                var migrated = MigrateIfNeeded(loaded);
+                var migrated = MigrateIfNeeded(loaded, data);
 
                 // 回填（不替换实例）
                 data.LoadFrom(migrated);
@@ -277,29 +310,75 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
         _repository.RegisterDataType(location, type);
     }
 
-    private ISettingsData MigrateIfNeeded(ISettingsData data)
+    /// <summary>
+    ///     将已加载的设置数据迁移到当前运行时实例声明的目标版本。
+    /// </summary>
+    /// <param name="data">从仓库读取的设置数据。</param>
+    /// <param name="latestData">当前内存中的设置实例，其 <c>Version</c> 值代表目标版本。</param>
+    /// <returns>迁移后的设置数据；如果无需迁移则返回原对象。</returns>
+    /// <remarks>
+    ///     该方法按设置类型缓存迁移表，并始终以 <paramref name="latestData" /> 的版本作为目标运行时版本，
+    ///     避免把旧文件中的版本号误当成当前版本。具体的缺链、版本一致性与前进性校验都委托给
+    ///     <see cref="VersionedMigrationRunner" /> 统一处理。缓存重建与迁移注册共用
+    ///     <see cref="_migrationMapLock" />，确保运行中的初始化不会把过期迁移快照写回缓存。
+    /// </remarks>
+    private ISettingsData MigrateIfNeeded(ISettingsData data, ISettingsData latestData)
     {
-        if (data is not IVersionedData versioned)
-            return data;
-
         var type = data.GetType();
-        var current = data;
-
-        if (!_migrationCache.TryGetValue(type, out var versionMap))
+        Dictionary<int, ISettingsMigration> versionMap;
+        lock (_migrationMapLock)
         {
-            versionMap = _migrations
-                .Where(kv => kv.Key.type == type)
-                .ToDictionary(kv => kv.Key.from, kv => kv.Value);
+            if (!_migrationCache.TryGetValue(type, out var cachedVersionMap))
+            {
+                // cache miss 与 RegisterMigration 共用同一把锁，避免注册新迁移后又被旧快照覆盖回缓存。
+                versionMap = _migrations
+                    .Where(kv => kv.Key.type == type)
+                    .ToDictionary(kv => kv.Key.from, kv => kv.Value);
 
-            _migrationCache[type] = versionMap;
+                _migrationCache[type] = versionMap;
+            }
+            else
+            {
+                versionMap = cachedVersionMap;
+            }
         }
 
-        while (versionMap.TryGetValue(versioned.Version, out var migration))
+        return VersionedMigrationRunner.MigrateToTargetVersion(
+            data,
+            latestData.Version,
+            static settings => settings.Version,
+            fromVersion => versionMap.TryGetValue(fromVersion, out var migration) ? migration : null,
+            static migration => migration.ToVersion,
+            static (migration, current) => ApplySettingsMigration(migration, current),
+            $"{type.Name} settings",
+            "settings migration");
+    }
+
+    /// <summary>
+    ///     执行单步设置迁移，并验证迁移结果仍然属于已注册的设置类型。
+    /// </summary>
+    /// <param name="migration">要执行的迁移器。</param>
+    /// <param name="currentData">当前版本的数据。</param>
+    /// <returns>迁移后的设置数据。</returns>
+    /// <exception cref="InvalidOperationException">
+    ///     迁移结果不实现 <see cref="ISettingsData" />，或返回了与声明设置类型不兼容的数据时抛出。
+    /// </exception>
+    private static ISettingsData ApplySettingsMigration(ISettingsMigration migration, ISettingsData currentData)
+    {
+        var fromVersion = currentData.Version;
+        var migrated = migration.Migrate(currentData);
+        if (migrated is not ISettingsData migratedData)
         {
-            current = (ISettingsData)migration.Migrate(current);
-            versioned = current;
+            throw new InvalidOperationException(
+                $"Settings migration for {migration.SettingsType.Name} from version {fromVersion} must return {nameof(ISettingsData)}.");
         }
 
-        return current;
+        if (!migration.SettingsType.IsInstanceOfType(migratedData))
+        {
+            throw new InvalidOperationException(
+                $"Settings migration for {migration.SettingsType.Name} from version {fromVersion} returned incompatible data type {migratedData.GetType().Name}.");
+        }
+
+        return migratedData;
     }
 }
