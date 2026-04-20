@@ -2775,6 +2775,335 @@ test("createSampleConfigYaml should prefer scalar const values over defaults", (
     assert.ok(!/^rarity: rare$/mu.test(sample));
 });
 
+test("parseSchemaContent should capture object-focused if/then/else metadata", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "itemId": { "type": "string" },
+                "itemCount": { "type": "integer" },
+                "bonus": { "type": "integer" }
+              },
+              "if": {
+                "type": "object",
+                "properties": {
+                  "itemId": {
+                    "type": "string",
+                    "const": "potion"
+                  }
+                }
+              },
+              "then": {
+                "type": "object",
+                "required": ["itemCount"],
+                "properties": {
+                  "itemCount": { "type": "integer" }
+                }
+              },
+              "else": {
+                "type": "object",
+                "required": ["bonus"],
+                "properties": {
+                  "bonus": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+    `);
+
+    assert.equal(schema.properties.reward.ifSchema.type, "object");
+    assert.equal(schema.properties.reward.thenSchema.type, "object");
+    assert.deepEqual(schema.properties.reward.thenSchema.required, ["itemCount"]);
+    assert.deepEqual(schema.properties.reward.elseSchema.required, ["bonus"]);
+});
+
+test("parseSchemaContent should reject then declarations without if", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  },
+                  "then": {
+                    "type": "object",
+                    "required": ["itemCount"],
+                    "properties": {
+                      "itemCount": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+        `),
+        /must declare 'if' when using 'then' or 'else'/u);
+});
+
+test("parseSchemaContent should require explicit object type for conditional branches", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemId": { "type": "string" }
+                  },
+                  "if": {
+                    "properties": {
+                      "itemId": { "type": "string", "const": "potion" }
+                    }
+                  },
+                  "then": {
+                    "type": "object",
+                    "properties": {
+                      "itemId": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+        `),
+        /must declare an object-typed 'if' schema/u);
+});
+
+test("parseSchemaContent should reject conditional branches with non-object properties metadata", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemId": { "type": "string" }
+                  },
+                  "if": {
+                    "type": "object",
+                    "properties": []
+                  },
+                  "then": {
+                    "type": "object",
+                    "properties": {
+                      "itemId": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+        `),
+        /must declare 'properties' in 'if' as an object-valued map/u);
+});
+
+test("parseSchemaContent should reject conditional branches with non-array required metadata", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  },
+                  "if": {
+                    "type": "object",
+                    "properties": {
+                      "itemCount": { "type": "integer" }
+                    }
+                  },
+                  "then": {
+                    "type": "object",
+                    "required": "itemCount",
+                    "properties": {
+                      "itemCount": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+        `),
+        /must declare 'required' in 'then' as an array of property names/u);
+});
+
+test("parseSchemaContent should reject conditional branches with invalid required entries", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "bonus": { "type": "integer" }
+                  },
+                  "if": {
+                    "type": "object",
+                    "properties": {
+                      "bonus": { "type": "integer" }
+                    }
+                  },
+                  "else": {
+                    "type": "object",
+                    "required": [" "],
+                    "properties": {
+                      "bonus": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+        `),
+        /cannot declare blank property names in 'required' for 'else'/u);
+});
+
+test("validateParsedConfig should report then violations", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "itemId": { "type": "string" },
+                "itemCount": { "type": "integer" }
+              },
+              "if": {
+                "type": "object",
+                "properties": {
+                  "itemId": {
+                    "type": "string",
+                    "const": "potion"
+                  }
+                }
+              },
+              "then": {
+                "type": "object",
+                "required": ["itemCount"],
+                "properties": {
+                  "itemCount": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+    `);
+
+    const yaml = parseTopLevelYaml(`
+reward:
+  itemId: potion
+`);
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /'then' schema|`then` schema/u);
+});
+
+test("validateParsedConfig should report else violations", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "itemId": { "type": "string" },
+                "bonus": { "type": "integer" }
+              },
+              "if": {
+                "type": "object",
+                "properties": {
+                  "itemId": {
+                    "type": "string",
+                    "const": "potion"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "required": ["bonus"],
+                "properties": {
+                  "bonus": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+    `);
+
+    const yaml = parseTopLevelYaml(`
+reward:
+  itemId: sword
+`);
+    const diagnostics = validateParsedConfig(schema, yaml);
+
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /'else' schema|`else` schema/u);
+});
+
+test("validateParsedConfig should accept satisfied if/then/else constraints", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "properties": {
+                "itemId": { "type": "string" },
+                "itemCount": { "type": "integer" },
+                "bonus": { "type": "integer" }
+              },
+              "if": {
+                "type": "object",
+                "properties": {
+                  "itemId": {
+                    "type": "string",
+                    "const": "potion"
+                  }
+                }
+              },
+              "then": {
+                "type": "object",
+                "required": ["itemCount"],
+                "properties": {
+                  "itemCount": { "type": "integer" }
+                }
+              },
+              "else": {
+                "type": "object",
+                "required": ["bonus"],
+                "properties": {
+                  "bonus": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+    `);
+
+    const thenYaml = parseTopLevelYaml(`
+reward:
+  itemId: potion
+  itemCount: 2
+`);
+    const elseYaml = parseTopLevelYaml(`
+reward:
+  itemId: sword
+  bonus: 1
+`);
+
+    assert.deepEqual(validateParsedConfig(schema, thenYaml), []);
+    assert.deepEqual(validateParsedConfig(schema, elseYaml), []);
+});
+
 test("parseBatchArrayValue should keep comma-separated batch editing behavior", () => {
     assert.deepEqual(parseBatchArrayValue(" potion, bomb ,  ,elixir "), ["potion", "bomb", "elixir"]);
 });
