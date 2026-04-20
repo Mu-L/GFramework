@@ -489,6 +489,33 @@ internal sealed class CqrsHandlerRegistrarTests
     }
 
     /// <summary>
+    ///     验证当程序集枚举结果包含重复 handler 类型时，registrar 仍只会写入一份 handler 映射。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Skip_Duplicate_Handler_Mappings_When_Assembly_Returns_Duplicate_Types()
+    {
+        var handlerType = typeof(AlphaDeterministicNotificationHandler);
+        var handlerAssembly = new Mock<Assembly>();
+        handlerAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.DuplicateHandlerMappingsAssembly, Version=1.0.0.0");
+        handlerAssembly
+            .Setup(static assembly => assembly.GetTypes())
+            .Returns([handlerType, handlerType]);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, handlerAssembly.Object);
+
+        var registrations = container.GetServicesUnsafe
+            .Where(static descriptor =>
+                descriptor.ServiceType == typeof(INotificationHandler<DeterministicOrderNotification>) &&
+                descriptor.ImplementationType == typeof(AlphaDeterministicNotificationHandler))
+            .ToArray();
+
+        Assert.That(registrations, Has.Length.EqualTo(1));
+    }
+
+    /// <summary>
     ///     清空本测试依赖的 registrar 静态缓存，避免跨用例共享进程级状态导致断言漂移。
     /// </summary>
     private static void ClearRegistrarCaches()

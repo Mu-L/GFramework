@@ -2,6 +2,16 @@
 
 ## 2026-04-20
 
+### 阶段：registrar duplicate mapping 索引收敛（CQRS-REWRITE-RP-049）
+
+- 已将 `CqrsHandlerRegistrar` 的重复 handler mapping 判定从逐条线性扫描 `IServiceCollection` 收敛为单次构建的本地映射索引
+- reflection fallback 或重复类型输入场景下，后续 duplicate mapping 判定改为 `HashSet` 命中，不再重复遍历已有服务描述符
+- `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs` 已补充“程序集枚举返回重复 handler 类型时仍只注册一份映射”的回归
+- 定向验证已通过：
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
+  - `11/11` passed
+  - 当前沙箱限制 MSBuild named pipe，因此验证在提权环境下执行
+
 ### 阶段：registrar handler-interface 反射缓存（CQRS-REWRITE-RP-048）
 
 - 已在 `CqrsHandlerRegistrar` 中新增按 `Type` 弱键缓存的 supported handler interface 元数据，reflection 注册路径现会复用已筛选且排序好的接口列表
