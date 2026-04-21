@@ -1,6 +1,6 @@
 # Analyzer Warning Reduction 追踪
 
-## 2026-04-21
+## 2026-04-21 — RP-003
 
 ### 阶段：Architecture 生命周期 `MA0051` 收口（RP-003）
 
@@ -20,7 +20,22 @@
   - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter FullyQualifiedName~ArchitectureLifecycleBehaviorTests -p:RestoreFallbackFolders=`
     - 结果：`6 Passed`，`0 Failed`
 
-## 2026-04-21
+## 2026-04-21 — RP-004
+
+### 阶段：PR review follow-up（RP-004）
+
+- 使用 `gframework-pr-review` 抓取当前分支 PR #263 的最新 CodeRabbit review threads、MegaLinter 摘要与 CTRF 测试结果，
+  只接受仍能在本地工作树复现的 review 点
+- 在 `GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs` 中将 `TryCreateGeneratedRegistry` 的 `out` 参数改为
+  `[NotNullWhen(true)] out ICqrsHandlerRegistry?`，移除三处 `null!` 抑制，保持激活失败时的日志文本与回退语义不变
+- 修正 active trace 中重复的 `## 2026-04-21` 二级标题，消除 CodeRabbit 报告的 markdownlint `MD024`
+- 核实 PR 信号后确认：当前 CTRF 报告为 `2134 passed / 0 failed`；MegaLinter 唯一告警来自 CI 环境中的 `dotnet-format`
+  restore 失败，不是本地代码格式问题
+- 验证通过：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release --no-restore -p:TargetFramework=net8.0 -p:UseSharedCompilation=false -p:RestoreFallbackFolders=`
+    - 结果：`0 Warning(s)`，`0 Error(s)`
+
+## 2026-04-21 — RP-002
 
 ### 阶段：CQRS `MA0051` 收口（RP-002）
 

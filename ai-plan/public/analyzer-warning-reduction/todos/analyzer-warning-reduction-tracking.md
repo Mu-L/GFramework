@@ -7,11 +7,13 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-003`
-- 当前阶段：`Phase 3`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-004`
+- 当前阶段：`Phase 4`
 - 当前焦点：
-  - 已完成 `GFramework.Core/Architectures/ArchitectureLifecycle.cs` 的 `MA0051` 长方法拆分，保持阶段推进、日志文本和 late registration 语义不变
-  - 已确认 `GFramework.Core` 定向 `warnings-only` 构建从 `30 Warning(s)` 收敛到 `29 Warning(s)`，`ArchitectureLifecycle` 已不再出现在剩余 `MA0051` 热点中
+  - 已完成当前分支 PR #263 的最新 review follow-up，本地确认并修复 `GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs`
+    的 `null!` 可空契约问题，同时消除 active trace 的重复标题 `MD024`
+  - 已确认 PR 上的测试信号为 `2134 Passed / 0 Failed`；MegaLinter 唯一告警来自 CI 中 `dotnet-format` restore 失败，
+    当前本地 follow-up 不需要额外处理
   - 下一轮若继续推进，优先从 `PauseStackManager`、`CoroutineScheduler` 或 `Store` 的剩余 `MA0051` 中只选一个切入点
 
 ## 当前状态摘要
@@ -27,6 +29,7 @@
 - `RP-001` 的详细实现历史、测试记录和 warning 热点清单已归档到主题内 `archive/`
 - `RP-002` 已在不改公共契约的前提下完成 `CqrsHandlerRegistrar` 结构拆分，并通过定向 build/test 验证
 - `RP-003` 已在不改生命周期契约的前提下完成 `ArchitectureLifecycle` 初始化主流程拆分，并通过定向 build/test 验证
+- `RP-004` 已完成当前 PR review follow-up：修复 `TryCreateGeneratedRegistry` 的可空 `out` 契约并清理 trace 文档重复标题
 - 当前工作树分支 `fix/analyzer-warning-reduction-batch` 已在 `ai-plan/public/README.md` 建立 topic 映射
 
 ## 当前风险
@@ -52,6 +55,9 @@
 - `RP-003` 的定向验证结果：
   - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders= -nologo -clp:Summary;WarningsOnly`
   - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter FullyQualifiedName~ArchitectureLifecycleBehaviorTests -p:RestoreFallbackFolders=`
+- `RP-004` 的定向验证结果：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release --no-restore -p:TargetFramework=net8.0 -p:UseSharedCompilation=false -p:RestoreFallbackFolders=`
+    - 结果：`0 Warning(s)`，`0 Error(s)`
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
 
 ## 下一步

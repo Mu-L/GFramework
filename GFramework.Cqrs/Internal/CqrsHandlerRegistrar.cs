@@ -1,6 +1,7 @@
 using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection.Emit;
 
 namespace GFramework.Cqrs.Internal;
@@ -185,7 +186,7 @@ internal static class CqrsHandlerRegistrar
         Type registryType,
         string assemblyName,
         ILogger logger,
-        out ICqrsHandlerRegistry registry)
+        [NotNullWhen(true)] out ICqrsHandlerRegistry? registry)
     {
         var activationMetadata = RegistryActivationMetadataCache.GetOrAdd(
             registryType,
@@ -195,7 +196,7 @@ internal static class CqrsHandlerRegistrar
         {
             logger.Warn(
                 $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it does not implement {typeof(ICqrsHandlerRegistry).FullName}.");
-            registry = null!;
+            registry = null;
             return false;
         }
 
@@ -203,7 +204,7 @@ internal static class CqrsHandlerRegistrar
         {
             logger.Warn(
                 $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it is abstract.");
-            registry = null!;
+            registry = null;
             return false;
         }
 
@@ -211,7 +212,7 @@ internal static class CqrsHandlerRegistrar
         {
             logger.Warn(
                 $"Ignoring generated CQRS handler registry {registryType.FullName} in assembly {assemblyName} because it does not expose an accessible parameterless constructor.");
-            registry = null!;
+            registry = null;
             return false;
         }
 
