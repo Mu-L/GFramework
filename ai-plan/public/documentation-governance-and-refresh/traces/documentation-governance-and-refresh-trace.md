@@ -127,3 +127,28 @@
 1. 继续核对 `docs/zh-CN/game/*`，优先处理仍引用旧安装方式、旧状态系统或旧 UI / Scene 接法的页面
 2. 再推进 `docs/zh-CN/source-generators/*`，重点核对生成器 wiring、包关系与最小接入示例
 3. 若 active trace 继续累计多个已完成恢复点，按 `archive/traces/` 粒度归档旧阶段细节
+
+### 阶段：Game Scene / UI 专题页收口（RP-006）
+
+- 依据 `documentation-governance-and-refresh` active tracking 的下一步，优先复核 `docs/zh-CN/game/scene.md` 与
+  `docs/zh-CN/game/ui.md`
+- 对照 `GFramework.Game.Abstractions/Scene/*`、`GFramework.Game.Abstractions/UI/*`、`GFramework.Game/Scene/SceneRouterBase.cs`、
+  `GFramework.Game/UI/UiRouterBase.cs`、`GFramework.Game/README.md` 与 `ai-libs/CoreGrid` 参考接法后确认：
+  - `scene.md` 仍把场景系统写成框架自带完整注册/装配的一体化方案，没有突出 `ISceneFactory`、`ISceneRoot` 和项目侧
+    router 派生类的责任边界
+  - `ui.md` 仍按旧教程式结构展开，没有清楚区分 `Page` 栈与 `Overlay/Modal/Toast/Topmost` 层级 UI，也缺少当前
+    `UiInteractionProfile`、`TryDispatchUiAction(...)` 与 World 输入阻断语义
+- 重写 `scene.md`，使其回到“当前公开入口、场景栈语义、最小接入路径、守卫/过渡处理器扩展点、与旧写法的边界”的结构
+- 重写 `ui.md`，使其回到“页面栈与层级 UI 分流、输入仲裁、暂停/阻断语义、最小接入路径、扩展点”的结构
+- 新版两页都明确了：factory、root、引擎节点与注册表仍由项目或适配层提供，框架当前提供的是 router 基类与通用编排
+
+### 验证（RP-006）
+
+- `cd docs && bun run build`
+
+### 下一步（RP-006）
+
+1. 继续核对 `docs/zh-CN/source-generators/*`，优先处理仍引用旧初始化方式、旧聚合包名或过时 generator wiring 的页面
+2. 重点复核 `priority-generator.md`、`context-aware-generator.md` 与 Godot 相关生成器页面，确认示例仍与当前 runtime /
+   generator 入口一致
+3. 若 `source-generators` 出现多页连续收口结果，再按恢复点粒度整理 active trace，避免默认入口继续膨胀
