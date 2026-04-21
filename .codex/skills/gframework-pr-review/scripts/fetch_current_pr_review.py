@@ -538,6 +538,27 @@ def build_latest_commit_review_threads(comments: list[dict[str, Any]]) -> list[d
     return sorted(threads, key=lambda item: (item["path"], item["line"] or 0, item["thread_id"]))
 
 
+def select_latest_submitted_review(
+    reviews: list[dict[str, Any]],
+    *,
+    required_user: str | None = None,
+    prefer_non_empty_body: bool = False,
+) -> dict[str, Any] | None:
+    filtered_reviews = [review for review in reviews if review.get("submitted_at")]
+    if required_user is not None:
+        filtered_reviews = [review for review in filtered_reviews if review.get("user", {}).get("login") == required_user]
+
+    if not filtered_reviews:
+        return None
+
+    if prefer_non_empty_body:
+        non_empty_body_reviews = [review for review in filtered_reviews if str(review.get("body") or "").strip()]
+        if non_empty_body_reviews:
+            filtered_reviews = non_empty_body_reviews
+
+    return max(filtered_reviews, key=lambda review: review.get("submitted_at", ""))
+
+
 def fetch_latest_commit_review(pr_number: int) -> dict[str, Any]:
     api_base = f"https://api.github.com/repos/{OWNER}/{REPO}/pulls/{pr_number}"
     commits = fetch_paged_json(f"{api_base}/commits?per_page=100")
@@ -558,10 +579,11 @@ def fetch_latest_commit_review(pr_number: int) -> dict[str, Any]:
         review for review in reviews if review.get("commit_id") == latest_commit_sha and review.get("submitted_at")
     ]
     candidate_reviews = latest_commit_reviews or [review for review in reviews if review.get("submitted_at")]
-    latest_review = (
-        max(candidate_reviews, key=lambda review: review.get("submitted_at", ""))
-        if candidate_reviews
-        else None
+    latest_review = select_latest_submitted_review(candidate_reviews)
+    latest_coderabbit_review_with_body = select_latest_submitted_review(
+        candidate_reviews,
+        required_user=CODERABBIT_LOGIN,
+        prefer_non_empty_body=True,
     )
 
     latest_commit_comments = [comment for comment in comments if comment.get("commit_id") == latest_commit_sha]
@@ -580,6 +602,18 @@ def fetch_latest_commit_review(pr_number: int) -> dict[str, Any]:
             "commit_id": latest_review.get("commit_id") if latest_review else "",
             "user": latest_review.get("user", {}).get("login") if latest_review else "",
             "body": latest_review.get("body") if latest_review else "",
+        },
+        "latest_coderabbit_review_with_body": {
+            "id": latest_coderabbit_review_with_body.get("id") if latest_coderabbit_review_with_body else None,
+            "state": latest_coderabbit_review_with_body.get("state") if latest_coderabbit_review_with_body else "",
+            "submitted_at": (
+                latest_coderabbit_review_with_body.get("submitted_at") if latest_coderabbit_review_with_body else ""
+            ),
+            "commit_id": latest_coderabbit_review_with_body.get("commit_id") if latest_coderabbit_review_with_body else "",
+            "user": latest_coderabbit_review_with_body.get("user", {}).get("login")
+            if latest_coderabbit_review_with_body
+            else "",
+            "body": latest_coderabbit_review_with_body.get("body") if latest_coderabbit_review_with_body else "",
         },
         "threads": threads,
         "open_threads": open_threads,
@@ -621,7 +655,7 @@ def build_result(pr_number: int, branch: str) -> dict[str, Any]:
     coderabbit_review: dict[str, Any] = {}
     try:
         latest_commit_review = fetch_latest_commit_review(pr_number)
-        latest_review = latest_commit_review.get("latest_review", {})
+        latest_review = latest_commit_review.get("latest_coderabbit_review_with_body", {})
         latest_review_body = str(latest_review.get("body") or "")
         if latest_review.get("user") == CODERABBIT_LOGIN and latest_review_body:
             coderabbit_review = parse_latest_review_body(latest_review_body)
