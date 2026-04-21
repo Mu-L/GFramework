@@ -1,5 +1,35 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-21 — RP-006
+
+### 阶段：Store `MA0051` 收口（RP-006）
+
+- 依据 active tracking 中“继续只选一个 `GFramework.Core` 结构性切入点”的约束，本轮选择
+  `GFramework.Core/StateManagement/Store.cs`，因为该文件的两个 `MA0051` 都集中在 dispatch / reducer snapshot 逻辑，
+  且已有 `StoreTests` 覆盖 dispatch、batch、history 和多态 reducer 匹配语义
+- 在正式验证前先处理 WSL 环境噪音：当前 worktree 的 `GFramework.Core/obj/project.assets.json` 是 Windows 侧 restore
+  产物，`--no-restore` 构建会继续引用宿主 Windows fallback package folder；本轮先执行一次 Linux 侧
+  `dotnet restore GFramework.Core/GFramework.Core.csproj -p:RestoreFallbackFolders="" -p:RestorePackagesPath=<linux-nuget-cache> --ignore-failed-sources -nologo`
+  刷新资产文件，再继续 warnings-only build
+- 将 `Dispatch` 拆分为：
+  - `EnterDispatchScope`
+  - `TryCommitDispatchResult`
+  - `ExitDispatchScope`
+- 将 `CreateReducerSnapshotCore` 拆分为：
+  - `CreateExactReducerSnapshot`
+  - `CreateAssignableReducerSnapshot`
+  - `CollectReducerMatches`
+  - `CompareReducerMatch`
+- 保持 `_dispatchGate -> _lock` 的锁顺序、middleware 锁外执行、批处理通知折叠以及“精确类型 -> 基类 -> 接口 ->
+  注册顺序”的 reducer 稳定排序语义不变，只收缩主方法长度并补齐辅助方法意图注释
+- 验证通过：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders="" -p:RestorePackagesPath=<linux-nuget-cache> -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`25 Warning(s)`，`0 Error(s)`；`Store.cs` 已不再出现在 `MA0051` 列表
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter FullyQualifiedName~StoreTests -p:RestoreFallbackFolders="" -p:RestorePackagesPath=<linux-nuget-cache> -nologo`
+    - 结果：`30 Passed`，`0 Failed`
+- 下一步保持同一节奏：只在 `CoroutineScheduler.cs` 的 `Run` / `FinalizeCoroutine` 两个 `MA0051` 中继续，不与其他
+  warning 家族混做
+
 ## 2026-04-21 — RP-005
 
 ### 阶段：PauseStackManager `MA0051` 收口（RP-005）
