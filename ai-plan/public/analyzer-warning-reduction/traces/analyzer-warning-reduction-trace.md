@@ -1,5 +1,40 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-21 — RP-015
+
+### 阶段：PR #267 failed-test follow-up 收口（RP-015）
+
+- 触发背景：
+  - 用户指出“测试好像挂了”，按 `$gframework-pr-review` 重新抓取当前分支 PR #267 的 review / checks / CTRF 评论
+  - PR 评论里同时存在一次 `2143 passed / 0 failed` 与一次 `1 failed` 的 CTRF 报告；失败用例为
+    `AsyncLogAppenderTests.ILogAppender_Flush_Should_Raise_OnFlushCompleted_Only_Once`
+- 复核过程：
+  - 先跑定向单测时该用例可以单独通过，因此继续核对 PR head commit 与本地整包测试，避免把旧评论误判成当前状态
+  - 在 `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers`
+    下成功复现相同失败，确认问题仍存在于当前代码，而不是单纯的 PR 评论残留
+  - 同时发现当前沙箱内如果用 shell 循环反复启动 `dotnet test`，会触发 `MSBuild` named pipe `Permission denied`
+    的环境噪音；后续验证改为单次命令并显式加 `--disable-build-servers`
+- 根因结论：
+  - `AsyncLogAppender.Flush()` 只依赖后台消费循环在处理完某个条目后检查 `_flushRequested`
+  - 当调用方执行 `Flush()` 前，后台线程已经把最后一个条目消费完并离开检查点时，`Flush()` 会一直等到默认超时，
+    最终通过 `OnFlushCompleted` 发出一次 `Success=false` 的错误完成通知
+- 实施修复：
+  - 为 `AsyncLogAppender` 增加“当前是否仍有条目在途处理”的状态跟踪
+  - 抽出 `TrySignalFlushCompletion()`，让 `Flush()` 在请求发出后先做一次即时完成判定；后台循环在每次处理结束后也复用
+    这条判定路径
+  - 在 `AsyncLogAppenderTests` 中新增 `Flush_WhenEntriesAlreadyProcessed_Should_Still_ReportSuccess`，稳定覆盖
+    “调用 Flush 前队列已被后台线程清空”的场景
+- 验证结果：
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers --filter "FullyQualifiedName~AsyncLogAppenderTests"`
+    - 结果：`15 Passed`，`0 Failed`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers`
+    - 结果：`1607 Passed`，`0 Failed`
+- 当前结论：
+  - PR #267 的 failed-test 信号不是纯粹的历史评论噪音，而是当前实现里仍存在的时序竞态
+  - 修复后该竞态已被稳定回归测试覆盖，当前 `GFramework.Core.Tests` 整包通过
+- 下一步建议：
+  - 若继续 analyzer warning reduction 主题，恢复到 `MA0016` / `MA0002` 低风险批次
+
 ## 2026-04-21 — RP-014
 
 ### 阶段：PR #267 review follow-up 收口（RP-014）

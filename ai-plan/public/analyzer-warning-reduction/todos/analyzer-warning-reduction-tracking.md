@@ -7,12 +7,12 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-014`
-- 当前阶段：`Phase 14`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-015`
+- 当前阶段：`Phase 15`
 - 当前焦点：
-  - 当前分支 PR #267 的 latest CodeRabbit unresolved threads、outside-diff comment 与 nitpick comment 已完成本地复核
-  - 本轮优先收口仍然成立的 follow-up：`AsyncLogAppender` 接口路径重复触发 `OnFlushCompleted`、事件/XML 契约缺口、
-    `PhaseChanged` 迁移文档说明与 `ai-plan` 基线表述歧义
+  - 当前分支 PR #267 的失败测试已通过 `$gframework-pr-review` 与本地整包测试完成复核
+  - 已确认并修复 `AsyncLogAppender.Flush()` 在“后台线程先清空队列”场景下可能超时返回 `false` 的竞态
+  - 已补上稳定回归测试，避免只在整包 `GFramework.Core.Tests` 里偶发暴露的刷新完成信号问题再次回归
   - 下一轮默认恢复到 `MA0016` 或 `MA0002` 低风险批次；`MA0015` 与 `MA0077` 继续作为尾项顺手吸收
   - `GFramework.Godot` 的 `Timing.cs` 已同步适配新事件签名，但当前 worktree 的 Godot restore 资产仍受 Windows fallback package folder 干扰，独立 build 需在修复资产后补跑
   - 后续继续按 warning 类型和数量批处理，而不是回退到按单文件切片推进
@@ -32,6 +32,8 @@
   并同步更新 `GFramework.Godot` 订阅点、定向测试与 `docs/zh-CN` 示例
 - 已完成当前 PR #267 review follow-up：修复 `AsyncLogAppender` 的 `ILogAppender.Flush()` 双重完成通知，并补齐
   `PhaseChanged` / `CoroutineExceptionEventArgs` XML 文档、`PhaseChanged` 迁移说明和 `ai-plan` 基线注释
+- 已完成当前 PR #267 failed-test follow-up：修复 `AsyncLogAppender.Flush()` 在队列已被后台线程提前清空时仍可能
+  等待满默认超时并返回 `false` 的竞态，并通过整包 `GFramework.Core.Tests` 重新验证
 - 当前 `GFramework.Core` `net8.0` warnings-only 基线已降到 `9` 条；剩余 warning 集中在
   `MA0016` 集合抽象接口、`MA0002` comparer 重载，以及 `MA0015` / `MA0077` 两个低数量尾项
 
@@ -62,6 +64,8 @@
   非标准签名；`GFramework.Core` `net8.0` warnings-only 基线由 `15` 降至 `9`
 - `RP-014` 使用 `gframework-pr-review` 复核当前分支 PR #267 的 latest head review threads、outside-diff comment 与
   nitpick comment 后，确认 8 条高信号项中仍成立的是 1 个行为 bug 与 7 个文档/测试/跟踪缺口，并按最小改动收口
+- `RP-015` 使用 `$gframework-pr-review` 复核 PR #267 的 CTRF 失败测试评论后，确认 `AsyncLogAppender` 仍存在
+  “队列已空但 Flush 仍超时失败”的竞态；该问题在本地整包 `GFramework.Core.Tests` 中可复现，现已修复并补上稳定回归测试
 - 当前工作树分支 `fix/analyzer-warning-reduction-batch` 已在 `ai-plan/public/README.md` 建立 topic 映射
 
 ## 当前风险
@@ -149,6 +153,11 @@
     - 结果：`9 Warning(s)`，`0 Error(s)`；`AsyncLogAppender` 行为修复与 XML / 文档补充未引入新的 `GFramework.Core` `net8.0` 构建错误
   - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~CoroutineSchedulerTests.Scheduler_Should_Raise_OnCoroutineException_With_EventArgs|FullyQualifiedName~AsyncLogAppenderTests.Flush_Should_Raise_OnFlushCompleted_With_Sender_And_Result|FullyQualifiedName~AsyncLogAppenderTests.ILogAppender_Flush_Should_Raise_OnFlushCompleted_Only_Once|FullyQualifiedName~ArchitectureLifecycleBehaviorTests.InitializeAsync_Should_Raise_PhaseChanged_With_Sender_And_EventArgs" -m:1 -p:RestoreFallbackFolders="" -nologo`
     - 结果：`4 Passed`，`0 Failed`
+- `RP-015` 的验证结果：
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers --filter "FullyQualifiedName~AsyncLogAppenderTests"`
+    - 结果：`15 Passed`，`0 Failed`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers`
+    - 结果：`1607 Passed`，`0 Failed`
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
 
 ## 下一步
