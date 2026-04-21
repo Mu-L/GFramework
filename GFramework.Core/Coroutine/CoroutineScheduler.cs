@@ -16,7 +16,7 @@ namespace GFramework.Core.Coroutine;
 /// </remarks>
 /// <param name="timeSource">缩放时间源，提供调度器默认推进所使用的时间数据。</param>
 /// <param name="instanceId">协程实例编号，用于生成带宿主前缀的句柄。</param>
-/// <param name="initialCapacity">调度器初始槽位容量。</param>
+/// <param name="initialCapacity">调度器初始槽位容量；允许为 0，此时首次启动协程会按需自动扩容。</param>
 /// <param name="enableStatistics">是否启用协程统计功能。</param>
 /// <param name="realtimeTimeSource">
 ///     非缩放时间源。
@@ -1036,7 +1036,9 @@ public sealed class CoroutineScheduler(
     /// </summary>
     private void Expand()
     {
-        Array.Resize(ref _slots, _slots.Length * 2);
+        // 允许构造器以 0 容量启动，用于极简场景或测试；首次分配时至少扩到 1，避免后续写槽位越界。
+        var expandedLength = Math.Max(1, _slots.Length * 2);
+        Array.Resize(ref _slots, expandedLength);
     }
 
     /// <summary>

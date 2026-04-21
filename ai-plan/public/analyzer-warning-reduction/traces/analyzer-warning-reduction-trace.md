@@ -1,5 +1,31 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-21 — RP-010
+
+### 阶段：PR #265 follow-up 收口（RP-010）
+
+- 使用 `gframework-pr-review` 抓取当前分支 PR #265 的 latest head review threads、CodeRabbit review body、MegaLinter 摘要与 CTRF
+  测试结果；确认最新 unresolved thread 只剩 `CoroutineScheduler` 零容量扩容边界
+- 本地复核后确认两处仍成立的风险：
+  - `CoroutineScheduler.Expand()` 在 `_slots.Length == 0` 时会把容量从 `0` 扩到 `0`，首次 `Run` 写槽位会越界
+  - `Store.EnterDispatchScope()` 在 `_isDispatching = true` 之后、快照构建完成之前若抛异常，会留下永久的嵌套分发误判
+- 实施最小修复：
+  - 将 `Expand()` 调整为 `Math.Max(1, _slots.Length * 2)`，保持已有倍增策略，只补上零容量边界
+  - 为 `EnterDispatchScope()` 增加快照阶段的异常回滚，确保 `_isDispatching` 与实际 dispatch 生命周期保持一致
+  - 新增回归测试覆盖零容量启动路径，以及 dispatch 快照阶段抛错后的可恢复性
+- 当前 PR 信号复核结论：
+  - CTRF：最新评论显示 `2135 passed / 0 failed`
+  - MegaLinter：唯一告警仍是 CI 中 `dotnet-format` restore 失败，未发现新的本地代码格式问题
+  - 旧 review body 中提到的 `Store` 异常安全问题虽未表现为最新 open thread，但在本地代码中仍可成立，因此一并收口
+- 定向验证命令：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release --no-restore -p:TargetFramework=net8.0 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`15 Warning(s)`，`0 Error(s)`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~CoroutineSchedulerTests.Run_Should_Grow_From_Zero_Initial_Capacity|FullyQualifiedName~StoreTests.Dispatch_Should_Reset_Dispatching_Flag_When_Snapshot_Creation_Throws" -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`2 Passed`，`0 Failed`
+- 下一步建议：
+  - 若继续本主题，恢复到 `MA0046` 主批次，不再停留在当前 PR follow-up
+  - 若 PR review 还出现新线程，继续遵守“只修复当前本地仍成立的问题”的策略
+
 ## 2026-04-21 — RP-009
 
 ### 阶段：`MA0048` 批次收口（RP-009）

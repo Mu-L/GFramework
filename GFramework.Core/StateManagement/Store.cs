@@ -828,11 +828,20 @@ public sealed class Store<TState> : IStore<TState>, IStoreDiagnostics<TState>
             EnsureNotDispatching();
             _isDispatching = true;
 
-            var context = new StoreDispatchContext<TState>(action!, _state);
-            stateComparerSnapshot = _stateComparer;
-            middlewaresSnapshot = CreateMiddlewareSnapshotCore();
-            reducersSnapshot = CreateReducerSnapshotCore(context.ActionType);
-            return context;
+            try
+            {
+                var context = new StoreDispatchContext<TState>(action!, _state);
+                stateComparerSnapshot = _stateComparer;
+                middlewaresSnapshot = CreateMiddlewareSnapshotCore();
+                reducersSnapshot = CreateReducerSnapshotCore(context.ActionType);
+                return context;
+            }
+            catch
+            {
+                // 进入 dispatch 标记早于快照构建；如果这里抛异常，必须同步回滚标记，避免后续调用被永久判定为嵌套分发。
+                _isDispatching = false;
+                throw;
+            }
         }
     }
 
