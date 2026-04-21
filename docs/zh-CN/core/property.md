@@ -1,477 +1,97 @@
-# Property 包使用说明
+# Property
 
-## 概述
+`GFramework.Core.Property` 负责字段级响应式值。它最适合“一个字段变化就足以驱动视图或局部业务逻辑”的场景；
+如果你的状态已经是聚合状态树、需要 reducer / middleware / history，再切到
+[state-management](./state-management.md)。
 
-Property 包提供了可绑定属性（BindableProperty）的实现，支持属性值的监听和响应式编程。这是实现数据绑定和响应式编程的核心组件。
+## 安装方式
 
-BindableProperty 是 GFramework 中 Model 层数据管理的基础，通过事件机制实现属性变化的通知。
-
-> 对于简单字段和局部 UI 绑定，`BindableProperty<T>` 仍然是首选方案。
-> 如果你需要统一管理复杂状态树、通过 action / reducer 演进状态，或复用局部状态选择器，
-> 请同时参考 [`state-management`](./state-management)。
-
-## 核心接口
-
-### IReadonlyBindableProperty`<T>`
-
-只读可绑定属性接口，提供属性值的读取和变更监听功能。
-
-**核心成员：**
-
-```csharp
-// 获取属性值
-T Value { get; }
-
-// 注册监听（不立即触发回调）
-IUnRegister Register(Action<T> onValueChanged);
-
-// 注册监听并立即触发回调传递当前值
-IUnRegister RegisterWithInitValue(Action<T> action);
-
-// 取消监听
-void UnRegister(Action<T> onValueChanged);
+```bash
+dotnet add package GeWuYou.GFramework.Core
+dotnet add package GeWuYou.GFramework.Core.Abstractions
 ```
 
-### IBindableProperty`<T>`
+## 最常用类型
 
-可绑定属性接口，继承自只读接口，增加了修改能力。
+当前最常见的公开类型是：
 
-**核心成员：**
+- `IReadonlyBindableProperty<T>`
+- `IBindableProperty<T>`
+- `BindableProperty<T>`
 
-```csharp
-// 可读写的属性值
-new T Value { get; set; }
+一般做法是：内部持有 `BindableProperty<T>`，对外只暴露 `IReadonlyBindableProperty<T>`。
 
-// 设置值但不触发事件
-void SetValueWithoutEvent(T newValue);
-```
-
-## 核心类
-
-### BindableProperty`<T>`
-
-可绑定属性的完整实现。
-
-**核心方法：**
+## 最小示例
 
 ```csharp
-// 构造函数
-BindableProperty(T defaultValue = default!);
+using GFramework.Core.Property;
+using GFramework.Core.Abstractions.Property;
+using GFramework.Core.Model;
 
-// 属性值
-T Value { get; set; }
-
-// 注册监听
-IUnRegister Register(Action<T> onValueChanged);
-IUnRegister RegisterWithInitValue(Action<T> action);
-
-// 取消监听
-void UnRegister(Action<T> onValueChanged);
-
-// 设置值但不触发事件
-void SetValueWithoutEvent(T newValue);
-
-// 设置自定义比较器
-BindableProperty<T> WithComparer(Func<T, T, bool> comparer);
-```
-
-**使用示例：**
-
-```csharp
-// 创建可绑定属性
-var health = new BindableProperty<int>(100);
-
-// 监听值变化（不会立即触发）
-var unregister = health.Register(newValue =>
+public sealed class PlayerModel : AbstractModel
 {
-    Console.WriteLine($"Health changed to: {newValue}");
-});
-
-// 设置值（会触发监听器）
-health.Value = 50;  // 输出: Health changed to: 50
-
-// 取消监听
-unregister.UnRegister();
-
-// 设置值但不触发事件
-health.SetValueWithoutEvent(75);
-```
-
-**高级功能：**
-
-```csharp
-// 1. 注册并立即获得当前值
-health.RegisterWithInitValue(value =>
-{
-    Console.WriteLine($"Current health: {value}");  // 立即输出当前值
-    // 后续值变化时也会调用
-});
-
-// 2. 自定义比较器（静态方法）
-BindableProperty<int>.Comparer = (a, b) => Math.Abs(a - b) < 1;
-
-// 3. 使用实例方法设置比较器
-var position = new BindableProperty<Vector3>(Vector3.Zero)
-    .WithComparer((a, b) => a.DistanceTo(b) < 0.01f);  // 距离小于0.01认为相等
-
-// 4. 字符串比较器示例
-var name = new BindableProperty<string>("Player")
-    .WithComparer((a, b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase));
-```
-
-### BindablePropertyUnRegister`<T>`
-
-可绑定属性的注销器，负责清理监听。
-
-**使用示例：**
-
-```csharp
-var unregister = health.Register(OnHealthChanged);
-// 当需要取消监听时
-unregister.UnRegister();
-```
-
-## BindableProperty 工作原理
-
-BindableProperty 基于事件系统实现属性变化通知：
-
-1. **值设置**：当设置 `Value` 属性时，首先进行值比较
-2. **变化检测**：使用 `EqualityComparer<T>.Default` 或自定义比较器检测值变化
-3. **事件触发**：如果值发生变化，调用所有注册的回调函数
-4. **内存管理**：通过 `IUnRegister` 机制管理监听器的生命周期
-
-## 在 Model 中使用
-
-### 什么时候继续使用 BindableProperty
-
-以下场景仍然优先推荐 `BindableProperty<T>`：
-
-- 单个字段变化就能驱动视图更新
-- 状态范围局限在单个 Model 内
-- 不需要统一的 action / reducer 写入入口
-- 不需要从聚合状态树中复用局部选择逻辑
-
-如果你的状态已经演化为“多个字段必须一起更新”或“多个模块共享同一聚合状态”，
-可以在 Model 内部组合 `Store<TState>`，而不是把所有字段都继续拆成独立属性。
-
-### 与 Store / StateMachine 的边界
-
-- `BindableProperty<T>`：字段级响应式值
-- `Store<TState>`：聚合状态容器，负责统一归约状态变化
-- `StateMachine`：流程状态切换，不负责数据状态归约
-
-一个复杂 Model 可以同时持有 Store 和 BindableProperty：
-
-```csharp
-public class PlayerStateModel : AbstractModel
-{
-    public Store<PlayerState> Store { get; } = new(new PlayerState(100, "Player"));
-    public BindableProperty<bool> IsDirty { get; } = new(false);
-
-    protected override void OnInit()
-    {
-        Store.RegisterReducer<DamageAction>((state, action) =>
-            state with { Health = Math.Max(0, state.Health - action.Amount) });
-    }
-}
-
-public sealed record PlayerState(int Health, string Name);
-public sealed record DamageAction(int Amount);
-```
-
-### 定义可绑定属性
-
-```csharp
-public class PlayerModel : AbstractModel
-{
-    // 可读写属性
-    public BindableProperty<string> Name { get; } = new("Player");
-    public BindableProperty<int> Level { get; } = new(1);
     public BindableProperty<int> Health { get; } = new(100);
-    public BindableProperty<int> MaxHealth { get; } = new(100);
-    public BindableProperty<Vector3> Position { get; } = new(Vector3.Zero);
-    
-    // 只读属性（外部只能读取和监听）
+
     public IReadonlyBindableProperty<int> ReadonlyHealth => Health;
-    
-    protected override void OnInit()
+
+    public void Damage(int amount)
     {
-        // 内部监听属性变化
-        Health.Register(hp =>
-        {
-            if (hp <= 0)
-            {
-                this.SendEvent(new PlayerDiedEvent());
-            }
-            else if (hp < MaxHealth.Value * 0.3f)
-            {
-                this.SendEvent(new LowHealthWarningEvent());
-            }
-        });
-        
-        // 监听等级变化
-        Level.Register(newLevel =>
-        {
-            this.SendEvent(new PlayerLevelUpEvent { NewLevel = newLevel });
-        });
-    }
-    
-    // 业务方法
-    public void TakeDamage(int damage)
-    {
-        Health.Value = Math.Max(0, Health.Value - damage);
-    }
-    
-    public void Heal(int amount)
-    {
-        Health.Value = Math.Min(MaxHealth.Value, Health.Value + amount);
-    }
-    
-    public float GetHealthPercentage()
-    {
-        return (float)Health.Value / MaxHealth.Value;
+        Health.Value = Math.Max(0, Health.Value - amount);
     }
 }
 ```
 
-## 在 Controller 中监听
-
-### UI 数据绑定
+监听方式：
 
 ```csharp
-using GFramework.Core.Abstractions.Controller;
-using GFramework.Core.SourceGenerators.Abstractions.Rule;
-
-[ContextAware]
-public partial class PlayerUI : Control, IController
+var unRegister = playerModel.ReadonlyHealth.RegisterWithInitValue(health =>
 {
-    [Export] private Label _healthLabel;
-    [Export] private Label _nameLabel;
-    [Export] private ProgressBar _healthBar;
-
-    private IUnRegisterList _unregisterList = new UnRegisterList();
-
-    public override void _Ready()
-    {
-        var playerModel = this.GetModel<PlayerModel>();
-
-        // 绑定生命值到UI（立即显示当前值）
-        playerModel.Health
-            .RegisterWithInitValue(health =>
-            {
-                _healthLabel.Text = $"HP: {health}/{playerModel.MaxHealth.Value}";
-                _healthBar.Value = (float)health / playerModel.MaxHealth.Value * 100;
-            })
-            .AddToUnregisterList(_unregisterList);
-
-        // 绑定最大生命值
-        playerModel.MaxHealth
-            .RegisterWithInitValue(maxHealth =>
-            {
-                _healthBar.MaxValue = maxHealth;
-            })
-            .AddToUnregisterList(_unregisterList);
-
-        // 绑定名称
-        playerModel.Name
-            .RegisterWithInitValue(name =>
-            {
-                _nameLabel.Text = name;
-            })
-            .AddToUnregisterList(_unregisterList);
-
-        // 绑定位置（仅用于调试显示）
-        playerModel.Position
-            .RegisterWithInitValue(pos =>
-            {
-                // 仅在调试模式下显示
-                #if DEBUG
-                Console.WriteLine($"Player position: {pos}");
-                #endif
-            })
-            .AddToUnregisterList(_unregisterList);
-    }
-
-    public override void _ExitTree()
-    {
-        _unregisterList.UnRegisterAll();
-    }
-}
+    Console.WriteLine($"Current HP: {health}");
+});
 ```
 
-## 常见使用模式
+## 当前公开语义
 
-### 1. 双向绑定
+- `Value`
+  - 读写当前值；只有值被判定为“真的变化”时才会触发回调
+- `Register(...)`
+  - 订阅后续变化，不会立即回放当前值
+- `RegisterWithInitValue(...)`
+  - 先回放当前值，再继续订阅
+- `SetValueWithoutEvent(...)`
+  - 更新值但不触发通知
+- `UnRegister(...)`
+  - 显式移除某个处理器
+- `WithComparer(...)`
+  - 改写值变化判定逻辑
 
-```c#
-// Model
-public class SettingsModel : AbstractModel
-{
-    public BindableProperty<float> MasterVolume { get; } = new(1.0f);
-    protected override void OnInit() { }
-}
+## 一个需要注意的兼容点
 
-// UI Controller
-[ContextAware]
-public partial class VolumeSlider : HSlider, IController
-{
-    private BindableProperty<float> _volumeProperty;
+`BindableProperty<T>.Comparer` 是按闭合泛型 `T` 共享的静态比较器，`WithComparer(...)` 本质上会改写这一共享
+比较器。也就是说，多个 `BindableProperty<int>` 实例会观察到同一比较规则；只有当你确定整个 `T` 族都要共享同一
+判等语义时，再去改它。
 
-    public override void _Ready()
-    {
-        _volumeProperty = this.GetModel<SettingsModel>().MasterVolume;
+## 什么时候继续用 Property
 
-        // Model -> UI
-        _volumeProperty.RegisterWithInitValue(vol => Value = vol)
-            .UnRegisterWhenNodeExitTree(this);
+下面这些场景仍然优先使用 `BindableProperty<T>`：
 
-        // UI -> Model
-        ValueChanged += newValue => _volumeProperty.Value = (float)newValue;
-    }
-}
-```
+- 单个字段变化就能驱动 UI
+- 状态范围局限在单个 Model 或单个页面
+- 不需要统一的 action / reducer 写入口
+- 不需要撤销/重做、历史快照或中间件
 
-### 2. 计算属性
+## 什么时候该切到 Store
 
-```c#
-public class PlayerModel : AbstractModel
-{
-    public BindableProperty<int> Health { get; } = new(100);
-    public BindableProperty<int> MaxHealth { get; } = new(100);
-    public BindableProperty<float> HealthPercent { get; } = new(1.0f);
-    
-    protected override void OnInit()
-    {
-        // 自动计算百分比
-        Action updatePercent = () =>
-        {
-            HealthPercent.Value = (float)Health.Value / MaxHealth.Value;
-        };
-        
-        Health.Register(_ => updatePercent());
-        MaxHealth.Register(_ => updatePercent());
-        
-        updatePercent();  // 初始计算
-    }
-}
-```
+如果状态已经演化为下面这些形态，更适合用 `Store<TState>`：
 
-### 3. 属性验证
+- 多个字段必须作为一个原子状态一起演进
+- 多个模块共享同一聚合状态
+- 需要 reducer / middleware / 历史回放
+- 需要从整棵状态树中复用局部选择逻辑
 
-```c#
-public class PlayerModel : AbstractModel
-{
-    private BindableProperty<int> _health = new(100);
-    
-    public BindableProperty<int> Health
-    {
-        get => _health;
-        set
-        {
-            // 限制范围
-            var clampedValue = Math.Clamp(value.Value, 0, MaxHealth.Value);
-            _health.Value = clampedValue;
-        }
-    }
-    
-    public BindableProperty<int> MaxHealth { get; } = new(100);
-    
-    protected override void OnInit() { }
-}
-```
+迁移时不必一次性抛弃旧绑定风格。当前已经提供：
 
-### 4. 条件监听
+- `store.Select(...)`
+- `store.ToBindableProperty(...)`
 
-```c#
-using GFramework.Core.Abstractions.Controller;
-using GFramework.Core.SourceGenerators.Abstractions.Rule;
-
-[ContextAware]
-public partial class CombatController : Node, IController
-{
-    public override void _Ready()
-    {
-        var playerModel = this.GetModel<PlayerModel>();
-
-        // 只在生命值低于30%时显示警告
-        playerModel.Health.Register(hp =>
-        {
-            if (hp < playerModel.MaxHealth.Value * 0.3f)
-            {
-                ShowLowHealthWarning();
-            }
-            else
-            {
-                HideLowHealthWarning();
-            }
-        }).UnRegisterWhenNodeExitTree(this);
-    }
-}
-```
-
-## 性能优化
-
-### 1. 避免频繁触发
-
-```c#
-// 使用 SetValueWithoutEvent 批量修改
-public void LoadPlayerData(SaveData data)
-{
-    // 临时关闭事件
-    Health.SetValueWithoutEvent(data.Health);
-    Mana.SetValueWithoutEvent(data.Mana);
-    Gold.SetValueWithoutEvent(data.Gold);
-    
-    // 最后统一触发一次更新事件
-    this.SendEvent(new PlayerDataLoadedEvent());
-}
-```
-
-### 2. 自定义比较器
-
-```c#
-// 避免浮点数精度问题导致的频繁触发
-var position = new BindableProperty<Vector3>()
-    .WithComparer((a, b) => a.DistanceTo(b) < 0.001f);
-```
-
-## 实现原理
-
-### 值变化检测
-
-```c#
-// 使用 EqualityComparer<T>.Default 进行比较
-if (!EqualityComparer<T>.Default.Equals(value, MValue))
-{
-    MValue = value;
-    _mOnValueChanged?.Invoke(value);
-}
-```
-
-### 事件触发机制
-
-```c#
-// 当值变化时触发所有注册的回调
-_mOnValueChanged?.Invoke(value);
-```
-
-## 最佳实践
-
-1. **在 Model 中定义属性** - BindableProperty 主要用于 Model 层
-2. **使用只读接口暴露** - 防止外部随意修改
-3. **及时注销监听** - 使用 UnRegisterList 或 UnRegisterWhenNodeExitTree
-4. **使用 RegisterWithInitValue** - UI 绑定时立即获取初始值
-5. **避免循环依赖** - 属性监听器中修改其他属性要小心
-6. **使用自定义比较器** - 对于浮点数等需要精度控制的属性
-7. **复杂聚合状态使用 Store** - 当多个字段必须统一演进时，使用 Store 管理聚合状态更清晰
-
-## 相关包
-
-- [`model`](./model.md) - Model 中大量使用 BindableProperty
-- [`events`](./events.md) - BindableProperty 基于事件系统实现
-- [`state-management`](./state-management) - 复杂状态树的集中式管理方案
-- [`extensions`](./extensions.md) - 提供便捷的注销扩展方法
-
----
-
-**许可证**: Apache 2.0
+这意味着你可以先把写路径统一到 `Store<TState>`，再渐进迁移现有 UI 或 Controller 的读取方式。

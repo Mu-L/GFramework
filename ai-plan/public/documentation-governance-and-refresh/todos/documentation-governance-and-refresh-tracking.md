@@ -7,21 +7,19 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-004`
+- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-005`
 - 当前阶段：`Phase 3`
 - 当前焦点：
-  - 已完成 `docs/zh-CN/core/architecture.md`、`context.md`、`lifecycle.md`、`command.md`、`query.md` 与
-    `cqrs.md` 的专题页重写
-  - `core` 关键专题页已改回当前 `Architecture`、`ArchitectureContext`、旧 Command/Query 兼容层与新 CQRS
-    runtime 的真实入口语义
-  - 下一轮需要继续推进 `docs/zh-CN/core/*` 余下专题页，以及 `docs/zh-CN/game/*`、
-    `docs/zh-CN/source-generators/*` 的专题页核对
+  - 已完成 `docs/zh-CN/core/events.md`、`property.md` 与 `logging.md` 的专题页重写
+  - 已按源码与测试复核 `docs/zh-CN/core/state-management.md`、`coroutine.md`，当前内容与实现基本一致，无需再做
+    机械改写
+  - 下一轮需要把重心转到 `docs/zh-CN/game/*` 与 `docs/zh-CN/source-generators/*` 的专题页核对
 
 ## 当前状态摘要
 
 - 文档治理规则已收口到仓库规范，README、站点入口与采用链路不再依赖旧文档自证
-- 高优先级模块入口与 `core` 关键专题页已回到可作为默认导航入口的状态
-- 当前主题仍是 active topic，因为 `core` 其余专题页及 `game`、`source-generators` 栏目下仍可能包含与实现漂移的旧内容
+- 高优先级模块入口与 `core` 关键专题页已回到可作为默认导航入口的状态，本轮计划中的 `core` 剩余高风险页面已完成收口
+- 当前主题仍是 active topic，因为 `game` 与 `source-generators` 栏目下仍可能包含与实现漂移的旧内容
 
 ## 当前活跃事实
 
@@ -36,11 +34,15 @@
 - `documentation-governance-and-refresh` active trace 已把重复的 `### 下一步` 标题改成带恢复点标识的唯一标题，消除
   `MD024/no-duplicate-heading` 告警
 - `gframework-pr-review` 脚本已修复“空 `APPROVED` review 覆盖非空 CodeRabbit review body”的解析路径，当前分支可重新提取 Nitpick comments
+- `docs/zh-CN/core/events.md`、`property.md` 与 `logging.md` 已改成“当前角色、最常用入口、边界和迁移建议”的结构，
+  不再复刻旧版大而全 API 列表
+- `docs/zh-CN/core/property.md` 已明确记录 `BindableProperty<T>.Comparer` 的闭合泛型级共享语义，避免文档继续误导读者把
+  `WithComparer(...)` 当成实例级配置
+- `docs/zh-CN/core/state-management.md` 与 `coroutine.md` 已按当前 runtime / 测试重新核对，当前内容可继续保留
 
 ## 当前风险
 
-- 旧专题页示例失真风险：`docs/zh-CN/core/*`、`game/*` 与 `source-generators/*` 中仍可能保留看似合理但与
-  真实实现不一致的示例
+- 旧专题页示例失真风险：`docs/zh-CN/game/*` 与 `source-generators/*` 中仍可能保留看似合理但与真实实现不一致的示例
   - 缓解措施：继续按源码、测试、`*.csproj` 与 `ai-libs/` 下已验证参考实现核对，不把旧文档当事实来源
 - 采用路径误导风险：根聚合包与模块边界若再次被写错，会继续误导消费者的包选择
   - 缓解措施：保持“源码与包关系优先”的证据顺序，改动采用说明时同步核对包依赖与生成器 wiring
@@ -64,7 +66,6 @@
 
 ## 下一步
 
-1. 继续核对 `docs/zh-CN/core/*` 余下专题页，优先处理 `events`、`property`、`state-management`、`coroutine`
-   与 `logging`
-2. 再推进 `docs/zh-CN/game/*` 与 `docs/zh-CN/source-generators/*` 的专题页重写，优先处理仍引用旧安装方式或旧 API 的页面
+1. 继续核对 `docs/zh-CN/game/*`，优先处理仍引用旧安装方式、旧状态系统或旧 UI / Scene 接法的页面
+2. 再推进 `docs/zh-CN/source-generators/*`，重点核对生成器 wiring、包关系与最小接入示例
 3. 若 active trace 再积累新的已完成阶段，按恢复点粒度迁入 `archive/traces/`，避免默认启动入口再次膨胀
