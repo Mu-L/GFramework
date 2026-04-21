@@ -7,12 +7,12 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-002`
-- 当前阶段：`Phase 2`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-003`
+- 当前阶段：`Phase 3`
 - 当前焦点：
-  - 已完成 `GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs` 的 `MA0051` 长方法拆分，保持 generated registry、fallback 与缓存语义不变
-  - 已确认 `GFramework.Cqrs` 定向构建恢复为 `0 Warning(s)`，该 warning slice 已不再是当前主题的阻塞项
-  - 下一轮若继续推进，优先从 `GFramework.Core` 剩余的 `MA0051`、`MA0046` 或低风险 `MA0016` 中只选一个切入点
+  - 已完成 `GFramework.Core/Architectures/ArchitectureLifecycle.cs` 的 `MA0051` 长方法拆分，保持阶段推进、日志文本和 late registration 语义不变
+  - 已确认 `GFramework.Core` 定向 `warnings-only` 构建从 `30 Warning(s)` 收敛到 `29 Warning(s)`，`ArchitectureLifecycle` 已不再出现在剩余 `MA0051` 热点中
+  - 下一轮若继续推进，优先从 `PauseStackManager`、`CoroutineScheduler` 或 `Store` 的剩余 `MA0051` 中只选一个切入点
 
 ## 当前状态摘要
 
@@ -26,6 +26,7 @@
 - 当前主题仍是 active topic，因为剩余结构性 warning 是否继续推进尚未决策
 - `RP-001` 的详细实现历史、测试记录和 warning 热点清单已归档到主题内 `archive/`
 - `RP-002` 已在不改公共契约的前提下完成 `CqrsHandlerRegistrar` 结构拆分，并通过定向 build/test 验证
+- `RP-003` 已在不改生命周期契约的前提下完成 `ArchitectureLifecycle` 初始化主流程拆分，并通过定向 build/test 验证
 - 当前工作树分支 `fix/analyzer-warning-reduction-batch` 已在 `ai-plan/public/README.md` 建立 topic 映射
 
 ## 当前风险
@@ -48,11 +49,14 @@
 - `RP-002` 的定向验证结果：
   - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release --no-restore -p:TargetFramework=net8.0 -p:UseSharedCompilation=false -p:RestoreFallbackFolders=`
   - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter FullyQualifiedName~CqrsHandlerRegistrarTests -p:RestoreFallbackFolders=`
+- `RP-003` 的定向验证结果：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders= -nologo -clp:Summary;WarningsOnly`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter FullyQualifiedName~ArchitectureLifecycleBehaviorTests -p:RestoreFallbackFolders=`
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
 
 ## 下一步
 
 1. 若要继续该主题，先读 active tracking，再按需展开历史归档中的 warning 热点与验证记录
-2. 优先在 `GFramework.Core/Architectures/ArchitectureLifecycle.cs`、`GFramework.Core/Coroutine/CoroutineScheduler.cs` 与
-   `GFramework.Core/Pause/PauseStackManager.cs` 的 `MA0051` 中只选一个继续，不要在同一轮同时扩多个风险面
+2. 优先在 `GFramework.Core/Pause/PauseStackManager.cs`、`GFramework.Core/Coroutine/CoroutineScheduler.cs` 与
+   `GFramework.Core/StateManagement/Store.cs` 的 `MA0051` 中只选一个继续，不要在同一轮同时扩多个风险面
 3. 若本主题确认暂缓，可保持当前归档状态，不需要再恢复 `local-plan/`

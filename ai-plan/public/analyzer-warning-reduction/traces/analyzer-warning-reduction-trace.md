@@ -2,6 +2,26 @@
 
 ## 2026-04-21
 
+### 阶段：Architecture 生命周期 `MA0051` 收口（RP-003）
+
+- 依据 active tracking 中“继续只选一个 `GFramework.Core` 结构性切入点”的约束，选定
+  `GFramework.Core/Architectures/ArchitectureLifecycle.cs`，因为文件体量适中且已有
+  `ArchitectureLifecycleBehaviorTests` 覆盖阶段流转、销毁顺序和 late registration 行为
+- 先用 `warnings-only` 定向构建确认 `ArchitectureLifecycle.InitializeAllComponentsAsync` 仍在报
+  `MA0051`，随后把主流程拆成：
+  - `CreateInitializationPlan`
+  - `InitializePhaseComponentsAsync`
+  - `MarkInitializationCompleted`
+- 保持原有阶段顺序 `Before* -> After*`、批量日志文本和异步初始化策略不变，只压缩主方法长度
+- 修正新增 `InitializationPlan` 记录类型的 XML `<param>` 名称大小写，避免引入文档告警
+- 验证通过：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders= -nologo -clp:Summary;WarningsOnly`
+    - 结果：`29 Warning(s)`，`0 Error(s)`；`ArchitectureLifecycle.cs` 已不再出现在 warning 列表
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter FullyQualifiedName~ArchitectureLifecycleBehaviorTests -p:RestoreFallbackFolders=`
+    - 结果：`6 Passed`，`0 Failed`
+
+## 2026-04-21
+
 ### 阶段：CQRS `MA0051` 收口（RP-002）
 
 - 依据 active tracking 中“先只选一个结构性切入点”的约束，选定 `GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs`

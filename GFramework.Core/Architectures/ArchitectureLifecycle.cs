@@ -145,69 +145,34 @@ internal sealed class ArchitectureLifecycle(
     {
         logger.Info($"Initializing {_pendingInitializableList.Count} components");
 
-        // 按类型分组初始化（保持原有的阶段划分）
-        var utilities = _pendingInitializableList.OfType<IContextUtility>().ToList();
-        var models = _pendingInitializableList.OfType<IModel>().ToList();
-        var systems = _pendingInitializableList.OfType<ISystem>().ToList();
+        var initializationPlan = CreateInitializationPlan();
 
-        // 1. 工具初始化阶段
-        EnterPhase(ArchitecturePhase.BeforeUtilityInit);
+        await InitializePhaseComponentsAsync(
+                initializationPlan.Utilities,
+                ArchitecturePhase.BeforeUtilityInit,
+                ArchitecturePhase.AfterUtilityInit,
+                "context utilities",
+                "utility",
+                asyncMode)
+            .ConfigureAwait(false);
+        await InitializePhaseComponentsAsync(
+                initializationPlan.Models,
+                ArchitecturePhase.BeforeModelInit,
+                ArchitecturePhase.AfterModelInit,
+                "models",
+                "model",
+                asyncMode)
+            .ConfigureAwait(false);
+        await InitializePhaseComponentsAsync(
+                initializationPlan.Systems,
+                ArchitecturePhase.BeforeSystemInit,
+                ArchitecturePhase.AfterSystemInit,
+                "systems",
+                "system",
+                asyncMode)
+            .ConfigureAwait(false);
 
-        if (utilities.Count != 0)
-        {
-            logger.Info($"Initializing {utilities.Count} context utilities");
-
-            foreach (var utility in utilities)
-            {
-                logger.Debug($"Initializing utility: {utility.GetType().Name}");
-                await InitializeComponentAsync(utility, asyncMode).ConfigureAwait(false);
-            }
-
-            logger.Info("All context utilities initialized");
-        }
-
-        EnterPhase(ArchitecturePhase.AfterUtilityInit);
-
-        // 2. 模型初始化阶段
-        EnterPhase(ArchitecturePhase.BeforeModelInit);
-
-        if (models.Count != 0)
-        {
-            logger.Info($"Initializing {models.Count} models");
-
-            foreach (var model in models)
-            {
-                logger.Debug($"Initializing model: {model.GetType().Name}");
-                await InitializeComponentAsync(model, asyncMode).ConfigureAwait(false);
-            }
-
-            logger.Info("All models initialized");
-        }
-
-        EnterPhase(ArchitecturePhase.AfterModelInit);
-
-        // 3. 系统初始化阶段
-        EnterPhase(ArchitecturePhase.BeforeSystemInit);
-
-        if (systems.Count != 0)
-        {
-            logger.Info($"Initializing {systems.Count} systems");
-
-            foreach (var system in systems)
-            {
-                logger.Debug($"Initializing system: {system.GetType().Name}");
-                await InitializeComponentAsync(system, asyncMode).ConfigureAwait(false);
-            }
-
-            logger.Info("All systems initialized");
-        }
-
-        EnterPhase(ArchitecturePhase.AfterSystemInit);
-
-        _pendingInitializableList.Clear();
-        _pendingInitializableSet.Clear();
-        _initialized = true;
-        logger.Info("All components initialized");
+        MarkInitializationCompleted();
     }
 
     /// <summary>
@@ -221,6 +186,67 @@ internal sealed class ArchitectureLifecycle(
             await asyncInit.InitializeAsync().ConfigureAwait(false);
         else
             component.Initialize();
+    }
+
+    /// <summary>
+    ///     按架构既有阶段语义把待初始化组件拆分为 utility、model 和 system 三个批次。
+    ///     这样可以在压缩主流程复杂度的同时，继续复用注册顺序和接口类型决定的初始化分层。
+    /// </summary>
+    /// <returns>当前待初始化组件的阶段化批次。</returns>
+    private InitializationPlan CreateInitializationPlan()
+    {
+        return new InitializationPlan(
+            _pendingInitializableList.OfType<IContextUtility>().ToList(),
+            _pendingInitializableList.OfType<IModel>().ToList(),
+            _pendingInitializableList.OfType<ISystem>().ToList());
+    }
+
+    /// <summary>
+    ///     执行单个生命周期阶段的批量初始化，并统一维护阶段切换、日志输出和异步初始化策略。
+    /// </summary>
+    /// <typeparam name="TComponent">当前阶段要初始化的组件类型。</typeparam>
+    /// <param name="components">当前阶段的组件列表。</param>
+    /// <param name="beforePhase">阶段开始前要进入的生命周期状态。</param>
+    /// <param name="afterPhase">阶段结束后要进入的生命周期状态。</param>
+    /// <param name="componentGroupName">用于批量日志的组件组名称。</param>
+    /// <param name="componentLogName">用于单个组件日志的组件角色名称。</param>
+    /// <param name="asyncMode">是否允许优先走异步初始化契约。</param>
+    private async Task InitializePhaseComponentsAsync<TComponent>(
+        IReadOnlyList<TComponent> components,
+        ArchitecturePhase beforePhase,
+        ArchitecturePhase afterPhase,
+        string componentGroupName,
+        string componentLogName,
+        bool asyncMode)
+        where TComponent : class, IInitializable
+    {
+        EnterPhase(beforePhase);
+
+        if (components.Count != 0)
+        {
+            logger.Info($"Initializing {components.Count} {componentGroupName}");
+
+            foreach (var component in components)
+            {
+                logger.Debug($"Initializing {componentLogName}: {component.GetType().Name}");
+                await InitializeComponentAsync(component, asyncMode).ConfigureAwait(false);
+            }
+
+            logger.Info($"All {componentGroupName} initialized");
+        }
+
+        EnterPhase(afterPhase);
+    }
+
+    /// <summary>
+    ///     在所有阶段初始化完成后清理挂起列表，并把生命周期状态切换到“已初始化”。
+    /// </summary>
+    private void MarkInitializationCompleted()
+    {
+        _pendingInitializableList.Clear();
+        _pendingInitializableSet.Clear();
+        _initialized = true;
+        logger.Info("All components initialized");
     }
 
     /// <summary>
@@ -257,6 +283,17 @@ internal sealed class ArchitectureLifecycle(
     }
 
     #endregion
+
+    /// <summary>
+    ///     保存一次完整初始化流程所需的三个阶段批次。
+    /// </summary>
+    /// <param name="Utilities">Utility 初始化批次。</param>
+    /// <param name="Models">Model 初始化批次。</param>
+    /// <param name="Systems">System 初始化批次。</param>
+    private readonly record struct InitializationPlan(
+        IReadOnlyList<IContextUtility> Utilities,
+        IReadOnlyList<IModel> Models,
+        IReadOnlyList<ISystem> Systems);
 
     #region Ready State
 
