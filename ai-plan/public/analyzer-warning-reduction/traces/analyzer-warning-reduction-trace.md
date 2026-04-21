@@ -1,5 +1,104 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-21 — RP-015
+
+### 阶段：PR #267 failed-test follow-up 收口（RP-015）
+
+- 触发背景：
+  - 用户指出“测试好像挂了”，按 `$gframework-pr-review` 重新抓取当前分支 PR #267 的 review / checks / CTRF 评论
+  - PR 评论里同时存在一次 `2143 passed / 0 failed` 与一次 `1 failed` 的 CTRF 报告；失败用例为
+    `AsyncLogAppenderTests.ILogAppender_Flush_Should_Raise_OnFlushCompleted_Only_Once`
+- 复核过程：
+  - 先跑定向单测时该用例可以单独通过，因此继续核对 PR head commit 与本地整包测试，避免把旧评论误判成当前状态
+  - 在 `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers`
+    下成功复现相同失败，确认问题仍存在于当前代码，而不是单纯的 PR 评论残留
+  - 同时发现当前沙箱内如果用 shell 循环反复启动 `dotnet test`，会触发 `MSBuild` named pipe `Permission denied`
+    的环境噪音；后续验证改为单次命令并显式加 `--disable-build-servers`
+- 根因结论：
+  - `AsyncLogAppender.Flush()` 只依赖后台消费循环在处理完某个条目后检查 `_flushRequested`
+  - 当调用方执行 `Flush()` 前，后台线程已经把最后一个条目消费完并离开检查点时，`Flush()` 会一直等到默认超时，
+    最终通过 `OnFlushCompleted` 发出一次 `Success=false` 的错误完成通知
+- 实施修复：
+  - 为 `AsyncLogAppender` 增加“当前是否仍有条目在途处理”的状态跟踪
+  - 抽出 `TrySignalFlushCompletion()`，让 `Flush()` 在请求发出后先做一次即时完成判定；后台循环在每次处理结束后也复用
+    这条判定路径
+  - 在 `AsyncLogAppenderTests` 中新增 `Flush_WhenEntriesAlreadyProcessed_Should_Still_ReportSuccess`，稳定覆盖
+    “调用 Flush 前队列已被后台线程清空”的场景
+- 验证结果：
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers --filter "FullyQualifiedName~AsyncLogAppenderTests"`
+    - 结果：`15 Passed`，`0 Failed`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --disable-build-servers`
+    - 结果：`1607 Passed`，`0 Failed`
+- 当前结论：
+  - PR #267 的 failed-test 信号不是纯粹的历史评论噪音，而是当前实现里仍存在的时序竞态
+  - 修复后该竞态已被稳定回归测试覆盖，当前 `GFramework.Core.Tests` 整包通过
+- 下一步建议：
+  - 若继续 analyzer warning reduction 主题，恢复到 `MA0016` / `MA0002` 低风险批次
+
+## 2026-04-21 — RP-014
+
+### 阶段：PR #267 review follow-up 收口（RP-014）
+
+- 使用 `gframework-pr-review` 抓取当前分支 PR #267 的 latest head review threads、outside-diff comment、nitpick comment、
+  MegaLinter 摘要与测试报告，并确认本轮除了 6 条 open thread 之外，还存在 1 条 outside-diff 与 1 条 nitpick 需要一并复核
+- 本地复核后确认仍成立的项：
+  - `AsyncLogAppender` 的显式接口实现 `ILogAppender.Flush()` 会在调用 `Flush()` 后再次手动触发 `OnFlushCompleted`，
+    导致接口路径重复通知
+  - `Architecture.PhaseChanged`、`CoroutineExceptionEventArgs` 与 `ArchitecturePhaseCoordinator.EnterPhase` 的 XML/注释契约仍未完全同步
+  - `CoroutineSchedulerTests` 的异常事件测试缺少测试级超时
+  - `docs/zh-CN/core/architecture.md` 与 `docs/zh-CN/core/lifecycle.md` 仍缺少明确的 `PhaseChanged` 迁移说明
+  - `ai-plan` active tracking 中 `RP-013` 的 `9 Warning(s)` 需要明确是相对 `RP-009` / `RP-011` 的 warnings-only 基线收敛
+- 实施最小修复：
+  - 删除 `ILogAppender.Flush()` 中重复的完成事件触发，只保留 `Flush(TimeSpan?)` 内的单一通知源
+  - 为接口调用路径补充单次完成通知回归测试，并为协程异常事件测试增加 `WaitAsync(TimeSpan.FromSeconds(3))`
+  - 补齐 `Architecture.PhaseChanged`、`CoroutineExceptionEventArgs` 与 `ArchitecturePhaseCoordinator.EnterPhase` 的契约文档
+  - 在 `docs/zh-CN/core/architecture.md` 与 `docs/zh-CN/core/lifecycle.md` 中加入 `phase => ...` 迁移到 `(_, args) => ...` 的说明
+  - 更新 `ai-plan/public/analyzer-warning-reduction/todos/analyzer-warning-reduction-tracking.md` 的恢复点、基线描述与验证结果
+- 验证结果：
+  - `dotnet restore GFramework.Core.Tests/GFramework.Core.Tests.csproj -p:RestoreFallbackFolders="" -nologo`
+    - 结果：通过；host Windows `dotnet` 首次验证前补齐了缺失的 `Meziantou.Analyzer 3.0.48`
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release --no-restore -p:TargetFramework=net8.0 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`9 Warning(s)`，`0 Error(s)`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~CoroutineSchedulerTests.Scheduler_Should_Raise_OnCoroutineException_With_EventArgs|FullyQualifiedName~AsyncLogAppenderTests.Flush_Should_Raise_OnFlushCompleted_With_Sender_And_Result|FullyQualifiedName~AsyncLogAppenderTests.ILogAppender_Flush_Should_Raise_OnFlushCompleted_Only_Once|FullyQualifiedName~ArchitectureLifecycleBehaviorTests.InitializeAsync_Should_Raise_PhaseChanged_With_Sender_And_EventArgs" -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`4 Passed`，`0 Failed`
+- 当前结论：
+  - PR #267 里当前仍成立的 CodeRabbit 高信号项已在本地收口
+  - 修复内容没有改变 `EventHandler<TEventArgs>` 迁移方向，只是补齐行为、文档与恢复信息
+- 下一步建议：
+  - 恢复到 `MA0016` / `MA0002` 主批次，默认先看 `LoggingConfiguration`、`FilterConfiguration` 与 `CollectionExtensions`
+
+## 2026-04-21 — RP-013
+
+### 阶段：`MA0046` 事件签名批次收口（RP-013）
+
+- 依据 `RP-012` 的下一步建议，本轮恢复到 `GFramework.Core` 的 `MA0046` 主批次，而不是继续停留在 PR review workflow 优化
+- 本地 warnings-only 基线确认当前 `GFramework.Core` `net8.0` 仍有 `6` 个 `MA0046`：
+  - `Architecture.cs`
+  - `ArchitectureLifecycle.cs`
+  - `ArchitecturePhaseCoordinator.cs`
+  - `AsyncLogAppender.cs`
+  - `CoroutineScheduler.cs` 两处事件
+- 方案选择：
+  - 不再保留 `Action<...>` 事件签名，统一改为标准 `EventHandler<TEventArgs>`
+  - 为 `Architecture`、`AsyncLogAppender` 新增放在 `GFramework.Core.Abstractions` 的事件参数类型
+  - 为 `CoroutineScheduler` 新增放在 `GFramework.Core` 的事件参数类型，因为 `CoroutineHandle` 定义在 runtime 层，不适合反向放入 Abstractions
+  - `Architecture` 相关事件采用 `Coordinator -> Lifecycle -> Architecture` relay，而不是直接透传底层事件，确保公开事件的 sender 始终是实际发布者，并避免引入新的 `MA0091`
+- 同步适配：
+  - 更新 `GFramework.Godot/Coroutine/Timing.cs` 的 `OnCoroutineFinished` 订阅签名
+  - 更新 `ArchitectureLifecycleBehaviorTests`、`CoroutineSchedulerTests`、`AsyncLogAppenderTests` 以覆盖 sender / event args 契约
+  - 更新 `docs/zh-CN/core/architecture.md` 与 `docs/zh-CN/core/lifecycle.md` 的 `PhaseChanged` 示例
+- 验证结果：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release --no-restore -p:TargetFramework=net8.0 -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`9 Warning(s)`，`0 Error(s)`；当前 `GFramework.Core` `net8.0` 输出中已无 `MA0046`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureLifecycleBehaviorTests|FullyQualifiedName~CoroutineSchedulerTests|FullyQualifiedName~AsyncLogAppenderTests" -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`50 Passed`，`0 Failed`
+  - `dotnet build GFramework.Godot/GFramework.Godot.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -nologo`
+    - 结果：失败；当前 worktree 的 `project.assets.json` 仍引用 Windows fallback package folder，尚未完成 Godot 独立编译验证
+- 当前结论：
+  - `MA0046` 已从 active 批次中移除
+  - 剩余 `GFramework.Core` `net8.0` warning 分布更新为：`MA0016=5`、`MA0002=2`、`MA0015=1`、`MA0077=1`
+  - 若继续本主题，下一步默认转入 `MA0016` 批次；若继续触达 Godot，再先修复该项目 restore 资产
+
 ## 2026-04-21 — RP-012
 
 ### 阶段：PR review workflow 输出收窄增强（RP-012）

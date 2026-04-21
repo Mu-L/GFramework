@@ -23,6 +23,7 @@ public sealed class AsyncLogAppender : ILogAppender
     private readonly Action<Exception>? _processingErrorHandler;
     private readonly Task _processingTask;
     private bool _disposed;
+    private int _isProcessingEntry;
     private volatile bool _flushRequested;
 
     /// <summary>
@@ -117,14 +118,14 @@ public sealed class AsyncLogAppender : ILogAppender
     /// </summary>
     void ILogAppender.Flush()
     {
-        var success = Flush();
-        OnFlushCompleted?.Invoke(success);
+        Flush();
     }
 
     /// <summary>
-    ///     Flush 操作完成事件，参数指示是否成功（true）或超时（false）
+    ///     Flush 操作完成事件。
+    ///     事件数据通过 <see cref="AsyncLogFlushCompletedEventArgs" /> 提供。
     /// </summary>
-    public event Action<bool>? OnFlushCompleted;
+    public event EventHandler<AsyncLogFlushCompletedEventArgs>? OnFlushCompleted;
 
     /// <summary>
     ///     刷新缓冲区，等待所有日志写入完成
@@ -140,12 +141,13 @@ public sealed class AsyncLogAppender : ILogAppender
 
         // 请求刷新
         _flushRequested = true;
+        TrySignalFlushCompletion();
 
         try
         {
             // 等待处理任务发出完成信号
             var success = _flushSemaphore.Wait(actualTimeout);
-            OnFlushCompleted?.Invoke(success);
+            OnFlushCompleted?.Invoke(this, new AsyncLogFlushCompletedEventArgs(success));
             return success;
         }
         finally
@@ -166,6 +168,7 @@ public sealed class AsyncLogAppender : ILogAppender
             {
                 try
                 {
+                    Volatile.Write(ref _isProcessingEntry, 1);
                     _innerAppender.Append(entry);
                 }
                 catch (Exception ex)
@@ -173,18 +176,12 @@ public sealed class AsyncLogAppender : ILogAppender
                     // 后台消费失败只通过显式回调暴露，避免测试宿主将 stderr 误判为测试告警。
                     ReportProcessingError(ex);
                 }
-
-                // 检查是否有刷新请求且通道已空
-                if (_flushRequested && _channel.Reader.Count == 0)
+                finally
                 {
-                    _innerAppender.Flush();
-
-                    // 发出完成信号
-                    if (_flushSemaphore.CurrentCount == 0)
-                    {
-                        _flushSemaphore.Release();
-                    }
+                    Volatile.Write(ref _isProcessingEntry, 0);
                 }
+
+                TrySignalFlushCompletion();
             }
         }
         catch (OperationCanceledException)
@@ -206,6 +203,29 @@ public sealed class AsyncLogAppender : ILogAppender
             {
                 ReportProcessingError(ex);
             }
+        }
+    }
+
+    /// <summary>
+    ///     在后台消费者已经处理完当前条目且队列为空时完成挂起的 Flush 请求。
+    /// </summary>
+    private void TrySignalFlushCompletion()
+    {
+        if (!_flushRequested)
+        {
+            return;
+        }
+
+        if (Volatile.Read(ref _isProcessingEntry) != 0 || _channel.Reader.Count != 0)
+        {
+            return;
+        }
+
+        _innerAppender.Flush();
+
+        if (_flushSemaphore.CurrentCount == 0)
+        {
+            _flushSemaphore.Release();
         }
     }
 

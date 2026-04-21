@@ -78,6 +78,73 @@ public class AsyncLogAppenderTests
     }
 
     [Test]
+    public void Flush_Should_Raise_OnFlushCompleted_With_Sender_And_Result()
+    {
+        var innerAppender = new TestAppender();
+        using var asyncAppender = new AsyncLogAppender(innerAppender, bufferSize: 10);
+        object? observedSender = null;
+        AsyncLogFlushCompletedEventArgs? observedArgs = null;
+
+        asyncAppender.Append(new LogEntry(DateTime.UtcNow, LogLevel.Info, "TestLogger", "Flush check", null, null));
+
+        asyncAppender.OnFlushCompleted += (sender, eventArgs) =>
+        {
+            observedSender = sender;
+            observedArgs = eventArgs;
+        };
+
+        var result = asyncAppender.Flush(TimeSpan.FromSeconds(1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(observedSender, Is.SameAs(asyncAppender));
+            Assert.That(observedArgs, Is.Not.Null);
+            Assert.That(observedArgs!.Success, Is.EqualTo(result));
+        });
+    }
+
+    [Test]
+    public void ILogAppender_Flush_Should_Raise_OnFlushCompleted_Only_Once()
+    {
+        var innerAppender = new TestAppender();
+        using var asyncAppender = new AsyncLogAppender(innerAppender, bufferSize: 10);
+        ILogAppender logAppender = asyncAppender;
+        var observedResults = new List<bool>();
+
+        asyncAppender.Append(new LogEntry(DateTime.UtcNow, LogLevel.Info, "TestLogger", "Interface flush check", null, null));
+        asyncAppender.OnFlushCompleted += (_, eventArgs) => observedResults.Add(eventArgs.Success);
+
+        logAppender.Flush();
+
+        Assert.That(observedResults, Has.Count.EqualTo(1));
+        Assert.That(observedResults, Has.All.True);
+    }
+
+    [Test]
+    public void Flush_WhenEntriesAlreadyProcessed_Should_Still_ReportSuccess()
+    {
+        using var appendCompleted = new ManualResetEventSlim();
+        var innerAppender = new SignalingAppender(appendCompleted);
+        using var asyncAppender = new AsyncLogAppender(innerAppender, bufferSize: 10);
+        var observedResults = new List<bool>();
+
+        asyncAppender.Append(new LogEntry(DateTime.UtcNow, LogLevel.Info, "TestLogger", "Already processed", null, null));
+        Assert.That(appendCompleted.Wait(TimeSpan.FromSeconds(1)), Is.True);
+
+        asyncAppender.OnFlushCompleted += (_, eventArgs) => observedResults.Add(eventArgs.Success);
+
+        var result = asyncAppender.Flush(TimeSpan.FromSeconds(1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(observedResults, Has.Count.EqualTo(1));
+            Assert.That(observedResults, Has.All.True);
+            Assert.That(innerAppender.FlushCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void Dispose_ShouldProcessRemainingEntries()
     {
         var innerAppender = new TestAppender();
@@ -258,6 +325,32 @@ public class AsyncLogAppenderTests
 
         public void Flush()
         {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class SignalingAppender : ILogAppender
+    {
+        private readonly ManualResetEventSlim _appendCompleted;
+
+        public SignalingAppender(ManualResetEventSlim appendCompleted)
+        {
+            _appendCompleted = appendCompleted;
+        }
+
+        public int FlushCount { get; private set; }
+
+        public void Append(LogEntry entry)
+        {
+            _appendCompleted.Set();
+        }
+
+        public void Flush()
+        {
+            FlushCount++;
         }
 
         public void Dispose()
