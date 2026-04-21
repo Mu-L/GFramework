@@ -7,20 +7,21 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-006`
+- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-007`
 - 当前阶段：`Phase 3`
 - 当前焦点：
   - 已完成 `docs/zh-CN/core/events.md`、`property.md` 与 `logging.md` 的专题页重写
   - 已按源码与测试复核 `docs/zh-CN/core/state-management.md`、`coroutine.md`，当前内容与实现基本一致，无需再做
     机械改写
   - 已完成 `docs/zh-CN/game/scene.md` 与 `ui.md` 的专题页重写，当前内容已回到“项目自接 factory/root + router 基类”的真实边界
-  - 下一轮需要把重心转到 `docs/zh-CN/source-generators/*` 的专题页核对
+  - 已完成 `docs/zh-CN/source-generators/context-aware-generator.md` 与 `priority-generator.md` 的专题页重写，当前内容已回到“真实生成成员、推荐 API 与兼容边界”的结构
+  - 下一轮需要把重心转到 Godot 相关生成器页面核对
 
 ## 当前状态摘要
 
 - 文档治理规则已收口到仓库规范，README、站点入口与采用链路不再依赖旧文档自证
 - 高优先级模块入口与 `core` 关键专题页已回到可作为默认导航入口的状态，本轮计划中的 `core` 剩余高风险页面已完成收口
-- 当前主题仍是 active topic，因为 `source-generators` 栏目下仍可能包含与实现漂移的旧内容
+- 当前主题仍是 active topic，因为 `source-generators` 栏目下的 Godot 相关页面仍可能包含与实现漂移的旧内容
 
 ## 当前活跃事实
 
@@ -45,12 +46,17 @@
 - `docs/zh-CN/game/ui.md` 已改成“Page 栈、layer UI、输入动作仲裁、World 阻断与暂停语义”的结构，明确 `Show(...)`
   不适用于 `UiLayer.Page`
 - 本轮重写后再次执行 `cd docs && bun run build` 通过，当前 `game` 栏目入口与专题页改动没有破坏站点构建
+- `docs/zh-CN/source-generators/context-aware-generator.md` 已改成“真实生成成员、provider/实例缓存语义、与 `ContextAwareBase` 的边界、测试接法”的结构，
+  不再用旧版简化生成代码替代当前实现
+- `docs/zh-CN/source-generators/priority-generator.md` 已改成“生成 `IPrioritized`、priority-aware 检索 API、动态优先级边界与诊断”的结构，
+  不再把 `GetAllByPriority<T>()` / `system.Init()` 当作所有场景的默认示例
+- 本轮重写后再次执行 `cd docs && bun run build` 通过，当前 `source-generators` 栏目改动没有破坏站点构建
 
 ## 当前风险
 
 - 旧专题页示例失真风险：`docs/zh-CN/game/*` 与 `source-generators/*` 中仍可能保留看似合理但与真实实现不一致的示例
-  - 缓解措施：`game/scene.md` 与 `ui.md` 已完成收口；继续按源码、测试、`*.csproj` 与 `ai-libs/` 下已验证参考实现核对
-    `source-generators/*`，不把旧文档当事实来源
+  - 缓解措施：`game/scene.md`、`ui.md`、`source-generators/context-aware-generator.md` 与 `priority-generator.md` 已完成收口；
+    继续按源码、测试、`*.csproj` 与 `ai-libs/` 下已验证参考实现核对剩余 Godot 相关页面，不把旧文档当事实来源
 - 采用路径误导风险：根聚合包与模块边界若再次被写错，会继续误导消费者的包选择
   - 缓解措施：保持“源码与包关系优先”的证据顺序，改动采用说明时同步核对包依赖与生成器 wiring
 - Active 入口回膨胀风险：后续若把栏目级重写过程直接追加到 active 文档，会再次拖慢恢复
@@ -73,7 +79,7 @@
 
 ## 下一步
 
-1. 继续核对 `docs/zh-CN/source-generators/*`，优先处理仍引用旧初始化方式、旧聚合包名或过时生成器 wiring 的页面
-2. 重点复核 `priority-generator.md`、`context-aware-generator.md` 与 Godot 相关生成器页面，确认示例仍与当前 runtime /
-   generator 入口一致
+1. 继续核对 Godot 相关生成器页面，优先处理 `godot-project-generator.md`、`get-node-generator.md` 与
+   `bind-node-signal-generator.md`
+2. 重点确认 `project.godot`、`AutoLoad` / `InputActions`、`GetNode` / `BindNodeSignal` 示例仍与当前包关系和生成器入口一致
 3. 若 active trace 再积累新的已完成阶段，按恢复点粒度迁入 `archive/traces/`，避免默认启动入口再次膨胀

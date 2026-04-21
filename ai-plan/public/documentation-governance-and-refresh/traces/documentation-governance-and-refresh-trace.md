@@ -152,3 +152,32 @@
 2. 重点复核 `priority-generator.md`、`context-aware-generator.md` 与 Godot 相关生成器页面，确认示例仍与当前 runtime /
    generator 入口一致
 3. 若 `source-generators` 出现多页连续收口结果，再按恢复点粒度整理 active trace，避免默认入口继续膨胀
+
+### 阶段：Core Source Generator 关键专题页收口（RP-007）
+
+- 依据 `documentation-governance-and-refresh` active tracking 的下一步，优先复核
+  `docs/zh-CN/source-generators/context-aware-generator.md` 与 `priority-generator.md`
+- 对照 `GFramework.Core.SourceGenerators/Rule/ContextAwareGenerator.cs`、`GFramework.Core/Rule/ContextAwareBase.cs`、
+  `GFramework.Core/Extensions/ContextAwareServiceExtensions.cs`、`GFramework.Core.SourceGenerators/Bases/PriorityGenerator.cs`、
+  `GFramework.Core.Abstractions/Architectures/IArchitectureContext.cs` 与相关诊断定义后确认：
+  - `context-aware-generator.md` 仍在展示旧版简化生成代码，没有说明当前实例缓存、类型级共享 provider、同步锁以及
+    `ContextAwareBase` 的不同默认回退路径
+  - `priority-generator.md` 仍把 `[Priority]` 写成“标了就自动改变顺序”的教程式功能说明，并大量使用
+    `GetAllByPriority<T>()`、`system.Init()` 这类不适合作为当前 `IContextAware` 路径默认示例的旧写法
+- 重写 `context-aware-generator.md`，使其回到“最小用法、当前生成成员、provider 与实例缓存语义、与 `ContextAwareBase`
+  和 Context Get 注入的关系、测试边界”的结构
+- 重写 `priority-generator.md`，使其回到“只生成 `IPrioritized`、priority-aware API 在不同层上的入口、动态优先级边界、
+  诊断与约束”的结构
+- 新版两页都明确了：排序效果取决于调用方是否走 priority-aware API；`[ContextAware]` 生成路径与
+  `ContextAwareBase` 不是同一套默认行为
+
+### 验证（RP-007）
+
+- `cd docs && bun run build`
+
+### 下一步（RP-007）
+
+1. 继续核对 Godot 相关生成器页面，优先处理 `godot-project-generator.md`、`get-node-generator.md` 与
+   `bind-node-signal-generator.md`
+2. 重点确认 `project.godot`、`AutoLoad` / `InputActions`、`GetNode` / `BindNodeSignal` 示例仍与当前包关系和生成器入口一致
+3. 若 Godot 页面也出现连续收口结果，再按恢复点粒度整理 active trace，避免默认入口继续膨胀
