@@ -102,6 +102,28 @@
 2. 若 active trace 继续累计多个已完成恢复点，按 `archive/traces/` 粒度归档旧阶段细节
 3. 保持 PR review 跟进时优先验证最新未解决线程、非空 CodeRabbit review body 与 MegaLinter 明确告警
 
-1. 继续处理 `docs/zh-CN/core/events.md`、`property.md`、`state-management.md`、`coroutine.md`、`logging.md`
-2. 保持同样的证据顺序：源码、`*.csproj`、模块 README、`ai-libs/` 参考实现
-3. 完成下一批专题页重写后再次执行 `cd docs && bun run build`
+### 阶段：Core 剩余高风险专题页核对（RP-005）
+
+- 依据 `documentation-governance-and-refresh` active tracking 的恢复点，继续核对
+  `docs/zh-CN/core/events.md`、`property.md`、`state-management.md`、`coroutine.md`、`logging.md`
+- 对照 `GFramework.Core/Events/*`、`Property/*`、`Logging/*`、`StateManagement/*`、`Coroutine/*` 以及对应测试后确认：
+  - `events.md`、`property.md` 与 `logging.md` 仍带有旧版“大而全 API 列表”写法，与当前公开入口和推荐边界不匹配
+  - `state-management.md` 与 `coroutine.md` 已和当前 runtime / 测试语义基本对齐，本轮无需为了统一文风做额外重写
+- 重写 `events.md`，使其回到“上下文入口、`EventBus` / `EnhancedEventBus`、优先级传播、局部事件对象、与 Store / CQRS
+  的边界”的当前结构
+- 重写 `property.md`，使其回到“字段级响应式值、何时继续使用 `BindableProperty<T>`、何时切到 `Store<TState>`”的当前结构，
+  并补充 `BindableProperty<T>.Comparer` 按闭合泛型共享的兼容注意点
+- 重写 `logging.md`，使其回到“`LoggerFactoryResolver` 默认行为、`ArchitectureConfiguration` 日志 provider 配置、
+  `IStructuredLogger` / `LogContext`、provider 替换边界”的当前结构
+- 执行 `cd docs && bun run build` 通过，说明本轮 `core` 专题页收口没有破坏文档站构建
+
+### 当前结论（RP-005）
+
+- 本轮计划中的 `core` 剩余高风险页面已完成核对；`state-management` 与 `coroutine` 经复核后可继续保留
+- `core` 栏目下一步不再需要围绕这五页反复停留，后续重心应转到 `docs/zh-CN/game/*` 与 `docs/zh-CN/source-generators/*`
+
+### 下一步（RP-005）
+
+1. 继续核对 `docs/zh-CN/game/*`，优先处理仍引用旧安装方式、旧状态系统或旧 UI / Scene 接法的页面
+2. 再推进 `docs/zh-CN/source-generators/*`，重点核对生成器 wiring、包关系与最小接入示例
+3. 若 active trace 继续累计多个已完成恢复点，按 `archive/traces/` 粒度归档旧阶段细节
