@@ -1,5 +1,31 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-22 — RP-018
+
+### 阶段：`CqrsHandlerRegistryGenerator` 剩余 `MA0051` 收口（RP-018）
+
+- 启动复核：
+  - 当前 worktree 仍映射到 `analyzer-warning-reduction` active topic
+  - `MA0158` 锁迁移仍然跨 `GFramework.Core` / `GFramework.Cqrs` 多 target 共享源码，继续视为需要单独设计的兼容性问题
+  - `GFramework.Cqrs.SourceGenerators` warnings-only build 复现 `CqrsHandlerRegistryGenerator.cs` 的 `6` 个 `MA0051`
+- 决策：
+  - 本轮暂缓 `MA0158`，转入单文件、可由生成器测试覆盖的 `GFramework.Cqrs.SourceGenerators` 结构拆分
+  - 未使用 subagent；critical path 是本地复现 warning、拆分源码发射流程并用 focused generator tests 验证输出未变
+- 实施调整：
+  - 将 handler candidate 分析拆为接口收集、候选构造和单接口注册分类阶段
+  - 将运行时类型引用构造拆为已构造泛型、命名类型反射查找等独立 helper
+  - 将注册器源码生成拆为文件头、程序集特性、注册器类型、`Register` 方法和服务注册日志发射 helper
+  - 将有序注册与精确反射注册输出拆为独立阶段，保留原有排序和生成文本形状
+- 验证结果：
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders= -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`0 Warning(s)`，`0 Error(s)`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~CqrsHandlerRegistryGeneratorTests -m:1 -p:RestoreFallbackFolders= -nologo`
+    - 结果：`14 Passed`，`0 Failed`
+    - 说明：测试项目构建仍显示 `GFramework.Game.SourceGenerators` 与测试项目中的既有 analyzer warning；不属于本轮写集
+- 下一步建议：
+  - 继续该主题时，优先处理 `GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs` 的 `MA0006` 低风险批次
+  - 若回到 `MA0158`，先设计多 target 条件编译方案，再考虑替换共享源码中的 `object` lock
+
 ## 2026-04-22 — RP-017
 
 ### 阶段：`ContextAwareGenerator` 剩余 `MA0051` 收口（RP-017）

@@ -89,17 +89,42 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         if (!IsConcreteHandlerType(type))
             return null;
 
-        var handlerInterfaces = type.AllInterfaces
-            .Where(IsSupportedHandlerInterface)
-            .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
-            .ToImmutableArray();
+        var handlerInterfaces = GetSupportedHandlerInterfaces(type);
 
         if (handlerInterfaces.IsDefaultOrEmpty)
             return null;
 
+        return CreateHandlerCandidateAnalysis(context.SemanticModel.Compilation, type, handlerInterfaces);
+    }
+
+    /// <summary>
+    ///     收集当前实现类型已经关闭的 CQRS handler 接口，并按稳定显示名排序以保证生成输出可重复。
+    /// </summary>
+    /// <param name="type">当前语义模型发现的具体 handler 实现类型。</param>
+    /// <returns>可由 CQRS 注册器生成器处理的 handler 接口集合。</returns>
+    private static ImmutableArray<INamedTypeSymbol> GetSupportedHandlerInterfaces(INamedTypeSymbol type)
+    {
+        return type.AllInterfaces
+            .Where(IsSupportedHandlerInterface)
+            .OrderBy(GetTypeSortKey, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    /// <summary>
+    ///     将单个实现类型的 handler 接口拆分为直接注册、实现类型反射注册、精确反射注册和兜底 fallback 四类结果。
+    /// </summary>
+    /// <param name="compilation">当前生成轮次的编译上下文，用于判断类型可访问性。</param>
+    /// <param name="type">需要分析的 handler 实现类型。</param>
+    /// <param name="handlerInterfaces">该实现类型声明的受支持 CQRS handler 接口。</param>
+    /// <returns>供最终生成阶段消费的 handler 候选分析结果。</returns>
+    private static HandlerCandidateAnalysis CreateHandlerCandidateAnalysis(
+        Compilation compilation,
+        INamedTypeSymbol type,
+        ImmutableArray<INamedTypeSymbol> handlerInterfaces)
+    {
         var implementationTypeDisplayName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var implementationLogName = GetLogDisplayName(type);
-        var canReferenceImplementation = CanReferenceFromGeneratedRegistry(context.SemanticModel.Compilation, type);
+        var canReferenceImplementation = CanReferenceFromGeneratedRegistry(compilation, type);
         var registrations = ImmutableArray.CreateBuilder<HandlerRegistrationSpec>(handlerInterfaces.Length);
         var reflectedImplementationRegistrations =
             ImmutableArray.CreateBuilder<ReflectedImplementationRegistrationSpec>(handlerInterfaces.Length);
@@ -108,32 +133,16 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         string? reflectionFallbackHandlerTypeMetadataName = null;
         foreach (var handlerInterface in handlerInterfaces)
         {
-            var canReferenceHandlerInterface =
-                CanReferenceFromGeneratedRegistry(context.SemanticModel.Compilation, handlerInterface);
-            if (canReferenceImplementation && canReferenceHandlerInterface)
-            {
-                registrations.Add(new HandlerRegistrationSpec(
-                    handlerInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    implementationTypeDisplayName,
-                    GetLogDisplayName(handlerInterface),
-                    implementationLogName));
-                continue;
-            }
-
-            if (!canReferenceImplementation && canReferenceHandlerInterface)
-            {
-                reflectedImplementationRegistrations.Add(new ReflectedImplementationRegistrationSpec(
-                    handlerInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    GetLogDisplayName(handlerInterface)));
-                continue;
-            }
-
-            if (TryCreatePreciseReflectedRegistration(
-                    context.SemanticModel.Compilation,
+            if (TryAddStaticHandlerRegistration(
+                    compilation,
                     handlerInterface,
-                    out var preciseReflectedRegistration))
+                    canReferenceImplementation,
+                    implementationTypeDisplayName,
+                    implementationLogName,
+                    registrations,
+                    reflectedImplementationRegistrations,
+                    preciseReflectedRegistrations))
             {
-                preciseReflectedRegistrations.Add(preciseReflectedRegistration);
                 continue;
             }
 
@@ -153,6 +162,56 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             preciseReflectedRegistrations.ToImmutable(),
             canReferenceImplementation ? null : GetReflectionTypeMetadataName(type),
             reflectionFallbackHandlerTypeMetadataName);
+    }
+
+    /// <summary>
+    ///     尝试为单个 handler 接口选择无需程序集级 fallback 的注册表示。
+    /// </summary>
+    /// <param name="compilation">当前生成轮次的编译上下文。</param>
+    /// <param name="handlerInterface">正在分类的关闭 handler 接口。</param>
+    /// <param name="canReferenceImplementation">生成代码是否可直接引用实现类型。</param>
+    /// <param name="implementationTypeDisplayName">实现类型在生成源码中的全限定显示名。</param>
+    /// <param name="implementationLogName">实现类型用于日志输出的稳定显示名。</param>
+    /// <param name="registrations">直接类型注册集合。</param>
+    /// <param name="reflectedImplementationRegistrations">实现类型需要反射解析、接口可直接引用的注册集合。</param>
+    /// <param name="preciseReflectedRegistrations">接口类型需要运行时精确构造的注册集合。</param>
+    /// <returns>
+    ///     当当前接口已经被添加到某个静态注册集合时返回 <see langword="true" />；否则调用方应记录 reflection fallback 元数据。
+    /// </returns>
+    private static bool TryAddStaticHandlerRegistration(
+        Compilation compilation,
+        INamedTypeSymbol handlerInterface,
+        bool canReferenceImplementation,
+        string implementationTypeDisplayName,
+        string implementationLogName,
+        ImmutableArray<HandlerRegistrationSpec>.Builder registrations,
+        ImmutableArray<ReflectedImplementationRegistrationSpec>.Builder reflectedImplementationRegistrations,
+        ImmutableArray<PreciseReflectedRegistrationSpec>.Builder preciseReflectedRegistrations)
+    {
+        var canReferenceHandlerInterface = CanReferenceFromGeneratedRegistry(compilation, handlerInterface);
+        if (canReferenceImplementation && canReferenceHandlerInterface)
+        {
+            registrations.Add(new HandlerRegistrationSpec(
+                handlerInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                implementationTypeDisplayName,
+                GetLogDisplayName(handlerInterface),
+                implementationLogName));
+            return true;
+        }
+
+        if (!canReferenceImplementation && canReferenceHandlerInterface)
+        {
+            reflectedImplementationRegistrations.Add(new ReflectedImplementationRegistrationSpec(
+                handlerInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                GetLogDisplayName(handlerInterface)));
+            return true;
+        }
+
+        if (!TryCreatePreciseReflectedRegistration(compilation, handlerInterface, out var preciseReflectedRegistration))
+            return false;
+
+        preciseReflectedRegistrations.Add(preciseReflectedRegistration);
+        return true;
     }
 
     /// <summary>
@@ -423,46 +482,82 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
         if (type is INamedTypeSymbol genericNamedType &&
             genericNamedType.IsGenericType &&
-            !genericNamedType.IsUnboundGenericType &&
-            TryCreateGenericTypeDefinitionReference(compilation, genericNamedType,
-                out var genericTypeDefinitionReference))
+            !genericNamedType.IsUnboundGenericType)
         {
-            var genericTypeArguments =
-                ImmutableArray.CreateBuilder<RuntimeTypeReferenceSpec>(genericNamedType.TypeArguments.Length);
-            foreach (var typeArgument in genericNamedType.TypeArguments)
-            {
-                if (!TryCreateRuntimeTypeReference(compilation, typeArgument, out var genericTypeArgumentReference))
-                {
-                    runtimeTypeReference = null;
-                    return false;
-                }
-
-                genericTypeArguments.Add(genericTypeArgumentReference!);
-            }
-
-            runtimeTypeReference = RuntimeTypeReferenceSpec.FromConstructedGeneric(
-                genericTypeDefinitionReference!,
-                genericTypeArguments.ToImmutable());
-            return true;
+            return TryCreateConstructedGenericRuntimeTypeReference(
+                compilation,
+                genericNamedType,
+                out runtimeTypeReference);
         }
 
         if (type is INamedTypeSymbol namedType)
         {
-            if (SymbolEqualityComparer.Default.Equals(namedType.ContainingAssembly, compilation.Assembly))
-            {
-                runtimeTypeReference = RuntimeTypeReferenceSpec.FromReflectionLookup(
-                    GetReflectionTypeMetadataName(namedType));
-                return true;
-            }
-
-            runtimeTypeReference = RuntimeTypeReferenceSpec.FromExternalReflectionLookup(
-                namedType.ContainingAssembly.Identity.ToString(),
-                GetReflectionTypeMetadataName(namedType));
+            runtimeTypeReference = CreateNamedRuntimeTypeReference(compilation, namedType);
             return true;
         }
 
         runtimeTypeReference = null;
         return false;
+    }
+
+    /// <summary>
+    ///     为已构造泛型类型构造运行时类型引用，并递归验证每个泛型实参都可以稳定编码到生成输出中。
+    /// </summary>
+    /// <param name="compilation">当前生成轮次的编译上下文。</param>
+    /// <param name="genericNamedType">需要表示的已构造泛型类型。</param>
+    /// <param name="runtimeTypeReference">
+    ///     当方法返回 <see langword="true" /> 时，包含泛型定义和泛型实参的运行时重建描述。
+    /// </param>
+    /// <returns>当泛型定义和全部泛型实参都能表达时返回 <see langword="true" />。</returns>
+    private static bool TryCreateConstructedGenericRuntimeTypeReference(
+        Compilation compilation,
+        INamedTypeSymbol genericNamedType,
+        out RuntimeTypeReferenceSpec? runtimeTypeReference)
+    {
+        if (!TryCreateGenericTypeDefinitionReference(
+                compilation,
+                genericNamedType,
+                out var genericTypeDefinitionReference))
+        {
+            runtimeTypeReference = null;
+            return false;
+        }
+
+        var genericTypeArguments =
+            ImmutableArray.CreateBuilder<RuntimeTypeReferenceSpec>(genericNamedType.TypeArguments.Length);
+        foreach (var typeArgument in genericNamedType.TypeArguments)
+        {
+            if (!TryCreateRuntimeTypeReference(compilation, typeArgument, out var genericTypeArgumentReference))
+            {
+                runtimeTypeReference = null;
+                return false;
+            }
+
+            genericTypeArguments.Add(genericTypeArgumentReference!);
+        }
+
+        runtimeTypeReference = RuntimeTypeReferenceSpec.FromConstructedGeneric(
+            genericTypeDefinitionReference!,
+            genericTypeArguments.ToImmutable());
+        return true;
+    }
+
+    /// <summary>
+    ///     为无法直接书写的命名类型选择当前程序集反射查找或外部程序集反射查找表示。
+    /// </summary>
+    /// <param name="compilation">当前生成轮次的编译上下文。</param>
+    /// <param name="namedType">需要在运行时解析的命名类型。</param>
+    /// <returns>适合写入生成注册器的命名类型运行时引用。</returns>
+    private static RuntimeTypeReferenceSpec CreateNamedRuntimeTypeReference(
+        Compilation compilation,
+        INamedTypeSymbol namedType)
+    {
+        if (SymbolEqualityComparer.Default.Equals(namedType.ContainingAssembly, compilation.Assembly))
+            return RuntimeTypeReferenceSpec.FromReflectionLookup(GetReflectionTypeMetadataName(namedType));
+
+        return RuntimeTypeReferenceSpec.FromExternalReflectionLookup(
+            namedType.ContainingAssembly.Identity.ToString(),
+            GetReflectionTypeMetadataName(namedType));
     }
 
     /// <summary>
@@ -627,33 +722,55 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         IReadOnlyList<ImplementationRegistrationSpec> registrations,
         IReadOnlyList<string> fallbackHandlerTypeMetadataNames)
     {
+        var sourceShape = CreateGeneratedRegistrySourceShape(registrations);
+        var builder = new StringBuilder();
+        AppendGeneratedSourcePreamble(builder, generationEnvironment, fallbackHandlerTypeMetadataNames);
+        AppendGeneratedRegistryType(builder, registrations, sourceShape);
+        return builder.ToString();
+    }
+
+    /// <summary>
+    ///     预先计算生成注册器需要的辅助分支，让主源码发射流程保持线性且避免重复扫描注册集合。
+    /// </summary>
+    /// <param name="registrations">已整理并排序的 handler 注册描述。</param>
+    /// <returns>当前生成输出需要启用的结构分支。</returns>
+    private static GeneratedRegistrySourceShape CreateGeneratedRegistrySourceShape(
+        IReadOnlyList<ImplementationRegistrationSpec> registrations)
+    {
         var hasReflectedImplementationRegistrations = registrations.Any(static registration =>
             !registration.ReflectedImplementationRegistrations.IsDefaultOrEmpty);
         var hasPreciseReflectedRegistrations = registrations.Any(static registration =>
             !registration.PreciseReflectedRegistrations.IsDefaultOrEmpty);
+        var hasReflectionTypeLookups = registrations.Any(static registration =>
+            !string.IsNullOrWhiteSpace(registration.ReflectionTypeMetadataName));
         var hasExternalAssemblyTypeLookups = registrations.Any(static registration =>
             registration.PreciseReflectedRegistrations.Any(static preciseRegistration =>
                 preciseRegistration.ServiceTypeArguments.Any(ContainsExternalAssemblyTypeLookup)));
-        var builder = new StringBuilder();
+
+        return new GeneratedRegistrySourceShape(
+            hasReflectedImplementationRegistrations,
+            hasPreciseReflectedRegistrations,
+            hasReflectionTypeLookups,
+            hasExternalAssemblyTypeLookups);
+    }
+
+    /// <summary>
+    ///     发射生成文件头、nullable 指令以及注册器所需的程序集级元数据特性。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="generationEnvironment">当前轮次的生成环境。</param>
+    /// <param name="fallbackHandlerTypeMetadataNames">需要程序集级 reflection fallback 的 handler 元数据名称。</param>
+    private static void AppendGeneratedSourcePreamble(
+        StringBuilder builder,
+        GenerationEnvironment generationEnvironment,
+        IReadOnlyList<string> fallbackHandlerTypeMetadataNames)
+    {
         builder.AppendLine("// <auto-generated />");
         builder.AppendLine("#nullable enable");
         builder.AppendLine();
         if (generationEnvironment.SupportsReflectionFallbackAttribute && fallbackHandlerTypeMetadataNames.Count > 0)
         {
-            builder.Append("[assembly: global::");
-            builder.Append(CqrsRuntimeNamespace);
-            builder.Append(".CqrsReflectionFallbackAttribute(");
-            for (var index = 0; index < fallbackHandlerTypeMetadataNames.Count; index++)
-            {
-                if (index > 0)
-                    builder.Append(", ");
-
-                builder.Append('"');
-                builder.Append(EscapeStringLiteral(fallbackHandlerTypeMetadataNames[index]));
-                builder.Append('"');
-            }
-
-            builder.AppendLine(")]");
+            AppendReflectionFallbackAttribute(builder, fallbackHandlerTypeMetadataNames);
             builder.AppendLine();
         }
 
@@ -664,7 +781,44 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         builder.Append('.');
         builder.Append(GeneratedTypeName);
         builder.AppendLine("))]");
+    }
 
+    /// <summary>
+    ///     发射程序集级 reflection fallback 元数据特性，供运行时补齐生成阶段无法精确表达的 handler。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="fallbackHandlerTypeMetadataNames">需要写入特性的 handler 元数据名称。</param>
+    private static void AppendReflectionFallbackAttribute(
+        StringBuilder builder,
+        IReadOnlyList<string> fallbackHandlerTypeMetadataNames)
+    {
+        builder.Append("[assembly: global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.Append(".CqrsReflectionFallbackAttribute(");
+        for (var index = 0; index < fallbackHandlerTypeMetadataNames.Count; index++)
+        {
+            if (index > 0)
+                builder.Append(", ");
+
+            builder.Append('"');
+            builder.Append(EscapeStringLiteral(fallbackHandlerTypeMetadataNames[index]));
+            builder.Append('"');
+        }
+
+        builder.AppendLine(")]");
+    }
+
+    /// <summary>
+    ///     发射生成注册器类型本体，包括 <c>Register</c> 方法和运行时反射辅助方法。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registrations">已排序的 handler 注册描述。</param>
+    /// <param name="sourceShape">当前输出需要启用的结构分支。</param>
+    private static void AppendGeneratedRegistryType(
+        StringBuilder builder,
+        IReadOnlyList<ImplementationRegistrationSpec> registrations,
+        GeneratedRegistrySourceShape sourceShape)
+    {
         builder.AppendLine();
         builder.Append("namespace ");
         builder.Append(GeneratedNamespace);
@@ -676,6 +830,28 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         builder.Append(CqrsRuntimeNamespace);
         builder.AppendLine(".ICqrsHandlerRegistry");
         builder.AppendLine("{");
+        AppendRegisterMethod(builder, registrations, sourceShape);
+
+        if (sourceShape.HasExternalAssemblyTypeLookups)
+        {
+            builder.AppendLine();
+            AppendReflectionHelpers(builder, sourceShape.HasExternalAssemblyTypeLookups);
+        }
+
+        builder.AppendLine("}");
+    }
+
+    /// <summary>
+    ///     发射注册器的 <c>Register</c> 方法，保持直接注册和反射注册之间的原始稳定排序。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registrations">已排序的 handler 注册描述。</param>
+    /// <param name="sourceShape">当前输出需要启用的结构分支。</param>
+    private static void AppendRegisterMethod(
+        StringBuilder builder,
+        IReadOnlyList<ImplementationRegistrationSpec> registrations,
+        GeneratedRegistrySourceShape sourceShape)
+    {
         builder.Append(
             "    public void Register(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::");
         builder.Append(LoggingNamespace);
@@ -685,9 +861,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(services));");
         builder.AppendLine("        if (logger is null)");
         builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(logger));");
-        if (hasReflectedImplementationRegistrations || hasPreciseReflectedRegistrations ||
-            registrations.Any(static registration =>
-                !string.IsNullOrWhiteSpace(registration.ReflectionTypeMetadataName)))
+        if (sourceShape.RequiresRegistryAssemblyVariable)
         {
             builder.AppendLine();
             builder.Append("        var registryAssembly = typeof(global::");
@@ -715,15 +889,6 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine("    }");
-
-        if (hasExternalAssemblyTypeLookups)
-        {
-            builder.AppendLine();
-            AppendReflectionHelpers(builder, hasExternalAssemblyTypeLookups);
-        }
-
-        builder.AppendLine("}");
-        return builder.ToString();
     }
 
     private static void AppendDirectRegistrations(
@@ -732,21 +897,65 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
     {
         foreach (var directRegistration in registration.DirectRegistrations)
         {
-            builder.AppendLine(
-                "        global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient(");
-            builder.AppendLine("            services,");
-            builder.Append("            typeof(");
-            builder.Append(directRegistration.HandlerInterfaceDisplayName);
-            builder.AppendLine("),");
-            builder.Append("            typeof(");
-            builder.Append(directRegistration.ImplementationTypeDisplayName);
-            builder.AppendLine("));");
-            builder.Append("        logger.Debug(\"Registered CQRS handler ");
-            builder.Append(EscapeStringLiteral(directRegistration.ImplementationLogName));
-            builder.Append(" as ");
-            builder.Append(EscapeStringLiteral(directRegistration.HandlerInterfaceLogName));
-            builder.AppendLine(".\");");
+            AppendServiceRegistration(
+                builder,
+                $"typeof({directRegistration.HandlerInterfaceDisplayName})",
+                $"typeof({directRegistration.ImplementationTypeDisplayName})",
+                "        ");
+            AppendRegistrationLog(
+                builder,
+                directRegistration.ImplementationLogName,
+                directRegistration.HandlerInterfaceLogName,
+                "        ");
         }
+    }
+
+    /// <summary>
+    ///     发射 <c>AddTransient</c> 调用，调用方负责传入已经按当前分支解析好的 service 和 implementation 表达式。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="serviceTypeExpression">生成代码中的服务类型表达式。</param>
+    /// <param name="implementationTypeExpression">生成代码中的实现类型表达式。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    private static void AppendServiceRegistration(
+        StringBuilder builder,
+        string serviceTypeExpression,
+        string implementationTypeExpression,
+        string indent)
+    {
+        builder.Append(indent);
+        builder.AppendLine("global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient(");
+        builder.Append(indent);
+        builder.AppendLine("    services,");
+        builder.Append(indent);
+        builder.Append("    ");
+        builder.Append(serviceTypeExpression);
+        builder.AppendLine(",");
+        builder.Append(indent);
+        builder.Append("    ");
+        builder.Append(implementationTypeExpression);
+        builder.AppendLine(");");
+    }
+
+    /// <summary>
+    ///     发射与注册语句配套的调试日志，保持所有生成注册路径的日志文本完全一致。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="implementationLogName">实现类型日志名。</param>
+    /// <param name="handlerInterfaceLogName">handler 接口日志名。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    private static void AppendRegistrationLog(
+        StringBuilder builder,
+        string implementationLogName,
+        string handlerInterfaceLogName,
+        string indent)
+    {
+        builder.Append(indent);
+        builder.Append("logger.Debug(\"Registered CQRS handler ");
+        builder.Append(EscapeStringLiteral(implementationLogName));
+        builder.Append(" as ");
+        builder.Append(EscapeStringLiteral(handlerInterfaceLogName));
+        builder.AppendLine(".\");");
     }
 
     private static void AppendOrderedImplementationRegistrations(
@@ -754,15 +963,42 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         ImplementationRegistrationSpec registration,
         int registrationIndex)
     {
-        var orderedRegistrations =
-            new List<(string HandlerInterfaceLogName, OrderedRegistrationKind Kind, int Index)>(
-                registration.DirectRegistrations.Length +
-                registration.ReflectedImplementationRegistrations.Length +
-                registration.PreciseReflectedRegistrations.Length);
+        var orderedRegistrations = CreateOrderedRegistrations(registration);
+        var implementationVariableName = $"implementationType{registrationIndex}";
+        AppendImplementationTypeVariable(builder, registration, implementationVariableName);
 
+        builder.Append("        if (");
+        builder.Append(implementationVariableName);
+        builder.AppendLine(" is not null)");
+        builder.AppendLine("        {");
+
+        foreach (var orderedRegistration in orderedRegistrations)
+        {
+            AppendOrderedRegistration(
+                builder,
+                registration,
+                orderedRegistration,
+                registrationIndex,
+                implementationVariableName);
+        }
+
+        builder.AppendLine("        }");
+    }
+
+    /// <summary>
+    ///     合并直接注册、实现类型反射注册和精确反射注册，并按 handler 接口日志名排序以保持生成输出稳定。
+    /// </summary>
+    /// <param name="registration">单个实现类型聚合后的注册描述。</param>
+    /// <returns>带有来源类型和原始索引的有序注册列表。</returns>
+    private static List<OrderedRegistrationSpec> CreateOrderedRegistrations(ImplementationRegistrationSpec registration)
+    {
+        var orderedRegistrations = new List<OrderedRegistrationSpec>(
+            registration.DirectRegistrations.Length +
+            registration.ReflectedImplementationRegistrations.Length +
+            registration.PreciseReflectedRegistrations.Length);
         for (var directIndex = 0; directIndex < registration.DirectRegistrations.Length; directIndex++)
         {
-            orderedRegistrations.Add((
+            orderedRegistrations.Add(new OrderedRegistrationSpec(
                 registration.DirectRegistrations[directIndex].HandlerInterfaceLogName,
                 OrderedRegistrationKind.Direct,
                 directIndex));
@@ -772,7 +1008,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
              reflectedIndex < registration.ReflectedImplementationRegistrations.Length;
              reflectedIndex++)
         {
-            orderedRegistrations.Add((
+            orderedRegistrations.Add(new OrderedRegistrationSpec(
                 registration.ReflectedImplementationRegistrations[reflectedIndex].HandlerInterfaceLogName,
                 OrderedRegistrationKind.ReflectedImplementation,
                 reflectedIndex));
@@ -782,7 +1018,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
              preciseIndex < registration.PreciseReflectedRegistrations.Length;
              preciseIndex++)
         {
-            orderedRegistrations.Add((
+            orderedRegistrations.Add(new OrderedRegistrationSpec(
                 registration.PreciseReflectedRegistrations[preciseIndex].HandlerInterfaceLogName,
                 OrderedRegistrationKind.PreciseReflected,
                 preciseIndex));
@@ -790,8 +1026,20 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
         orderedRegistrations.Sort(static (left, right) =>
             StringComparer.Ordinal.Compare(left.HandlerInterfaceLogName, right.HandlerInterfaceLogName));
+        return orderedRegistrations;
+    }
 
-        var implementationVariableName = $"implementationType{registrationIndex}";
+    /// <summary>
+    ///     发射实现类型变量。公开类型直接使用 <c>typeof</c>，不可直接引用的实现类型则从当前程序集反射解析。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registration">单个实现类型聚合后的注册描述。</param>
+    /// <param name="implementationVariableName">生成代码中的实现类型变量名。</param>
+    private static void AppendImplementationTypeVariable(
+        StringBuilder builder,
+        ImplementationRegistrationSpec registration,
+        string implementationVariableName)
+    {
         if (string.IsNullOrWhiteSpace(registration.ReflectionTypeMetadataName))
         {
             builder.Append("        var ");
@@ -808,71 +1056,131 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             builder.Append(EscapeStringLiteral(registration.ReflectionTypeMetadataName!));
             builder.AppendLine("\", throwOnError: false, ignoreCase: false);");
         }
+    }
 
-        builder.Append("        if (");
-        builder.Append(implementationVariableName);
-        builder.AppendLine(" is not null)");
-        builder.AppendLine("        {");
-
-        foreach (var orderedRegistration in orderedRegistrations)
+    /// <summary>
+    ///     根据注册来源发射单条有序注册，确保混合直接和反射路径时仍按 handler 接口名稳定输出。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registration">单个实现类型聚合后的注册描述。</param>
+    /// <param name="orderedRegistration">带来源类型和原始索引的排序项。</param>
+    /// <param name="registrationIndex">实现类型在整体注册列表中的索引，用于生成稳定变量名。</param>
+    /// <param name="implementationVariableName">生成代码中的实现类型变量名。</param>
+    private static void AppendOrderedRegistration(
+        StringBuilder builder,
+        ImplementationRegistrationSpec registration,
+        OrderedRegistrationSpec orderedRegistration,
+        int registrationIndex,
+        string implementationVariableName)
+    {
+        switch (orderedRegistration.Kind)
         {
-            switch (orderedRegistration.Kind)
-            {
-                case OrderedRegistrationKind.Direct:
-                    var directRegistration = registration.DirectRegistrations[orderedRegistration.Index];
-                    builder.AppendLine(
-                        "            global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient(");
-                    builder.AppendLine("                services,");
-                    builder.Append("                typeof(");
-                    builder.Append(directRegistration.HandlerInterfaceDisplayName);
-                    builder.AppendLine("),");
-                    builder.Append("                ");
-                    builder.Append(implementationVariableName);
-                    builder.AppendLine(");");
-                    builder.Append("            logger.Debug(\"Registered CQRS handler ");
-                    builder.Append(EscapeStringLiteral(registration.ImplementationLogName));
-                    builder.Append(" as ");
-                    builder.Append(EscapeStringLiteral(directRegistration.HandlerInterfaceLogName));
-                    builder.AppendLine(".\");");
-                    break;
-                case OrderedRegistrationKind.ReflectedImplementation:
-                    var reflectedRegistration =
-                        registration.ReflectedImplementationRegistrations[orderedRegistration.Index];
-                    builder.AppendLine(
-                        "            global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient(");
-                    builder.AppendLine("                services,");
-                    builder.Append("                typeof(");
-                    builder.Append(reflectedRegistration.HandlerInterfaceDisplayName);
-                    builder.AppendLine("),");
-                    builder.Append("                ");
-                    builder.Append(implementationVariableName);
-                    builder.AppendLine(");");
-                    builder.Append("            logger.Debug(\"Registered CQRS handler ");
-                    builder.Append(EscapeStringLiteral(registration.ImplementationLogName));
-                    builder.Append(" as ");
-                    builder.Append(EscapeStringLiteral(reflectedRegistration.HandlerInterfaceLogName));
-                    builder.AppendLine(".\");");
-                    break;
-                case OrderedRegistrationKind.PreciseReflected:
-                    var preciseRegistration = registration.PreciseReflectedRegistrations[orderedRegistration.Index];
-                    var registrationVariablePrefix = $"serviceType{registrationIndex}_{orderedRegistration.Index}";
-                    AppendPreciseReflectedTypeResolution(
-                        builder,
-                        preciseRegistration.ServiceTypeArguments,
-                        registrationVariablePrefix,
-                        implementationVariableName,
-                        preciseRegistration.OpenHandlerTypeDisplayName,
-                        registration.ImplementationLogName,
-                        preciseRegistration.HandlerInterfaceLogName,
-                        3);
-                    break;
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported ordered CQRS registration kind {orderedRegistration.Kind}.");
-            }
+            case OrderedRegistrationKind.Direct:
+                AppendOrderedDirectRegistration(
+                    builder,
+                    registration,
+                    registration.DirectRegistrations[orderedRegistration.Index],
+                    implementationVariableName);
+                break;
+            case OrderedRegistrationKind.ReflectedImplementation:
+                AppendOrderedReflectedImplementationRegistration(
+                    builder,
+                    registration,
+                    registration.ReflectedImplementationRegistrations[orderedRegistration.Index],
+                    implementationVariableName);
+                break;
+            case OrderedRegistrationKind.PreciseReflected:
+                AppendOrderedPreciseReflectedRegistration(
+                    builder,
+                    registration,
+                    registration.PreciseReflectedRegistrations[orderedRegistration.Index],
+                    registrationIndex,
+                    orderedRegistration.Index,
+                    implementationVariableName);
+                break;
+            default:
+                throw new InvalidOperationException(
+                    $"Unsupported ordered CQRS registration kind {orderedRegistration.Kind}.");
         }
+    }
 
-        builder.AppendLine("        }");
+    /// <summary>
+    ///     发射实现类型已通过变量解析、handler 接口可直接引用的直接注册语句。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registration">单个实现类型聚合后的注册描述。</param>
+    /// <param name="directRegistration">当前直接注册项。</param>
+    /// <param name="implementationVariableName">生成代码中的实现类型变量名。</param>
+    private static void AppendOrderedDirectRegistration(
+        StringBuilder builder,
+        ImplementationRegistrationSpec registration,
+        HandlerRegistrationSpec directRegistration,
+        string implementationVariableName)
+    {
+        AppendServiceRegistration(
+            builder,
+            $"typeof({directRegistration.HandlerInterfaceDisplayName})",
+            implementationVariableName,
+            "            ");
+        AppendRegistrationLog(
+            builder,
+            registration.ImplementationLogName,
+            directRegistration.HandlerInterfaceLogName,
+            "            ");
+    }
+
+    /// <summary>
+    ///     发射实现类型需要反射解析、handler 接口可直接引用的注册语句。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registration">单个实现类型聚合后的注册描述。</param>
+    /// <param name="reflectedRegistration">当前实现类型反射注册项。</param>
+    /// <param name="implementationVariableName">生成代码中的实现类型变量名。</param>
+    private static void AppendOrderedReflectedImplementationRegistration(
+        StringBuilder builder,
+        ImplementationRegistrationSpec registration,
+        ReflectedImplementationRegistrationSpec reflectedRegistration,
+        string implementationVariableName)
+    {
+        AppendServiceRegistration(
+            builder,
+            $"typeof({reflectedRegistration.HandlerInterfaceDisplayName})",
+            implementationVariableName,
+            "            ");
+        AppendRegistrationLog(
+            builder,
+            registration.ImplementationLogName,
+            reflectedRegistration.HandlerInterfaceLogName,
+            "            ");
+    }
+
+    /// <summary>
+    ///     发射 handler 接口需要运行时精确构造的注册语句。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registration">单个实现类型聚合后的注册描述。</param>
+    /// <param name="preciseRegistration">当前精确反射注册项。</param>
+    /// <param name="registrationIndex">实现类型在整体注册列表中的索引。</param>
+    /// <param name="orderedRegistrationIndex">当前注册项在原始精确反射注册集合中的索引。</param>
+    /// <param name="implementationVariableName">生成代码中的实现类型变量名。</param>
+    private static void AppendOrderedPreciseReflectedRegistration(
+        StringBuilder builder,
+        ImplementationRegistrationSpec registration,
+        PreciseReflectedRegistrationSpec preciseRegistration,
+        int registrationIndex,
+        int orderedRegistrationIndex,
+        string implementationVariableName)
+    {
+        var registrationVariablePrefix = $"serviceType{registrationIndex}_{orderedRegistrationIndex}";
+        AppendPreciseReflectedTypeResolution(
+            builder,
+            preciseRegistration.ServiceTypeArguments,
+            registrationVariablePrefix,
+            implementationVariableName,
+            preciseRegistration.OpenHandlerTypeDisplayName,
+            registration.ImplementationLogName,
+            preciseRegistration.HandlerInterfaceLogName,
+            3);
     }
 
     private static void AppendPreciseReflectedTypeResolution(
@@ -886,10 +1194,50 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         int indentLevel)
     {
         var indent = new string(' ', indentLevel * 4);
-        var nestedIndent = new string(' ', (indentLevel + 1) * 4);
-        var resolvedArgumentNames = new string[serviceTypeArguments.Length];
         var reflectedArgumentNames = new List<string>();
+        var resolvedArgumentNames = AppendServiceTypeArgumentResolutions(
+            builder,
+            serviceTypeArguments,
+            registrationVariablePrefix,
+            reflectedArgumentNames,
+            indent);
 
+        if (reflectedArgumentNames.Count > 0)
+            indent = AppendReflectedArgumentGuardStart(builder, reflectedArgumentNames, indent);
+
+        AppendClosedGenericServiceTypeCreation(
+            builder,
+            registrationVariablePrefix,
+            openHandlerTypeDisplayName,
+            resolvedArgumentNames,
+            indent);
+        AppendServiceRegistration(builder, registrationVariablePrefix, implementationVariableName, indent);
+        AppendRegistrationLog(builder, implementationLogName, handlerInterfaceLogName, indent);
+
+        if (reflectedArgumentNames.Count > 0)
+        {
+            builder.Append(new string(' ', indentLevel * 4));
+            builder.AppendLine("}");
+        }
+    }
+
+    /// <summary>
+    ///     递归发射每个 handler 泛型实参的运行时类型解析表达式。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="serviceTypeArguments">handler 服务类型的运行时泛型实参描述。</param>
+    /// <param name="registrationVariablePrefix">当前注册项的稳定变量名前缀。</param>
+    /// <param name="reflectedArgumentNames">需要空值检查的反射解析变量集合。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    /// <returns>可传给 <c>MakeGenericType</c> 的实参表达式。</returns>
+    private static string[] AppendServiceTypeArgumentResolutions(
+        StringBuilder builder,
+        ImmutableArray<RuntimeTypeReferenceSpec> serviceTypeArguments,
+        string registrationVariablePrefix,
+        ICollection<string> reflectedArgumentNames,
+        string indent)
+    {
+        var resolvedArgumentNames = new string[serviceTypeArguments.Length];
         for (var argumentIndex = 0; argumentIndex < serviceTypeArguments.Length; argumentIndex++)
         {
             resolvedArgumentNames[argumentIndex] = AppendRuntimeTypeReferenceResolution(
@@ -900,32 +1248,60 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 indent);
         }
 
-        if (reflectedArgumentNames.Count > 0)
+        return resolvedArgumentNames;
+    }
+
+    /// <summary>
+    ///     为运行时反射解析出的泛型实参发射空值保护块，避免生成注册器注册无法完整构造的服务类型。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="reflectedArgumentNames">需要参与空值检查的变量名。</param>
+    /// <param name="indent">保护块开始前的缩进。</param>
+    /// <returns>保护块内部应使用的下一层缩进。</returns>
+    private static string AppendReflectedArgumentGuardStart(
+        StringBuilder builder,
+        IReadOnlyList<string> reflectedArgumentNames,
+        string indent)
+    {
+        builder.Append(indent);
+        builder.Append("if (");
+        for (var index = 0; index < reflectedArgumentNames.Count; index++)
         {
-            builder.Append(indent);
-            builder.Append("if (");
-            for (var index = 0; index < reflectedArgumentNames.Count; index++)
-            {
-                if (index > 0)
-                    builder.Append(" && ");
+            if (index > 0)
+                builder.Append(" && ");
 
-                builder.Append(reflectedArgumentNames[index]);
-                builder.Append(" is not null");
-            }
-
-            builder.AppendLine(")");
-            builder.Append(indent);
-            builder.AppendLine("{");
-            indent = nestedIndent;
+            builder.Append(reflectedArgumentNames[index]);
+            builder.Append(" is not null");
         }
 
+        builder.AppendLine(")");
+        builder.Append(indent);
+        builder.AppendLine("{");
+        return $"{indent}    ";
+    }
+
+    /// <summary>
+    ///     发射关闭 handler 服务类型的 <c>MakeGenericType</c> 构造语句。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="registrationVariablePrefix">生成代码中的服务类型变量名。</param>
+    /// <param name="openHandlerTypeDisplayName">开放 handler 接口类型显示名。</param>
+    /// <param name="resolvedArgumentNames">已解析的泛型实参表达式。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    private static void AppendClosedGenericServiceTypeCreation(
+        StringBuilder builder,
+        string registrationVariablePrefix,
+        string openHandlerTypeDisplayName,
+        IReadOnlyList<string> resolvedArgumentNames,
+        string indent)
+    {
         builder.Append(indent);
         builder.Append("var ");
         builder.Append(registrationVariablePrefix);
         builder.Append(" = typeof(");
         builder.Append(openHandlerTypeDisplayName);
         builder.Append(").MakeGenericType(");
-        for (var index = 0; index < resolvedArgumentNames.Length; index++)
+        for (var index = 0; index < resolvedArgumentNames.Count; index++)
         {
             if (index > 0)
                 builder.Append(", ");
@@ -934,31 +1310,6 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine(");");
-        builder.Append(indent);
-        builder.AppendLine(
-            "global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddTransient(");
-        builder.Append(indent);
-        builder.AppendLine("    services,");
-        builder.Append(indent);
-        builder.Append("    ");
-        builder.Append(registrationVariablePrefix);
-        builder.AppendLine(",");
-        builder.Append(indent);
-        builder.Append("    ");
-        builder.Append(implementationVariableName);
-        builder.AppendLine(");");
-        builder.Append(indent);
-        builder.Append("logger.Debug(\"Registered CQRS handler ");
-        builder.Append(EscapeStringLiteral(implementationLogName));
-        builder.Append(" as ");
-        builder.Append(EscapeStringLiteral(handlerInterfaceLogName));
-        builder.AppendLine(".\");");
-
-        if (reflectedArgumentNames.Count > 0)
-        {
-            builder.Append(new string(' ', indentLevel * 4));
-            builder.AppendLine("}");
-        }
     }
 
     private static string AppendRuntimeTypeReferenceResolution(
@@ -972,57 +1323,145 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             return $"typeof({runtimeTypeReference.TypeDisplayName})";
 
         if (runtimeTypeReference.ArrayElementTypeReference is not null)
-        {
-            var elementExpression = AppendRuntimeTypeReferenceResolution(
+            return AppendArrayRuntimeTypeReferenceResolution(
                 builder,
-                runtimeTypeReference.ArrayElementTypeReference,
-                $"{variableBaseName}Element",
+                runtimeTypeReference,
+                variableBaseName,
                 reflectedArgumentNames,
                 indent);
-
-            return runtimeTypeReference.ArrayRank == 1
-                ? $"{elementExpression}.MakeArrayType()"
-                : $"{elementExpression}.MakeArrayType({runtimeTypeReference.ArrayRank})";
-        }
 
         if (runtimeTypeReference.PointerElementTypeReference is not null)
-        {
-            var pointedAtExpression = AppendRuntimeTypeReferenceResolution(
+            return AppendPointerRuntimeTypeReferenceResolution(
                 builder,
-                runtimeTypeReference.PointerElementTypeReference,
-                $"{variableBaseName}PointedAt",
+                runtimeTypeReference,
+                variableBaseName,
                 reflectedArgumentNames,
                 indent);
-
-            return $"{pointedAtExpression}.MakePointerType()";
-        }
 
         if (runtimeTypeReference.GenericTypeDefinitionReference is not null)
-        {
-            var genericTypeDefinitionExpression = AppendRuntimeTypeReferenceResolution(
+            return AppendConstructedGenericRuntimeTypeReferenceResolution(
                 builder,
-                runtimeTypeReference.GenericTypeDefinitionReference,
-                $"{variableBaseName}GenericDefinition",
+                runtimeTypeReference,
+                variableBaseName,
                 reflectedArgumentNames,
                 indent);
-            var genericArgumentExpressions = new string[runtimeTypeReference.GenericTypeArguments.Length];
-            for (var argumentIndex = 0;
-                 argumentIndex < runtimeTypeReference.GenericTypeArguments.Length;
-                 argumentIndex++)
-            {
-                genericArgumentExpressions[argumentIndex] = AppendRuntimeTypeReferenceResolution(
-                    builder,
-                    runtimeTypeReference.GenericTypeArguments[argumentIndex],
-                    $"{variableBaseName}GenericArgument{argumentIndex}",
-                    reflectedArgumentNames,
-                    indent);
-            }
 
-            return
-                $"{genericTypeDefinitionExpression}.MakeGenericType({string.Join(", ", genericArgumentExpressions)})";
+        return AppendReflectionRuntimeTypeReferenceResolution(
+            builder,
+            runtimeTypeReference,
+            variableBaseName,
+            reflectedArgumentNames,
+            indent);
+    }
+
+    /// <summary>
+    ///     发射数组类型引用的运行时重建表达式。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="runtimeTypeReference">数组类型引用描述。</param>
+    /// <param name="variableBaseName">用于递归生成变量名的稳定前缀。</param>
+    /// <param name="reflectedArgumentNames">需要空值检查的反射解析变量集合。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    /// <returns>数组类型表达式。</returns>
+    private static string AppendArrayRuntimeTypeReferenceResolution(
+        StringBuilder builder,
+        RuntimeTypeReferenceSpec runtimeTypeReference,
+        string variableBaseName,
+        ICollection<string> reflectedArgumentNames,
+        string indent)
+    {
+        var elementExpression = AppendRuntimeTypeReferenceResolution(
+            builder,
+            runtimeTypeReference.ArrayElementTypeReference!,
+            $"{variableBaseName}Element",
+            reflectedArgumentNames,
+            indent);
+
+        return runtimeTypeReference.ArrayRank == 1
+            ? $"{elementExpression}.MakeArrayType()"
+            : $"{elementExpression}.MakeArrayType({runtimeTypeReference.ArrayRank})";
+    }
+
+    /// <summary>
+    ///     发射指针类型引用的运行时重建表达式。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="runtimeTypeReference">指针类型引用描述。</param>
+    /// <param name="variableBaseName">用于递归生成变量名的稳定前缀。</param>
+    /// <param name="reflectedArgumentNames">需要空值检查的反射解析变量集合。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    /// <returns>指针类型表达式。</returns>
+    private static string AppendPointerRuntimeTypeReferenceResolution(
+        StringBuilder builder,
+        RuntimeTypeReferenceSpec runtimeTypeReference,
+        string variableBaseName,
+        ICollection<string> reflectedArgumentNames,
+        string indent)
+    {
+        var pointedAtExpression = AppendRuntimeTypeReferenceResolution(
+            builder,
+            runtimeTypeReference.PointerElementTypeReference!,
+            $"{variableBaseName}PointedAt",
+            reflectedArgumentNames,
+            indent);
+
+        return $"{pointedAtExpression}.MakePointerType()";
+    }
+
+    /// <summary>
+    ///     发射已构造泛型类型引用的运行时重建表达式。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="runtimeTypeReference">已构造泛型类型引用描述。</param>
+    /// <param name="variableBaseName">用于递归生成变量名的稳定前缀。</param>
+    /// <param name="reflectedArgumentNames">需要空值检查的反射解析变量集合。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    /// <returns>已构造泛型类型表达式。</returns>
+    private static string AppendConstructedGenericRuntimeTypeReferenceResolution(
+        StringBuilder builder,
+        RuntimeTypeReferenceSpec runtimeTypeReference,
+        string variableBaseName,
+        ICollection<string> reflectedArgumentNames,
+        string indent)
+    {
+        var genericTypeDefinitionExpression = AppendRuntimeTypeReferenceResolution(
+            builder,
+            runtimeTypeReference.GenericTypeDefinitionReference!,
+            $"{variableBaseName}GenericDefinition",
+            reflectedArgumentNames,
+            indent);
+        var genericArgumentExpressions = new string[runtimeTypeReference.GenericTypeArguments.Length];
+        for (var argumentIndex = 0;
+             argumentIndex < runtimeTypeReference.GenericTypeArguments.Length;
+             argumentIndex++)
+        {
+            genericArgumentExpressions[argumentIndex] = AppendRuntimeTypeReferenceResolution(
+                builder,
+                runtimeTypeReference.GenericTypeArguments[argumentIndex],
+                $"{variableBaseName}GenericArgument{argumentIndex}",
+                reflectedArgumentNames,
+                indent);
         }
 
-        var reflectionTypeMetadataName = runtimeTypeReference.ReflectionTypeMetadataName!;
+        return $"{genericTypeDefinitionExpression}.MakeGenericType({string.Join(", ", genericArgumentExpressions)})";
+    }
+
+    /// <summary>
+    ///     发射命名类型的运行时反射查找语句，并返回后续服务类型构造应引用的变量名。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="runtimeTypeReference">反射查找类型引用描述。</param>
+    /// <param name="variableBaseName">生成代码中的反射变量名。</param>
+    /// <param name="reflectedArgumentNames">需要空值检查的反射解析变量集合。</param>
+    /// <param name="indent">当前生成语句的缩进。</param>
+    /// <returns>生成代码中的反射变量名。</returns>
+    private static string AppendReflectionRuntimeTypeReferenceResolution(
+        StringBuilder builder,
+        RuntimeTypeReferenceSpec runtimeTypeReference,
+        string variableBaseName,
+        ICollection<string> reflectedArgumentNames,
+        string indent)
+    {
         reflectedArgumentNames.Add(variableBaseName);
         builder.Append(indent);
         builder.Append("var ");
@@ -1030,7 +1469,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         if (string.IsNullOrWhiteSpace(runtimeTypeReference.ReflectionAssemblyName))
         {
             builder.Append(" = registryAssembly.GetType(\"");
-            builder.Append(EscapeStringLiteral(reflectionTypeMetadataName));
+            builder.Append(EscapeStringLiteral(runtimeTypeReference.ReflectionTypeMetadataName!));
             builder.AppendLine("\", throwOnError: false, ignoreCase: false);");
         }
         else
@@ -1038,7 +1477,7 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             builder.Append(" = ResolveReferencedAssemblyType(\"");
             builder.Append(EscapeStringLiteral(runtimeTypeReference.ReflectionAssemblyName!));
             builder.Append("\", \"");
-            builder.Append(EscapeStringLiteral(reflectionTypeMetadataName));
+            builder.Append(EscapeStringLiteral(runtimeTypeReference.ReflectionTypeMetadataName!));
             builder.AppendLine("\");");
         }
 
@@ -1143,6 +1582,23 @@ public sealed class CqrsHandlerRegistryGenerator : IIncrementalGenerator
     private readonly record struct ReflectedImplementationRegistrationSpec(
         string HandlerInterfaceDisplayName,
         string HandlerInterfaceLogName);
+
+    private readonly record struct OrderedRegistrationSpec(
+        string HandlerInterfaceLogName,
+        OrderedRegistrationKind Kind,
+        int Index);
+
+    private readonly record struct GeneratedRegistrySourceShape(
+        bool HasReflectedImplementationRegistrations,
+        bool HasPreciseReflectedRegistrations,
+        bool HasReflectionTypeLookups,
+        bool HasExternalAssemblyTypeLookups)
+    {
+        public bool RequiresRegistryAssemblyVariable =>
+            HasReflectedImplementationRegistrations ||
+            HasPreciseReflectedRegistrations ||
+            HasReflectionTypeLookups;
+    }
 
     /// <summary>
     ///     标记某条 handler 注册语句在生成阶段采用的表达策略。
