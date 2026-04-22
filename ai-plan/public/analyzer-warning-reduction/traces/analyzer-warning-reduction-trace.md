@@ -1,5 +1,32 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-22 — RP-020
+
+### 阶段：`SchemaConfigGenerator` 第一批 `MA0051` 结构拆分（RP-020）
+
+- 启动复核：
+  - 当前 worktree 仍映射到 `analyzer-warning-reduction` active topic
+  - `GFramework.Game.SourceGenerators` warnings-only build 复现 `19` 条 warning，全部为
+    `GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs` 的 `MA0051`
+- 决策：
+  - 本轮继续低风险结构拆分，不改变 schema 支持范围、诊断 ID、生成类型形状或输出顺序
+  - 未使用 subagent；critical path 是本地复现 warning、拆分语义阶段并用 focused schema generator tests 验证行为
+- 实施调整：
+  - 将 schema 入口解析拆为文本读取、root 验证、id key 验证和 `SchemaFileSpec` 构造阶段
+  - 将属性解析拆为共享上下文提取、类型分派、标量/对象/数组属性构造 helper
+  - 将统一 schema 遍历拆为对象属性、dependentSchemas、allOf、条件分支、not、array items / contains 等遍历阶段
+  - 将约束文档生成拆为 const、numeric、string、array、object 约束片段
+  - 将 catalog/registration/YAML/lookup/object type 等生成代码发射路径中的小型高收益 helper 拆出
+- 验证结果：
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders= -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`9 Warning(s)`，`0 Error(s)`；当前项目剩余 warning 均为 `SchemaConfigGenerator.cs` 的 `MA0051`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~SchemaConfigGenerator -m:1 -p:RestoreFallbackFolders= -nologo`
+    - 结果：`50 Passed`，`0 Failed`
+    - 说明：测试项目构建仍显示既有 source generator test analyzer warning；不属于本轮写集
+- 下一步建议：
+  - 继续该主题时，优先拆分 `GenerateBindingsClass`、`AppendGeneratedConfigCatalogType` 或对象/条件 schema target 验证方法
+  - 若转回 `MA0158`，仍需先设计多 target 条件编译方案，再考虑替换共享源码中的 `object` lock
+
 ## 2026-04-22 — RP-019
 
 ### 阶段：`SchemaConfigGenerator` 当前 `MA0006` 收口（RP-019）
