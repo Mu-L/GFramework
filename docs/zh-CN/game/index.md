@@ -1,3 +1,8 @@
+---
+title: Game
+description: GFramework.Game family 的运行时入口、采用顺序与 XML 阅读基线。
+---
+
 # Game
 
 `Game` 栏目对应 `GFramework.Game` 与 `GFramework.Game.Abstractions` 这层游戏运行时能力。
@@ -97,6 +102,16 @@ IStorage storage = new FileStorage("GameData", serializer);
 3. [data](./data.md)
 4. [setting](./setting.md)
 5. [scene](./scene.md) 或 [ui](./ui.md)
+
+## Game Family XML 覆盖基线
+
+下面这份 inventory 记录的是 `2026-04-23` 对 `Game` family 做的一轮轻量 XML 盘点结果：只统计公开 / 内部类型声明是否带 XML 注释，用来建立 README / landing / API 阅读链路；成员级 `param`、`returns`、`exception` 与生命周期说明仍需要后续波次继续细化。
+
+| 模块 | 基线状态 | 代表类型 | 阅读重点 |
+| --- | --- | --- | --- |
+| `GFramework.Game` | `56/56` 个类型声明已带 XML 注释 | `YamlConfigLoader`、`SettingsModel<TRepository>`、`SceneRouterBase`、`UiRouterBase` | 先看运行时默认实现、配置加载、设置编排和路由基类 |
+| `GFramework.Game.Abstractions` | `80/80` 个类型声明已带 XML 注释 | `IConfigRegistry`、`ISaveRepository<TSaveData>`、`ISettingsSystem`、`ISceneRouter`、`IUiRouter` | 再看契约层边界，决定项目哪些程序集只依赖接口 |
+| `GFramework.Game.SourceGenerators` | `2/2` 个类型声明已带 XML 注释 | `SchemaConfigGenerator`、`ConfigSchemaDiagnostics` | 最后看 schema 生成入口与诊断模型，确认配置系统的编译期链路 |
 
 ## 与真实接法的关系
 

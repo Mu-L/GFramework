@@ -12,12 +12,12 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-004`
-- 当前阶段：`Phase 3 - Cqrs Docs Refresh`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-005`
+- 当前阶段：`Phase 4 - Game Docs Refresh`
 - 当前焦点：
-  - 收口 `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` 的 landing / generator topic / API 入口
+  - 收口 `Game` / `Game.Abstractions` / `Game.SourceGenerators` 的 README / landing / abstractions / XML inventory
   - 延续 `README / landing / API reference / XML inventory` 的同一治理模板
-  - 为下一波 `Game` family 审计保留统一的恢复模板与验证口径
+  - 把 `Game.Abstractions` 从失真的接口摘录页收敛为真实契约边界页面，并为下一轮巡检保留统一口径
 
 ## 当前状态摘要
 
@@ -47,6 +47,10 @@
   - 新建 `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`，为 `Cqrs.SourceGenerators` 补齐站内专题入口
   - 更新 `docs/zh-CN/source-generators/index.md`、`docs/zh-CN/api-reference/index.md` 与 VitePress sidebar，使 `Cqrs` family 的 generator 入口可导航
   - 为 `GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs` 与 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中缺失的内部类型补齐 XML 注释，使本轮轻量 inventory 达到声明级闭环
+  - 为 `GFramework.Game/README.md`、`GFramework.Game.Abstractions/README.md`、`GFramework.Game.SourceGenerators/README.md` 补齐 `Game` family 的类型族级 XML inventory
+  - 为 `docs/zh-CN/game/index.md` 补齐 frontmatter，并增加 `Game` / `Game.Abstractions` / `Game.SourceGenerators` 的 XML 覆盖基线入口
+  - 将 `docs/zh-CN/abstractions/game-abstractions.md` 从失真的旧接口摘录页重写为契约边界 / 包关系 / 最小接入路径页面
+  - 基于顶层目录轻量盘点确认：`GFramework.Game` 为 `56/56`、`GFramework.Game.Abstractions` 为 `80/80`、`GFramework.Game.SourceGenerators` 为 `2/2`，当前公开 / 内部类型声明都已带 XML 注释
 
 ## Inventory（第一版）
 
@@ -54,7 +58,7 @@
 | --- | --- | --- | --- |
 | `Core` / `Core.Abstractions` | `README / landing / 类型族级 XML inventory 已收口，成员级审计待补齐` | 根 README、模块 README、`docs/zh-CN/core/**`、`docs/zh-CN/abstractions/core-abstractions.md` 已对齐当前目录与类型族基线 | 进入巡检；如有新 API 变更，再追加成员级 XML 审计 |
 | `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` | `README / landing / generator topic / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Cqrs/README.md`、`GFramework.Cqrs.Abstractions/README.md`、`GFramework.Cqrs.SourceGenerators/README.md`、`docs/zh-CN/core/cqrs.md`、`docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`、`docs/zh-CN/api-reference/index.md` 已对齐当前源码与测试 | 转入巡检；下一波切到 `Game` family 的 XML / 教程链路审计 |
-| `Game` / `Game.Abstractions` / `Game.SourceGenerators` | `已验证` | 根 README、模块 README、`docs/zh-CN/game/**` 和 abstractions 页已存在 | 后续波次补 XML / 教程链路审计 |
+| `Game` / `Game.Abstractions` / `Game.SourceGenerators` | `README / landing / abstractions / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Game/README.md`、`GFramework.Game.Abstractions/README.md`、`GFramework.Game.SourceGenerators/README.md`、`docs/zh-CN/game/index.md`、`docs/zh-CN/abstractions/game-abstractions.md` 已对齐当前源码与目录基线 | 转入巡检；优先抽查 `config-system`、`scene`、`ui` 与 `source-generators` 交叉链路是否回漂 |
 | `Godot` / `Godot.SourceGenerators` | `已验证` | 上一轮归档 topic 已完成核心 landing / topic / tutorial 校验 | 进入巡检周期，重点看回漂 |
 | `Ecs.Arch` / `Ecs.Arch.Abstractions` | `README / landing / abstractions / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Ecs.Arch/README.md`、`GFramework.Ecs.Arch.Abstractions/README.md`、`docs/zh-CN/ecs/**`、`docs/zh-CN/abstractions/ecs-arch-abstractions.md` 已对齐当前源码与测试 | 转入巡检；后续仅在运行时公共 API 变动时补成员级 XML 细审 |
 | `SourceGenerators.Common` 与 `*.SourceGenerators.Abstractions` | `已判定为内部支撑` | `*.csproj` 明确 `IsPackable=false` | 由所属模块 README 与生成器栏目说明 owner，不建独立采用页 |
@@ -76,8 +80,8 @@
 
 - 当前 `Core` / `Core.Abstractions` 只完成了类型族级 XML 基线，不等于成员级契约全审计
   - 缓解措施：后续只在共享抽象或高风险生命周期接口发生改动时补成员级细审，不在本轮扩张范围
-- 其他模块族尚未全部建立同粒度的 XML inventory
-  - 缓解措施：按 `Ecs`、`Cqrs`、`Game` 的波次顺序继续推广同一模板
+- `Godot` family 的治理结论主要留在已归档 topic 中，active topic 当前只保留摘要
+  - 缓解措施：后续巡检优先抽查 `Godot` 入口页是否仍与归档结论一致，必要时把关键 XML inventory 摘要迁回 active topic
 - 新功能分支若修改 README / docs / 公共 API 却不挂文档 topic，仍可能回漂
   - 缓解措施：将本 topic 作为长期 active topic 保留，并在后续巡检中记录回漂来源
 - VitePress 页面不能直接链接到 `docs/` 目录之外的模块 `README.md`
@@ -138,9 +142,21 @@
 - `cd docs && bun run build`
 - 结果：通过
 - 备注：`2026-04-22` 在 `Cqrs` 波次文档刷新后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/game-abstractions.md`
+- 结果：通过
+- 备注：`2026-04-23` 在重写 `Game.Abstractions` 页面后验证通过
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/index.md`
+- 结果：通过
+- 备注：`2026-04-23` 在补充 frontmatter 与 XML inventory 后重新验证
+- `python3` 轻量 XML inventory 扫描
+- 结果：通过
+- 备注：`2026-04-23` 确认 `GFramework.Game` 为 `56/56`、`GFramework.Game.Abstractions` 为 `80/80`、`GFramework.Game.SourceGenerators` 为 `2/2`
+- `cd docs && bun run build`
+- 结果：通过
+- 备注：`2026-04-23` 在 `Game` 波次文档刷新后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
 
 ## 下一步
 
-1. 切换到 `Game` / `Game.Abstractions` / `Game.SourceGenerators` 波次，按 `Cqrs` 模板核对 README / landing / tutorials / API reference / XML 链路
-2. 评估 `Game` family 当前是否已经具备类型族级 XML inventory，还是仍停留在“README / 页面存在但不可审计”
+1. 进入巡检周期，优先抽查 `docs/zh-CN/game/config-system.md`、`scene.md`、`ui.md` 与 `docs/zh-CN/source-generators/index.md` 的交叉引用是否仍与当前 `Game` family README 对齐
+2. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，避免长期治理只依赖 archive 恢复
 3. 在后续环境治理任务中单独处理 `GFramework.Cqrs` 本地 build 的 fallback package folder 阻塞，避免影响后续代码类验证

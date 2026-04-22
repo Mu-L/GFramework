@@ -141,3 +141,40 @@
 
 1. 切换到 `Game` family 波次，按 `Core` / `Ecs` / `Cqrs` 已验证模板继续补 XML inventory 与教程链路
 2. 把 `GFramework.Cqrs` 的本地构建阻塞留给后续环境治理或构建脚本清理，不在本 topic 内扩张为环境修复任务
+
+### 当前恢复点：RP-005
+
+- 完成 `Game` 波次的模块族入口刷新：
+  - 更新 `GFramework.Game/README.md`
+  - 更新 `GFramework.Game.Abstractions/README.md`
+  - 更新 `GFramework.Game.SourceGenerators/README.md`
+  - 更新 `docs/zh-CN/game/index.md`
+  - 重写 `docs/zh-CN/abstractions/game-abstractions.md`
+- 将 `Game` family 从“README / 页面存在但缺少可审计 XML 入口，且 abstractions 页失真”推进到“runtime / abstractions / source generator 都有声明级 XML inventory 与真实采用边界”
+- 基于轻量扫描确认：
+  - `GFramework.Game` 当前类型声明级 XML 覆盖为 `56/56`
+  - `GFramework.Game.Abstractions` 当前类型声明级 XML 覆盖为 `80/80`
+  - `GFramework.Game.SourceGenerators` 当前类型声明级 XML 覆盖为 `2/2`
+
+### 当前决策（RP-005）
+
+- `docs/zh-CN/abstractions/game-abstractions.md` 不再维护虚构接口摘录，而是与源码中的 `Config` / `Data` / `Setting` / `Scene` / `UI` / `Routing` 契约分组保持一致
+- `Game.SourceGenerators` 继续以 `README + docs/zh-CN/game/config-system.md + docs/zh-CN/source-generators/index.md` 组成入口，不额外新增只为凑数量的专题页
+- `docs/zh-CN/game/index.md` 补 frontmatter，并承担 `Game` family 的 XML 基线入口；更细的类型族说明继续留在模块 README 与 abstractions 页
+
+### 当前验证（RP-005）
+
+- 文档校验：
+  - `validate-all.sh docs/zh-CN/abstractions/game-abstractions.md`：通过
+  - `validate-all.sh docs/zh-CN/game/index.md`：通过
+- 轻量 XML inventory：
+  - `GFramework.Game`：`56/56`
+  - `GFramework.Game.Abstractions`：`80/80`
+  - `GFramework.Game.SourceGenerators`：`2/2`
+- 构建校验：
+  - `cd docs && bun run build`：通过；仅保留 VitePress 大 chunk warning，无构建失败
+
+### 下一步
+
+1. 进入 `Game` family 巡检，优先检查 `config-system.md`、`scene.md`、`ui.md` 与 `source-generators/index.md` 的交叉引用是否回漂
+2. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，减少对 archive 的依赖
