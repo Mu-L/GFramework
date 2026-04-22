@@ -140,11 +140,30 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     /// <param name="sb">字符串构建器</param>
     private static void GenerateContextProperty(StringBuilder sb)
     {
+        GenerateContextBackingFields(sb);
+        GenerateContextGetter(sb);
+        GenerateContextProviderConfiguration(sb);
+    }
+
+    /// <summary>
+    ///     生成上下文缓存和同步所需的字段。
+    /// </summary>
+    /// <param name="sb">字符串构建器。</param>
+    private static void GenerateContextBackingFields(StringBuilder sb)
+    {
         sb.AppendLine("    private global::GFramework.Core.Abstractions.Architectures.IArchitectureContext? _context;");
         sb.AppendLine(
             "    private static global::GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider? _contextProvider;");
         sb.AppendLine("    private static readonly object _contextSync = new();");
         sb.AppendLine();
+    }
+
+    /// <summary>
+    ///     生成实例上下文访问器，包含显式注入优先和 provider 惰性回退语义。
+    /// </summary>
+    /// <param name="sb">字符串构建器。</param>
+    private static void GenerateContextGetter(StringBuilder sb)
+    {
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// 获取当前实例绑定的架构上下文。");
         sb.AppendLine("    /// </summary>");
@@ -185,6 +204,14 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine();
+    }
+
+    /// <summary>
+    ///     生成静态 provider 配置 API，供测试和宿主在懒加载前替换默认上下文来源。
+    /// </summary>
+    /// <param name="sb">字符串构建器。</param>
+    private static void GenerateContextProviderConfiguration(StringBuilder sb)
+    {
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// 配置当前生成类型共享的上下文提供者。");
         sb.AppendLine("    /// </summary>");

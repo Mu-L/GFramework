@@ -1,5 +1,38 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-22 — RP-017
+
+### 阶段：`ContextAwareGenerator` 剩余 `MA0051` 收口（RP-017）
+
+- 启动复核：
+  - 当前 worktree 仍映射到 `analyzer-warning-reduction` active topic
+  - `GFramework.Core` `net10.0` warnings-only build 在刷新 restore fallback 资产后复现 `16` 个 `MA0158`
+  - `GFramework.Core.SourceGenerators` warnings-only build 复现 `ContextAwareGenerator.GenerateContextProperty` 的单个
+    `MA0051`
+- 决策：
+  - `MA0158` 涉及 `GFramework.Core` 与 `GFramework.Cqrs` 的 object lock 字段，且项目仍多 target 到 `net8.0` / `net9.0`
+    / `net10.0`，因此本轮不直接批量替换为 `System.Threading.Lock`
+  - 先处理单文件、单 warning、生成输出可由 snapshot 验证的 `ContextAwareGenerator` 结构拆分
+  - 未使用 subagent；本轮 critical path 是本地复现 warning、拆分方法并验证生成输出，拆分后写集只包含单个 generator 文件和
+    active `ai-plan` 文档
+- 实施调整：
+  - 将 `GenerateContextProperty` 拆为 `GenerateContextBackingFields`、`GenerateContextGetter` 与
+    `GenerateContextProviderConfiguration`
+  - 保留原有 `StringBuilder` 追加顺序与生成代码文本，避免 snapshot 变更
+  - 为新增 helper 补充 XML 注释，说明字段、getter 与 provider 配置 API 的生成职责
+- 验证结果：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net10.0 -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`16 Warning(s)`，`0 Error(s)`；记录当前 `MA0158` 基线，不作为本轮修改范围
+  - `dotnet build GFramework.Core.SourceGenerators/GFramework.Core.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`0 Warning(s)`，`0 Error(s)`；`ContextAwareGenerator.cs` 的 `MA0051` 已清零
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~ContextAwareGeneratorSnapshotTests" -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`1 Passed`，`0 Failed`
+    - 说明：该 test project 构建仍显示相邻 generator/test 项目的既有 analyzer warning；本轮关注的
+      `GFramework.Core.SourceGenerators` 独立 build 已清零
+- 下一步建议：
+  - 继续该主题时，优先设计 `MA0158` 的多 target 兼容迁移方案；如果风险过高，再单独切入
+    `GFramework.Cqrs.SourceGenerators` 或 `GFramework.Game.SourceGenerators` 的结构性 warning
+
 ## 2026-04-22 — RP-016
 
 ### 阶段：`GFramework.Core` 剩余低风险 warning 批次清零（RP-016）
