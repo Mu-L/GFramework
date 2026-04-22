@@ -7,8 +7,8 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-022`
-- 当前阶段：`Phase 22`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-023`
+- 当前阶段：`Phase 23`
 - 当前焦点：
   - 已完成 `GFramework.Core` 当前 `MA0016` / `MA0002` / `MA0015` / `MA0077` 低风险收口批次
   - 已复核 `net10.0` 下的 `MA0158` 基线：`GFramework.Core` / `GFramework.Cqrs` 当前共有 `16` 个 object lock
@@ -23,6 +23,8 @@
     `ContextAwareGenerator` 已补上字段名去冲突与锁内读取修正，`Option<T>` 补齐 `<remarks>` 契约说明
   - 已完成当前 PR #269 第二轮 follow-up：恢复 `EasyEvents`、`CollectionExtensions`、`LoggingConfiguration` 与
     `FilterConfiguration` 的公共 API 兼容形状，并将 analyzer 兼容性处理收敛到局部 pragma
+  - 已完成当前 PR #269 第三轮 follow-up：继续收口 `SchemaConfigGenerator` 的根类型标识符校验与 XML 文档转义，
+    并补齐 `LoggingConfigurationTests`、`CollectionExtensionsTests`、`Cqrs` helper 抽取与 `ai-plan` 命令文本修正
   - `CoroutineScheduler` 的 tag/group 字典已显式使用 `StringComparer.Ordinal`，保持既有区分大小写语义
   - `EasyEvents.AddEvent<T>()` 的重复注册路径已恢复为 `ArgumentException`，以保持既有异常契约
   - `Option<T>` 已声明 `IEquatable<Option<T>>`，与已有强类型 `Equals(Option<T>)` 契约对齐
@@ -105,6 +107,9 @@
 - `RP-022` 继续复核 PR #269 的 latest-head review threads 与 nitpick，确认仍成立的项包括公共 API 兼容回退、
   `ContextAwareGenerator` 字段名真正去冲突与锁内读取、`SchemaConfigGenerator` 取消传播、`Cqrs` 运行时类型 null 防御；
   已补齐对应回归测试与 focused build/test 验证
+- `RP-023` 继续复核 PR #269 剩余 nitpick/outside-diff 项，确认仍成立的项集中在 `SchemaConfigGenerator` 根类型名校验、
+  aggregate registration comparer XML 文档转义、logging / collection 反射测试补强，以及跟踪文档中的
+  `RestoreFallbackFolders=""` 可复制性问题
 - 当前工作树分支 `fix/analyzer-warning-reduction-batch` 已在 `ai-plan/public/README.md` 建立 topic 映射
 
 ## 当前风险
@@ -248,16 +253,26 @@
       `CqrsHandlerRegistryGeneratorTests=14 Passed`
     - 说明：失败来自测试宿主并行写入同一 build 输出，不是代码回归；串行重跑后快照新增的字段重名场景和 CQRS 快照均通过
 - `RP-022` 的验证结果：
-  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders=\"\" -v minimal`
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders="" -v minimal`
     - 结果：通过；`EasyEvents`、`CollectionExtensions` 与 logging 配置模型的兼容性回退未引入新的 `net8.0` 构建错误
-  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders=\"\" -v minimal`
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -v minimal`
     - 结果：通过；`ContainingAssembly` null 防御与发射 helper 精简未引入新的构建错误
-  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders=\"\" -v minimal`
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -v minimal`
     - 结果：通过；仍保留既有 `9` 条 `SchemaConfigGenerator.cs` `MA0051` warning，非本轮新增
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~SchemaConfigGeneratorTests|FullyQualifiedName~ContextAwareGeneratorSnapshotTests|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests" -m:1 -p:RestoreFallbackFolders=\"\" -v minimal`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~SchemaConfigGeneratorTests|FullyQualifiedName~ContextAwareGeneratorSnapshotTests|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
     - 结果：`63 Passed`，`0 Failed`
-  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~EasyEventsTests|FullyQualifiedName~CollectionExtensionsTests|FullyQualifiedName~LoggingConfigurationTests|FullyQualifiedName~ConfigurableLoggerFactoryTests" -m:1 -p:RestoreFallbackFolders=\"\" -v minimal`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~EasyEventsTests|FullyQualifiedName~CollectionExtensionsTests|FullyQualifiedName~LoggingConfigurationTests|FullyQualifiedName~ConfigurableLoggerFactoryTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
     - 结果：`38 Passed`，`0 Failed`
+- `RP-023` 的验证结果：
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：通过；仍保留既有 `9` 条 `SchemaConfigGenerator.cs` `MA0051` warning，未新增新的 generator warning
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：通过；并行构建时 `GFramework.SourceGenerators.Common.dll` 复制阶段出现一次 `MSB3026` 重试，随后成功完成
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~SchemaConfigGeneratorTests|FullyQualifiedName~SchemaConfigGeneratorSnapshotTests|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：`63 Passed`，`0 Failed`
+    - 说明：测试项目构建仍会显示既有 `GFramework.SourceGenerators.Tests` analyzer warning；不属于本轮写集
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~CollectionExtensionsTests|FullyQualifiedName~LoggingConfigurationTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：`27 Passed`，`0 Failed`
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
 
 ## 下一步

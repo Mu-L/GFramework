@@ -73,6 +73,48 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证 schema 文件名若生成无效根类型标识符时，会在生成前产生命名明确的诊断。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_Schema_File_Name_Generates_Invalid_Root_Type_Identifier()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "name"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "name": { "type": "string" }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("123-monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_006"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("<root>"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("123-monster"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("123MonsterConfig"));
+        });
+    }
+
+    /// <summary>
     ///     用于模拟 AdditionalFiles 读取阶段直接收到取消请求的测试桩。
     /// </summary>
     private sealed class ThrowingAdditionalText : AdditionalText
@@ -2687,6 +2729,12 @@ public class SchemaConfigGeneratorTests
             Assert.That(catalogSource,
                 Does.Contain(
                     "public global::System.Collections.Generic.IEqualityComparer<int>? MonsterComparer { get; init; }"));
+            Assert.That(catalogSource,
+                Does.Contain(
+                    "using <c>global::System.Collections.Generic.IEqualityComparer&lt;string&gt;?</c> when aggregate registration runs."));
+            Assert.That(catalogSource,
+                Does.Contain(
+                    "using <c>global::System.Collections.Generic.IEqualityComparer&lt;int&gt;?</c> when aggregate registration runs."));
             Assert.That(catalogSource, Does.Contain("return RegisterAllGeneratedConfigTables(loader, options: null);"));
             Assert.That(catalogSource, Does.Contain("GeneratedConfigRegistrationOptions? options"));
             Assert.That(catalogSource, Does.Contain("loader.RegisterItemTable(effectiveOptions.ItemComparer);"));

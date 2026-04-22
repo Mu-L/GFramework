@@ -176,8 +176,13 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             return SchemaParseResult.FromDiagnostic(diagnostic!);
         }
 
-        var entityName = ToPascalCase(GetSchemaBaseName(filePath));
-        var rootObject = ParseObjectSpec(filePath, root, "<root>", $"{entityName}Config", isRoot: true);
+        var schemaBaseName = GetSchemaBaseName(filePath);
+        if (!TryBuildRootTypeIdentifiers(filePath, schemaBaseName, out var entityName, out var rootClassName, out diagnostic))
+        {
+            return SchemaParseResult.FromDiagnostic(diagnostic!);
+        }
+
+        var rootObject = ParseObjectSpec(filePath, root, "<root>", rootClassName, isRoot: true);
         if (rootObject.Diagnostic is not null)
         {
             return SchemaParseResult.FromDiagnostic(rootObject.Diagnostic);
@@ -190,7 +195,6 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             return SchemaParseResult.FromDiagnostic(diagnostic);
         }
 
-        var schemaBaseName = GetSchemaBaseName(filePath);
         var configRelativePath = ResolveConfigRelativePath(filePath, root, schemaBaseName);
         if (configRelativePath.Diagnostic is not null)
         {
@@ -3110,9 +3114,11 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         for (var index = 0; index < schemas.Count; index++)
         {
             var schema = schemas[index];
+            var comparerTypeDocumentation = EscapeXmlDocumentation(
+                $"global::System.Collections.Generic.IEqualityComparer<{schema.KeyClrType}>?");
             builder.AppendLine("    /// <summary>");
             builder.AppendLine(
-                $"    ///     Gets or sets the optional key comparer forwarded to {schema.EntityName}ConfigBindings.Register{schema.EntityName}Table(global::GFramework.Game.Config.YamlConfigLoader, global::System.Collections.Generic.IEqualityComparer<{schema.KeyClrType}>?) when aggregate registration runs.");
+                $"    ///     Gets or sets the optional key comparer forwarded to {schema.EntityName}ConfigBindings.Register{schema.EntityName}Table using <c>{comparerTypeDocumentation}</c> when aggregate registration runs.");
             builder.AppendLine("    /// </summary>");
             builder.AppendLine(
                 $"    public global::System.Collections.Generic.IEqualityComparer<{schema.KeyClrType}>? {schema.EntityName}Comparer {{ get; init; }}");
@@ -4042,6 +4048,41 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             displayPath,
             schemaName,
             propertyName);
+        return false;
+    }
+
+    /// <summary>
+    ///     将 schema 文件名派生的根实体名验证为生成代码可直接使用的根类型标识符。
+    ///     这里与属性名验证保持一致，避免文件名中的前导数字或其他非法字符把根配置类型/表类型生成为无效 C# 标识符。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="schemaBaseName">去除扩展名后的 schema 基础名。</param>
+    /// <param name="entityName">验证后的实体名。</param>
+    /// <param name="rootClassName">验证后的根配置类型名。</param>
+    /// <param name="diagnostic">根类型名非法时生成的诊断。</param>
+    /// <returns>是否成功生成合法的根类型标识符。</returns>
+    private static bool TryBuildRootTypeIdentifiers(
+        string filePath,
+        string schemaBaseName,
+        out string entityName,
+        out string rootClassName,
+        out Diagnostic? diagnostic)
+    {
+        entityName = ToPascalCase(schemaBaseName);
+        rootClassName = $"{entityName}Config";
+        if (SyntaxFacts.IsValidIdentifier(rootClassName))
+        {
+            diagnostic = null;
+            return true;
+        }
+
+        diagnostic = Diagnostic.Create(
+            ConfigSchemaDiagnostics.InvalidGeneratedIdentifier,
+            CreateFileLocation(filePath),
+            Path.GetFileName(filePath),
+            "<root>",
+            schemaBaseName,
+            rootClassName);
         return false;
     }
 

@@ -173,22 +173,11 @@ public sealed partial class CqrsHandlerRegistryGenerator
         INamedTypeSymbol namedType,
         out RuntimeTypeReferenceSpec? runtimeTypeReference)
     {
-        if (SymbolEqualityComparer.Default.Equals(namedType.ContainingAssembly, compilation.Assembly))
-        {
-            runtimeTypeReference = RuntimeTypeReferenceSpec.FromReflectionLookup(GetReflectionTypeMetadataName(namedType));
-            return true;
-        }
-
-        if (namedType.ContainingAssembly is null)
-        {
-            runtimeTypeReference = null;
-            return false;
-        }
-
-        runtimeTypeReference = RuntimeTypeReferenceSpec.FromExternalReflectionLookup(
-            namedType.ContainingAssembly.Identity.ToString(),
-            GetReflectionTypeMetadataName(namedType));
-        return true;
+        return TryCreateReflectionLookupReference(
+            compilation,
+            namedType,
+            GetReflectionTypeMetadataName(namedType),
+            out runtimeTypeReference);
     }
 
     /// <summary>
@@ -223,22 +212,42 @@ public sealed partial class CqrsHandlerRegistryGenerator
             return true;
         }
 
-        if (SymbolEqualityComparer.Default.Equals(genericTypeDefinition.ContainingAssembly, compilation.Assembly))
+        return TryCreateReflectionLookupReference(
+            compilation,
+            genericTypeDefinition,
+            GetReflectionTypeMetadataName(genericTypeDefinition),
+            out genericTypeDefinitionReference);
+    }
+
+    /// <summary>
+    ///     为当前程序集或外部程序集中的命名类型构造统一的运行时反射查找描述。
+    /// </summary>
+    /// <param name="compilation">当前生成轮次的编译上下文。</param>
+    /// <param name="namedType">需要在运行时解析的命名类型。</param>
+    /// <param name="metadataName">写入生成代码的反射元数据名称。</param>
+    /// <param name="runtimeTypeReference">成功时返回可直接写入注册器的运行时类型引用描述。</param>
+    /// <returns>当命名类型具备可稳定编码的程序集归属信息时返回 <see langword="true" />。</returns>
+    private static bool TryCreateReflectionLookupReference(
+        Compilation compilation,
+        INamedTypeSymbol namedType,
+        string metadataName,
+        out RuntimeTypeReferenceSpec? runtimeTypeReference)
+    {
+        if (SymbolEqualityComparer.Default.Equals(namedType.ContainingAssembly, compilation.Assembly))
         {
-            genericTypeDefinitionReference = RuntimeTypeReferenceSpec.FromReflectionLookup(
-                GetReflectionTypeMetadataName(genericTypeDefinition));
+            runtimeTypeReference = RuntimeTypeReferenceSpec.FromReflectionLookup(metadataName);
             return true;
         }
 
-        if (genericTypeDefinition.ContainingAssembly is null)
+        if (namedType.ContainingAssembly is null)
         {
-            genericTypeDefinitionReference = null;
+            runtimeTypeReference = null;
             return false;
         }
 
-        genericTypeDefinitionReference = RuntimeTypeReferenceSpec.FromExternalReflectionLookup(
-            genericTypeDefinition.ContainingAssembly.Identity.ToString(),
-            GetReflectionTypeMetadataName(genericTypeDefinition));
+        runtimeTypeReference = RuntimeTypeReferenceSpec.FromExternalReflectionLookup(
+            namedType.ContainingAssembly.Identity.ToString(),
+            metadataName);
         return true;
     }
 

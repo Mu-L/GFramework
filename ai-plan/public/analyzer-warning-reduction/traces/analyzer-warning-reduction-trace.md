@@ -1,5 +1,38 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-22 — RP-023
+
+### 阶段：PR #269 第三轮 review follow-up 收口（RP-023）
+
+- 启动复核：
+  - 延续 `$gframework-pr-review` 对 PR #269 的 latest-head unresolved threads、outside-diff comment 与 nitpick comment
+  - 本地核实后确认剩余仍成立的项集中在 `SchemaConfigGenerator` 根类型名校验、aggregate registration comparer XML 文档转义、
+    `LoggingConfigurationTests` / `CollectionExtensionsTests` 断言补强，以及 `ai-plan` 命令文本可复制性
+- 决策：
+  - `SchemaConfigGenerator` 沿用现有 `InvalidGeneratedIdentifier` 诊断，不新增诊断 ID；将根类型名校验收敛到独立 helper，
+    让顶层 schema 文件名与属性名共享同一类安全边界
+  - aggregate registration comparer 文档直接复用现有 `EscapeXmlDocumentation(...)`，避免在 `///` 注释里再次写入原始泛型尖括号
+  - `CqrsHandlerRegistryGenerator` 的重复反射查找分支采用小 helper 抽取，不改变 fallback 语义和快照输出
+- 实施调整：
+  - 为 `SchemaConfigGenerator` 新增 `TryBuildRootTypeIdentifiers(...)`，在进入 `ParseObjectSpec(...)` 前拦截非法根类型名
+  - 调整 aggregate registration comparer 属性的 XML 文档，使用 `<c>...</c>` 包裹并转义泛型类型文本
+  - 为 `SchemaConfigGeneratorTests` 增加非法 schema 文件名诊断回归，并补强 generated catalog 中 comparer 文档断言
+  - 为 `LoggingConfigurationTests` 增加正向键存在和值断言，为 `CollectionExtensionsTests` 补齐返回类型泛型参数绑定断言
+  - 为 `CqrsHandlerRegistryGenerator.RuntimeTypeReferences` 抽取共享反射查找 helper，并修正 active tracking 中的转义引号
+- 验证结果：
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：通过；仍保留既有 `9` 条 `SchemaConfigGenerator.cs` `MA0051`
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：通过；并行构建时出现一次 `MSB3026` 文件占用重试，自动恢复后完成
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~SchemaConfigGeneratorTests|FullyQualifiedName~SchemaConfigGeneratorSnapshotTests|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：`63 Passed`，`0 Failed`
+    - 说明：测试项目构建仍打印既有 source-generator-tests analyzer warning，不属于本轮写集
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~CollectionExtensionsTests|FullyQualifiedName~LoggingConfigurationTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：`27 Passed`，`0 Failed`
+- 下一步建议：
+  - 若本轮验证通过，继续回到 `SchemaConfigGenerator.cs` 剩余 `MA0051`
+  - 若 PR #269 仍有未关闭 review thread，再按“先本地复核、再最小修复”的节奏收口
+
 ## 2026-04-22 — RP-022
 
 ### 阶段：PR #269 第二轮 review follow-up 收口（RP-022）

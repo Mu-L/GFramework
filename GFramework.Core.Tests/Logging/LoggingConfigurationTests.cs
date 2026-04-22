@@ -65,7 +65,12 @@ public class LoggingConfigurationTests
         var config = new LoggingConfiguration();
         config.LoggerLevels["GFramework.Core"] = LogLevel.Info;
 
-        Assert.That(config.LoggerLevels.ContainsKey("gframework.core"), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(config.LoggerLevels.ContainsKey("GFramework.Core"), Is.True);
+            Assert.That(config.LoggerLevels["GFramework.Core"], Is.EqualTo(LogLevel.Info));
+            Assert.That(config.LoggerLevels.ContainsKey("gframework.core"), Is.False);
+        });
     }
 
     [Test]
