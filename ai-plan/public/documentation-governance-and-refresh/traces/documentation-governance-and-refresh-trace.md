@@ -2,7 +2,7 @@
 
 ## 2026-04-22
 
-### 当前恢复点：RP-015
+### 当前恢复点：RP-016
 
 - 本轮从 PR #268 的最新 review 数据恢复，未发现失败检查；CTRF 报告显示 2139 个测试全部通过
 - 本轮复核确认当前 PR 的 latest-head open thread 同时来自 `coderabbitai[bot]` 与 `greptile-apps[bot]`
@@ -36,8 +36,12 @@
   `IUiPageBehaviorProvider` 与 `[AutoUiPage]` 的真实关系、输入与暂停边界”，不再继续虚构 `GodotUiRouter`
 - 本轮额外确认 Godot Scene / UI 的关键差异：`GodotSceneFactory` 在 provider 缺失时会回退到 `SceneBehaviorFactory`，
   而 `GodotUiFactory` 仍会在缺失 `IUiPageBehaviorProvider` 时直接抛异常；这已写入两页文档，避免继续把两者描述成同一种接入模型
-- 本轮检索确认 Godot 栏目新的高优先级页面转为 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`：
-  两页仍保留 `SignalBuilder` / 大而全扩展层叙述，应作为 scene / ui 之后的下一轮收口对象
+- 本轮已重写 `docs/zh-CN/godot/signal.md`，把内容收口为“当前公开入口、动态绑定最小接入路径、与 `[BindNodeSignal]`
+  的分工、当前边界”，明确当前入口是 `Signal(...)` 而不是旧 `CreateSignalBuilder(...)`
+- 本轮已重写 `docs/zh-CN/godot/extensions.md`，把内容收口为“真实扩展分组、`NodeExtensions` 实际成员、`UnRegisterWhenNodeExitTree(...)`
+  生命周期边界、当前边界”，不再继续宣称存在覆盖所有 Godot 场景的万能扩展层
+- 本轮复核 `ai-libs/CoreGrid` 的动态绑定用法后，明确把 fluent API 定位为“动态对象 / 动态 signal 的运行时连接”，而把静态控件绑定继续归到
+  `[BindNodeSignal]` 生成器链路
 
 ### 当前决策
 
@@ -55,8 +59,10 @@
   `GFramework.Godot` 运行时
 - `ui.md` 已明确记录 `Page` 必须走 `PushAsync` / `ReplaceAsync`，`Show(..., UiLayer.Page)` 在当前实现中会抛异常；
   后续不要再把所有 UI 入口重新写回统一 `Show(...)`
-- `signal.md` 与 `extensions.md` 的下一轮收口应以 `Signal(...)` fluent API 与 `NodeExtensions` 的当前成员表为准，
-  不再继续复刻旧版 `SignalBuilder` 教程和泛化扩展层叙述
+- `signal.md` 已明确为 `Signal(...)` / `SignalBuilder` 的轻量 fluent 包装说明页，不再继续混入生成器职责
+- `extensions.md` 已明确限制在 `GodotPathExtensions`、`NodeExtensions`、`SignalFluentExtensions` 与 `UnRegisterExtension`
+  这四组当前存在的扩展
+- Godot 栏目的下一轮优先级转为 `logging.md`；后续如果它仍复用旧扩展页话术，会重新污染已收口的入口页
 
 ### 验证
 
@@ -79,11 +85,13 @@
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
 - `rg -n "GodotSceneRouter|GodotUiRouter|CreateSignalBuilder|GetNodeX|InstallGodotModule\(" docs/zh-CN/godot -S`
 - `cd docs && bun run build`
 
 ### 下一步
 
-1. 优先重写 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`，清掉旧 `SignalBuilder` / 大而全扩展层叙述
-2. 视 `signal.md` / `extensions.md` 收口结果，决定是否同步复核 `docs/zh-CN/godot/logging.md`
+1. 优先复核 `docs/zh-CN/godot/logging.md`，确认它的 API 说明与交叉链接不会把 signal / extensions / runtime 边界重新写偏
+2. 视 `logging.md` 复核结果，决定是否可以把当前 Godot 栏目恢复点收口并迁入 archive
 3. 下一次推送后重新执行 `$gframework-pr-review`，确认 PR #268 的 CodeRabbit / Greptile open thread 是否关闭或减少

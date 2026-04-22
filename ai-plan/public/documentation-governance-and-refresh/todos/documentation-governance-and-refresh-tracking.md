@@ -7,7 +7,7 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-015`
+- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-016`
 - 当前阶段：`Phase 3`
 - 当前焦点：
   - 已建立统一公开 skill：`.agents/skills/gframework-doc-refresh/`
@@ -15,15 +15,16 @@
   - `docs/zh-CN/godot/index.md` 已改成源码优先的模块 landing page，不再把 `GetNodeX`、`CreateSignalBuilder`、`InstallGodotModule(...)` 写成默认入口
   - `docs/zh-CN/godot/architecture.md` 已改成当前锚点生命周期、模块挂接顺序和接口边界说明，不再沿用旧版 `.Wait()` 叙述
   - `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md` 已按当前 factory / registry / root / source-generator wiring 重写完成
-  - 下一轮高优先级页面转为 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`
+  - `docs/zh-CN/godot/signal.md` 已按当前 `Signal(...)` / `SignalBuilder` / `[BindNodeSignal]` 分工重写完成
+  - `docs/zh-CN/godot/extensions.md` 已按当前 `GodotPathExtensions`、`NodeExtensions`、`SignalFluentExtensions` 与 `UnRegisterExtension` 重写完成
+  - 下一轮高优先级页面转为 `docs/zh-CN/godot/logging.md`
 
 ## 当前状态摘要
 
 - 文档治理规则已收口到仓库规范，README、站点入口与采用链路不再依赖旧文档自证
 - 高优先级模块入口、`core` 关键专题页与 `tutorials/godot-integration.md` 已回到“以源码 / 测试 / README 为准”的状态
 - `docs/zh-CN/godot/index.md`、`architecture.md`、`scene.md` 与 `ui.md` 已完成当前实现收口
-- 当前主题仍是 active topic，因为 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md` 仍可能保留旧
-  `SignalBuilder` / 大而全扩展层叙述，Godot 文档链路尚未完全收口
+- 当前主题仍是 active topic，因为 `docs/zh-CN/godot/logging.md` 及其与运行时扩展页的交叉引用仍需复核，Godot 文档链路尚未完全收口
 
 ## 当前活跃事实
 
@@ -85,6 +86,13 @@
   输入与暂停边界”的结构，明确当前没有 `GodotUiRouter`，且 `GodotUiFactory` 仍强制要求 `IUiPageBehaviorProvider`
 - 本轮已执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md` 与
   `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`，两页聚焦校验通过
+- `docs/zh-CN/godot/signal.md` 已改成“当前公开入口、动态绑定最小接入路径、与 `[BindNodeSignal]` 的分工、当前边界”的结构，
+  不再沿用旧 `CreateSignalBuilder(...)` / builder-pattern 教程式长篇叙述
+- `docs/zh-CN/godot/extensions.md` 已改成“真实扩展分组、Node 辅助成员表、`UnRegisterWhenNodeExitTree(...)` 生命周期边界、
+  当前边界”的结构，不再把扩展层写成覆盖所有 Godot 开发动作的万能工具箱
+- 本轮已执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md` 与
+  `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`，两页聚焦校验通过
+- 本轮再次执行 `cd docs && bun run build` 通过，当前 Godot signal / extensions 页面改动没有破坏站点构建
 - `.agents/skills/gframework-doc-refresh/SKILL.md` 已改成标准 YAML frontmatter skill，并明确支持模块输入、证据顺序、输出优先级与验证步骤
 - `.agents/skills/gframework-doc-refresh/SKILL.md` 的 `description` 已加引号，修复 `Recommended command:` 中冒号导致的
   invalid YAML skill 加载警告
@@ -105,10 +113,10 @@
     `godot-project-generator.md`、`get-node-generator.md`、`bind-node-signal-generator.md` 与 `auto-register-exported-collections-generator.md`
     已完成收口；
     继续按源码、测试、`*.csproj` 与 `ai-libs/` 下已验证参考实现核对剩余 Godot 相关页面，不把旧文档当事实来源
-- Godot signal / extensions 专题页失真风险：`docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md` 仍可能保留
-  `SignalBuilder` 或“大而全扩展层”叙述，重新把已经收口的入口页带偏
-  - 缓解措施：`scene.md` 与 `ui.md` 已完成收口；下一轮优先按当前 `Signal(...)` fluent API、`NodeExtensions` 实际成员与
-    `ai-libs/CoreGrid` 的使用方式重写 `signal.md`、`extensions.md`
+- Godot logging 专题页失真风险：`docs/zh-CN/godot/logging.md` 仍可能沿用旧扩展页引用和过时运行时说明，把已经收口的
+  signal / extensions / index 页重新带偏
+  - 缓解措施：`signal.md` 与 `extensions.md` 已完成收口；下一轮优先按当前日志 API、Godot 运行时边界与真实交叉链接复核
+    `logging.md`
 - 采用路径误导风险：根聚合包与模块边界若再次被写错，会继续误导消费者的包选择
   - 缓解措施：保持“源码与包关系优先”的证据顺序，改动采用说明时同步核对包依赖与生成器 wiring
 - 模块映射不全风险：统一 skill 若遗漏模块别名、测试项目或 docs 栏目映射，会让后续扫描阶段直接失焦
@@ -160,11 +168,13 @@
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
 - `rg -n "GodotSceneRouter|GodotUiRouter|CreateSignalBuilder|GetNodeX|InstallGodotModule\(" docs/zh-CN/godot -S`
 - `cd docs && bun run build`
 
 ## 下一步
 
-1. 优先重写 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`，清掉旧 `SignalBuilder` / 大而全扩展层叙述
-2. 视 `signal.md` / `extensions.md` 收口结果，决定是否同步复核 `docs/zh-CN/godot/logging.md`
+1. 优先复核 `docs/zh-CN/godot/logging.md`，确认它不会把已收口的 signal / extensions / runtime 边界重新写偏
+2. 视 `logging.md` 复核结果，决定是否可以把 Godot 栏目的 active 恢复点收口并准备归档本阶段历史
 3. 下一次推送后重新执行 `$gframework-pr-review`，确认 PR #268 的 CodeRabbit / Greptile open thread 是否按预期收敛
