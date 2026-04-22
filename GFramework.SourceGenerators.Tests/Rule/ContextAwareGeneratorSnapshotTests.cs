@@ -154,6 +154,9 @@ public class ContextAwareGeneratorSnapshotTests
                                       private readonly string _context = "user-field";
                                       private static readonly string _contextProvider = "user-provider";
                                       private static readonly object _contextSync = new();
+                                      private IArchitectureContext? _gFrameworkContextAwareContext;
+                                      private static IArchitectureContextProvider? _gFrameworkContextAwareProvider;
+                                      private static readonly object _gFrameworkContextAwareSync = new();
                                   }
                               }
                               """;

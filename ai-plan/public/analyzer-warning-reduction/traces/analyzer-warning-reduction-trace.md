@@ -1,5 +1,41 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-22 — RP-022
+
+### 阶段：PR #269 第二轮 review follow-up 收口（RP-022）
+
+- 启动复核：
+  - 延续 `$gframework-pr-review` 的 PR #269 结果，继续核对 latest-head unresolved threads 与 nitpick comment
+  - 结合本地实现确认仍成立的项不止第一轮记录的 4 个，还包括公共 API 兼容回退、`SchemaConfigGenerator` 取消传播、
+    `ContextAwareGenerator` 真正的字段名去冲突与锁内读取修正、`Cqrs` 运行时类型 null 防御
+- 决策：
+  - 对公共 API 兼容项优先保持既有契约，不为了压 analyzer 而继续收窄返回类型、属性类型或异常类型
+  - `ContextAwareGenerator` 采用保守并发修复：移除未加锁 fast-path，统一在锁内读取上下文缓存，并让生成字段名按已有成员去冲突
+  - `SchemaConfigGenerator` 在取消已请求时直接重新抛出 `OperationCanceledException`，避免把取消误报告成普通诊断
+- 实施调整：
+  - 将 `EasyEvents.AddEvent<T>()` 的重复注册异常恢复为 `ArgumentException`，并在测试中恢复既有异常契约断言
+  - 将 `CollectionExtensions.ToDictionarySafe(...)` 返回类型恢复为 `Dictionary<TKey, TValue>`，并新增反射测试锁定公开 API 形状
+  - 将 `LoggingConfiguration` / `FilterConfiguration` 的公开集合属性恢复为具体 `List<>` / `Dictionary<,>` 类型，
+    并新增反射测试与默认 comparer 语义断言
+  - 为 `CqrsHandlerRegistryGenerator` 的命名类型引用构造补上 `ContainingAssembly is null` 防御，移除发射 helper 冗余布尔参数
+  - 为 `SchemaConfigGenerator` 补上“仅在 cancellationToken 已取消时重抛”的 catch 分支，并为测试驱动添加多 `AdditionalText` 重载
+  - 为 `ContextAwareGenerator` 增加生成成员名分配逻辑，新增 `_gFrameworkContextAware*` 与旧 `_context*` 双冲突快照场景，
+    同时移除 getter 中未加锁 fast-path
+- 验证结果：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：通过
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：通过
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：通过；仍有既有 `9` 条 `MA0051`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~SchemaConfigGeneratorTests|FullyQualifiedName~ContextAwareGeneratorSnapshotTests|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：`63 Passed`，`0 Failed`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~EasyEventsTests|FullyQualifiedName~CollectionExtensionsTests|FullyQualifiedName~LoggingConfigurationTests|FullyQualifiedName~ConfigurableLoggerFactoryTests" -m:1 -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：`38 Passed`，`0 Failed`
+- 下一步建议：
+  - 回到 `GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs` 的剩余 `MA0051`
+  - 若后续 review 再提 analyzer 兼容建议，先做公共契约回归检查，再决定是否接受该建议
+
 ## 2026-04-22 — RP-021
 
 ### 阶段：PR #269 review follow-up 收口（RP-021）

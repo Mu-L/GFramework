@@ -134,6 +134,10 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         {
             text = file.GetText(cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             text = null;

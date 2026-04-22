@@ -105,9 +105,10 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 out runtimeTypeReference);
         }
 
-        if (type is INamedTypeSymbol namedType)
+        if (type is INamedTypeSymbol namedType &&
+            TryCreateNamedRuntimeTypeReference(compilation, namedType, out var namedTypeReference))
         {
-            runtimeTypeReference = CreateNamedRuntimeTypeReference(compilation, namedType);
+            runtimeTypeReference = namedTypeReference;
             return true;
         }
 
@@ -162,17 +163,32 @@ public sealed partial class CqrsHandlerRegistryGenerator
     /// </summary>
     /// <param name="compilation">当前生成轮次的编译上下文。</param>
     /// <param name="namedType">需要在运行时解析的命名类型。</param>
-    /// <returns>适合写入生成注册器的命名类型运行时引用。</returns>
-    private static RuntimeTypeReferenceSpec CreateNamedRuntimeTypeReference(
+    /// <param name="runtimeTypeReference">
+    ///     当方法返回 <see langword="true" /> 时，包含适合写入生成注册器的命名类型运行时引用；
+    ///     当返回 <see langword="false" /> 时，调用方应回退到更保守的注册路径。
+    /// </param>
+    /// <returns>当命名类型可安全编码为运行时引用时返回 <see langword="true" />。</returns>
+    private static bool TryCreateNamedRuntimeTypeReference(
         Compilation compilation,
-        INamedTypeSymbol namedType)
+        INamedTypeSymbol namedType,
+        out RuntimeTypeReferenceSpec? runtimeTypeReference)
     {
         if (SymbolEqualityComparer.Default.Equals(namedType.ContainingAssembly, compilation.Assembly))
-            return RuntimeTypeReferenceSpec.FromReflectionLookup(GetReflectionTypeMetadataName(namedType));
+        {
+            runtimeTypeReference = RuntimeTypeReferenceSpec.FromReflectionLookup(GetReflectionTypeMetadataName(namedType));
+            return true;
+        }
 
-        return RuntimeTypeReferenceSpec.FromExternalReflectionLookup(
+        if (namedType.ContainingAssembly is null)
+        {
+            runtimeTypeReference = null;
+            return false;
+        }
+
+        runtimeTypeReference = RuntimeTypeReferenceSpec.FromExternalReflectionLookup(
             namedType.ContainingAssembly.Identity.ToString(),
             GetReflectionTypeMetadataName(namedType));
+        return true;
     }
 
     /// <summary>
@@ -212,6 +228,12 @@ public sealed partial class CqrsHandlerRegistryGenerator
             genericTypeDefinitionReference = RuntimeTypeReferenceSpec.FromReflectionLookup(
                 GetReflectionTypeMetadataName(genericTypeDefinition));
             return true;
+        }
+
+        if (genericTypeDefinition.ContainingAssembly is null)
+        {
+            genericTypeDefinitionReference = null;
+            return false;
         }
 
         genericTypeDefinitionReference = RuntimeTypeReferenceSpec.FromExternalReflectionLookup(

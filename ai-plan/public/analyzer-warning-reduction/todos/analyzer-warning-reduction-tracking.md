@@ -7,8 +7,8 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-021`
-- 当前阶段：`Phase 21`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-022`
+- 当前阶段：`Phase 22`
 - 当前焦点：
   - 已完成 `GFramework.Core` 当前 `MA0016` / `MA0002` / `MA0015` / `MA0077` 低风险收口批次
   - 已复核 `net10.0` 下的 `MA0158` 基线：`GFramework.Core` / `GFramework.Cqrs` 当前共有 `16` 个 object lock
@@ -20,10 +20,11 @@
   - 已完成 `SchemaConfigGenerator.cs` 的第一批 `MA0051` 结构拆分：schema 入口解析、属性解析、schema 遍历、数组属性解析、
     约束文档生成与若干生成代码发射 helper 已拆出语义阶段
   - 已完成当前 PR #269 review follow-up：`CqrsHandlerRegistryGenerator` 按职责拆分为 partial 生成器文件，
-    `ContextAwareGenerator` 改用稳定前缀字段并补上 provider null 防御，`Option<T>` 补齐 `<remarks>` 契约说明
-  - `LoggingConfiguration`、`FilterConfiguration` 与 `CollectionExtensions` 已改用集合抽象接口，并保留内部具体集合默认值
+    `ContextAwareGenerator` 已补上字段名去冲突与锁内读取修正，`Option<T>` 补齐 `<remarks>` 契约说明
+  - 已完成当前 PR #269 第二轮 follow-up：恢复 `EasyEvents`、`CollectionExtensions`、`LoggingConfiguration` 与
+    `FilterConfiguration` 的公共 API 兼容形状，并将 analyzer 兼容性处理收敛到局部 pragma
   - `CoroutineScheduler` 的 tag/group 字典已显式使用 `StringComparer.Ordinal`，保持既有区分大小写语义
-  - `EasyEvents.AddEvent<T>()` 的重复注册路径已改为状态冲突异常，避免把泛型类型参数伪装成方法参数名
+  - `EasyEvents.AddEvent<T>()` 的重复注册路径已恢复为 `ArgumentException`，以保持既有异常契约
   - `Option<T>` 已声明 `IEquatable<Option<T>>`，与已有强类型 `Equals(Option<T>)` 契约对齐
   - 当前 `GFramework.Core` `net8.0` warnings-only 基线已降到 `0` 条
   - 当前 `GFramework.Core.SourceGenerators` warnings-only 基线已降到 `0` 条
@@ -53,8 +54,9 @@
 - 已完成当前 `GFramework.Core` `net8.0` 剩余低风险 analyzer warning 批次；warnings-only 基线已降到 `0` 条
 - 已完成 `GFramework.Core.SourceGenerators` 中 `ContextAwareGenerator` 的剩余 `MA0051` 收口；warnings-only 基线已降到 `0` 条
 - 已完成 `GFramework.Cqrs.SourceGenerators` 中 `CqrsHandlerRegistryGenerator` 的剩余 `MA0051` 收口；warnings-only 基线已降到 `0` 条
-- 已完成当前 PR #269 的 review follow-up：收口 `ContextAwareGenerator` 的字段命名冲突 / provider null 契约、
-  `Option<T>` 的 XML 文档缺口，以及 `CqrsHandlerRegistryGenerator` 的超大文件拆分
+- 已完成当前 PR #269 的 review follow-up：收口 `ContextAwareGenerator` 的字段命名冲突 / 锁内读取契约、
+  `CqrsHandlerRegistryGenerator` 的运行时类型 null 防御与超大文件拆分、`SchemaConfigGenerator` 的取消语义，
+  并恢复 `EasyEvents` / `CollectionExtensions` / logging 配置模型的公共 API 兼容形状
 - 已完成 `GFramework.Game.SourceGenerators` 中 `SchemaConfigGenerator` 的第一批 `MA0051` 收口；warnings-only 基线剩余 `9` 条
   `MA0051`
 
@@ -100,12 +102,15 @@
 - `RP-021` 使用 `$gframework-pr-review` 复核当前分支 PR #269 后，修复仍在本地成立的 4 个项：将
   `CqrsHandlerRegistryGenerator` 拆分为职责清晰的 partial 文件、为 `ContextAwareGenerator` 生成字段增加稳定前缀并补上
   `SetContextProvider` 的运行时 null 校验、为 `Option<T>` 补齐 `<remarks>`，并新增字段重名场景的生成器快照测试
+- `RP-022` 继续复核 PR #269 的 latest-head review threads 与 nitpick，确认仍成立的项包括公共 API 兼容回退、
+  `ContextAwareGenerator` 字段名真正去冲突与锁内读取、`SchemaConfigGenerator` 取消传播、`Cqrs` 运行时类型 null 防御；
+  已补齐对应回归测试与 focused build/test 验证
 - 当前工作树分支 `fix/analyzer-warning-reduction-batch` 已在 `ai-plan/public/README.md` 建立 topic 映射
 
 ## 当前风险
 
-- 公共契约兼容风险：本轮将部分配置与扩展方法返回值从具体集合类型改为集合抽象接口
-  - 缓解措施：保留具体集合默认值，并通过配置反序列化、工厂创建与集合扩展定向测试覆盖主要消费路径
+- analyzer 收口回退风险：后续若继续压 `MA0015` / `MA0016`，容易再次把公共 API 收窄成与既有契约不兼容的形状
+  - 缓解措施：优先保留既有公共 API，并将兼容性例外收敛到局部 pragma；继续用反射断言覆盖返回类型、属性类型与异常类型
 - 测试宿主稳定性风险：部分 Godot 失败路径在当前 .NET 测试宿主下仍不稳定
   - 缓解措施：继续优先使用稳定的 targeted test、项目构建和相邻 smoke test 组合验证
 - 多目标框架 warning 解释风险：同一源位置会在多个 target framework 下重复计数
@@ -242,6 +247,17 @@
     - 结果：先并行运行两条 `dotnet test` 时触发共享输出文件锁冲突；改为串行重跑后 `ContextAwareGeneratorSnapshotTests=2 Passed`、
       `CqrsHandlerRegistryGeneratorTests=14 Passed`
     - 说明：失败来自测试宿主并行写入同一 build 输出，不是代码回归；串行重跑后快照新增的字段重名场景和 CQRS 快照均通过
+- `RP-022` 的验证结果：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -p:RestoreFallbackFolders=\"\" -v minimal`
+    - 结果：通过；`EasyEvents`、`CollectionExtensions` 与 logging 配置模型的兼容性回退未引入新的 `net8.0` 构建错误
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders=\"\" -v minimal`
+    - 结果：通过；`ContainingAssembly` null 防御与发射 helper 精简未引入新的构建错误
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders=\"\" -v minimal`
+    - 结果：通过；仍保留既有 `9` 条 `SchemaConfigGenerator.cs` `MA0051` warning，非本轮新增
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~SchemaConfigGeneratorTests|FullyQualifiedName~ContextAwareGeneratorSnapshotTests|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests" -m:1 -p:RestoreFallbackFolders=\"\" -v minimal`
+    - 结果：`63 Passed`，`0 Failed`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~EasyEventsTests|FullyQualifiedName~CollectionExtensionsTests|FullyQualifiedName~LoggingConfigurationTests|FullyQualifiedName~ConfigurableLoggerFactoryTests" -m:1 -p:RestoreFallbackFolders=\"\" -v minimal`
+    - 结果：`38 Passed`，`0 Failed`
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
 
 ## 下一步

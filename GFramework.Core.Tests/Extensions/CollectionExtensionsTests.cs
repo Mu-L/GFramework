@@ -166,6 +166,20 @@ public class CollectionExtensionsTests
     }
 
     /// <summary>
+    ///     测试ToDictionarySafe保持具体Dictionary返回类型，避免公开API继续收窄。
+    /// </summary>
+    [Test]
+    public void ToDictionarySafe_Should_Preserve_Concrete_Return_Type()
+    {
+        var method = typeof(GFramework.Core.Extensions.CollectionExtensions)
+            .GetMethods()
+            .Single(static method => method.Name == nameof(GFramework.Core.Extensions.CollectionExtensions.ToDictionarySafe));
+
+        Assert.That(method.ReturnType.IsGenericType, Is.True);
+        Assert.That(method.ReturnType.GetGenericTypeDefinition(), Is.EqualTo(typeof(Dictionary<,>)));
+    }
+
+    /// <summary>
     ///     测试ToDictionarySafe方法在存在重复键时覆盖前面的值
     /// </summary>
     [Test]

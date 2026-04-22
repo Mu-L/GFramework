@@ -96,6 +96,7 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
 
         var interfaceName = iContextAware.ToDisplayString(
             SymbolDisplayFormat.FullyQualifiedFormat);
+        var memberNames = CreateGeneratedContextMemberNames(symbol);
         sb.AppendLine("/// <summary>");
         sb.AppendLine("/// 为当前规则类型补充自动生成的架构上下文访问实现。");
         sb.AppendLine("/// </summary>");
@@ -107,15 +108,15 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine(
             "/// 已缓存的实例上下文需要通过 <see cref=\"GFramework.Core.Abstractions.Rule.IContextAware.SetContext(GFramework.Core.Abstractions.Architectures.IArchitectureContext)\" /> 显式覆盖。");
         sb.AppendLine(
-            "/// 与手动继承 <see cref=\"global::GFramework.Core.Rule.ContextAwareBase\" /> 的路径相比，生成实现会使用 <c>_gFrameworkContextAwareSync</c> 协调惰性初始化、provider 切换和显式上下文注入；");
+            $"/// 与手动继承 <see cref=\"global::GFramework.Core.Rule.ContextAwareBase\" /> 的路径相比，生成实现会使用 <c>{memberNames.SyncFieldName}</c> 协调惰性初始化、provider 切换和显式上下文注入；");
         sb.AppendLine(
             "/// <see cref=\"global::GFramework.Core.Rule.ContextAwareBase\" /> 则保持无锁的实例级缓存语义，更适合已经由调用方线程模型保证串行访问的简单场景。");
         sb.AppendLine("/// </remarks>");
         sb.AppendLine($"partial class {symbol.Name} : {interfaceName}");
         sb.AppendLine("{");
 
-        GenerateContextProperty(sb);
-        GenerateInterfaceImplementations(sb, iContextAware);
+        GenerateContextProperty(sb, memberNames);
+        GenerateInterfaceImplementations(sb, iContextAware, memberNames);
 
         sb.AppendLine("}");
         return sb.ToString().TrimEnd();
@@ -138,24 +139,29 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     ///     生成Context属性
     /// </summary>
     /// <param name="sb">字符串构建器</param>
-    private static void GenerateContextProperty(StringBuilder sb)
+    /// <param name="memberNames">当前目标类型应使用的上下文字段名。</param>
+    private static void GenerateContextProperty(
+        StringBuilder sb,
+        GeneratedContextMemberNames memberNames)
     {
-        GenerateContextBackingFields(sb);
-        GenerateContextGetter(sb);
-        GenerateContextProviderConfiguration(sb);
+        GenerateContextBackingFields(sb, memberNames);
+        GenerateContextGetter(sb, memberNames);
+        GenerateContextProviderConfiguration(sb, memberNames);
     }
 
     /// <summary>
     ///     生成上下文缓存和同步所需的字段。
     /// </summary>
     /// <param name="sb">字符串构建器。</param>
-    private static void GenerateContextBackingFields(StringBuilder sb)
+    private static void GenerateContextBackingFields(
+        StringBuilder sb,
+        GeneratedContextMemberNames memberNames)
     {
         sb.AppendLine(
-            "    private global::GFramework.Core.Abstractions.Architectures.IArchitectureContext? _gFrameworkContextAwareContext;");
+            $"    private global::GFramework.Core.Abstractions.Architectures.IArchitectureContext? {memberNames.ContextFieldName};");
         sb.AppendLine(
-            "    private static global::GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider? _gFrameworkContextAwareProvider;");
-        sb.AppendLine("    private static readonly object _gFrameworkContextAwareSync = new();");
+            $"    private static global::GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider? {memberNames.ProviderFieldName};");
+        sb.AppendLine($"    private static readonly object {memberNames.SyncFieldName} = new();");
         sb.AppendLine();
     }
 
@@ -163,7 +169,9 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     ///     生成实例上下文访问器，包含显式注入优先和 provider 惰性回退语义。
     /// </summary>
     /// <param name="sb">字符串构建器。</param>
-    private static void GenerateContextGetter(StringBuilder sb)
+    private static void GenerateContextGetter(
+        StringBuilder sb,
+        GeneratedContextMemberNames memberNames)
     {
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// 获取当前实例绑定的架构上下文。");
@@ -178,7 +186,7 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine(
             "    /// 或 <see cref=\"ResetContextProvider\" /> 不会自动清除此缓存；如需覆盖，请显式调用 <c>IContextAware.SetContext(...)</c>。");
         sb.AppendLine(
-            "    /// 当前实现还假设 <see cref=\"GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider.GetContext\" /> 可在持有 <c>_gFrameworkContextAwareSync</c> 时安全执行；");
+            $"    /// 当前实现还假设 <see cref=\"GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider.GetContext\" /> 可在持有 <c>{memberNames.SyncFieldName}</c> 时安全执行；");
         sb.AppendLine(
             "    /// 自定义 provider 不应在该调用链内重新进入当前类型的 provider 配置 API，且应避免引入与外部全局锁相互等待的锁顺序。");
         sb.AppendLine("    /// </remarks>");
@@ -186,21 +194,15 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine("    {");
         sb.AppendLine("        get");
         sb.AppendLine("        {");
-        sb.AppendLine("            var context = _gFrameworkContextAwareContext;");
-        sb.AppendLine("            if (context is not null)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return context;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
         sb.AppendLine("            // 在同一个同步域内协调懒加载与 provider 切换，避免读取到被并发重置的空提供者。");
         sb.AppendLine(
-            "            // provider 的 GetContext() 会在持有 _gFrameworkContextAwareSync 时执行；自定义 provider 必须避免在该调用链内回调 SetContextProvider/ResetContextProvider 或形成反向锁顺序。");
-        sb.AppendLine("            lock (_gFrameworkContextAwareSync)");
+            $"            // provider 的 GetContext() 会在持有 {memberNames.SyncFieldName} 时执行；自定义 provider 必须避免在该调用链内回调 SetContextProvider/ResetContextProvider 或形成反向锁顺序。");
+        sb.AppendLine($"            lock ({memberNames.SyncFieldName})");
         sb.AppendLine("            {");
         sb.AppendLine(
-            "                _gFrameworkContextAwareProvider ??= new global::GFramework.Core.Architectures.GameContextProvider();");
-        sb.AppendLine("                _gFrameworkContextAwareContext ??= _gFrameworkContextAwareProvider.GetContext();");
-        sb.AppendLine("                return _gFrameworkContextAwareContext;");
+            $"                {memberNames.ProviderFieldName} ??= new global::GFramework.Core.Architectures.GameContextProvider();");
+        sb.AppendLine($"                {memberNames.ContextFieldName} ??= {memberNames.ProviderFieldName}.GetContext();");
+        sb.AppendLine($"                return {memberNames.ContextFieldName};");
         sb.AppendLine("            }");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
@@ -211,7 +213,9 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     ///     生成静态 provider 配置 API，供测试和宿主在懒加载前替换默认上下文来源。
     /// </summary>
     /// <param name="sb">字符串构建器。</param>
-    private static void GenerateContextProviderConfiguration(StringBuilder sb)
+    private static void GenerateContextProviderConfiguration(
+        StringBuilder sb,
+        GeneratedContextMemberNames memberNames)
     {
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// 配置当前生成类型共享的上下文提供者。");
@@ -229,9 +233,9 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
             "    public static void SetContextProvider(global::GFramework.Core.Abstractions.Architectures.IArchitectureContextProvider provider)");
         sb.AppendLine("    {");
         sb.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(provider);");
-        sb.AppendLine("        lock (_gFrameworkContextAwareSync)");
+        sb.AppendLine($"        lock ({memberNames.SyncFieldName})");
         sb.AppendLine("        {");
-        sb.AppendLine("            _gFrameworkContextAwareProvider = provider;");
+        sb.AppendLine($"            {memberNames.ProviderFieldName} = provider;");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -246,9 +250,9 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
         sb.AppendLine("    /// </remarks>");
         sb.AppendLine("    public static void ResetContextProvider()");
         sb.AppendLine("    {");
-        sb.AppendLine("        lock (_gFrameworkContextAwareSync)");
+        sb.AppendLine($"        lock ({memberNames.SyncFieldName})");
         sb.AppendLine("        {");
-        sb.AppendLine("            _gFrameworkContextAwareProvider = null;");
+        sb.AppendLine($"            {memberNames.ProviderFieldName} = null;");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -265,7 +269,8 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     /// <param name="interfaceSymbol">接口符号</param>
     private static void GenerateInterfaceImplementations(
         StringBuilder sb,
-        INamedTypeSymbol interfaceSymbol)
+        INamedTypeSymbol interfaceSymbol,
+        GeneratedContextMemberNames memberNames)
     {
         var interfaceName = interfaceSymbol.ToDisplayString(
             SymbolDisplayFormat.FullyQualifiedFormat);
@@ -275,7 +280,7 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
             if (method.MethodKind != MethodKind.Ordinary)
                 continue;
 
-            GenerateMethod(sb, interfaceName, method);
+            GenerateMethod(sb, interfaceName, method, memberNames);
             sb.AppendLine();
         }
     }
@@ -289,7 +294,8 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     private static void GenerateMethod(
         StringBuilder sb,
         string interfaceName,
-        IMethodSymbol method)
+        IMethodSymbol method,
+        GeneratedContextMemberNames memberNames)
     {
         var returnType = method.ReturnType.ToDisplayString(
             SymbolDisplayFormat.FullyQualifiedFormat);
@@ -302,7 +308,7 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
             $"    {returnType} {interfaceName}.{method.Name}({parameters})");
         sb.AppendLine("    {");
 
-        GenerateMethodBody(sb, method);
+        GenerateMethodBody(sb, method, memberNames);
 
         sb.AppendLine("    }");
     }
@@ -314,15 +320,16 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     /// <param name="method">方法符号</param>
     private static void GenerateMethodBody(
         StringBuilder sb,
-        IMethodSymbol method)
+        IMethodSymbol method,
+        GeneratedContextMemberNames memberNames)
     {
         switch (method.Name)
         {
             case "SetContext":
                 sb.AppendLine("        // 与 Context getter 共享同一同步协议，避免显式注入被并发懒加载覆盖。");
-                sb.AppendLine("        lock (_gFrameworkContextAwareSync)");
+                sb.AppendLine($"        lock ({memberNames.SyncFieldName})");
                 sb.AppendLine("        {");
-                sb.AppendLine("            _gFrameworkContextAwareContext = context;");
+                sb.AppendLine($"            {memberNames.ContextFieldName} = context;");
                 sb.AppendLine("        }");
                 break;
 
@@ -338,4 +345,55 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
                 break;
         }
     }
+
+    /// <summary>
+    ///     为生成字段选择不会与目标类型现有成员冲突的稳定名称。
+    /// </summary>
+    /// <param name="symbol">当前需要补充 ContextAware 实现的目标类型。</param>
+    /// <returns>当前生成轮次应使用的上下文字段名集合。</returns>
+    private static GeneratedContextMemberNames CreateGeneratedContextMemberNames(INamedTypeSymbol symbol)
+    {
+        var reservedNames = new HashSet<string>(
+            symbol.GetMembers()
+                .Where(static member => !member.IsImplicitlyDeclared)
+                .Select(static member => member.Name),
+            StringComparer.Ordinal);
+
+        return new GeneratedContextMemberNames(
+            AllocateGeneratedMemberName(reservedNames, "_gFrameworkContextAwareContext"),
+            AllocateGeneratedMemberName(reservedNames, "_gFrameworkContextAwareProvider"),
+            AllocateGeneratedMemberName(reservedNames, "_gFrameworkContextAwareSync"));
+    }
+
+    /// <summary>
+    ///     在固定前缀基础上按顺序追加数字后缀，直到找到可安全写入的成员名。
+    /// </summary>
+    /// <param name="reservedNames">当前类型已占用或已为其他生成字段保留的名称集合。</param>
+    /// <param name="baseName">优先尝试的基础名称。</param>
+    /// <returns>本轮生成可以使用的唯一成员名。</returns>
+    private static string AllocateGeneratedMemberName(
+        ISet<string> reservedNames,
+        string baseName)
+    {
+        if (reservedNames.Add(baseName))
+            return baseName;
+
+        for (var suffix = 1; ; suffix++)
+        {
+            var candidateName = $"{baseName}{suffix}";
+            if (reservedNames.Add(candidateName))
+                return candidateName;
+        }
+    }
+
+    /// <summary>
+    ///     描述一次 ContextAware 代码生成中选定的上下文字段名。
+    /// </summary>
+    /// <param name="ContextFieldName">实例上下文缓存字段名。</param>
+    /// <param name="ProviderFieldName">共享上下文提供者字段名。</param>
+    /// <param name="SyncFieldName">用于串行化访问的同步字段名。</param>
+    private readonly record struct GeneratedContextMemberNames(
+        string ContextFieldName,
+        string ProviderFieldName,
+        string SyncFieldName);
 }

@@ -34,12 +34,6 @@ partial class MyRule : global::GFramework.Core.Abstractions.Rule.IContextAware
     {
         get
         {
-            var context = _gFrameworkContextAwareContext;
-            if (context is not null)
-            {
-                return context;
-            }
-
             // 在同一个同步域内协调懒加载与 provider 切换，避免读取到被并发重置的空提供者。
             // provider 的 GetContext() 会在持有 _gFrameworkContextAwareSync 时执行；自定义 provider 必须避免在该调用链内回调 SetContextProvider/ResetContextProvider 或形成反向锁顺序。
             lock (_gFrameworkContextAwareSync)

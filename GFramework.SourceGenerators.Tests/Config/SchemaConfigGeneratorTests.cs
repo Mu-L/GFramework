@@ -7,6 +7,32 @@ namespace GFramework.SourceGenerators.Tests.Config;
 public class SchemaConfigGeneratorTests
 {
     /// <summary>
+    ///     验证 AdditionalFiles 读取被取消时会向上传播取消，而不是伪造成 schema 诊断。
+    /// </summary>
+    [Test]
+    public void Run_Should_Propagate_Cancellation_When_AdditionalText_Read_Is_Cancelled()
+    {
+        var method = typeof(global::GFramework.Game.SourceGenerators.Config.SchemaConfigGenerator)
+            .GetMethod(
+                "TryReadSchemaText",
+                global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static);
+        var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+        var invocationArguments = new object?[]
+        {
+            new ThrowingAdditionalText("monster.schema.json"),
+            cancellationTokenSource.Token,
+            null,
+            null
+        };
+
+        var exception = Assert.Throws<global::System.Reflection.TargetInvocationException>(() =>
+            method!.Invoke(null, invocationArguments));
+
+        Assert.That(exception!.InnerException, Is.TypeOf<OperationCanceledException>());
+    }
+
+    /// <summary>
     ///     验证缺失必填 id 字段时会产生命名明确的诊断。
     /// </summary>
     [Test]
@@ -44,6 +70,30 @@ public class SchemaConfigGeneratorTests
             Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
             Assert.That(diagnostic.GetMessage(), Does.Contain("monster.schema.json"));
         });
+    }
+
+    /// <summary>
+    ///     用于模拟 AdditionalFiles 读取阶段直接收到取消请求的测试桩。
+    /// </summary>
+    private sealed class ThrowingAdditionalText : AdditionalText
+    {
+        /// <summary>
+        ///     创建一个在读取时抛出取消异常的 AdditionalText。
+        /// </summary>
+        /// <param name="path">虚拟 schema 路径。</param>
+        public ThrowingAdditionalText(string path)
+        {
+            Path = path;
+        }
+
+        /// <inheritdoc />
+        public override string Path { get; }
+
+        /// <inheritdoc />
+        public override SourceText GetText(CancellationToken cancellationToken = default)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
     }
 
     /// <summary>

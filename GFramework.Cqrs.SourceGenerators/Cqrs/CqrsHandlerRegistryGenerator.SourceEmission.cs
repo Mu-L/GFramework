@@ -143,7 +143,7 @@ public sealed partial class CqrsHandlerRegistryGenerator
         if (sourceShape.HasExternalAssemblyTypeLookups)
         {
             builder.AppendLine();
-            AppendReflectionHelpers(builder, sourceShape.HasExternalAssemblyTypeLookups);
+            AppendReflectionHelpers(builder);
         }
 
         builder.AppendLine("}");
@@ -792,53 +792,48 @@ public sealed partial class CqrsHandlerRegistryGenerator
         return variableBaseName;
     }
 
-    private static void AppendReflectionHelpers(
-        StringBuilder builder,
-        bool includeExternalAssemblyTypeLookupHelpers)
+    private static void AppendReflectionHelpers(StringBuilder builder)
     {
-        if (includeExternalAssemblyTypeLookupHelpers)
-        {
-            builder.AppendLine(
-                "    private static global::System.Type? ResolveReferencedAssemblyType(string assemblyIdentity, string typeMetadataName)");
-            builder.AppendLine("    {");
-            builder.AppendLine("        var assembly = ResolveReferencedAssembly(assemblyIdentity);");
-            builder.AppendLine(
-                "        return assembly?.GetType(typeMetadataName, throwOnError: false, ignoreCase: false);");
-            builder.AppendLine("    }");
-            builder.AppendLine();
-            builder.AppendLine(
-                "    private static global::System.Reflection.Assembly? ResolveReferencedAssembly(string assemblyIdentity)");
-            builder.AppendLine("    {");
-            builder.AppendLine("        global::System.Reflection.AssemblyName targetAssemblyName;");
-            builder.AppendLine("        try");
-            builder.AppendLine("        {");
-            builder.AppendLine(
-                "            targetAssemblyName = new global::System.Reflection.AssemblyName(assemblyIdentity);");
-            builder.AppendLine("        }");
-            builder.AppendLine("        catch");
-            builder.AppendLine("        {");
-            builder.AppendLine("            return null;");
-            builder.AppendLine("        }");
-            builder.AppendLine();
-            builder.AppendLine(
-                "        foreach (var assembly in global::System.AppDomain.CurrentDomain.GetAssemblies())");
-            builder.AppendLine("        {");
-            builder.AppendLine(
-                "            if (global::System.Reflection.AssemblyName.ReferenceMatchesDefinition(targetAssemblyName, assembly.GetName()))");
-            builder.AppendLine("                return assembly;");
-            builder.AppendLine("        }");
-            builder.AppendLine();
-            builder.AppendLine("        try");
-            builder.AppendLine("        {");
-            builder.AppendLine(
-                "            return global::System.Reflection.Assembly.Load(targetAssemblyName);");
-            builder.AppendLine("        }");
-            builder.AppendLine("        catch");
-            builder.AppendLine("        {");
-            builder.AppendLine("            return null;");
-            builder.AppendLine("        }");
-            builder.AppendLine("    }");
-        }
+        builder.AppendLine(
+            "    private static global::System.Type? ResolveReferencedAssemblyType(string assemblyIdentity, string typeMetadataName)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        var assembly = ResolveReferencedAssembly(assemblyIdentity);");
+        builder.AppendLine(
+            "        return assembly?.GetType(typeMetadataName, throwOnError: false, ignoreCase: false);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "    private static global::System.Reflection.Assembly? ResolveReferencedAssembly(string assemblyIdentity)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        global::System.Reflection.AssemblyName targetAssemblyName;");
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            targetAssemblyName = new global::System.Reflection.AssemblyName(assemblyIdentity);");
+        builder.AppendLine("        }");
+        builder.AppendLine("        catch");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return null;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        foreach (var assembly in global::System.AppDomain.CurrentDomain.GetAssemblies())");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            if (global::System.Reflection.AssemblyName.ReferenceMatchesDefinition(targetAssemblyName, assembly.GetName()))");
+        builder.AppendLine("                return assembly;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            return global::System.Reflection.Assembly.Load(targetAssemblyName);");
+        builder.AppendLine("        }");
+        builder.AppendLine("        catch");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return null;");
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
     }
 
     private static string EscapeStringLiteral(string value)
