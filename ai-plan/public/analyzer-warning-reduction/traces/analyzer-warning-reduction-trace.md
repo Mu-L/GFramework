@@ -1,5 +1,35 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-22 — RP-019
+
+### 阶段：`SchemaConfigGenerator` 当前 `MA0006` 收口（RP-019）
+
+- 启动复核：
+  - 当前 worktree 仍映射到 `analyzer-warning-reduction` active topic
+  - Windows Git interop 在当前 shell 中返回 WSL socket 错误；本轮使用显式 `--git-dir` / `--work-tree` 读取状态
+  - `GFramework.Game.SourceGenerators` 首次 build 受 stale Windows fallback package folder 影响，刷新 restore 资产后复现
+    `46` 条 warning，其中 `MA0006=27`，其余为 `SchemaConfigGenerator.cs` 的 `MA0051`
+- 决策：
+  - 本轮先收口低风险 `MA0006`，不在同一 slice 中拆分 `SchemaConfigGenerator.cs` 的长方法
+  - 未使用 subagent；critical path 是本地复现 warning、替换 schema 字符串比较并用 focused schema generator tests 验证输出行为
+- 实施调整：
+  - 为 schema 类型关键字新增 `IsSchemaType` / `IsNumericSchemaType` helper，统一使用 `StringComparison.Ordinal`
+  - 将 id key 类型验证、约束文档生成、required property 文档和路径拼接中的直接字符串比较改为显式 ordinal 比较
+  - 修正 `JsonElement.GetString()` 后的 nullable flow，避免新增 `CS8604`
+- 验证结果：
+  - `dotnet restore GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -p:RestoreFallbackFolders= -nologo`
+    - 结果：通过
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders= -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`19 Warning(s)`，`0 Error(s)`；当前项目输出已无 `MA0006`，剩余均为 `MA0051`
+  - `dotnet restore GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -p:RestoreFallbackFolders= -nologo`
+    - 结果：通过
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~SchemaConfigGenerator -m:1 -p:RestoreFallbackFolders= -nologo`
+    - 结果：`50 Passed`，`0 Failed`
+    - 说明：测试项目构建仍显示既有 analyzer warning；不属于本轮写集
+- 下一步建议：
+  - 继续该主题时，优先拆分 `GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs` 的 `MA0051`
+  - 若回到 `MA0158`，先设计多 target 条件编译方案，再考虑替换共享源码中的 `object` lock
+
 ## 2026-04-22 — RP-018
 
 ### 阶段：`CqrsHandlerRegistryGenerator` 剩余 `MA0051` 收口（RP-018）

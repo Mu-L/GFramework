@@ -203,8 +203,8 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                         Path.GetFileName(file.Path)));
             }
 
-            if (idProperty.TypeSpec.SchemaType != "integer" &&
-                idProperty.TypeSpec.SchemaType != "string")
+            if (!IsSchemaType(idProperty.TypeSpec.SchemaType, "integer") &&
+                !IsSchemaType(idProperty.TypeSpec.SchemaType, "string"))
             {
                 return SchemaParseResult.FromDiagnostic(
                     Diagnostic.Create(
@@ -1852,6 +1852,27 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             "uuid" => true,
             _ => false
         };
+    }
+
+    /// <summary>
+    ///     使用 schema 关键字的大小写敏感语义比较类型名称。
+    /// </summary>
+    /// <param name="schemaType">从 JSON schema 读取或推导出的类型名称。</param>
+    /// <param name="expectedType">期望匹配的 schema 类型关键字。</param>
+    /// <returns>当两个类型名称按 schema 关键字语义完全一致时返回 <see langword="true" />。</returns>
+    private static bool IsSchemaType(string schemaType, string expectedType)
+    {
+        return string.Equals(schemaType, expectedType, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     判断类型是否支持 JSON schema 数值范围和倍数约束。
+    /// </summary>
+    /// <param name="schemaType">从 JSON schema 读取或推导出的类型名称。</param>
+    /// <returns>当类型为 <c>integer</c> 或 <c>number</c> 时返回 <see langword="true" />。</returns>
+    private static bool IsNumericSchemaType(string schemaType)
+    {
+        return IsSchemaType(schemaType, "integer") || IsSchemaType(schemaType, "number");
     }
 
     /// <summary>
@@ -3943,57 +3964,57 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             parts.Add($"const = {constDocumentation}");
         }
 
-        if ((schemaType == "integer" || schemaType == "number") &&
+        if (IsNumericSchemaType(schemaType) &&
             TryGetFiniteNumber(element, "minimum", out var minimum))
         {
             parts.Add($"minimum = {minimum.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if ((schemaType == "integer" || schemaType == "number") &&
+        if (IsNumericSchemaType(schemaType) &&
             TryGetFiniteNumber(element, "exclusiveMinimum", out var exclusiveMinimum))
         {
             parts.Add($"exclusiveMinimum = {exclusiveMinimum.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if ((schemaType == "integer" || schemaType == "number") &&
+        if (IsNumericSchemaType(schemaType) &&
             TryGetFiniteNumber(element, "maximum", out var maximum))
         {
             parts.Add($"maximum = {maximum.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if ((schemaType == "integer" || schemaType == "number") &&
+        if (IsNumericSchemaType(schemaType) &&
             TryGetFiniteNumber(element, "exclusiveMaximum", out var exclusiveMaximum))
         {
             parts.Add($"exclusiveMaximum = {exclusiveMaximum.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if ((schemaType == "integer" || schemaType == "number") &&
+        if (IsNumericSchemaType(schemaType) &&
             TryGetFiniteNumber(element, "multipleOf", out var multipleOf) &&
             multipleOf > 0d)
         {
             parts.Add($"multipleOf = {multipleOf.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "string" &&
+        if (IsSchemaType(schemaType, "string") &&
             TryGetNonNegativeInt32(element, "minLength", out var minLength))
         {
             parts.Add($"minLength = {minLength.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "string" &&
+        if (IsSchemaType(schemaType, "string") &&
             TryGetNonNegativeInt32(element, "maxLength", out var maxLength))
         {
             parts.Add($"maxLength = {maxLength.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "string" &&
+        if (IsSchemaType(schemaType, "string") &&
             element.TryGetProperty("pattern", out var patternElement) &&
             patternElement.ValueKind == JsonValueKind.String)
         {
             parts.Add($"pattern = '{patternElement.GetString() ?? string.Empty}'");
         }
 
-        if (schemaType == "string" &&
+        if (IsSchemaType(schemaType, "string") &&
             element.TryGetProperty("format", out var formatElement) &&
             formatElement.ValueKind == JsonValueKind.String)
         {
@@ -4004,26 +4025,26 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             }
         }
 
-        if (schemaType == "array" &&
+        if (IsSchemaType(schemaType, "array") &&
             TryGetNonNegativeInt32(element, "minItems", out var minItems))
         {
             parts.Add($"minItems = {minItems.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "array" &&
+        if (IsSchemaType(schemaType, "array") &&
             TryGetNonNegativeInt32(element, "maxItems", out var maxItems))
         {
             parts.Add($"maxItems = {maxItems.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "array" &&
+        if (IsSchemaType(schemaType, "array") &&
             element.TryGetProperty("uniqueItems", out var uniqueItemsElement) &&
             uniqueItemsElement.ValueKind == JsonValueKind.True)
         {
             parts.Add("uniqueItems = true");
         }
 
-        if (schemaType == "array")
+        if (IsSchemaType(schemaType, "array"))
         {
             var containsDocumentation = TryBuildContainsDocumentation(element);
             if (containsDocumentation is not null)
@@ -4038,31 +4059,31 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             parts.Add($"not = {notDocumentation}");
         }
 
-        if (schemaType == "array" &&
+        if (IsSchemaType(schemaType, "array") &&
             TryGetNonNegativeInt32(element, "minContains", out var minContains))
         {
             parts.Add($"minContains = {minContains.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "array" &&
+        if (IsSchemaType(schemaType, "array") &&
             TryGetNonNegativeInt32(element, "maxContains", out var maxContains))
         {
             parts.Add($"maxContains = {maxContains.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "object" &&
+        if (IsSchemaType(schemaType, "object") &&
             TryGetNonNegativeInt32(element, "minProperties", out var minProperties))
         {
             parts.Add($"minProperties = {minProperties.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "object" &&
+        if (IsSchemaType(schemaType, "object") &&
             TryGetNonNegativeInt32(element, "maxProperties", out var maxProperties))
         {
             parts.Add($"maxProperties = {maxProperties.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        if (schemaType == "object")
+        if (IsSchemaType(schemaType, "object"))
         {
             var dependentRequiredDocumentation = TryBuildDependentRequiredDocumentation(element);
             if (dependentRequiredDocumentation is not null)
@@ -4351,14 +4372,14 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         var schemaType = typeElement.GetString();
-        if (string.IsNullOrWhiteSpace(schemaType))
+        if (schemaType is null || string.IsNullOrWhiteSpace(schemaType))
         {
             return null;
         }
 
         var details = new List<string>();
         if (includeRequiredProperties &&
-            schemaType == "object")
+            IsSchemaType(schemaType, "object"))
         {
             var requiredDocumentation = TryBuildRequiredPropertiesDocumentation(schemaElement);
             if (requiredDocumentation is not null)
@@ -4367,13 +4388,13 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             }
         }
 
-        var enumDocumentation = TryBuildEnumDocumentation(schemaElement, schemaType!);
+        var enumDocumentation = TryBuildEnumDocumentation(schemaElement, schemaType);
         if (enumDocumentation is not null)
         {
             details.Add($"enum = {enumDocumentation}");
         }
 
-        var constraintDocumentation = TryBuildConstraintDocumentation(schemaElement, schemaType!);
+        var constraintDocumentation = TryBuildConstraintDocumentation(schemaElement, schemaType);
         if (constraintDocumentation is not null)
         {
             details.Add(constraintDocumentation);
@@ -4492,7 +4513,9 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     /// <returns>组合后的路径。</returns>
     private static string CombinePath(string parentPath, string propertyName)
     {
-        return parentPath == "<root>" ? propertyName : $"{parentPath}.{propertyName}";
+        return string.Equals(parentPath, "<root>", StringComparison.Ordinal)
+            ? propertyName
+            : $"{parentPath}.{propertyName}";
     }
 
     /// <summary>
