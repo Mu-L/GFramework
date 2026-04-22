@@ -20,10 +20,10 @@ public sealed class FilterConfiguration
     /// <summary>
     ///     命名空间前缀列表（用于 Namespace 过滤器）。
     /// </summary>
-    public List<string>? Namespaces { get; set; }
+    public IList<string>? Namespaces { get; set; }
 
     /// <summary>
     ///     子过滤器列表（用于 Composite 过滤器）。
     /// </summary>
-    public List<FilterConfiguration>? Filters { get; set; }
+    public IList<FilterConfiguration>? Filters { get; set; }
 }

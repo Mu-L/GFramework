@@ -99,14 +99,14 @@ public class EasyEventsTests
     }
 
     /// <summary>
-    ///     测试并发场景下AddEvent的行为
+    ///     测试 AddEvent 对重复事件类型给出状态冲突异常。
     /// </summary>
     [Test]
     public void AddEvent_Should_Throw_When_Already_Registered()
     {
         _easyEvents.AddEvent<Event<int>>();
 
-        Assert.Throws<ArgumentException>(() => _easyEvents.AddEvent<Event<int>>());
+        Assert.Throws<InvalidOperationException>(() => _easyEvents.AddEvent<Event<int>>());
     }
 
     /// <summary>

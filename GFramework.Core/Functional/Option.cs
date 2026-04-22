@@ -17,7 +17,7 @@ namespace GFramework.Core.Functional;
 ///     表示可能存在或不存在的值，用于替代 null 引用的函数式编程类型
 /// </summary>
 /// <typeparam name="T">值的类型</typeparam>
-public readonly struct Option<T>
+public readonly struct Option<T> : IEquatable<Option<T>>
 {
     private readonly T _value;
     private readonly bool _isSome;

@@ -15,10 +15,11 @@ public sealed class LoggingConfiguration
     /// <summary>
     ///     Appender 配置列表
     /// </summary>
-    public List<AppenderConfiguration> Appenders { get; set; } = new();
+    public IList<AppenderConfiguration> Appenders { get; set; } = new List<AppenderConfiguration>();
 
     /// <summary>
     ///     特定 Logger 的日志级别配置
     /// </summary>
-    public Dictionary<string, LogLevel> LoggerLevels { get; set; } = new(StringComparer.Ordinal);
+    public IDictionary<string, LogLevel> LoggerLevels { get; set; } =
+        new Dictionary<string, LogLevel>(StringComparer.Ordinal);
 }

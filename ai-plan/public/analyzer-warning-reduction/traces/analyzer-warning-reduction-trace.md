@@ -1,5 +1,39 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-22 — RP-016
+
+### 阶段：`GFramework.Core` 剩余低风险 warning 批次清零（RP-016）
+
+- 依据 `RP-015` 的下一步建议，本轮恢复到 `MA0016` / `MA0002` 低风险批次，并顺手吸收仍集中在
+  `GFramework.Core` 的 `MA0015` 与 `MA0077`
+- 基线复核：
+  - 首次使用 Linux `dotnet` 时仍被当前 worktree 的 Windows fallback package folder restore 资产阻断
+  - 切换到 host Windows `dotnet` 后，`GFramework.Core` `net8.0` warnings-only build 复现 `9` 条 warning：
+    `MA0016=5`、`MA0002=2`、`MA0015=1`、`MA0077=1`
+- 实施调整：
+  - 将 `LoggingConfiguration.Appenders` / `LoggerLevels` 与 `FilterConfiguration.Namespaces` / `Filters`
+    的公开类型改为集合抽象接口，同时保留 `List<T>` / `Dictionary<TKey,TValue>` 默认实例，兼顾 analyzer 与现有配置消费路径
+  - 将 `CollectionExtensions.ToDictionarySafe(...)` 返回类型改为 `IDictionary<TKey,TValue>`，内部仍使用 `Dictionary<TKey,TValue>`
+    保留“重复键以后值覆盖前值”的实现语义
+  - 为 `CoroutineScheduler` 的 `_tagged` 与 `_grouped` 字典显式指定 `StringComparer.Ordinal`，将原有默认区分大小写语义写入代码
+  - 将 `EasyEvents.AddEvent<T>()` 重复注册失败从 `ArgumentException` 改为 `InvalidOperationException`；该路径表示状态冲突，
+    不是某个方法参数无效，因此不能为 `MA0015` 人造参数名
+  - 为 `Option<T>` 声明 `IEquatable<Option<T>>`，与已有强类型 `Equals(Option<T>)` 实现对齐
+- 验证结果：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:TargetFramework=net8.0 -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`0 Warning(s)`，`0 Error(s)`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~LoggingConfigurationTests|FullyQualifiedName~ConfigurableLoggerFactoryTests|FullyQualifiedName~CollectionExtensionsTests|FullyQualifiedName~EasyEventsTests|FullyQualifiedName~OptionTests|FullyQualifiedName~CoroutineGroupTests|FullyQualifiedName~CoroutineSchedulerTests" -m:1 -nologo`
+    - 结果：`112 Passed`，`0 Failed`
+    - 说明：测试构建仍显示既有 `net10.0` `MA0158` 与 source generator `MA0051` warning；这些不属于本轮
+      `GFramework.Core` `net8.0` 剩余 warning 批次
+- 当前结论：
+  - `GFramework.Core` `net8.0` 当前 analyzer warning baseline 已清零
+  - analyzer topic 仍可继续，但下一轮应转入 `net10.0` 专属 `MA0158` 兼容性评估，或单独处理 source generator 剩余
+    `MA0051`
+- 下一步建议：
+  - 优先评估 `MA0158` 在多 target 源码中的安全推进方式；若风险过高，再处理
+    `GFramework.Core.SourceGenerators/Rule/ContextAwareGenerator.cs` 的结构拆分
+
 ## 2026-04-21 — RP-015
 
 ### 阶段：PR #267 failed-test follow-up 收口（RP-015）

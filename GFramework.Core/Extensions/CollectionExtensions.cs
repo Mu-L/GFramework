@@ -81,7 +81,7 @@ public static class CollectionExtensions
     /// // dict["a"] == 3 (最后一个值)
     /// </code>
     /// </example>
-    public static Dictionary<TKey, TValue> ToDictionarySafe<T, TKey, TValue>(
+    public static IDictionary<TKey, TValue> ToDictionarySafe<T, TKey, TValue>(
         this IEnumerable<T> source,
         Func<T, TKey> keySelector,
         Func<T, TValue> valueSelector) where TKey : notnull
