@@ -1,6 +1,6 @@
 ---
 name: gframework-doc-refresh
-description: Refresh or reassess GFramework documentation for a source module such as Core, Game, Godot, Cqrs, Ecs.Arch, or their generator/abstraction packages. Use this when the user asks to update module docs, re-evaluate landing pages, fix outdated topic pages, refresh API reference coverage, verify adoption paths against source/tests/README, or compare current docs with ai-libs consumer wiring. Recommended command: /gframework-doc-refresh <module>.
+description: "Refresh or reassess GFramework documentation for a source module such as Core, Game, Godot, Cqrs, Ecs.Arch, or their generator/abstraction packages. Use this when the user asks to update module docs, re-evaluate landing pages, fix outdated topic pages, refresh API reference coverage, verify adoption paths against source/tests/README, or compare current docs with ai-libs consumer wiring. Recommended command: /gframework-doc-refresh <module>."
 ---
 
 # Purpose

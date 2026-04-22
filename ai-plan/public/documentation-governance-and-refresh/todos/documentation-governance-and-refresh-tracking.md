@@ -7,12 +7,12 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-008`
+- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-009`
 - 当前阶段：`Phase 3`
 - 当前焦点：
   - 已建立统一公开 skill：`.agents/skills/gframework-doc-refresh/`
   - 文档重构入口已从“按 guide/tutorial/api 类型拆 skill”收口为“按源码模块驱动文档刷新”
-  - 旧 `vitepress-*` skill 的模板、规范与校验逻辑已迁入新 skill 或 `_shared/`
+  - PR #268 的当前未解决 review 线程已进入收口：active trace 归档、Game Scene/UI 目录约定补充、skill YAML 修复
   - 下一轮需要用统一 skill 推进 Godot 相关生成器页面核对
 
 ## 当前状态摘要
@@ -26,6 +26,8 @@
 - 旧 `local-plan/` 的详细 todo 与 trace 已迁入主题内 `archive/`
 - 当前分支 `docs/sdk-update-documentation` 已在 `ai-plan/public/README.md` 建立 topic 映射
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
+- active trace 已把 RP-001 到 RP-008 的闭环历史归档到
+  `ai-plan/public/documentation-governance-and-refresh/archive/traces/documentation-governance-and-refresh-rp-001-through-rp-008.md`
 - `core`、`game` 与 `source-generators` 三个栏目入口页现在都以模块 README 与当前包拆分为准
 - `docs` 站点构建已验证通过，修正了 VitePress 对 `docs/` 目录外相对链接的 dead-link 检查问题
 - `core` 关键专题页已移除 `Init()`、属性式 `CommandBus` / `QueryBus`、旧 `Input` 赋值式示例和已移除的
@@ -40,9 +42,9 @@
   `WithComparer(...)` 当成实例级配置
 - `docs/zh-CN/core/state-management.md` 与 `coroutine.md` 已按当前 runtime / 测试重新核对，当前内容可继续保留
 - `docs/zh-CN/game/scene.md` 已改成“真实公开入口、场景栈语义、factory/root 装配、过渡处理器与守卫扩展点”的结构，
-  不再暗示框架自带统一场景注册与完整引擎装配
+  不再暗示框架自带统一场景注册与完整引擎装配；本轮已补充项目侧目录布局、文件命名、最小 wiring 与兼容说明
 - `docs/zh-CN/game/ui.md` 已改成“Page 栈、layer UI、输入动作仲裁、World 阻断与暂停语义”的结构，明确 `Show(...)`
-  不适用于 `UiLayer.Page`
+  不适用于 `UiLayer.Page`；本轮已补充 router、factory、root、page behavior、params 与 views 的推荐放置约定
 - 本轮重写后再次执行 `cd docs && bun run build` 通过，当前 `game` 栏目入口与专题页改动没有破坏站点构建
 - `docs/zh-CN/source-generators/context-aware-generator.md` 已改成“真实生成成员、provider/实例缓存语义、与 `ContextAwareBase` 的边界、测试接法”的结构，
   不再用旧版简化生成代码替代当前实现
@@ -50,6 +52,8 @@
   不再把 `GetAllByPriority<T>()` / `system.Init()` 当作所有场景的默认示例
 - 本轮重写后再次执行 `cd docs && bun run build` 通过，当前 `source-generators` 栏目改动没有破坏站点构建
 - `.agents/skills/gframework-doc-refresh/SKILL.md` 已改成标准 YAML frontmatter skill，并明确支持模块输入、证据顺序、输出优先级与验证步骤
+- `.agents/skills/gframework-doc-refresh/SKILL.md` 的 `description` 已加引号，修复 `Recommended command:` 中冒号导致的
+  invalid YAML skill 加载警告
 - `.agents/skills/_shared/module-map.json` 已收口为源码模块映射表，覆盖源码目录、测试项目、README、`docs/zh-CN` 栏目与 `ai-libs/` 参考入口
 - 旧 `vitepress-api-doc`、`vitepress-batch-api`、`vitepress-doc-generator`、`vitepress-guide`、`vitepress-tutorial`、`vitepress-validate`
   已不再保留为可用公开 skill 定义文件
@@ -80,13 +84,15 @@
 
 - 历史跟踪归档：[documentation-governance-and-refresh-history-through-2026-04-18.md](../archive/todos/documentation-governance-and-refresh-history-through-2026-04-18.md)
 - 历史 trace 归档：[documentation-governance-and-refresh-history-through-2026-04-18.md](../archive/traces/documentation-governance-and-refresh-history-through-2026-04-18.md)
+- RP-001 到 RP-008 trace 归档：[documentation-governance-and-refresh-rp-001-through-rp-008.md](../archive/traces/documentation-governance-and-refresh-rp-001-through-rp-008.md)
 
 ## 验证说明
 
 - 旧 `local-plan/` 的详细实施历史与文档站构建结果已迁入主题内归档
 - active 跟踪文件已按 `ai-plan` 治理规则精简为当前恢复入口
 - `cd docs && bun run build`
-- `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json`
+- `python3 -B .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --branch docs/sdk-update-documentation --format json --json-output /tmp/current-pr-review.json`
+- `python3 -c "import pathlib, yaml; text = pathlib.Path('.agents/skills/gframework-doc-refresh/SKILL.md').read_text(); yaml.safe_load(text.split('---', 2)[1]); print('yaml-ok')"`
 - `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Core`
 - `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Godot.SourceGenerators`
 - `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Cqrs`
