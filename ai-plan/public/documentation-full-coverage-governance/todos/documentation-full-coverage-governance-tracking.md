@@ -12,12 +12,12 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-006`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-007`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
-  - 将当前 WSL 会话验证通过的 Git 回退策略写回 `AGENTS.md`
-  - 明确显式 `--git-dir` / `--work-tree` 绑定在本仓库中的优先级高于 `git.exe`
-  - 避免后续 `boot` / 恢复任务重复踩到 `git.exe` 无法执行与 plain `git` worktree 路径翻译错误
+  - 完成 `Game` family 巡检，确认 `config-system`、`scene`、`ui` 与 `source-generators` 入口没有再次偏离当前源码与 README
+  - 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic
+  - 继续把 active topic 收敛为可恢复入口，而不是把详细历史长期堆在默认 boot 路径
 
 ## 当前状态摘要
 
@@ -53,6 +53,7 @@
   - 基于顶层目录轻量盘点确认：`GFramework.Game` 为 `56/56`、`GFramework.Game.Abstractions` 为 `80/80`、`GFramework.Game.SourceGenerators` 为 `2/2`，当前公开 / 内部类型声明都已带 XML 注释
   - 更新 `AGENTS.md` 的 WSL Git 策略，将显式 `--git-dir` / `--work-tree` 绑定提升为高于 `git.exe` 的默认优先级
   - 记录当前环境偏差：本会话 `git.exe` 可解析但执行会触发 `Exec format error`，而 plain Linux `git` 会命中 worktree 路径翻译错误，需要显式仓库绑定
+  - 完成 `Game` family 巡检，确认 `docs/zh-CN/game/config-system.md`、`scene.md`、`ui.md` 与 `docs/zh-CN/source-generators/index.md` 的核心采用说明、包关系与交叉引用仍与当前源码 / README 一致，没有发现需要立刻修正的回漂
 
 ## Inventory（第一版）
 
@@ -83,7 +84,7 @@
 - 当前 `Core` / `Core.Abstractions` 只完成了类型族级 XML 基线，不等于成员级契约全审计
   - 缓解措施：后续只在共享抽象或高风险生命周期接口发生改动时补成员级细审，不在本轮扩张范围
 - `Godot` family 的治理结论主要留在已归档 topic 中，active topic 当前只保留摘要
-  - 缓解措施：后续巡检优先抽查 `Godot` 入口页是否仍与归档结论一致，必要时把关键 XML inventory 摘要迁回 active topic
+  - 缓解措施：下一恢复点优先判断是否要把关键 XML inventory 摘要迁回 active topic，避免后续 boot 仍过度依赖 archive
 - 新功能分支若修改 README / docs / 公共 API 却不挂文档 topic，仍可能回漂
   - 缓解措施：将本 topic 作为长期 active topic 保留，并在后续巡检中记录回漂来源
 - VitePress 页面不能直接链接到 `docs/` 目录之外的模块 `README.md`
@@ -161,9 +162,12 @@
 - `cd docs && bun run build`
 - 结果：通过
 - 备注：`2026-04-23` 在更新 `AGENTS.md` 的 WSL Git 优先级后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
+- `cd docs && bun run build`
+- 结果：通过
+- 备注：`2026-04-23` 在推进 `DOCUMENTATION-FULL-COVERAGE-GOV-RP-007`、回写 `Game` family 巡检结论后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
 
 ## 下一步
 
-1. 进入巡检周期，优先抽查 `docs/zh-CN/game/config-system.md`、`scene.md`、`ui.md` 与 `docs/zh-CN/source-generators/index.md` 的交叉引用是否仍与当前 `Game` family README 对齐
-2. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，避免长期治理只依赖 archive 恢复
+1. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，避免长期治理只依赖 archive 恢复
+2. 继续巡检 `Game` family 之外的高频入口页，优先关注 README / landing page / API reference 之间是否出现新的术语或包关系漂移
 3. 在后续环境治理任务中单独处理 `GFramework.Cqrs` 本地 build 的 fallback package folder 阻塞，避免影响后续代码类验证

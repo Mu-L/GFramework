@@ -205,3 +205,32 @@
 
 1. 继续 `Game` family 巡检，优先检查 `config-system.md`、`scene.md`、`ui.md` 与 `source-generators/index.md` 的交叉引用是否回漂
 2. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，减少对 archive 的依赖
+
+### 当前恢复点：RP-007
+
+- 完成 `Game` family 巡检：
+  - 复核 `docs/zh-CN/game/config-system.md`
+  - 复核 `docs/zh-CN/game/scene.md`
+  - 复核 `docs/zh-CN/game/ui.md`
+  - 复核 `docs/zh-CN/source-generators/index.md`
+- 对照 `GFramework.Game`、`GFramework.Game.Abstractions`、`GFramework.Game.SourceGenerators` README 与相关源码 / 测试后，未发现需要立刻修正的采用语义回漂
+- 重点确认的真实语义包括：
+  - `GameConfigBootstrap` / `RegisterAllGeneratedConfigTables(...)` / `GFrameworkConfigSchemaDirectory` 的配置入口仍与文档示例一致
+  - `SceneRouterBase` 仍通过 `SemaphoreSlim` 串行化切换，并拒绝重复 `sceneKey` 入栈
+  - `UiRouterBase` 仍将 `Page` 层与 `Overlay` / `Modal` / `Toast` / `Topmost` 分为两套入口，且 `Show(..., UiLayer.Page)` 会直接拒绝
+
+### 当前决策（RP-007）
+
+- 本轮不为“巡检通过”硬造文档改动，先把结论写回 active topic，保持恢复点准确
+- `Game` family 暂时转入稳定巡检，不在没有源码变化的情况下重复改写 landing page
+- 默认下一步切到 `Godot` family 摘要是否回迁，减少长期治理对 archive topic 的依赖
+
+### 当前验证（RP-007）
+
+- 构建校验：
+  - `cd docs && bun run build`：通过；仅保留 VitePress 大 chunk warning，无构建失败
+
+### 下一步
+
+1. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic
+2. 若不需要迁回，则继续抽查 README / landing page / API reference 之间的 cross-link 是否出现新的漂移
