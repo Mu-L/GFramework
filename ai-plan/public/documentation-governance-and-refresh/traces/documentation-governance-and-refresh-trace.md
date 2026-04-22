@@ -2,7 +2,7 @@
 
 ## 2026-04-22
 
-### 当前恢复点：RP-010
+### 当前恢复点：RP-011
 
 - 本轮从 PR #268 的最新 review 数据恢复，未发现失败检查；CTRF 报告显示 2139 个测试全部通过
 - 本轮复核确认当前 PR 的 latest-head open thread 同时来自 `coderabbitai[bot]` 与 `greptile-apps[bot]`
@@ -16,6 +16,12 @@
 - `fetch_current_pr_review.py` 的本地函数 docstring 覆盖率已补到 `44/44`
 - 已闭环 RP-001 到 RP-008 的执行细节已归档到
   `ai-plan/public/documentation-governance-and-refresh/archive/traces/documentation-governance-and-refresh-rp-001-through-rp-008.md`
+- 本轮按 `gframework-doc-refresh` 的模块扫描结果，重写了 `Godot.SourceGenerators` 的 3 个高风险专题页：
+  - `godot-project-generator.md`
+  - `get-node-generator.md`
+  - `bind-node-signal-generator.md`
+- 新页面统一收口到“包关系、最小接入路径、真实生成语义、生命周期边界、诊断约束”，不再沿用旧教程式长篇 API 罗列
+- 本轮额外复核了 `ai-libs/CoreGrid` 的真实采用方式，确认 `[GetNode]` / `[BindNodeSignal]` 组合使用时应先注入节点再绑定事件
 
 ### 当前决策
 
@@ -23,6 +29,8 @@
 - `scene.md` 与 `ui.md` 的集成说明除目录布局外，也要保证标题层级能真实反映采用路径语义
 - `gframework-pr-review` 继续以 latest-head unresolved thread 为主信号，同时显式声明支持的 AI reviewer 名单，避免 skill
   声明与实际抓取能力再次漂移
+- `Godot.SourceGenerators` 专题页继续采用“源码 / 测试 / README 优先，`ai-libs/` 只补消费者 wiring”的证据顺序
+- `BindNodeSignal` 页面明确记录“当前不自动生成 `_Ready()` / `_ExitTree()`”，避免继续把它写成自动生命周期织入器
 
 ### 验证
 
@@ -33,9 +41,13 @@
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-code-blocks.sh docs/zh-CN/game/ui.md`
 - `bash -lc 'source .agents/skills/_shared/module-config.sh && get_readme_paths Core.SourceGenerators.Abstractions && if get_readme_paths Not.Real.Module; then exit 1; else echo unmapped-ok; fi'`
 - `cd docs && bun run build`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/godot-project-generator.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/get-node-generator.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/bind-node-signal-generator.md`
+- `cd docs && bun run build`
 
 ### 下一步
 
 1. 下一次推送后重新执行 `$gframework-pr-review`，确认 PR #268 的 CodeRabbit / Greptile open thread 是否关闭或减少
 2. 继续使用 `gframework-doc-refresh` 对 `Godot.SourceGenerators` 做真实模块扫描
-3. 优先刷新 `godot-project-generator.md`、`get-node-generator.md` 与 `bind-node-signal-generator.md`
+3. 优先刷新 `auto-register-exported-collections-generator.md`，并复核 `tutorials/godot-integration.md` 是否仍残留旧叙述
