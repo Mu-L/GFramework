@@ -1,643 +1,351 @@
 ---
 title: Godot UI 系统
-description: Godot UI 系统提供了 GFramework UI 管理与 Godot Control 节点的完整集成。
+description: 以当前 GFramework.Godot 源码、Game UI 契约与 CoreGrid 接线为准，说明 PackedScene UI 工厂、页面行为和层级接入路径。
 ---
 
 # Godot UI 系统
 
-## 概述
+`GFramework.Godot.UI` 当前负责的是把 `GFramework.Game` 的 UI 路由契约接到 `Control` / `CanvasLayer` /
+`PackedScene` 上，而不是定义一个 Godot 专属 router。
 
-Godot UI 系统是 GFramework.Godot 中连接框架 UI 管理与 Godot Control 节点的核心组件。它提供了 UI 页面行为封装、UI 工厂、UI
-注册表等功能，支持多层级 UI 显示，让你可以在 Godot 项目中使用 GFramework 的 UI 管理系统。
+当前真正参与这条链路的核心类型是：
 
-通过 Godot UI 系统，你可以使用 GFramework 的 UI 路由、生命周期管理、多层级显示等功能，同时保持与 Godot UI 系统的完美兼容。
+- `IGodotUiRegistry` / `GodotUiRegistry`
+- `GodotUiFactory`
+- `CanvasItemUiPageBehaviorBase<T>`
+- `UiPageBehaviorFactory`
+- `Page` / `Overlay` / `Modal` / `Toast` / `Topmost` 五类 layer behavior
+- 项目侧实现的 `IUiRoot`
+- 项目侧继承 `UiRouterBase` 的 router
 
-**主要特性**：
+## 当前公开入口
 
-- UI 页面行为封装
-- UI 工厂和注册表
-- 与 Godot PackedScene 集成
-- 多层级 UI 支持（Page、Overlay、Modal、Toast、Topmost）
-- UI 生命周期管理
-- UI 根节点管理
+### `IGodotUiRegistry`
 
-## 核心概念
+Godot 侧 UI 资源表，底层是 `IAssetRegistry<PackedScene>`。它只负责：
 
-### UI 页面行为
+- `uiKey -> PackedScene` 映射
+- 让 `GodotUiFactory` 可以按 key 实例化 UI 页面
 
-`CanvasItemUiPageBehaviorBase<T>` 封装了 Godot Control 节点的 UI 行为：
+框架当前不会自动扫描 `.tscn`、不会自动根据类型名补全注册表。
+
+### `GodotUiFactory`
+
+`GodotUiFactory.Create(string uiKey)` 的当前行为比场景工厂更严格：
+
+1. 从 `IGodotUiRegistry` 取出 `PackedScene`
+2. 调用 `Instantiate()`
+3. 节点必须实现 `IUiPageBehaviorProvider`
+4. 返回 `provider.GetPage()`
+
+如果实例化得到的节点没有实现 `IUiPageBehaviorProvider`，当前实现会直接抛 `InvalidCastException`。这也是 UI 页面文档必须强调
+`GetPage()` / `[AutoUiPage]` 的原因。
+
+### `CanvasItemUiPageBehaviorBase<T>`
+
+Godot runtime 的页面行为包装基类。它把 `IUiPageBehavior` 的这些语义接到 `CanvasItem` 上：
+
+- `Key`
+- `Layer`
+- `Handle`
+- `IsAlive`
+- `IsVisible`
+- `InteractionProfile`
+- `OnEnter` / `OnExit`
+- `OnPause` / `OnResume`
+- `OnShow` / `OnHide`
+- `TryHandleUiAction(UiInputAction action)`
+
+如果 owner 同时实现了 `IUiPage`、`IUiInteractionProfileProvider`、`IUiActionHandler`，这些契约都会被页面行为继续利用。
+
+### `UiPageBehaviorFactory`
+
+当前 layer 到 behavior 的映射来自运行时代码本身：
+
+- `UiLayer.Page` -> `PageLayerUiPageBehavior<T>`
+- `UiLayer.Overlay` -> `OverlayLayerUiPageBehavior<T>`
+- `UiLayer.Modal` -> `ModalLayerUiPageBehavior<T>`
+- `UiLayer.Toast` -> `ToastLayerUiPageBehavior<T>`
+- `UiLayer.Topmost` -> `TopmostLayerUiPageBehavior<T>`
+
+几个容易被旧文档写偏的默认语义如下：
+
+- `Page`
+  - 不可重入，阻断输入
+- `Overlay`
+  - 可重入，非模态，不阻断输入；暂停时不会停掉节点处理
+- `Modal`
+  - 可重入，模态，阻断输入
+- `Toast`
+  - 可重入，非模态，不阻断输入
+- `Topmost`
+  - 不可重入，模态，阻断输入
+
+## 最小接入路径
+
+### 1. 继续在项目层保留自己的 router
+
+仓库当前不存在 `GodotUiRouter` 类型。实际做法仍然是项目侧继承 `GFramework.Game.UI.UiRouterBase`。
+
+`ai-libs/CoreGrid` 的 `UiRouter` 目前就是：
 
 ```csharp
-public abstract class CanvasItemUiPageBehaviorBase<T> : IUiPageBehavior
-    where T : CanvasItem
+using LoggingTransitionHandler = GFramework.Game.UI.Handler.LoggingTransitionHandler;
+
+namespace CoreGrid.scripts.core.ui;
+
+[Log]
+public partial class UiRouter : UiRouterBase
 {
-    protected readonly T Owner;
-    public string Key { get; }
-    public UiLayer Layer { get; }
-    public bool IsReentrant { get; }
+    protected override void RegisterHandlers()
+    {
+        _log.Debug("Registering default transition handlers");
+        RegisterHandler(new LoggingTransitionHandler());
+    }
 }
 ```
 
-### UI 工厂
+Godot runtime 自身并不接管这层 router 的定义。
 
-`GodotUiFactory` 负责创建 UI 实例：
+### 2. 注册 `IGodotUiRegistry` 与 `IUiFactory`
 
-```csharp
-public class GodotUiFactory : IUiFactory
-{
-    public IUiPageBehavior Create(string uiKey);
-}
-```
-
-### UI 层级行为
-
-不同层级的 UI 有不同的行为类：
+最小 wiring 需要显式注册 UI 资源表和工厂：
 
 ```csharp
-// Page 层（栈管理）
-public class PageLayerUiPageBehavior : CanvasItemUiPageBehaviorBase<Control>
-{
-    public override UiLayer Layer => UiLayer.Page;
-    public override bool IsReentrant => false;
-}
-
-// Modal 层（模态对话框）
-public class ModalLayerUiPageBehavior : CanvasItemUiPageBehaviorBase<Control>
-{
-    public override UiLayer Layer => UiLayer.Modal;
-    public override bool IsReentrant => true;
-}
-```
-
-## 基本用法
-
-### 创建 UI 脚本
-
-```csharp
-using Godot;
 using GFramework.Game.Abstractions.UI;
+using GFramework.Godot.UI;
+using Godot;
 
-public partial class MainMenuPage : Control, IUiPage
+public sealed class GameUiRegistry : GodotUiRegistry
 {
+    public GameUiRegistry()
+    {
+        Register(nameof(UiKey.MainMenu), GD.Load<PackedScene>("res://ui/main_menu.tscn"));
+        Register(nameof(UiKey.PauseMenu), GD.Load<PackedScene>("res://ui/pause_menu.tscn"));
+        Register(nameof(UiKey.OptionsMenu), GD.Load<PackedScene>("res://ui/options_menu.tscn"));
+    }
+}
+
+architecture.RegisterUtility<IGodotUiRegistry>(new GameUiRegistry());
+architecture.RegisterUtility<IUiFactory>(new GodotUiFactory());
+architecture.RegisterSystem(new UiRouter());
+```
+
+### 3. 提供 `IUiRoot`
+
+`UiRouterBase` 只负责页面栈、layer UI、输入仲裁和暂停语义；真正把页面挂到 Godot 容器的是项目自己的 `IUiRoot`。
+
+CoreGrid 当前的 `UiRoot` 做法和源码契约一致：
+
+- 继承 `CanvasLayer`
+- 为每个 `UiLayer` 创建一个 `Control` 容器
+- 在 `_Ready()` 时调用 `_uiRouter.BindRoot(this)`
+- 在 `AddUiPage` / `RemoveUiPage` 中处理 `CanvasItem` 挂载与释放
+
+最小形态可以写成：
+
+```csharp
+public sealed class UiRoot : CanvasLayer, IUiRoot
+{
+    [GetSystem] private IUiRouter _uiRouter = null!;
+
+    public override void _Ready()
+    {
+        __InjectContextBindings_Generated();
+        _uiRouter.BindRoot(this);
+    }
+
+    public void AddUiPage(IUiPageBehavior child)
+    {
+        AddUiPage(child, UiLayer.Page);
+    }
+
+    public void AddUiPage(IUiPageBehavior child, UiLayer layer, int orderInLayer = 0)
+    {
+        if (child.View is not CanvasItem item)
+            throw new InvalidOperationException("UIPage View must be a Godot Node");
+
+        AddChild(item);
+        item.ZIndex = (int)layer * 100 + orderInLayer;
+    }
+
+    public void RemoveUiPage(IUiPageBehavior child)
+    {
+        if (child.View is Node node && node.GetParent() == this)
+            RemoveChild(node);
+    }
+}
+```
+
+### 4. 让页面节点提供 `GetPage()`
+
+因为 `GodotUiFactory` 不会自动回退到默认 behavior，页面节点必须显式提供 `GetPage()`。
+
+#### 方式 A：手写 `IUiPageBehaviorProvider`
+
+```csharp
+public partial class PauseMenu : Control, IUiPage, IUiPageBehaviorProvider
+{
+    private IUiPageBehavior? _page;
+
+    public IUiPageBehavior GetPage()
+    {
+        return _page ??= UiPageBehaviorFactory.Create(this, nameof(UiKey.PauseMenu), UiLayer.Modal);
+    }
+
     public void OnEnter(IUiPageEnterParam? param)
     {
-        GD.Print("进入主菜单");
-        Show();
     }
 
     public void OnExit()
     {
-        GD.Print("退出主菜单");
-        Hide();
     }
 
     public void OnPause()
     {
-        GD.Print("暂停主菜单");
     }
 
     public void OnResume()
     {
-        GD.Print("恢复主菜单");
     }
 
     public void OnShow()
     {
-        Show();
     }
 
     public void OnHide()
     {
-        Hide();
     }
 }
 ```
 
-### 实现 UI 页面行为提供者
+#### 方式 B：用 `[AutoUiPage]` 让生成器补样板
+
+当前更贴近真实消费者 wiring 的方式，是让生成器产出 `UiKeyStr` 和 `GetPage()`：
 
 ```csharp
-using Godot;
 using GFramework.Game.Abstractions.UI;
-using GFramework.Godot.UI;
-
-public partial class MainMenuPage : Control, IUiPageBehaviorProvider
-{
-    private PageLayerUiPageBehavior _behavior;
-
-    public override void _Ready()
-    {
-        _behavior = new PageLayerUiPageBehavior(this, "MainMenu");
-    }
-
-    public IUiPageBehavior GetPage()
-    {
-        return _behavior;
-    }
-}
-```
-
-### 注册 UI
-
-```csharp
-using GFramework.Godot.UI;
+using GFramework.Godot.SourceGenerators.Abstractions.UI;
 using Godot;
 
-public class GameUiRegistry : GodotUiRegistry
-{
-    public GameUiRegistry()
-    {
-        // 注册 UI 资源
-        Register("MainMenu", GD.Load<PackedScene>("res://ui/MainMenu.tscn"));
-        Register("Settings", GD.Load<PackedScene>("res://ui/Settings.tscn"));
-        Register("ConfirmDialog", GD.Load<PackedScene>("res://ui/ConfirmDialog.tscn"));
-        Register("Toast", GD.Load<PackedScene>("res://ui/Toast.tscn"));
-    }
-}
-```
-
-### 设置 UI 系统
-
-```csharp
-using GFramework.Godot.Architecture;
-using GFramework.Godot.UI;
-
-public class GameArchitecture : AbstractArchitecture
-{
-    protected override void InstallModules()
-    {
-        // 注册 UI 注册表
-        var uiRegistry = new GameUiRegistry();
-        RegisterUtility<IGodotUiRegistry>(uiRegistry);
-
-        // 注册 UI 工厂
-        var uiFactory = new GodotUiFactory();
-        RegisterUtility<IUiFactory>(uiFactory);
-
-        // 注册 UI 路由
-        var uiRouter = new GodotUiRouter();
-        RegisterSystem<IUiRouter>(uiRouter);
-    }
-}
-```
-
-### 使用 UI 路由
-
-```csharp
-using Godot;
-using GFramework.Godot.Extensions;
-
-public partial class GameController : Node
-{
-    public override void _Ready()
-    {
-        ShowMainMenu();
-    }
-
-    private async void ShowMainMenu()
-    {
-        var uiRouter = this.GetSystem<IUiRouter>();
-        await uiRouter.PushAsync("MainMenu");
-    }
-
-    private async void ShowSettings()
-    {
-        var uiRouter = this.GetSystem<IUiRouter>();
-        await uiRouter.PushAsync("Settings");
-    }
-
-    private void ShowDialog()
-    {
-        var uiRouter = this.GetSystem<IUiRouter>();
-        uiRouter.Show("ConfirmDialog", UiLayer.Modal);
-    }
-
-    private void ShowToast(string message)
-    {
-        var uiRouter = this.GetSystem<IUiRouter>();
-        uiRouter.Show("Toast", UiLayer.Toast, new ToastParam { Message = message });
-    }
-}
-```
-
-## 高级用法
-
-### 不同层级的 UI 行为
-
-```csharp
-// Page 层 UI（栈管理，不可重入）
-public partial class MainMenuPage : Control, IUiPageBehaviorProvider
-{
-    public IUiPageBehavior GetPage()
-    {
-        return new PageLayerUiPageBehavior(this, "MainMenu");
-    }
-}
-
-// Overlay 层 UI（浮层，可重入）
-public partial class InfoPanel : Control, IUiPageBehaviorProvider
-{
-    public IUiPageBehavior GetPage()
-    {
-        return new OverlayLayerUiPageBehavior(this, "InfoPanel");
-    }
-}
-
-// Modal 层 UI（模态对话框，可重入）
-public partial class ConfirmDialog : Control, IUiPageBehaviorProvider
-{
-    public IUiPageBehavior GetPage()
-    {
-        return new ModalLayerUiPageBehavior(this, "ConfirmDialog");
-    }
-}
-
-// Toast 层 UI（提示，可重入）
-public partial class ToastMessage : Control, IUiPageBehaviorProvider
-{
-    public IUiPageBehavior GetPage()
-    {
-        return new ToastLayerUiPageBehavior(this, "Toast");
-    }
-}
-
-// Topmost 层 UI（顶层，不可重入）
-public partial class LoadingScreen : Control, IUiPageBehaviorProvider
-{
-    public IUiPageBehavior GetPage()
-    {
-        return new TopmostLayerUiPageBehavior(this, "Loading");
-    }
-}
-```
-
-### UI 参数传递
-
-```csharp
-// 定义 UI 参数
-public class ConfirmDialogParam : IUiPageEnterParam
-{
-    public string Title { get; set; }
-    public string Message { get; set; }
-    public Action OnConfirm { get; set; }
-    public Action OnCancel { get; set; }
-}
-
-// 在 UI 中接收参数
-public partial class ConfirmDialog : Control, IUiPage
-{
-    private Label _titleLabel;
-    private Label _messageLabel;
-    private Action _onConfirm;
-    private Action _onCancel;
-
-    public override void _Ready()
-    {
-        _titleLabel = GetNode<Label>("Title");
-        _messageLabel = GetNode<Label>("Message");
-
-        GetNode<Button>("ConfirmButton").Pressed += OnConfirmPressed;
-        GetNode<Button>("CancelButton").Pressed += OnCancelPressed;
-    }
-
-    public void OnEnter(IUiPageEnterParam? param)
-    {
-        if (param is ConfirmDialogParam dialogParam)
-        {
-            _titleLabel.Text = dialogParam.Title;
-            _messageLabel.Text = dialogParam.Message;
-            _onConfirm = dialogParam.OnConfirm;
-            _onCancel = dialogParam.OnCancel;
-        }
-
-        Show();
-    }
-
-    private void OnConfirmPressed()
-    {
-        _onConfirm?.Invoke();
-        CloseDialog();
-    }
-
-    private void OnCancelPressed()
-    {
-        _onCancel?.Invoke();
-        CloseDialog();
-    }
-
-    private void CloseDialog()
-    {
-        var uiRouter = this.GetSystem<IUiRouter>();
-        if (Handle.HasValue)
-        {
-            uiRouter.Hide(Handle.Value, UiLayer.Modal, destroy: true);
-        }
-    }
-
-    // ... 其他生命周期方法
-}
-
-// 显示对话框
-var uiRouter = this.GetSystem<IUiRouter>();
-uiRouter.Show("ConfirmDialog", UiLayer.Modal, new ConfirmDialogParam
-{
-    Title = "确认",
-    Message = "确定要退出吗？",
-    OnConfirm = () => GD.Print("确认"),
-    OnCancel = () => GD.Print("取消")
-});
-```
-
-### UI 根节点管理
-
-```csharp
-using Godot;
-using GFramework.Godot.UI;
-
-public partial class UiRoot : CanvasLayer, IUiRoot
-{
-    private Control _pageLayer;
-    private Control _overlayLayer;
-    private Control _modalLayer;
-    private Control _toastLayer;
-    private Control _topmostLayer;
-
-    public override void _Ready()
-    {
-        // 创建各层级容器
-        _pageLayer = new Control { Name = "PageLayer" };
-        _overlayLayer = new Control { Name = "OverlayLayer" };
-        _modalLayer = new Control { Name = "ModalLayer" };
-        _toastLayer = new Control { Name = "ToastLayer" };
-        _topmostLayer = new Control { Name = "TopmostLayer" };
-
-        AddChild(_pageLayer);
-        AddChild(_overlayLayer);
-        AddChild(_modalLayer);
-        AddChild(_toastLayer);
-        AddChild(_topmostLayer);
-    }
-
-    public void AttachPage(Control page, UiLayer layer)
-    {
-        var container = GetLayerContainer(layer);
-        container.AddChild(page);
-    }
-
-    public void DetachPage(Control page, UiLayer layer)
-    {
-        var container = GetLayerContainer(layer);
-        container.RemoveChild(page);
-    }
-
-    private Control GetLayerContainer(UiLayer layer)
-    {
-        return layer switch
-        {
-            UiLayer.Page => _pageLayer,
-            UiLayer.Overlay => _overlayLayer,
-            UiLayer.Modal => _modalLayer,
-            UiLayer.Toast => _toastLayer,
-            UiLayer.Topmost => _topmostLayer,
-            _ => _pageLayer
-        };
-    }
-}
-```
-
-### UI 动画和过渡
-
-```csharp
-public partial class AnimatedPage : Control, IUiPage
+[AutoUiPage(nameof(UiKey.MainMenu), nameof(UiLayer.Page))]
+public partial class MainMenu : Control, IUiPageBehaviorProvider, IUiPage
 {
     public void OnEnter(IUiPageEnterParam? param)
     {
-        // 淡入动画
-        Modulate = new Color(1, 1, 1, 0);
-        Show();
-
-        var tween = CreateTween();
-        tween.TweenProperty(this, "modulate:a", 1.0f, 0.3f);
     }
 
     public void OnExit()
     {
-        // 淡出动画
-        var tween = CreateTween();
-        tween.TweenProperty(this, "modulate:a", 0.0f, 0.3f);
-        tween.TweenCallback(Callable.From(Hide));
+    }
+
+    public void OnPause()
+    {
+    }
+
+    public void OnResume()
+    {
     }
 
     public void OnShow()
     {
-        Show();
     }
 
     public void OnHide()
     {
-        Hide();
     }
-
-    // ... 其他方法
 }
 ```
 
-### UI 句柄管理
+当前生成器补出的核心样板与源码一致：
 
 ```csharp
-public partial class DialogManager : Node
+public IUiPageBehavior GetPage()
 {
-    private UiHandle? _currentDialog;
-
-    public void ShowDialog(string dialogKey)
-    {
-        // 关闭当前对话框
-        CloseCurrentDialog();
-
-        // 显示新对话框
-        var uiRouter = this.GetSystem<IUiRouter>();
-        _currentDialog = uiRouter.Show(dialogKey, UiLayer.Modal);
-    }
-
-    public void CloseCurrentDialog()
-    {
-        if (_currentDialog.HasValue)
-        {
-            var uiRouter = this.GetSystem<IUiRouter>();
-            uiRouter.Hide(_currentDialog.Value, UiLayer.Modal, destroy: true);
-            _currentDialog = null;
-        }
-    }
+    return __autoUiPageBehavior_Generated ??=
+        UiPageBehaviorFactory.Create(this, UiKeyStr, UiLayer.Page);
 }
 ```
 
-### 多个 Toast 显示
+要注意两点：
+
+- `[AutoUiPage]` 不会替你自动补 `: IUiPageBehaviorProvider`
+- UI 层级是生成器输入的一部分；`Page` / `Modal` / `Overlay` 语义不是后面再猜出来的
+
+### 5. 按 layer 选择正确入口
+
+Godot runtime 只是落地 `UiRouterBase` 的语义，因此入口仍然和 `GFramework.Game` 一致：
+
+页面栈：
 
 ```csharp
-public partial class ToastManager : Node
-{
-    private readonly List<UiHandle> _activeToasts = new();
-
-    public void ShowToast(string message, float duration = 3.0f)
-    {
-        var uiRouter = this.GetSystem<IUiRouter>();
-
-        // Toast 层支持重入，可以同时显示多个
-        var handle = uiRouter.Show("Toast", UiLayer.Toast, new ToastParam
-        {
-            Message = message
-        });
-
-        _activeToasts.Add(handle);
-
-        // 自动隐藏
-        GetTree().CreateTimer(duration).Timeout += () =>
-        {
-            uiRouter.Hide(handle, UiLayer.Toast, destroy: true);
-            _activeToasts.Remove(handle);
-        };
-    }
-
-    public void ClearAllToasts()
-    {
-        var uiRouter = this.GetSystem<IUiRouter>();
-
-        foreach (var handle in _activeToasts)
-        {
-            uiRouter.Hide(handle, UiLayer.Toast, destroy: true);
-        }
-
-        _activeToasts.Clear();
-    }
-}
+await uiRouter.ReplaceAsync(nameof(UiKey.MainMenu));
+await uiRouter.PushAsync(nameof(UiKey.Settings));
+await uiRouter.PopAsync();
 ```
 
-## 最佳实践
-
-1. **UI 脚本实现 IUiPage 接口**：获得完整的生命周期管理
-   ```csharp
-   ✓ public partial class MyPage : Control, IUiPage { }
-   ✗ public partial class MyPage : Control { } // 无生命周期管理
-   ```
-
-2. **使用正确的 UI 层级**：根据 UI 类型选择合适的层级
-   ```csharp
-   ✓ Page: 主要页面（主菜单、设置）
-   ✓ Overlay: 浮层（信息面板）
-   ✓ Modal: 模态对话框（确认框）
-   ✓ Toast: 提示消息
-   ✓ Topmost: 系统级（加载界面）
-   ```
-
-3. **在 OnEnter 中显示 UI**：确保 UI 正确显示
-   ```csharp
-   public void OnEnter(IUiPageEnterParam? param)
-   {
-       Show(); // 显示 UI
-       // 初始化 UI 状态
-   }
-   ```
-
-4. **在 OnExit 中隐藏 UI**：确保 UI 正确隐藏
-   ```csharp
-   public void OnExit()
-   {
-       Hide(); // 隐藏 UI
-       // 清理 UI 状态
-   }
-   ```
-
-5. **使用 UI 句柄管理非栈 UI**：对于 Modal、Toast 等层级
-   ```csharp
-   var handle = uiRouter.Show("Dialog", UiLayer.Modal);
-   // 保存句柄以便后续关闭
-   uiRouter.Hide(handle, UiLayer.Modal, destroy: true);
-   ```
-
-6. **使用 UI 参数传递数据**：避免使用全局变量
-   ```csharp
-   ✓ uiRouter.Show("Dialog", UiLayer.Modal, new DialogParam { ... });
-   ✗ GlobalData.DialogMessage = "..."; // 避免全局状态
-   ```
-
-## 常见问题
-
-### 问题：如何在 Godot UI 中使用 GFramework？
-
-**解答**：
-UI 脚本实现 `IUiPage` 和 `IUiPageBehaviorProvider` 接口：
+层级 UI：
 
 ```csharp
-public partial class MyPage : Control, IUiPage, IUiPageBehaviorProvider
-{
-    public void OnEnter(IUiPageEnterParam? param) { }
-    public IUiPageBehavior GetPage() { return new PageLayerUiPageBehavior(this, "MyPage"); }
-}
+var handle = uiRouter.Show(nameof(UiKey.PauseMenu), UiLayer.Modal);
+uiRouter.Hide(handle, UiLayer.Modal);
 ```
 
-### 问题：UI 层级有什么区别？
+当前实现里，`Show(..., UiLayer.Page)` 会直接抛异常；`Page` 层必须走 `PushAsync` / `ReplaceAsync`。
 
-**解答**：
+## 输入与暂停语义
 
-- **Page**：栈管理，不可重入，用于主要页面
-- **Overlay**：可重入，用于浮层
-- **Modal**：可重入，带遮罩，用于对话框
-- **Toast**：可重入，轻量提示
-- **Topmost**：不可重入，最高优先级
+如果页面只实现 `IUiPage`，它只有基础生命周期。
 
-### 问题：如何实现 UI 动画？
+如果还需要更强的输入仲裁或暂停语义，可以像 CoreGrid 的 `PauseMenu` 一样继续实现：
 
-**解答**：
-在生命周期方法中使用 Godot Tween：
+- `IUiInteractionProfileProvider`
+- `IUiActionHandler`
 
-```csharp
-public void OnEnter(IUiPageEnterParam? param)
-{
-    var tween = CreateTween();
-    tween.TweenProperty(this, "modulate:a", 1.0f, 0.3f);
-}
-```
+当前这条链路是成立的：
 
-### 问题：如何在 UI 中访问架构组件？
+1. 页面行为从 owner 读取 `UiInteractionProfile`
+2. router 根据 profile 判断动作捕获、世界输入阻断和暂停策略
+3. 如果页面实现了 `IUiActionHandler`，`TryHandleUiAction(...)` 会继续下沉到页面
 
-**解答**：
-使用扩展方法：
+这也是为什么 `PauseMenu` 一类 modal 页面可以声明：
 
-```csharp
-public partial class MyPage : Control, IUiPage
-{
-    public void OnEnter(IUiPageEnterParam? param)
-    {
-        var playerModel = this.GetModel<PlayerModel>();
-        var gameSystem = this.GetSystem<GameSystem>();
-    }
-}
-```
+- 捕获 `Cancel`
+- 阻断 World pointer / action input
+- 在可见时持有暂停
+- 即使在暂停状态也继续处理节点逻辑
 
-### 问题：如何关闭 Modal 或 Toast？
+## 当前边界
 
-**解答**：
-使用 UI 句柄：
+### 没有 `GodotUiRouter`
 
-```csharp
-// 显示时保存句柄
-var handle = uiRouter.Show("Dialog", UiLayer.Modal);
+仓库当前没有这个类型。旧文档把它写成默认入口是不准确的；真实入口仍然是项目侧的 `UiRouterBase` 派生类。
 
-// 关闭时使用句柄
-uiRouter.Hide(handle, UiLayer.Modal, destroy: true);
-```
+### UI 工厂不会自动补 behavior
 
-### 问题：UI 生命周期方法的调用顺序是什么？
+和 `GodotSceneFactory` 不同，`GodotUiFactory` 当前不会按节点类型自动创建 behavior。节点不实现
+`IUiPageBehaviorProvider` 时会直接失败。
 
-**解答**：
+### `Page` 层不是 `Show(...)` 的适用对象
 
-- 进入：`OnEnter` -> `OnShow`
-- 暂停：`OnPause` -> `OnHide`
-- 恢复：`OnShow` -> `OnResume`
-- 退出：`OnHide` -> `OnExit`
+`UiLayer.Page` 代表页面栈语义，而不是普通 layer UI。当前实现明确要求：
 
-## 相关文档
+- `Page` 用 `PushAsync` / `ReplaceAsync`
+- `Overlay` / `Modal` / `Toast` / `Topmost` 用 `Show` / `Hide`
 
-- [UI 系统](/zh-CN/game/ui) - 核心 UI 管理
-- [Godot 架构集成](/zh-CN/godot/architecture) - Godot 架构基础
-- [Godot 场景系统](/zh-CN/godot/scene) - Godot 场景集成
-- [Godot 扩展](/zh-CN/godot/extensions) - Godot 扩展方法
+### root 仍然由项目控制
+
+`IUiRoot` 决定：
+
+- 每个 layer 是否拆独立容器
+- 层内排序怎么算
+- 页面移除时如何释放节点
+
+Godot runtime 不会替项目自动生成统一 UI 根节点。
+
+## 继续阅读
+
+1. [Godot 运行时集成](./index.md)
+2. [Game UI 系统](../game/ui.md)
+3. [AutoUiPage 生成器](../source-generators/auto-ui-page-generator.md)
+4. [Godot 架构集成](./architecture.md)

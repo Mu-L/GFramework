@@ -2,7 +2,7 @@
 
 ## 2026-04-22
 
-### 当前恢复点：RP-014
+### 当前恢复点：RP-015
 
 - 本轮从 PR #268 的最新 review 数据恢复，未发现失败检查；CTRF 报告显示 2139 个测试全部通过
 - 本轮复核确认当前 PR 的 latest-head open thread 同时来自 `coderabbitai[bot]` 与 `greptile-apps[bot]`
@@ -30,8 +30,14 @@
   明确把 `[GetNode]`、`[BindNodeSignal]`、`AutoLoads`、`InputActions` 收口到 `GFramework.Godot.SourceGenerators`
 - 本轮已重写 `docs/zh-CN/godot/architecture.md`，改成“锚点生命周期、`InstallGodotModule(...)` 执行顺序、`IGodotModule`
   契约边界”的结构，不再沿用旧版 `.Wait()` 和自动阶段广播叙述
-- 本轮检索确认 Godot 栏目新的高优先级页面转为 `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md`：两页仍保留
-  `GodotSceneRouter` / `GodotUiRouter` 一类旧接线叙述，应作为 landing / architecture 之后的下一轮收口对象
+- 本轮已重写 `docs/zh-CN/godot/scene.md`，把内容收口为“公开入口、factory 真实行为、项目侧 router/root wiring、
+  `ISceneBehaviorProvider` 与 `[AutoScene]` 的真实关系、当前边界”，不再继续虚构 `GodotSceneRouter`
+- 本轮已重写 `docs/zh-CN/godot/ui.md`，把内容收口为“公开入口、layer behavior 语义、项目侧 router/root wiring、
+  `IUiPageBehaviorProvider` 与 `[AutoUiPage]` 的真实关系、输入与暂停边界”，不再继续虚构 `GodotUiRouter`
+- 本轮额外确认 Godot Scene / UI 的关键差异：`GodotSceneFactory` 在 provider 缺失时会回退到 `SceneBehaviorFactory`，
+  而 `GodotUiFactory` 仍会在缺失 `IUiPageBehaviorProvider` 时直接抛异常；这已写入两页文档，避免继续把两者描述成同一种接入模型
+- 本轮检索确认 Godot 栏目新的高优先级页面转为 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`：
+  两页仍保留 `SignalBuilder` / 大而全扩展层叙述，应作为 scene / ui 之后的下一轮收口对象
 
 ### 当前决策
 
@@ -45,8 +51,12 @@
 - `godot-integration.md` 已重新成为可用的采用路径入口；后续 Godot 文档收口应优先处理 `godot/index.md` 和 `godot/architecture.md`
 - `godot/index.md` 与 `godot/architecture.md` 现在都必须维持“运行时包与生成器包分边界”的写法，不能再把场景注入和项目元数据生成写回
   `GFramework.Godot` 运行时契约
-- `scene.md` 与 `ui.md` 的下一轮重写应以 `GFramework.Godot.Scene`、`GFramework.Godot.UI`、`ai-libs/CoreGrid` 的当前 wiring 为准，
-  不再继续复刻并不存在的 `GodotSceneRouter` / `GodotUiRouter`
+- `scene.md` 已明确记录“项目侧 router + Godot factory/registry/root”这一分工，后续不要再把 router 包装回
+  `GFramework.Godot` 运行时
+- `ui.md` 已明确记录 `Page` 必须走 `PushAsync` / `ReplaceAsync`，`Show(..., UiLayer.Page)` 在当前实现中会抛异常；
+  后续不要再把所有 UI 入口重新写回统一 `Show(...)`
+- `signal.md` 与 `extensions.md` 的下一轮收口应以 `Signal(...)` fluent API 与 `NodeExtensions` 的当前成员表为准，
+  不再继续复刻旧版 `SignalBuilder` 教程和泛化扩展层叙述
 
 ### 验证
 
@@ -67,11 +77,13 @@
 - `rg -n "GetNodeX|CreateSignalBuilder|GodotGameArchitecture|AbstractGodotModule|InstallGodotModule\(|GFramework\\.Godot\\.Pool" docs/zh-CN/godot docs/zh-CN/tutorials -S`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`
 - `rg -n "GodotSceneRouter|GodotUiRouter|CreateSignalBuilder|GetNodeX|InstallGodotModule\(" docs/zh-CN/godot -S`
 - `cd docs && bun run build`
 
 ### 下一步
 
-1. 优先重写 `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md`，清掉 `GodotSceneRouter` / `GodotUiRouter` 一类旧接线叙述
-2. 视 `scene.md` / `ui.md` 收口结果，决定是否同步压缩 `docs/zh-CN/godot/signal.md` 与 `extensions.md`
+1. 优先重写 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`，清掉旧 `SignalBuilder` / 大而全扩展层叙述
+2. 视 `signal.md` / `extensions.md` 收口结果，决定是否同步复核 `docs/zh-CN/godot/logging.md`
 3. 下一次推送后重新执行 `$gframework-pr-review`，确认 PR #268 的 CodeRabbit / Greptile open thread 是否关闭或减少

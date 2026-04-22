@@ -7,21 +7,23 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-014`
+- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-015`
 - 当前阶段：`Phase 3`
 - 当前焦点：
   - 已建立统一公开 skill：`.agents/skills/gframework-doc-refresh/`
   - 文档重构入口已从“按 guide/tutorial/api 类型拆 skill”收口为“按源码模块驱动文档刷新”
   - `docs/zh-CN/godot/index.md` 已改成源码优先的模块 landing page，不再把 `GetNodeX`、`CreateSignalBuilder`、`InstallGodotModule(...)` 写成默认入口
   - `docs/zh-CN/godot/architecture.md` 已改成当前锚点生命周期、模块挂接顺序和接口边界说明，不再沿用旧版 `.Wait()` 叙述
-  - `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md` 仍保留 `GodotSceneRouter` / `GodotUiRouter` 一类旧接线叙述，成为下一轮高优先级收口对象
+  - `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md` 已按当前 factory / registry / root / source-generator wiring 重写完成
+  - 下一轮高优先级页面转为 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`
 
 ## 当前状态摘要
 
 - 文档治理规则已收口到仓库规范，README、站点入口与采用链路不再依赖旧文档自证
 - 高优先级模块入口、`core` 关键专题页与 `tutorials/godot-integration.md` 已回到“以源码 / 测试 / README 为准”的状态
-- `docs/zh-CN/godot/index.md` 与 `docs/zh-CN/godot/architecture.md` 已完成当前实现收口
-- 当前主题仍是 active topic，因为 `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md` 仍保留旧 router / 工厂接线叙述，Godot 文档链路尚未完全收口
+- `docs/zh-CN/godot/index.md`、`architecture.md`、`scene.md` 与 `ui.md` 已完成当前实现收口
+- 当前主题仍是 active topic，因为 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md` 仍可能保留旧
+  `SignalBuilder` / 大而全扩展层叙述，Godot 文档链路尚未完全收口
 
 ## 当前活跃事实
 
@@ -76,6 +78,13 @@
   `IGodotModule` 契约边界”的结构，不再把 `OnPhase(...)` / `OnArchitecturePhase(...)` 写成稳定自动广播
 - 本轮再次执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh` 校验 `godot/index.md` 与
   `godot/architecture.md`，并执行 `cd docs && bun run build`，站点构建继续通过
+- `docs/zh-CN/godot/scene.md` 已改成“公开入口、factory 实际行为、项目侧 router/root wiring、`[AutoScene]` 最小接入路径、
+  当前边界”的结构，明确当前没有 `GodotSceneRouter`，且 `GodotSceneFactory` 会在 provider 缺失时回退到
+  `SceneBehaviorFactory`
+- `docs/zh-CN/godot/ui.md` 已改成“公开入口、layer behavior 语义、项目侧 router/root wiring、`[AutoUiPage]` 最小接入路径、
+  输入与暂停边界”的结构，明确当前没有 `GodotUiRouter`，且 `GodotUiFactory` 仍强制要求 `IUiPageBehaviorProvider`
+- 本轮已执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md` 与
+  `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`，两页聚焦校验通过
 - `.agents/skills/gframework-doc-refresh/SKILL.md` 已改成标准 YAML frontmatter skill，并明确支持模块输入、证据顺序、输出优先级与验证步骤
 - `.agents/skills/gframework-doc-refresh/SKILL.md` 的 `description` 已加引号，修复 `Recommended command:` 中冒号导致的
   invalid YAML skill 加载警告
@@ -96,10 +105,10 @@
     `godot-project-generator.md`、`get-node-generator.md`、`bind-node-signal-generator.md` 与 `auto-register-exported-collections-generator.md`
     已完成收口；
     继续按源码、测试、`*.csproj` 与 `ai-libs/` 下已验证参考实现核对剩余 Godot 相关页面，不把旧文档当事实来源
-- Godot 场景 / UI 专题页失真风险：`docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md` 仍保留 `GodotSceneRouter`、
-  `GodotUiRouter` 和旧工厂接线叙述，可能把已经收口的入口页再次带偏
-  - 缓解措施：本轮已完成 `godot/index.md` 与 `godot/architecture.md` 收口；下一轮优先按当前 `GFramework.Godot.Scene` /
-    `GFramework.Godot.UI` 实现与 `ai-libs/CoreGrid` 的真实采用路径重写 `scene.md`、`ui.md`
+- Godot signal / extensions 专题页失真风险：`docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md` 仍可能保留
+  `SignalBuilder` 或“大而全扩展层”叙述，重新把已经收口的入口页带偏
+  - 缓解措施：`scene.md` 与 `ui.md` 已完成收口；下一轮优先按当前 `Signal(...)` fluent API、`NodeExtensions` 实际成员与
+    `ai-libs/CoreGrid` 的使用方式重写 `signal.md`、`extensions.md`
 - 采用路径误导风险：根聚合包与模块边界若再次被写错，会继续误导消费者的包选择
   - 缓解措施：保持“源码与包关系优先”的证据顺序，改动采用说明时同步核对包依赖与生成器 wiring
 - 模块映射不全风险：统一 skill 若遗漏模块别名、测试项目或 docs 栏目映射，会让后续扫描阶段直接失焦
@@ -149,11 +158,13 @@
 - `cd docs && bun run build`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`
 - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`
 - `rg -n "GodotSceneRouter|GodotUiRouter|CreateSignalBuilder|GetNodeX|InstallGodotModule\(" docs/zh-CN/godot -S`
 - `cd docs && bun run build`
 
 ## 下一步
 
-1. 优先重写 `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md`，清掉 `GodotSceneRouter` / `GodotUiRouter` 一类旧接线叙述
-2. 视 `scene.md` / `ui.md` 收口结果，决定是否同步压缩 `docs/zh-CN/godot/signal.md` 与 `extensions.md`
+1. 优先重写 `docs/zh-CN/godot/signal.md` 与 `docs/zh-CN/godot/extensions.md`，清掉旧 `SignalBuilder` / 大而全扩展层叙述
+2. 视 `signal.md` / `extensions.md` 收口结果，决定是否同步复核 `docs/zh-CN/godot/logging.md`
 3. 下一次推送后重新执行 `$gframework-pr-review`，确认 PR #268 的 CodeRabbit / Greptile open thread 是否按预期收敛
