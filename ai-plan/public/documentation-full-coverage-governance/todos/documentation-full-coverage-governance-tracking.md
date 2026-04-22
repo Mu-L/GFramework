@@ -12,11 +12,11 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-002`
-- 当前阶段：`Phase 2 - Ecs Runtime Docs Refresh`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-003`
+- 当前阶段：`Phase 3 - Cqrs Docs Refresh Preparation`
 - 当前焦点：
-  - 重写 `docs/zh-CN/ecs/index.md` 与 `docs/zh-CN/ecs/arch.md`
-  - 为 `Ecs.Arch` / `Ecs.Arch.Abstractions` 建立 runtime / abstractions / XML 阅读链路
+  - 准备进入 `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` 波次
+  - 延续 `README / landing / API reference / XML inventory` 的同一治理模板
   - 继续把模块族 inventory 从“入口存在”推进到“可审计的 XML / README / landing 对照表”
 
 ## 当前状态摘要
@@ -39,16 +39,20 @@
   - 为 `GFramework.Core/README.md`、`GFramework.Core.Abstractions/README.md` 补齐类型族级 XML 覆盖基线入口
   - 为 `docs/zh-CN/core/index.md`、`docs/zh-CN/abstractions/core-abstractions.md` 增加“类型族 -> XML 覆盖状态 -> 代表类型”的 inventory
   - 基于顶层目录轻量盘点确认：`Core` / `Core.Abstractions` 当前公开 / 内部类型声明都已带 XML 注释，成员级审计留待后续波次
+  - 重写 `docs/zh-CN/ecs/index.md`，收敛当前 ECS family 的包边界、采用顺序和 XML inventory
+  - 重写 `docs/zh-CN/ecs/arch.md`，明确 `UseArch(...)` 需早于 `Initialize()` 的真实接入时机
+  - 刷新 `GFramework.Ecs.Arch/README.md`，使运行时 README 与源码 / 测试一致
+  - 为 `GFramework.Ecs.Arch.Abstractions/README.md` 与 `docs/zh-CN/abstractions/ecs-arch-abstractions.md` 补齐类型族级 XML inventory
 
 ## Inventory（第一版）
 
 | 模块族 | 当前状态 | 当前证据 | 下一动作 |
 | --- | --- | --- | --- |
 | `Core` / `Core.Abstractions` | `README / landing / 类型族级 XML inventory 已收口，成员级审计待补齐` | 根 README、模块 README、`docs/zh-CN/core/**`、`docs/zh-CN/abstractions/core-abstractions.md` 已对齐当前目录与类型族基线 | 进入巡检；如有新 API 变更，再追加成员级 XML 审计 |
-| `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` | `待重写` | README 已存在；站内入口目前分散在 `docs/zh-CN/core/cqrs.md` 与 `docs/zh-CN/source-generators/**` | 在 `Cqrs` 波次里补 dedicated landing / API map 审计 |
+| `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` | `待重写` | README 已存在；站内入口目前分散在 `docs/zh-CN/core/cqrs.md` 与 `docs/zh-CN/source-generators/**` | 进入下一波次，补 dedicated landing / API map 审计 |
 | `Game` / `Game.Abstractions` / `Game.SourceGenerators` | `已验证` | 根 README、模块 README、`docs/zh-CN/game/**` 和 abstractions 页已存在 | 后续波次补 XML / 教程链路审计 |
 | `Godot` / `Godot.SourceGenerators` | `已验证` | 上一轮归档 topic 已完成核心 landing / topic / tutorial 校验 | 进入巡检周期，重点看回漂 |
-| `Ecs.Arch` / `Ecs.Arch.Abstractions` | `待重写` | runtime README 已存在；`Ecs.Arch.Abstractions` README 与抽象页已在本轮补齐；`docs/zh-CN/ecs/index.md` / `arch.md` 仍偏旧 | 在 `Ecs` 波次重写 runtime docs 并补 XML map |
+| `Ecs.Arch` / `Ecs.Arch.Abstractions` | `README / landing / abstractions / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Ecs.Arch/README.md`、`GFramework.Ecs.Arch.Abstractions/README.md`、`docs/zh-CN/ecs/**`、`docs/zh-CN/abstractions/ecs-arch-abstractions.md` 已对齐当前源码与测试 | 转入巡检；后续仅在运行时公共 API 变动时补成员级 XML 细审 |
 | `SourceGenerators.Common` 与 `*.SourceGenerators.Abstractions` | `已判定为内部支撑` | `*.csproj` 明确 `IsPackable=false` | 由所属模块 README 与生成器栏目说明 owner，不建独立采用页 |
 
 ## 缺口分级
@@ -66,8 +70,8 @@
 
 ## 当前风险
 
-- `docs/zh-CN/ecs/index.md` 与 `docs/zh-CN/ecs/arch.md` 仍保留较多早期表述，本轮只先完成 inventory 与入口补齐
-  - 缓解措施：把 `Ecs.Arch` 排进前五波次，并把 runtime docs 重写列为该波次的必做项
+- `Cqrs` family 目前仍缺 dedicated landing 与统一 API / XML 阅读链路，站内入口散落在 `core` 与 `source-generators` 栏目
+  - 缓解措施：下一恢复点直接进入 `Cqrs` 波次，按 `Core` / `Ecs` 已验证模板重写入口
 - 当前 `Core` / `Core.Abstractions` 只完成了类型族级 XML 基线，不等于成员级契约全审计
   - 缓解措施：后续只在共享抽象或高风险生命周期接口发生改动时补成员级细审，不在本轮扩张范围
 - 其他模块族尚未全部建立同粒度的 XML inventory
@@ -100,9 +104,21 @@
 - `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.Core.Abstractions/GFramework.Core.Abstractions.csproj -c Release -p:RestoreFallbackFolders=`
 - 结果：通过
 - 备注：`0 Warning(s) / 0 Error(s)`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/index.md`
+- 结果：通过
+- 备注：`2026-04-22` 在重写 ECS landing 后重新验证
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/arch.md`
+- 结果：通过
+- 备注：`2026-04-22` 在重写 Arch ECS 专题页后重新验证
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/ecs-arch-abstractions.md`
+- 结果：通过
+- 备注：`2026-04-22` 在补充抽象页 XML inventory 后重新验证
+- `cd docs && bun run build`
+- 结果：通过
+- 备注：`2026-04-22` 在 Ecs 波次重写后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
 
 ## 下一步
 
-1. 进入 `Ecs` 波次，按源码重写 `docs/zh-CN/ecs/index.md` 与 `docs/zh-CN/ecs/arch.md`
-2. 为 `Ecs.Arch` / `Ecs.Arch.Abstractions` 建立与 `Core` 同粒度的 XML / README / landing inventory
+1. 进入 `Cqrs` 波次，梳理 `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` 的模块边界与 docs 入口
+2. 判断是否需要为 `Cqrs` family 新建 dedicated landing，或把现有 `core/cqrs.md` 拆分成模块族入口页
 3. 继续为每个模块族补“README / landing / tutorials / API reference / XML”对照表，持续清零 `P0` / `P1`

@@ -62,7 +62,40 @@
 - 构建校验：
   - `cd docs && bun run build`：通过；仅保留 VitePress 大 chunk warning，无构建失败
 
+### 当前恢复点：RP-003
+
+- 完成 `Ecs.Arch` 波次的运行时文档刷新：
+  - `docs/zh-CN/ecs/index.md`
+  - `docs/zh-CN/ecs/arch.md`
+  - `GFramework.Ecs.Arch/README.md`
+- 为 `Ecs.Arch.Abstractions` 补齐与运行时页同粒度的 XML inventory：
+  - `GFramework.Ecs.Arch.Abstractions/README.md`
+  - `docs/zh-CN/abstractions/ecs-arch-abstractions.md`
+- 明确记录一个关键采用事实：
+  - `UseArch(...)` 必须早于 `Initialize()` 调用
+  - 该结论以 `ArchExtensions` 的模块注册方式和 `ExplicitRegistrationTests` 为证据
+- 将 `Ecs.Arch` family 从“入口存在但失真”推进到“README / landing / abstractions / XML inventory 已对齐源码与测试”
+
+### 当前决策（RP-003）
+
+- `Ecs` 波次继续采用与 `Core` 相同的治理粒度：
+  - 模块 README 承担仓库入口
+  - `docs/zh-CN/ecs/index.md` 承担模块族 landing
+  - `docs/zh-CN/ecs/arch.md` 承担运行时默认实现专题页
+  - `docs/zh-CN/abstractions/ecs-arch-abstractions.md` 承担契约边界专题页
+- `EnableStatistics` 当前仅保留在公开配置面上；文档不再把它写成已验证的运行时行为
+- 下一恢复点切换到 `Cqrs` 波次，优先解决入口分散和 API / XML 阅读链路不统一的问题
+
+### 当前验证（RP-003）
+
+- 文档校验：
+  - `validate-all.sh docs/zh-CN/ecs/index.md`：通过
+  - `validate-all.sh docs/zh-CN/ecs/arch.md`：通过
+  - `validate-all.sh docs/zh-CN/abstractions/ecs-arch-abstractions.md`：通过
+- 构建校验：
+  - `cd docs && bun run build`：通过；仅保留 VitePress 大 chunk warning，无构建失败
+
 ### 下一步
 
-1. 在 `Ecs` 波次重写运行时 docs，并把 `Ecs.Arch.Abstractions` 纳入完整模块闭环
-2. 为 `Ecs.Arch` / `Ecs.Arch.Abstractions` 建立与 `Core` 同粒度的 XML inventory 基线
+1. 在 `Cqrs` 波次核对模块 README、`docs/zh-CN/core/cqrs.md` 与 `docs/zh-CN/source-generators/**` 的真实 owner
+2. 决定 `Cqrs` family 是补 dedicated landing 还是拆分现有入口页
