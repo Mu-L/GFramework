@@ -81,6 +81,14 @@ public sealed partial class CqrsHandlerRegistryGenerator
             return false;
         }
 
+        // Roslyn models dynamic as a pseudo-type, but generated C# cannot emit typeof(dynamic).
+        // Normalize it to the CLR runtime type so precise reflected registrations stay compilable.
+        if (type.TypeKind == TypeKind.Dynamic)
+        {
+            runtimeTypeReference = RuntimeTypeReferenceSpec.FromDirectReference("global::System.Object");
+            return true;
+        }
+
         if (CanReferenceFromGeneratedRegistry(compilation, type))
         {
             runtimeTypeReference = RuntimeTypeReferenceSpec.FromDirectReference(
@@ -255,7 +263,7 @@ public sealed partial class CqrsHandlerRegistryGenerator
     {
         // Roslyn error symbols stringify to unresolved type names; emitting them via typeof(...) would turn
         // an existing user-code error into a second generator-produced compile error instead of falling back.
-        if (type.TypeKind == TypeKind.Error)
+        if (type.TypeKind is TypeKind.Error or TypeKind.Dynamic)
             return false;
 
         switch (type)
@@ -279,8 +287,8 @@ public sealed partial class CqrsHandlerRegistryGenerator
             case ITypeParameterSymbol:
                 return false;
             default:
-                // Treat other Roslyn type kinds, such as dynamic, as referenceable for now.
-                // If a real-world case proves unsafe, tighten this branch instead of broadening the named-type path above.
+                // Remaining Roslyn type kinds that reach this branch have already been normalized by earlier guards
+                // and can continue through the direct-reference path without emitting fallback reflection code.
                 return true;
         }
     }

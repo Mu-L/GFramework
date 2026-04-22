@@ -1976,6 +1976,49 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证同一对象内不同 schema key 若归一化后映射到同一属性名，会在生成前直接给出冲突诊断。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_Schema_Keys_Collide_After_Identifier_Normalization()
+    {
+        const string source = """
+                              namespace TestApp
+                              {
+                                  public sealed class Dummy
+                                  {
+                                  }
+                              }
+                              """;
+
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "foo-bar": { "type": "string" },
+                                  "foo_bar": { "type": "string" }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_014"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("foo_bar"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("FooBar"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("foo-bar"));
+        });
+    }
+
+    /// <summary>
     ///     验证 schema 顶层允许通过元数据覆盖默认配置目录，并会统一路径分隔符。
     /// </summary>
     [Test]

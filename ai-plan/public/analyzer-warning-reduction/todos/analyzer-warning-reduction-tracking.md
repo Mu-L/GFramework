@@ -7,8 +7,8 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-024`
-- 当前阶段：`Phase 24`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-025`
+- 当前阶段：`Phase 25`
 - 当前焦点：
   - 已完成 `GFramework.Core` 当前 `MA0016` / `MA0002` / `MA0015` / `MA0077` 低风险收口批次
   - 已复核 `net10.0` 下的 `MA0158` 基线：`GFramework.Core` / `GFramework.Cqrs` 当前共有 `16` 个 object lock
@@ -27,6 +27,11 @@
     并补齐 `LoggingConfigurationTests`、`CollectionExtensionsTests`、`Cqrs` helper 抽取与 `ai-plan` 命令文本修正
   - 已完成当前 PR #269 第四轮 follow-up：将 `CqrsHandlerRegistryGenerator` 的 Roslyn error type 直接引用改为
     运行时精确查找路径，并为 `SchemaConfigGenerator` 补上根 `type` 非字符串时的防御与回归测试
+  - 已完成当前 PR #269 第五轮 follow-up：`SchemaConfigGenerator` 补上归一化后属性名冲突诊断并新增
+    `GF_ConfigSchema_014`，`CqrsHandlerRegistryGenerator` 将 `dynamic` 归一化为 `global::System.Object`，
+    同时收紧相关 generator regression tests
+  - 已更新 `AGENTS.md`：变更模块必须运行对应 `dotnet build -c Release`，并处理或显式报告模块构建 warning，
+    不再默认留给长期 warning 清理分支
   - `CoroutineScheduler` 的 tag/group 字典已显式使用 `StringComparer.Ordinal`，保持既有区分大小写语义
   - `EasyEvents.AddEvent<T>()` 的重复注册路径已恢复为 `ArgumentException`，以保持既有异常契约
   - `Option<T>` 已声明 `IEquatable<Option<T>>`，与已有强类型 `Equals(Option<T>)` 契约对齐
@@ -63,6 +68,8 @@
   并恢复 `EasyEvents` / `CollectionExtensions` / logging 配置模型的公共 API 兼容形状
 - 已完成当前 PR #269 的第四轮 review follow-up：确认 5 个 latest-head 未解决线程中仅剩 2 个本地仍成立，
   已分别在 `CqrsHandlerRegistryGenerator` 与 `SchemaConfigGenerator` 中收口，并补齐定向 generator regression tests
+- 已完成当前 PR #269 的第五轮 review follow-up：收口 `SchemaConfigGenerator` 的归一化字段名冲突诊断、
+  `CqrsHandlerRegistryGenerator` 的 `dynamic` 类型引用风险，并同步更新 `AGENTS.md` 的模块 build / warning 治理规范
 - 已完成 `GFramework.Game.SourceGenerators` 中 `SchemaConfigGenerator` 的第一批 `MA0051` 收口；warnings-only 基线剩余 `9` 条
   `MA0051`
 
@@ -117,6 +124,9 @@
 - `RP-024` 使用 `$gframework-pr-review` 继续复核 PR #269 latest-head unresolved threads，确认 `EasyEvents` 异常契约、
   `SchemaConfigGenerator` 取消传播与 `ContextAwareGenerator` 快照冲突线程均已在本地收口，仅剩 `Cqrs` error type
   直接引用与根 schema `type` 非字符串防御仍成立；现已补齐实现与回归测试
+- `RP-025` 继续复核 PR #269 剩余 outside-diff / nitpick 信号后，确认本地仍成立的是 `SchemaConfigGenerator`
+  的归一化字段名冲突与 `Cqrs` 对 `dynamic` 的直接类型引用；已分别补上诊断、运行时类型归一化与回归测试，
+  并把“变更模块必须运行对应 build 且处理 warning”的治理规则写回 `AGENTS.md`
 - 当前工作树分支 `fix/analyzer-warning-reduction-batch` 已在 `ai-plan/public/README.md` 建立 topic 映射
 
 ## 当前风险
@@ -132,6 +142,9 @@
 - source generator warning 外溢风险：运行 `GFramework.SourceGenerators.Tests` 会构建相邻 generator/test 项目并显示既有
   `GFramework.Game.SourceGenerators` 与测试项目 warning
   - 缓解措施：继续以被修改 generator 项目的独立 warnings-only build 作为主验收，并用 focused generator test 验证行为
+- source generator test warning 治理风险：`GFramework.SourceGenerators.Tests` 当前仍有既有 `MA0051` / `MA0004` / `MA0048`
+  warning，本轮 focused test 已通过，但测试项目整包 warning 尚未进入本轮写集
+  - 缓解措施：后续若继续修改该测试项目，应按新增 `AGENTS.md` 规则先跑其独立 build，并在进入下一轮实现前明确 warning 收口范围
 - Godot 资产文件环境风险：当前 worktree 的 `GFramework.Godot` restore/build 仍会命中 Windows fallback package folder
   - 缓解措施：后续若继续触达 Godot 模块，先用 Linux 侧 restore 资产或 Windows-hosted 构建链刷新该项目，再补跑定向 build
 - 并行实现风险：批量收敛时若 subagent 写入边界不清晰，容易引入命名冲突或重复重构

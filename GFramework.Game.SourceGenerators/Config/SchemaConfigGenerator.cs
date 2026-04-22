@@ -356,20 +356,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         var properties = new List<SchemaPropertySpec>();
-        foreach (var property in propertiesElement.EnumerateObject())
-        {
-            var parsedProperty = ParseProperty(
+        if (!TryParseObjectProperties(
                 filePath,
-                property,
-                requiredProperties.Contains(property.Name),
-                CombinePath(displayPath, property.Name),
-                isDirectChildOfRoot: isRoot);
-            if (parsedProperty.Diagnostic is not null)
-            {
-                return ParsedObjectResult.FromDiagnostic(parsedProperty.Diagnostic);
-            }
-
-            properties.Add(parsedProperty.Property!);
+                displayPath,
+                isRoot,
+                propertiesElement,
+                requiredProperties,
+                properties,
+                out var propertyDiagnostic))
+        {
+            return ParsedObjectResult.FromDiagnostic(propertyDiagnostic!);
         }
 
         return ParsedObjectResult.FromObject(new SchemaObjectSpec(
@@ -379,6 +375,60 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             TryGetMetadataString(element, "description"),
             TryBuildConstraintDocumentation(element, "object"),
             properties));
+    }
+
+    /// <summary>
+    ///     解析对象 schema 的直接子属性，并在进入代码发射前阻止归一化后的属性名冲突落入生成输出。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">当前对象的逻辑路径。</param>
+    /// <param name="isRoot">当前对象是否为根对象。</param>
+    /// <param name="propertiesElement">对象的 <c>properties</c> JSON 节点。</param>
+    /// <param name="requiredProperties">当前对象声明的必填字段集合。</param>
+    /// <param name="properties">成功时返回的已解析属性列表。</param>
+    /// <param name="diagnostic">解析失败时返回的首个诊断。</param>
+    /// <returns>当所有属性都可安全生成时返回 <see langword="true" />。</returns>
+    private static bool TryParseObjectProperties(
+        string filePath,
+        string displayPath,
+        bool isRoot,
+        JsonElement propertiesElement,
+        ISet<string> requiredProperties,
+        ICollection<SchemaPropertySpec> properties,
+        out Diagnostic? diagnostic)
+    {
+        var schemaKeyByGeneratedPropertyName = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var property in propertiesElement.EnumerateObject())
+        {
+            var propertyDisplayPath = CombinePath(displayPath, property.Name);
+            var parsedProperty = ParseProperty(
+                filePath,
+                property,
+                requiredProperties.Contains(property.Name),
+                propertyDisplayPath,
+                isDirectChildOfRoot: isRoot);
+            if (parsedProperty.Diagnostic is not null)
+            {
+                diagnostic = parsedProperty.Diagnostic;
+                return false;
+            }
+
+            if (!TryRegisterGeneratedPropertyName(
+                    filePath,
+                    propertyDisplayPath,
+                    property.Name,
+                    parsedProperty.Property!.PropertyName,
+                    schemaKeyByGeneratedPropertyName,
+                    out diagnostic))
+            {
+                return false;
+            }
+
+            properties.Add(parsedProperty.Property!);
+        }
+
+        diagnostic = null;
+        return true;
     }
 
     /// <summary>
@@ -4049,6 +4099,43 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             displayPath,
             schemaName,
             propertyName);
+        return false;
+    }
+
+    /// <summary>
+    ///     记录同一对象节点内已分配的生成属性名，并在 schema key 归一化后发生冲突时返回明确诊断。
+    ///     该校验会在生成器进入源码发射前阻止重复属性、查询方法与索引成员名落入后续编译阶段。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">当前字段的逻辑路径。</param>
+    /// <param name="schemaName">当前字段的原始 schema key。</param>
+    /// <param name="propertyName">当前字段归一化后的 CLR 属性名。</param>
+    /// <param name="schemaKeyByGeneratedPropertyName">同一对象内已分配的属性名与原始 schema key 对照表。</param>
+    /// <param name="diagnostic">检测到冲突时返回的诊断。</param>
+    /// <returns>当生成属性名在当前对象作用域内唯一时返回 <see langword="true" />。</returns>
+    private static bool TryRegisterGeneratedPropertyName(
+        string filePath,
+        string displayPath,
+        string schemaName,
+        string propertyName,
+        IDictionary<string, string> schemaKeyByGeneratedPropertyName,
+        out Diagnostic? diagnostic)
+    {
+        if (!schemaKeyByGeneratedPropertyName.TryGetValue(propertyName, out var existingSchemaName))
+        {
+            schemaKeyByGeneratedPropertyName.Add(propertyName, schemaName);
+            diagnostic = null;
+            return true;
+        }
+
+        diagnostic = Diagnostic.Create(
+            ConfigSchemaDiagnostics.DuplicateGeneratedIdentifier,
+            CreateFileLocation(filePath),
+            Path.GetFileName(filePath),
+            displayPath,
+            schemaName,
+            propertyName,
+            existingSchemaName);
         return false;
     }
 

@@ -1,5 +1,41 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-23 — RP-025
+
+### 阶段：PR #269 第五轮 review follow-up 与模块 build / warning 治理补充（RP-025）
+
+- 启动复核：
+  - 继续使用 `$gframework-pr-review` 读取 PR #269 当前 latest review、outside-diff comment、nitpick comment 与 open-thread 摘要
+  - 本地核对后确认 `SchemaConfigGenerator` 的取消传播、根 `type` 非字符串防御、`ContextAware` 冲突快照与
+    `Cqrs` error type 线程均已是陈旧信号；仍成立的是归一化字段名冲突与 `dynamic` 运行时类型引用问题
+- 决策：
+  - `SchemaConfigGenerator` 不复用 `GF_ConfigSchema_006`，改为新增专门的冲突诊断 `GF_ConfigSchema_014`，
+    避免把“标识符非法”和“归一化后重名”混成同一类错误
+  - `CqrsHandlerRegistryGenerator` 对 `dynamic` 采用“生成期归一化为 `global::System.Object`”策略，而不是退回更宽泛的
+    fallback 路径，保持精确注册能力且避免发射 `typeof(dynamic)`
+  - `AGENTS.md` 增加模块级 build / warning 治理规则，要求后续改代码时必须对受影响模块跑 Release build，并处理或显式报告 warning
+- 实施调整：
+  - 为 `SchemaConfigGenerator` 增加对象级生成属性名登记 helper，在 `ParseObjectSpec(...)` 中拦截 `foo-bar` /
+    `foo_bar` 这类归一化后冲突，并新增 `ConfigSchemaDiagnostics.DuplicateGeneratedIdentifier`
+  - 为 `SchemaConfigGeneratorTests` 补上冲突诊断回归测试；为 `CqrsHandlerRegistryGeneratorTests` 收紧
+    unresolved-type 断言并新增 `dynamic` 类型归一化回归测试
+  - 为 `CqrsHandlerRegistryGenerator.RuntimeTypeReferences` 增加 `TypeKind.Dynamic` 归一化处理，并保持
+    `TypeKind.Error` 的保守回退
+  - 为 `AGENTS.md` 补充“受影响模块必须独立 build 且 warning 不能默认甩给长期分支”的硬性规范
+- 验证结果：
+  - `dotnet restore GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -p:RestoreFallbackFolders="" -nologo`
+    - 结果：通过；并行 restore 时出现一次共享 `obj` 文件已存在的竞争噪音，串行验证后未再复现
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -clp:"Summary;WarningsOnly" -nologo`
+    - 结果：`0 Warning(s)`，`0 Error(s)`
+  - `dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -clp:"Summary;WarningsOnly" -nologo`
+    - 结果：`9 Warning(s)`，`0 Error(s)`；维持既有 `SchemaConfigGenerator.cs` `MA0051` 基线，未新增 warning
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~Run_Should_Report_Diagnostic_When_Schema_Keys_Collide_After_Identifier_Normalization|FullyQualifiedName~Emits_Object_Type_Reference_When_Handler_Response_Uses_Dynamic|FullyQualifiedName~Emits_Runtime_Type_Lookup_When_Handler_Contract_Contains_Unresolved_Error_Types" -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`3 Passed`，`0 Failed`
+    - 说明：测试项目构建仍打印既有 `MA0051` / `MA0004` / `MA0048` warning，不属于本轮 generator 模块写集，但已在 tracking 风险中记录
+- 下一步建议：
+  - 若继续收口 PR #269，可再次抓取最新 unresolved threads，确认 GitHub 上剩余 open thread 是否全部转为陈旧信号
+  - 若回到 analyzer 主线，继续推进 `GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs` 剩余 `MA0051`
+
 ## 2026-04-22 — RP-024
 
 ### 阶段：PR #269 第四轮 review follow-up 收口（RP-024）
