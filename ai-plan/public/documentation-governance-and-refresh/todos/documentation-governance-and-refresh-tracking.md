@@ -7,19 +7,26 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-010`
+- 恢复点编号：`DOCUMENTATION-GOVERNANCE-REFRESH-RP-017`
 - 当前阶段：`Phase 3`
 - 当前焦点：
   - 已建立统一公开 skill：`.agents/skills/gframework-doc-refresh/`
   - 文档重构入口已从“按 guide/tutorial/api 类型拆 skill”收口为“按源码模块驱动文档刷新”
-  - PR #268 的当前未解决 review 线程已进入收口：Scene/UI 标题层级修正、共享脚本 review 修复、`gframework-pr-review` 多 AI reviewer 支持补齐
-  - 下一轮需要用统一 skill 推进 Godot 相关生成器页面核对
+  - `docs/zh-CN/godot/index.md` 已改成源码优先的模块 landing page，不再把 `GetNodeX`、`CreateSignalBuilder`、`InstallGodotModule(...)` 写成默认入口
+  - `docs/zh-CN/godot/architecture.md` 已改成当前锚点生命周期、模块挂接顺序和接口边界说明，不再沿用旧版 `.Wait()` 叙述
+  - `docs/zh-CN/godot/scene.md` 与 `docs/zh-CN/godot/ui.md` 已按当前 factory / registry / root / source-generator wiring 重写完成
+  - `docs/zh-CN/godot/signal.md` 已按当前 `Signal(...)` / `SignalBuilder` / `[BindNodeSignal]` 分工重写完成
+  - `docs/zh-CN/godot/extensions.md` 已按当前 `GodotPathExtensions`、`NodeExtensions`、`SignalFluentExtensions` 与 `UnRegisterExtension` 重写完成
+  - `docs/zh-CN/godot/logging.md` 已按当前 provider / factory / logger 结构、Godot 控制台输出语义与 CoreGrid 架构接线重写完成
+  - 下一轮高优先级工作转为评估 Godot 栏目当前 active 恢复点是否可以收口并迁入 archive
 
 ## 当前状态摘要
 
 - 文档治理规则已收口到仓库规范，README、站点入口与采用链路不再依赖旧文档自证
-- 高优先级模块入口与 `core` 关键专题页已回到可作为默认导航入口的状态，本轮计划中的 `core` 剩余高风险页面已完成收口
-- 当前主题仍是 active topic，因为 `source-generators` 栏目下的 Godot 相关页面仍可能包含与实现漂移的旧内容，且统一 skill 还需要在该场景上继续落地使用
+- 高优先级模块入口、`core` 关键专题页与 `tutorials/godot-integration.md` 已回到“以源码 / 测试 / README 为准”的状态
+- `docs/zh-CN/godot/index.md`、`architecture.md`、`scene.md` 与 `ui.md` 已完成当前实现收口
+- 当前主题仍是 active topic，因为 Godot 栏目本轮已完成 `logging.md` 收口，但仍需确认是否可以把当前阶段历史迁入
+  `archive/`，并在下一次推送后跟进 PR #268 的 review 线程收敛情况
 
 ## 当前活跃事实
 
@@ -57,6 +64,41 @@
 - `docs/zh-CN/source-generators/priority-generator.md` 已改成“生成 `IPrioritized`、priority-aware 检索 API、动态优先级边界与诊断”的结构，
   不再把 `GetAllByPriority<T>()` / `system.Init()` 当作所有场景的默认示例
 - 本轮重写后再次执行 `cd docs && bun run build` 通过，当前 `source-generators` 栏目改动没有破坏站点构建
+- `docs/zh-CN/source-generators/godot-project-generator.md` 已改成“包关系、最小接入路径、AutoLoad / InputActions 生成语义、`project.godot` 文件约束与诊断边界”的结构，
+  明确 `GFrameworkGodotProjectFile` 只能改相对路径、不能改文件名
+- `docs/zh-CN/source-generators/get-node-generator.md` 已改成“字段注入职责、路径推断、`Required` / `Lookup` 语义、`_Ready()` 自动补齐边界与冲突诊断”的结构，
+  明确只有缺少 `_Ready()` 时才会生成 `OnGetNodeReadyGenerated()`
+- `docs/zh-CN/source-generators/bind-node-signal-generator.md` 已改成“CLR event 绑定职责、生命周期接线要求、与 `[GetNode]` 的调用顺序、签名约束与命名冲突”的结构，
+  明确当前不会自动生成 `_Ready()` / `_ExitTree()`
+- `docs/zh-CN/source-generators/auto-register-exported-collections-generator.md` 已补齐 frontmatter，并改成“成员形状、registry 匹配规则、null-skip 行为、编译期诊断与 CoreGrid 真实采用路径”的结构，
+  明确生成器依赖的是实例可读集合成员与可读 registry 成员，不要求成员必须带 `[Export]`
+- `docs/zh-CN/tutorials/godot-integration.md` 已改成“包关系、`project.godot` 接线、`[GetNode]` / `[BindNodeSignal]` 协作顺序、运行时扩展边界、迁移提醒”的结构，
+  不再把 `GetNodeX`、`CreateSignalBuilder`、`AbstractGodotModule` 默认化叙述为当前推荐路径
+- `docs/zh-CN/tutorials/index.md` 中 Godot 教程入口摘要已同步改成“项目级配置 + 生成器协作 + 生命周期边界”，不再继续宣传对象池 / 性能优化式旧范围
+- `docs/zh-CN/godot/index.md` 已改成“模块定位、包关系、最小接入路径、关键入口、当前边界”的 landing page 结构，并明确把
+  `[GetNode]`、`[BindNodeSignal]`、`AutoLoads`、`InputActions` 归到 `GFramework.Godot.SourceGenerators`
+- `docs/zh-CN/godot/architecture.md` 已改成“何时继承 `AbstractArchitecture`、何时使用 `InstallGodotModule(...)`、锚点生命周期、
+  `IGodotModule` 契约边界”的结构，不再把 `OnPhase(...)` / `OnArchitecturePhase(...)` 写成稳定自动广播
+- 本轮再次执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh` 校验 `godot/index.md` 与
+  `godot/architecture.md`，并执行 `cd docs && bun run build`，站点构建继续通过
+- `docs/zh-CN/godot/scene.md` 已改成“公开入口、factory 实际行为、项目侧 router/root wiring、`[AutoScene]` 最小接入路径、
+  当前边界”的结构，明确当前没有 `GodotSceneRouter`，且 `GodotSceneFactory` 会在 provider 缺失时回退到
+  `SceneBehaviorFactory`
+- `docs/zh-CN/godot/ui.md` 已改成“公开入口、layer behavior 语义、项目侧 router/root wiring、`[AutoUiPage]` 最小接入路径、
+  输入与暂停边界”的结构，明确当前没有 `GodotUiRouter`，且 `GodotUiFactory` 仍强制要求 `IUiPageBehaviorProvider`
+- 本轮已执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md` 与
+  `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`，两页聚焦校验通过
+- `docs/zh-CN/godot/signal.md` 已改成“当前公开入口、动态绑定最小接入路径、与 `[BindNodeSignal]` 的分工、当前边界”的结构，
+  不再沿用旧 `CreateSignalBuilder(...)` / builder-pattern 教程式长篇叙述
+- `docs/zh-CN/godot/extensions.md` 已改成“真实扩展分组、Node 辅助成员表、`UnRegisterWhenNodeExitTree(...)` 生命周期边界、
+  当前边界”的结构，不再把扩展层写成覆盖所有 Godot 开发动作的万能工具箱
+- 本轮已执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md` 与
+  `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`，两页聚焦校验通过
+- 本轮再次执行 `cd docs && bun run build` 通过，当前 Godot signal / extensions 页面改动没有破坏站点构建
+- `docs/zh-CN/godot/logging.md` 已改成“当前公开入口、最小接入路径、Godot 控制台输出语义、`[Log]` 协作边界、当前限制”的结构，
+  不再把直接改写 `LoggerFactoryResolver.Provider`、`AbstractGodotModule` 或 Godot 专用日志 API 写成默认接入模型
+- 本轮已执行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/logging.md` 与
+  `cd docs && bun run build`，logging 页面聚焦校验与站点构建继续通过
 - `.agents/skills/gframework-doc-refresh/SKILL.md` 已改成标准 YAML frontmatter skill，并明确支持模块输入、证据顺序、输出优先级与验证步骤
 - `.agents/skills/gframework-doc-refresh/SKILL.md` 的 `description` 已加引号，修复 `Recommended command:` 中冒号导致的
   invalid YAML skill 加载警告
@@ -74,7 +116,12 @@
 
 - 旧专题页示例失真风险：`docs/zh-CN/game/*` 与 `source-generators/*` 中仍可能保留看似合理但与真实实现不一致的示例
   - 缓解措施：`game/scene.md`、`ui.md`、`source-generators/context-aware-generator.md` 与 `priority-generator.md` 已完成收口；
+    `godot-project-generator.md`、`get-node-generator.md`、`bind-node-signal-generator.md` 与 `auto-register-exported-collections-generator.md`
+    已完成收口；
     继续按源码、测试、`*.csproj` 与 `ai-libs/` 下已验证参考实现核对剩余 Godot 相关页面，不把旧文档当事实来源
+- Godot 栏目归档过早风险：虽然 `logging.md` 已完成收口，但如果在推送前就把当前阶段过早归档，后续 review 跟进会缺少
+  清晰的 active 恢复入口
+  - 缓解措施：先保留当前 topic 为 active；待确认本轮页面集与 PR #268 的 review 跟进节奏后，再决定是否迁入 `archive/`
 - 采用路径误导风险：根聚合包与模块边界若再次被写错，会继续误导消费者的包选择
   - 缓解措施：保持“源码与包关系优先”的证据顺序，改动采用说明时同步核对包依赖与生成器 wiring
 - 模块映射不全风险：统一 skill 若遗漏模块别名、测试项目或 docs 栏目映射，会让后续扫描阶段直接失焦
@@ -115,10 +162,25 @@
 - `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Core`
 - `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Godot.SourceGenerators`
 - `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Cqrs`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/godot-project-generator.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/get-node-generator.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/bind-node-signal-generator.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/auto-register-exported-collections-generator.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+- `rg -n "GetNodeX|CreateSignalBuilder|GodotGameArchitecture|AbstractGodotModule|InstallGodotModule\(|GFramework\.Godot\.Pool" docs/zh-CN/godot docs/zh-CN/tutorials -S`
+- `cd docs && bun run build`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/logging.md`
+- `rg -n "GodotSceneRouter|GodotUiRouter|CreateSignalBuilder|GetNodeX|InstallGodotModule\(" docs/zh-CN/godot -S`
+- `cd docs && bun run build`
 
 ## 下一步
 
-1. 继续核对 Godot 相关生成器页面，优先处理 `godot-project-generator.md`、`get-node-generator.md` 与
-   `bind-node-signal-generator.md`，优先用 `gframework-doc-refresh` 的模块扫描结果驱动判断
-2. 下一次推送后先重新执行 `$gframework-pr-review`，确认 PR #268 的 CodeRabbit / Greptile open thread 是否按预期收敛
-3. 再继续确认 `project.godot`、`AutoLoad` / `InputActions`、`GetNode` / `BindNodeSignal` 示例仍与当前包关系和生成器入口一致
+1. 评估当前 Godot 栏目页面集是否已足够稳定，决定是否把本阶段 active 恢复点收口并迁入 `archive/`
+2. 如需继续保持 active，优先精简 tracking / trace，只保留归档决策、当前风险与下一次 PR follow-up 入口
+3. 下一次推送后重新执行 `$gframework-pr-review`，确认 PR #268 的 CodeRabbit / Greptile open thread 是否按预期收敛

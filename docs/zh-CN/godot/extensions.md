@@ -1,328 +1,181 @@
-# Godot 扩展方法 (Godot Extensions)
+---
+title: Godot 扩展方法
+description: 以当前 GFramework.Godot.Extensions 源码为准，说明路径、Node、signal 和 unregister 扩展的真实成员与边界。
+---
 
-## 概述
+# Godot 扩展方法
 
-Godot 扩展方法模块为 Godot 引擎提供了丰富的便捷扩展方法集合。这些扩展方法简化了常见的 Godot
-开发任务，提高了代码的可读性和开发效率。该模块遵循流畅接口设计原则，支持链式调用。
+`GFramework.Godot.Extensions` 当前并不是“覆盖所有 Godot 节点操作”的万能层。按源码看，它实际公开的扩展主要只有四组：
 
-## 模块结构
+- `GodotPathExtensions`
+- `NodeExtensions`
+- `SignalFluentExtensions`
+- `UnRegisterExtension`
 
-```mermaid
-graph TD
-    A[Extensions] --> B[GodotPathExtensions]
-    A --> C[NodeExtensions]
-    A --> D[SignalFluentExtensions]
-    A --> E[UnRegisterExtension]
-    D --> F[SignalBuilder]
-    
-    B --> G[路径判断扩展]
-    C --> H[节点生命周期]
-    C --> I[节点查询]
-    C --> J[场景树操作]
-    C --> K[输入控制]
-    C --> L[调试工具]
-    D --> M[信号连接系统]
-    E --> N[事件管理]
-```
+这页的重点应该是识别这些扩展各自解决什么问题，以及哪些旧文档里的“大而全能力”现在并不存在。
 
-## 扩展模块详解
+## 当前公开入口
 
-### 1. 路径扩展 (GodotPathExtensions)
+### `GodotPathExtensions`
 
-提供 Godot 虚拟路径的判断和识别功能。
+这组扩展只负责判断 Godot 虚拟路径前缀：
 
-**主要方法：**
+- `IsUserPath(this string path)`
+- `IsResPath(this string path)`
+- `IsGodotPath(this string path)`
 
-- `IsUserPath()` - 判断是否为 `user://` 路径
-- `IsResPath()` - 判断是否为 `res://` 路径
-- `IsGodotPath()` - 判断是否为 Godot 虚拟路径
-
-**使用示例：**
+它们不做文件访问，也不解析目录结构，只是用字符串前缀判断 `user://` 和 `res://`。
 
 ```csharp
-string savePath = "user://save.dat";
-string configPath = "res://config.json";
-string logPath = "C:/logs/debug.log";
+using GFramework.Godot.Extensions;
 
-if (savePath.IsUserPath()) Console.WriteLine("用户数据路径");
-if (configPath.IsResPath()) Console.WriteLine("资源路径");
-if (logPath.IsGodotPath()) Console.WriteLine("Godot 虚拟路径");
-else Console.WriteLine("文件系统路径");
-```
-
-### 2. 节点扩展 (NodeExtensions)
-
-最丰富的扩展模块，提供全面的节点操作功能。
-
-#### 节点生命周期管理
-
-```csharp
-// 安全释放节点
-node.QueueFreeX();  // 延迟释放
-node.FreeX();       // 立即释放
-
-// 等待节点就绪
-await node.WaitUntilReadyAsync();
-
-// 检查节点有效性
-if (node.IsValidNode()) Console.WriteLine("节点有效");
-if (node.IsInvalidNode()) Console.WriteLine("节点无效");
-```
-
-#### 节点查询操作
-
-```csharp
-// 查找子节点
-var sprite = node.FindChildX<Sprite2D>("Sprite");
-var parent = node.GetParentX<Control>();
-
-// 获取或创建节点
-var panel = parent.GetOrCreateNode<Panel>("MainPanel");
-
-// 遍历子节点
-node.ForEachChild<Sprite2D>(sprite => {
-    sprite.Modulate = Colors.White;
-});
-```
-
-#### 场景树操作
-
-```csharp
-// 获取根节点
-var root = node.GetRootNodeX();
-
-// 异步添加子节点
-await parent.AddChildXAsync(childNode);
-
-// 设置场景树暂停状态
-node.Paused(true);   // 暂停
-node.Paused(false);  // 恢复
-```
-
-#### 输入控制
-
-```csharp
-// 标记输入事件已处理
-node.SetInputAsHandled();
-
-// 禁用/启用输入
-node.DisableInput();
-node.EnableInput();
-```
-
-#### 调试工具
-
-```csharp
-// 打印节点路径
-node.LogNodePath();
-
-// 打印节点树
-node.PrintTreeX();
-
-// 安全延迟调用
-node.SafeCallDeferred("UpdateUI");
-```
-
-#### 类型转换
-
-```csharp
-// 安全的类型转换
-var button = node.OfType<Button>();
-var sprite = childNode.OfType<Sprite2D>();
-```
-
-### 3. 信号扩展 (SignalFluentExtensions)
-
-提供流畅的信号连接 API，详见 [信号扩展](signal.md)。
-
-**快速示例：**
-
-```csharp
-button.Signal(Button.SignalName.Pressed)
-    .WithFlags(GodotObject.ConnectFlags.OneShot)
-    .ToAndCall(new Callable(this, nameof(OnButtonPressed)));
-```
-
-### 4. 取消注册扩展 (UnRegisterExtension)
-
-自动管理事件监听器的生命周期。
-
-**主要方法：**
-
-- `UnRegisterWhenNodeExitTree()` - 节点退出场景树时自动取消注册
-
-**使用示例：**
-
-```csharp
-var unRegister = eventManager.Subscribe<GameEvent>(OnGameEvent);
-unRegister.UnRegisterWhenNodeExitTree(node);
-```
-
-## 快速参考
-
-### 常用代码片段
-
-#### 场景节点管理
-
-```csharp
-public class GameManager : Node
+if ("user://save.json".IsUserPath())
 {
-    private Node _uiRoot;
-    
-    public override void _Ready()
+}
+
+if ("res://config/gameplay.yaml".IsGodotPath())
+{
+}
+```
+
+### `NodeExtensions`
+
+`NodeExtensions` 是当前扩展集合里体量最大的部分，但职责仍然比较具体，主要分成下面几类。
+
+#### 生命周期与有效性辅助
+
+- `QueueFreeX(this Node? node)`
+- `FreeX(this Node? node)`
+- `WaitUntilReadyAsync(this Node node)`
+- `WaitUntilReady(this Node node, Action callback)`
+- `IsValidNode(this Node? node)`
+- `IsInvalidNode(this Node? node)`
+
+这里最容易写偏的地方有两个：
+
+- `QueueFreeX()` / `FreeX()` 会先检查 null、实例是否仍有效、是否已经进入删除队列
+- `IsValidNode()` 不只要求实例还活着，还要求节点已经在 `SceneTree` 里；单纯 `new` 出来但还没挂树的节点会返回 `false`
+
+#### 节点访问与装配辅助
+
+- `FindChildX<T>(...)`
+- `GetOrCreateNode<T>(...)`
+- `AddChildXAsync(...)`
+- `GetParentX<T>()`
+- `GetRootNodeX()`
+- `ForEachChild<T>(...)`
+- `OfType<T>()`
+
+这几组方法更偏“少量常用装配动作”，不是完整查询 DSL。
+
+特别是 `GetOrCreateNode<T>(string path)` 的当前实现要注意：
+
+1. 先尝试 `GetNodeOrNull<T>(path)`
+2. 如果没找到，就 `new T()`
+3. 把新节点直接 `AddChild(...)` 到当前节点
+4. 再把 `created.Name = path`
+
+它不会按斜杠路径逐级创建中间节点，所以不要把它当成层级化路径构建器。
+
+#### 输入、暂停与调试辅助
+
+- `SetInputAsHandled()`
+- `Paused(bool paused = true)`
+- `DisableInput()`
+- `EnableInput()`
+- `LogNodePath()`
+- `PrintTreeX(string indent = "")`
+- `SafeCallDeferred(string method)`
+
+这些方法都很薄，基本是在现有 `Viewport` / `SceneTree` / `CallDeferred(...)` 上做便捷包装，没有额外状态机。
+
+### `SignalFluentExtensions`
+
+`SignalFluentExtensions` 只提供一个入口：
+
+- `Signal(this GodotObject @object, StringName signal)`
+
+它把目标对象和 signal 名称包装成 `SignalBuilder`。具体连接语义请看 [Godot 信号系统](./signal.md)。
+
+### `UnRegisterExtension`
+
+`UnRegisterExtension` 当前也只有一个公开方法：
+
+- `UnRegisterWhenNodeExitTree(this IUnRegister unRegister, Node node)`
+
+它做的事情很明确：把 `unRegister.UnRegister` 挂到 `node.TreeExiting` 上。这样框架侧的订阅句柄就能跟 Godot 节点生命周期对齐。
+
+```csharp
+IUnRegister subscription = eventBus.Subscribe<SettingsChangedEvent>(OnSettingsChanged);
+subscription.UnRegisterWhenNodeExitTree(this);
+```
+
+它不会接管普通 Godot signal 的断开逻辑，也不会帮你推断别的释放时机。
+
+## 最小接入路径
+
+### 1. 节点进入树之后再做装配
+
+如果你的节点可能在 `_Ready()` 前就被访问，先用 `WaitUntilReadyAsync()`：
+
+```csharp
+using GFramework.Godot.Extensions;
+using GFramework.Godot.Extensions.Signal;
+using Godot;
+
+public partial class SettingsPanel : Control
+{
+    public override async void _Ready()
     {
-        _uiRoot = GetNode<Node>("UI");
-        
-        // 创建游戏面板
-        var gamePanel = _uiRoot.GetOrCreateNode<Panel>("GamePanel");
-        
-        // 安全添加子节点
-        var player = new Player();
-        await AddChildXAsync(player);
-        
-        // 查找并配置玩家
-        var sprite = player.FindChildX<Sprite2D>("Sprite");
-        if (sprite.IsValidNode()) sprite.Modulate = Colors.Red;
+        await this.WaitUntilReadyAsync();
+
+        var applyButton = FindChildX<Button>("ApplyButton");
+        applyButton?.Signal(Button.SignalName.Pressed)
+                    .To(Callable.From(OnApplyPressed));
     }
-    
-    public void Cleanup()
+
+    private void OnApplyPressed()
     {
-        // 安全释放所有子节点
-        ForEachChild<Node>(child => child.QueueFreeX());
+        this.SetInputAsHandled();
     }
 }
 ```
 
-#### UI 事件处理
+### 2. 框架订阅和节点生命周期一起收尾
+
+当订阅句柄实现了 `IUnRegister`，可以把释放时机绑到节点退出树：
 
 ```csharp
-public class MainMenu : Control
+public override void _Ready()
 {
-    private Button _startButton;
-    private Button _quitButton;
-    
-    public override void _Ready()
-    {
-        _startButton = FindChildX<Button>("StartButton");
-        _quitButton = FindChildX<Button>("QuitButton");
-        
-        // 流畅的信号连接
-        _startButton.Signal(BaseButton.SignalName.Pressed)
-            .ToAndCall(new Callable(this, nameof(OnStartPressed)));
-            
-        _quitButton.Signal(BaseButton.SignalName.Pressed)
-            .To(new Callable(this, nameof(OnQuitPressed)));
-    }
-    
-    private void OnStartPressed()
-    {
-        GetTree().ChangeSceneToFile("res://scenes/game.tscn");
-    }
-    
-    private void OnQuitPressed()
-    {
-        GetTree().Quit();
-    }
+    IUnRegister subscription = _eventBus.Subscribe<SettingsChangedEvent>(OnSettingsChanged);
+    subscription.UnRegisterWhenNodeExitTree(this);
 }
 ```
 
-#### 异步场景管理
+这比在多个 `_ExitTree()` / `Dispose()` 分支里手写解绑更稳定，也更符合当前扩展的职责边界。
 
-```csharp
-public class SceneManager : Node
-{
-    public async Task<T> LoadSceneAsync<T>(string scenePath) where T : Node
-    {
-        var packedScene = GD.Load<PackedScene>(scenePath);
-        var instance = packedScene.Instantiate<T>();
-        
-        // 等待场景加载完成
-        await instance.WaitUntilReadyAsync();
-        
-        return instance;
-    }
-    
-    public async Task TransitionToScene(string scenePath)
-    {
-        var newScene = await LoadSceneAsync<Node>(scenePath);
-        
-        // 清理当前场景
-        ForEachChild<Node>(child => child.QueueFreeX());
-        
-        // 加载新场景
-        await AddChildXAsync(newScene);
-        
-        // 设置输入处理
-        newScene.SetInputAsHandled();
-    }
-}
-```
+### 3. 只在需要时使用 signal fluent API
 
-## 设计原则
+`Signal(...)` 属于扩展集合的一部分，但它已经有独立页面。实践上可以这样分工：
 
-### 1. 安全性
+- 节点查找、ready 等待、输入处理：`NodeExtensions`
+- 动态 signal 绑定：`Signal(...)`
+- 框架订阅释放：`UnRegisterWhenNodeExitTree(...)`
+- 路径前缀判断：`GodotPathExtensions`
 
-- 所有节点操作都包含有效性检查
-- 提供安全的类型转换方法
-- 避免空引用异常
+## 当前边界
 
-### 2. 便利性
+- 当前 `NodeExtensions` 没有 `GetNodeX()`、`CreateSignalBuilder()` 之类旧文档里提过的 API
+- 它不是 router、scene factory、UI factory 或生成器的替代层
+- `GetOrCreateNode<T>()` 只会创建一个直接子节点，不会递归补整条路径
+- `SafeCallDeferred(...)` 只有在 `IsValidNode()` 为 `true` 时才会调用；节点未入树时不会执行
+- `UnRegisterWhenNodeExitTree(...)` 只针对实现了 `IUnRegister` 的框架订阅句柄，不会自动处理 Godot 原生 `Connect(...)`
+- 协程辅助扩展在 `GFramework.Godot.Coroutine` 命名空间，不属于这组 `Extensions` 页面要覆盖的核心范围
 
-- 流畅的 API 设计
-- 支持链式调用
-- 减少样板代码
+## 继续阅读
 
-### 3. 一致性
-
-- 统一的命名约定
-- 一致的返回类型
-- 预测性方法行为
-
-### 4. 性能
-
-- 避免不必要的节点查找
-- 最小化内存分配
-- 优化常见操作
-
-## 最佳实践
-
-### 1. 节点生命周期
-
-```csharp
-// ✅ 推荐：使用安全释放
-node.QueueFreeX();
-
-// ❌ 避免：直接释放可能导致错误
-node.QueueFree();
-```
-
-### 2. 节点查询
-
-```csharp
-// ✅ 推荐：类型安全的查找
-var button = node.FindChildX<Button>("Button");
-
-// ❌ 避免：需要手动类型转换
-var button = node.FindChild("Button") as Button;
-```
-
-### 3. 异步操作
-
-```csharp
-// ✅ 推荐：等待节点就绪
-await child.WaitUntilReadyAsync();
-
-// ❌ 避免：假设节点已就绪
-child.DoSomething();
-```
-
-### 4. 事件管理
-
-```csharp
-// ✅ 推荐：自动清理事件
-var unRegister = eventSystem.Subscribe(eventHandler);
-unRegister.UnRegisterWhenNodeExitTree(node);
-
-// ❌ 避免：手动管理事件生命周期
-// 可能导致内存泄漏
-```
+- [Godot 运行时集成](./index.md)
+- [Godot 信号系统](./signal.md)
+- [Godot 场景系统](./scene.md)
+- [Godot UI 系统](./ui.md)

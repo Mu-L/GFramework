@@ -1,583 +1,321 @@
 ---
 title: Godot 场景系统
-description: Godot 场景系统提供了 GFramework 场景管理与 Godot 场景树的完整集成。
+description: 以当前 GFramework.Godot 源码、Game 场景契约与 CoreGrid 接线为准，说明 PackedScene 场景工厂、行为包装和最小接入路径。
 ---
 
 # Godot 场景系统
 
-## 概述
+`GFramework.Godot` 在场景这一层负责的是 Godot runtime 适配，而不是再提供一个 Godot 专属 router。
 
-Godot 场景系统是 GFramework.Godot 中连接框架场景管理与 Godot 场景树的核心组件。它提供了场景行为封装、场景工厂、场景注册表等功能，让你可以在
-Godot 项目中使用 GFramework 的场景管理系统。
+当前真正参与场景接线的核心类型是：
 
-通过 Godot 场景系统，你可以使用 GFramework 的场景路由、生命周期管理等功能，同时保持与 Godot 场景系统的完美兼容。
+- `IGodotSceneRegistry` / `GodotSceneRegistry`
+- `GodotSceneFactory`
+- `SceneBehaviorFactory`
+- `SceneBehaviorBase<T>` 及其 `Node2D` / `Node3D` / `Control` / `Generic` 实现
+- 项目侧实现的 `ISceneRoot`
+- 项目侧继承 `SceneRouterBase` 的 router
 
-**主要特性**：
+也就是说，Godot 集成页的重点不是“再造一套场景导航 API”，而是把 `PackedScene`、`Node` 和 `GFramework.Game` 的
+`ISceneRouter` / `ISceneBehavior` 契约接起来。
 
-- 场景行为封装（SceneBehavior）
-- 场景工厂和注册表
-- 与 Godot PackedScene 集成
-- 多种场景行为类型（Node2D、Node3D、Control）
-- 场景生命周期管理
-- 场景根节点管理
+## 当前公开入口
 
-## 核心概念
+### `IGodotSceneRegistry`
 
-### 场景行为
+Godot 侧的场景资源表，底层是 `IAssetRegistry<PackedScene>`。它只负责：
 
-`SceneBehaviorBase<T>` 封装了 Godot 节点的场景行为：
+- `sceneKey -> PackedScene` 映射
+- 让 `GodotSceneFactory` 能按 key 实例化场景
+
+框架当前不会自动扫描项目里的 `.tscn` 文件并填充 registry。
+
+### `GodotSceneFactory`
+
+`GodotSceneFactory.Create(string sceneKey)` 的当前行为很明确：
+
+1. 从 `IGodotSceneRegistry` 取出 `PackedScene`
+2. 调用 `Instantiate()`
+3. 如果节点实现了 `ISceneBehaviorProvider`，优先返回 `provider.GetScene()`
+4. 否则回退到 `SceneBehaviorFactory.Create(node, sceneKey)`
+
+这和旧文档里“必须有 Godot 专属 router / 专属 scene provider 才能工作”的说法不同。当前源码允许两条路径：
+
+- 显式 provider：项目自己决定行为对象
+- 自动包装：按节点类型回退到默认 behavior
+
+### `SceneBehaviorBase<T>`
+
+`SceneBehaviorBase<T>` 是当前 Godot 场景行为包装基类。它把 `ISceneBehavior` 的生命周期接到 `Node` 上：
+
+- `OnLoadAsync`
+- `OnEnterAsync`
+- `OnPauseAsync`
+- `OnResumeAsync`
+- `OnExitAsync`
+- `OnUnloadAsync`
+
+如果 owner 还实现了 `IScene`，这些阶段会继续转发到业务节点；如果没有实现 `IScene`，默认 behavior 仍会处理 Godot 节点的
+process 开关和 `QueueFreeX()` 释放。
+
+### `SceneBehaviorFactory`
+
+自动包装的选择规则来自当前实现：
+
+- `Node2D` -> `Node2DSceneBehavior`
+- `Node3D` -> `Node3DSceneBehavior`
+- `Control` -> `ControlSceneBehavior`
+- 其他 `Node` -> `GenericSceneBehavior`
+
+这意味着 Godot runtime 确实能“自动给节点补一个 behavior”，但它不会替你补项目侧 router、root 或 registry。
+
+## 最小接入路径
+
+推荐按下面顺序接入。
+
+### 1. 继续在项目层保留自己的 router
+
+`GFramework.Godot` 当前没有 `GodotSceneRouter` 类型。消费者项目的实际做法，是在项目层继承
+`GFramework.Game.Scene.SceneRouterBase`。
+
+`ai-libs/CoreGrid` 的 router 就是这样：
 
 ```csharp
-public abstract class SceneBehaviorBase<T> : ISceneBehavior
-    where T : Node
+using global::CoreGrid.global;
+using LoggingTransitionHandler = GFramework.Game.Scene.Handler.LoggingTransitionHandler;
+
+namespace CoreGrid.scripts.core.scene;
+
+public partial class SceneRouter : SceneRouterBase
 {
-    protected readonly T Owner;
-    public string Key { get; }
-    public IScene Scene { get; }
-}
-```
+    [GetUtility] private IGodotSceneRegistry _sceneRegistry = null!;
 
-### 场景工厂
+    public Node? SceneRoot => Root as Node;
 
-`GodotSceneFactory` 负责创建场景实例：
-
-```csharp
-public class GodotSceneFactory : ISceneFactory
-{
-    public ISceneBehavior Create(string sceneKey);
-}
-```
-
-### 场景注册表
-
-`IGodotSceneRegistry` 管理场景资源：
-
-```csharp
-public interface IGodotSceneRegistry
-{
-    void Register(string key, PackedScene scene);
-    PackedScene Get(string key);
-}
-```
-
-## 基本用法
-
-### 创建场景脚本
-
-```csharp
-using Godot;
-using GFramework.Game.Abstractions.Scene;
-
-public partial class MainMenuScene : Control, IScene
-{
-    public async ValueTask OnLoadAsync(ISceneEnterParam? param)
+    protected override void RegisterHandlers()
     {
-        GD.Print("加载主菜单资源");
-        await Task.CompletedTask;
-    }
-
-    public async ValueTask OnEnterAsync()
-    {
-        GD.Print("进入主菜单");
-        Show();
-        await Task.CompletedTask;
-    }
-
-    public async ValueTask OnPauseAsync()
-    {
-        GD.Print("暂停主菜单");
-        await Task.CompletedTask;
-    }
-
-    public async ValueTask OnResumeAsync()
-    {
-        GD.Print("恢复主菜单");
-        await Task.CompletedTask;
-    }
-
-    public async ValueTask OnExitAsync()
-    {
-        GD.Print("退出主菜单");
-        Hide();
-        await Task.CompletedTask;
-    }
-
-    public async ValueTask OnUnloadAsync()
-    {
-        GD.Print("卸载主菜单资源");
-        await Task.CompletedTask;
+        __InjectContextBindings_Generated();
+        RegisterHandler(new LoggingTransitionHandler());
+        RegisterAroundHandler(
+            new SceneTransitionAnimationHandler(() => SceneTransitionManager.Instance!, _sceneRegistry.GetAll()));
     }
 }
 ```
 
-### 注册场景
+这里可以看到，Godot 适配点在 factory / registry / root / transition handler 上，而 router 仍然是项目类。
+
+### 2. 注册 `IGodotSceneRegistry` 与 `ISceneFactory`
+
+最小 wiring 需要把 registry 和 factory 装进架构：
 
 ```csharp
-using GFramework.Godot.Scene;
-using Godot;
-
-public class GameSceneRegistry : GodotSceneRegistry
-{
-    publieneRegistry()
-    {
-        // 注册场景资源
-        Register("MainMenu", GD.Load<PackedScene>("res://scenes/MainMenu.tscn"));
-        Register("Gameplay", GD.Load<PackedScene>("res://scenes/Gameplay.tscn"));
-        Register("Pause", GD.Load<PackedScene>("res://scenes/Pause.tscn"));
-    }
-}
-```
-
-### 设置场景系统
-
-```csharp
-using GFramework.Godot.Architecture;
-using GFramework.Godot.Scene;
-
-public class GameArchitecture : AbstractArchitecture
-{
-    protected override void InstallModules()
-    {
-        // 注册场景注册表
-        var sceneRegistry = new GameSceneRegistry();
-        RegisterUtility<IGodotSceneRegistry>(sceneRegistry);
-
-        // 注册场景工厂
-        var sceneFactory = new GodotSceneFactory();
-        RegisterUtility<ISceneFactory>(sceneFactory);
-
-        // 注册场景路由
-        var sceneRouter = new GodotSceneRouter();
-        RegisterSystem<ISceneRouter>(sceneRouter);
-    }
-}
-```
-
-### 使用场景路由
-
-```csharp
-using Godot;
-using GFramework.Godot.Extensions;
-
-public partial class GameController : Node
-{
-    public override void _Ready()
-    {
-        // 切换到主菜单
-        SwitchToMainMenu();
-    }
-
-    private async void SwitchToMainMenu()
-    {
-        var sceneRouter = this.GetSystem<ISceneRouter>();
-        await sceneRouter.ReplaceAsync("MainMenu");
-    }
-
-    private async void StartGame()
-    {
-        var sceneRouter = this.GetSystem<ISceneRouter>();
-        await sceneRouter.ReplaceAsync("Gameplay");
-    }
-
-    private async void ShowPause()
-    {
-        var sceneRouter = this.GetSystem<ISceneRouter>();
-        await sceneRouter.PushAsync("Pause");
-    }
-}
-```
-
-## 高级用法
-
-### 使用场景行为提供者
-
-```csharp
-using Godot;
 using GFramework.Game.Abstractions.Scene;
 using GFramework.Godot.Scene;
+using Godot;
 
-public partial class GameplayScene : Node2D, ISceneBehaviorProvider
+public sealed class GameSceneRegistry : GodotSceneRegistry
 {
-    private GameplaySceneBehavior _behavior;
+    public GameSceneRegistry()
+    {
+        Register(nameof(SceneKey.MainMenu), GD.Load<PackedScene>("res://scenes/main_menu.tscn"));
+        Register(nameof(SceneKey.Gameplay), GD.Load<PackedScene>("res://scenes/gameplay.tscn"));
+    }
+}
+
+architecture.RegisterUtility<IGodotSceneRegistry>(new GameSceneRegistry());
+architecture.RegisterUtility<ISceneFactory>(new GodotSceneFactory());
+architecture.RegisterSystem(new SceneRouter());
+```
+
+项目用什么 key 类型、资源目录或配置表都可以，但最终要能落到 `sceneKey -> PackedScene`。
+
+### 3. 提供 `ISceneRoot`
+
+`SceneRouterBase` 只负责切换编排，真正把场景节点挂到 Godot 场景树的是项目自己的 `ISceneRoot`。
+
+CoreGrid 的 `SceneRoot` 当前做了两件关键事：
+
+- 在 `_Ready()` 时调用 `_sceneRouter.BindRoot(this)`
+- 在 `AddScene` / `RemoveScene` 里把 `scene.Original` 当作 `Node` 挂入或移出树
+
+最小形态可以写成：
+
+```csharp
+public sealed class SceneRoot : Node2D, ISceneRoot
+{
+    [GetSystem] private ISceneRouter _sceneRouter = null!;
 
     public override void _Ready()
     {
-        _behavior = new GameplaySceneBehavior(this, "Gameplay");
+        __InjectContextBindings_Generated();
+        _sceneRouter.BindRoot(this);
     }
+
+    public void AddScene(ISceneBehavior scene)
+    {
+        if (scene.Original is not Node node)
+            throw new InvalidOperationException("SceneBehavior must inherit Godot Node.");
+
+        if (node.GetParent() == null)
+            AddChild(node);
+    }
+
+    public void RemoveScene(ISceneBehavior scene)
+    {
+        if (scene.Original is Node node && node.GetParent() == this)
+            RemoveChild(node);
+    }
+}
+```
+
+### 4. 让场景节点提供 behavior
+
+当前有两种可行方式。
+
+#### 方式 A：实现 `ISceneBehaviorProvider`
+
+如果你想显式控制 behavior 类型，直接实现 `GetScene()`：
+
+```csharp
+public partial class GameplayRoot : Node2D, ISceneBehaviorProvider, IScene
+{
+    private ISceneBehavior? _scene;
 
     public ISceneBehavior GetScene()
     {
-        return _behavior;
-    }
-}
-
-// 自定义场景行为
-public class GameplaySceneBehavior : Node2DSceneBehavior
-{
-    public GameplaySceneBehavior(Node2D owner, string key) : base(owner, key)
-    {
+        return _scene ??= SceneBehaviorFactory.Create(this, nameof(SceneKey.Gameplay));
     }
 
-    protected override async ValueTask OnLoadInternalAsync(ISceneEnterParam? param)
+    public ValueTask OnLoadAsync(ISceneEnterParam? param)
     {
-        GD.Print("加载游戏场景");
-        // 加载游戏资源
-        await Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
-    protected override async ValueTask OnEnterInternalAsync()
+    public ValueTask OnEnterAsync()
     {
-        GD.Print("进入游戏场景");
-        Owner.Show();
-        await Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
-}
-```
 
-### 不同类型的场景行为
-
-```csharp
-// Node2D 场景
-public class Node2DSceneBehavior : SceneBehaviorBase<Node2D>
-{
-    public Node2DSceneBehavior(Node2D owner, string key) : base(owner, key)
+    public ValueTask OnPauseAsync()
     {
+        return ValueTask.CompletedTask;
     }
-}
 
-// Node3D 场景
-public class Node3DSceneBehavior : SceneBehaviorBase<Node3D>
-{
-    public Node3DSceneBehavior(Node3D owner, string key) : base(owner, key)
+    public ValueTask OnResumeAsync()
     {
+        return ValueTask.CompletedTask;
     }
-}
 
-// Control 场景（UI）
-public class ControlSceneBehavior : SceneBehaviorBase<Control>
-{
-    public ControlSceneBehavior(Control owner, string key) : base(owner, key)
+    public ValueTask OnExitAsync()
     {
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask OnUnloadAsync()
+    {
+        return ValueTask.CompletedTask;
     }
 }
 ```
 
-### 场景根节点管理
+#### 方式 B：用 `[AutoScene]` 让生成器补样板
+
+当前更贴近真实消费者 wiring 的方式，是让 `GFramework.Godot.SourceGenerators` 生成 `SceneKeyStr` 和 `GetScene()`：
 
 ```csharp
-using Godot;
-using GFramework.Godot.Scene;
-
-public partial class SceneRoot : Node, ISceneRoot
-{
-    private Node _currentSceneNode;
-
-    public void AttachScene(Node sceneNode)
-    {
-        // 移除旧场景
-        if (_currentSceneNode != null)
-        {
-            RemoveChild(_currentSceneNode);
-            _currentSceneNode.QueueFree();
-        }
-
-        // 添加新场景
-        _currentSceneNode = sceneNode;
-        AddChild(_currentSceneNode);
-    }
-
-    public void DetachScene(Node sceneNode)
-    {
-        if (_currentSceneNode == sceneNode)
-        {
-            RemoveChild(_currentSceneNode);
-            _currentSceneNode = null;
-        }
-    }
-}
-```
-
-### 场景参数传递
-
-```csharp
-// 定义场景参数
-public class GameplayEnterParam : ISceneEnterParam
-{
-    public int Level { get; set; }
-    public string Difficulty { get; set; }
-}
-
-// 在场景中接收参数
-public partial class GameplayScene : Node2D, IScene
-{
-    private int _level;
-    private string _difficulty;
-
-    public async ValueTask OnLoadAsync(ISceneEnterParam? param)
-    {
-        if (param is GameplayEnterParam gameplayParam)
-        {
-            _level = gameplayParam.Level;
-            _difficulty = gameplayParam.Difficulty;
-            GD.Print($"加载关卡 {_level}，难度: {_difficulty}");
-        }
-
-        await Task.CompletedTask;
-    }
-
-    // ... 其他生命周期方法
-}
-
-// 切换场景时传递参数
-var sceneRouter = this.GetSystem<ISceneRouter>();
-await sceneRouter.ReplaceAsync("Gameplay", new GameplayEnterParam
-{
-    Level = 1,
-    Difficulty = "Normal"
-});
-```
-
-### 场景预加载
-
-```csharp
-public partial class LoadingScene : Control
-{
-    public override async void _Ready()
-    {
-        // 预加载下一个场景
-        await PreloadNextScene();
-
-        // 切换到预加载的场景
-        var sceneRouter = this.GetSystem<ISceneRouter>();
-        await sceneRouter.ReplaceAsync("Gameplay");
-    }
-
-    private async Task PreloadNextScene()
-    {
-        var sceneFactory = this.GetUtility<ISceneFactory>();
-        var sceneBehavior = sceneFactory.Create("Gameplay");
-
-        // 预加载场景资源
-        await sceneBehavior.LoadAsync(null);
-
-        GD.Print("场景预加载完成");
-    }
-}
-```
-
-### 场景转换动画
-
-```csharp
-using Godot;
 using GFramework.Game.Abstractions.Scene;
+using GFramework.Godot.SourceGenerators.Abstractions.UI;
+using Godot;
 
-public class FadeTransitionHandler : ISceneTransitionHandler
+[AutoScene(nameof(SceneKey.Gameplay))]
+public partial class GameplayRoot : Node2D, ISceneBehaviorProvider, IScene
 {
-    private ColorRect _fadeRect;
-
-    public FadeTransitionHandler(ColorRect fadeRect)
+    public ValueTask OnLoadAsync(ISceneEnterParam? param)
     {
-        _fadeRect = fadeRect;
+        return ValueTask.CompletedTask;
     }
 
-    public async ValueTask OnBeforeExitAsync(SceneTransitionEvent @event)
+    public ValueTask OnEnterAsync()
     {
-        // 淡出动画
-        var tween = _fadeRect.CreateTween();
-        tween.TweenProperty(_fadeRect, "modulate:a", 1.0f, 0.3f);
-        await tween.ToSignal(tween, Tween.SignalName.Finished);
+        return ValueTask.CompletedTask;
     }
 
-    public async ValueTask OnAfterEnterAsync(SceneTransitionEvent @event)
+    public ValueTask OnPauseAsync()
     {
-        // 淡入动画
-        var tween = _fadeRect.CreateTween();
-        tween.TweenProperty(_fadeRect, "modulate:a", 0.0f, 0.3f);
-        await tween.ToSignal(tween, Tween.SignalName.Finished);
+        return ValueTask.CompletedTask;
     }
 
-    // ... 其他方法
-}
-```
-
-### 场景间通信
-
-```csharp
-// 通过事件通信
-public partial class GameplayScene : Node2D, IScene
-{
-    public async ValueTask OnEnterAsync()
+    public ValueTask OnResumeAsync()
     {
-        // 发送场景进入事件
-        this.SendEvent(new GameplaySceneEnteredEvent());
-        await Task.CompletedTask;
-    }
-}
-
-// 在其他地方监听
-public partial class HUD : Control
-{
-    public override void _Ready()
-    {
-        this.RegisterEvent<GameplaySceneEnteredEvent>(OnGameplayEntered);
+        return ValueTask.CompletedTask;
     }
 
-    private void OnGameplayEntered(GameplaySceneEnteredEvent evt)
+    public ValueTask OnExitAsync()
     {
-        GD.Print("游戏场景已进入，显示 HUD");
-        Show();
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask OnUnloadAsync()
+    {
+        return ValueTask.CompletedTask;
     }
 }
 ```
 
-## 最佳实践
-
-1. **场景脚本实现 IScene 接口**：获得完整的生命周期管理
-   ```csharp
-   ✓ public partial class MyScene : Node2D, IScene { }
-   ✗ public partial class MyScene : Node2D { } // 无生命周期管理
-   ```
-
-2. **使用场景注册表管理场景资源**：集中管理所有场景
-   ```csharp
-   public class GameSceneRegistry : GodotSceneRegistry
-   {
-       public GameSceneRegistry()
-       {
-           Register("MainMenu", GD.Load<PackedScene>("res://scenes/MainMenu.tscn"));
-           Register("Gameplay", GD.Load<PackedScene>("res://scenes/Gameplay.tscn"));
-       }
-   }
-   ```
-
-3. **在 OnLoadAsync 中加载资源**：避免场景切换卡顿
-   ```csharp
-   public async ValueTask OnLoadAsync(ISceneEnterParam? param)
-   {
-       // 异步加载资源
-       await LoadTexturesAsync();
-       await LoadAudioAsync();
-   }
-   ```
-
-4. **使用场景根节点管理场景树**：保持场景树结构清晰
-   ```csharp
-   // 创建场景根节点
-   var sceneRoot = new Node { Name = "SceneRoot" };
-   AddChild(sceneRoot);
-
-   // 绑定到场景路由
-   sceneRouter.BindRoot(sceneRoot);
-   ```
-
-5. **正确清理场景资源**：在 OnUnloadAsync 中释放资源
-   ```csharp
-   public async ValueTask OnUnloadAsync()
-   {
-       // 释放资源
-       _texture?.Dispose();
-       _audioStream?.Dispose();
-       await Task.CompletedTask;
-   }
-   ```
-
-6. **使用场景参数传递数据**：避免使用全局变量
-   ```csharp
-   ✓ await sceneRouter.ReplaceAsync("Gameplay", new GameplayEnterParam { Level = 1 });
-   ✗ GlobalData.CurrentLevel = 1; // 避免全局状态
-   ```
-
-## 常见问题
-
-### 问题：如何在 Godot 场景中使用 GFramework？
-
-**解答**：
-场景脚本实现 `IScene` 接口：
+生成器当前会补出与源码一致的 `GetScene()`：
 
 ```csharp
-public partial class MyScene : Node2D, IScene
+public ISceneBehavior GetScene()
 {
-    public async ValueTask OnLoadAsync(ISceneEnterParam? param) { }
-    public async ValueTask OnEnterAsync() { }
-    // ... 实现其他方法
+    return __autoSceneBehavior_Generated ??= SceneBehaviorFactory.Create(this, SceneKeyStr);
 }
 ```
 
-### 问题：场景切换时节点如何管理？
+要注意两点：
 
-**解答**：
-使用场景根节点管理：
+- `[AutoScene]` 只生成方法和 key，不会替你自动补 `: ISceneBehaviorProvider`
+- `IScene` 仍然是业务生命周期契约；不实现它时，默认 behavior 只会保留基础节点切换语义
 
-```csharp
-// 场景路由会自动管理节点的添加和移除
-await sceneRouter.ReplaceAsync("NewScene");
-// 旧场景节点会被移除，新场景节点会被添加
-```
+### 5. 从业务代码发起导航
 
-### 问题：如何实现场景预加载？
-
-**解答**：
-使用场景工厂提前创建场景：
+一旦 registry、factory、router、root 都装好，导航入口仍然是 `ISceneRouter`：
 
 ```csharp
-var sceneFactory = this.GetUtility<ISceneFactory>();
-var sceneBehavior = sceneFactory.Create("NextScene");
-await sceneBehavior.LoadAsync(null);
+await sceneRouter.ReplaceAsync(nameof(SceneKey.MainMenu));
+await sceneRouter.ReplaceAsync(nameof(SceneKey.Gameplay), new GameplayEnterParam());
+await sceneRouter.PushAsync(nameof(SceneKey.PauseMenu));
+await sceneRouter.PopAsync();
 ```
 
-### 问题：场景生命周期方法的调用顺序是什么？
+## 当前边界
 
-**解答**：
+### 没有 `GodotSceneRouter`
 
-- 进入场景：`OnLoadAsync` -> `OnEnterAsync` -> `OnShow`
-- 暂停场景：`OnPause` -> `OnHide`
-- 恢复场景：`OnShow` -> `OnResume`
-- 退出场景：`OnHide` -> `OnExitAsync` -> `OnUnloadAsync`
+仓库当前不存在 `GodotSceneRouter` 类型。旧文档里把它写成默认入口是失真的；实际入口仍然是项目侧继承
+`SceneRouterBase` 的 router。
 
-### 问题：如何在场景中访问架构组件？
+### 没有自动注册所有场景
 
-**解答**：
-使用扩展方法：
+当前运行时只认识你注册进 `IGodotSceneRegistry` 的 `PackedScene`。它不会扫描目录、不会从脚本类型自动反推出注册表。
 
-```csharp
-public partial class MyScene : Node2D, IScene
-{
-    public async ValueTask OnEnterAsync()
-    {
-        var playerModel = this.GetModel<PlayerModel>();
-        var gameSystem = this.GetSystem<GameSystem>();
-        await Task.CompletedTask;
-    }
-}
-```
+### provider 是“优先路径”，不是“唯一路径”
 
-### 问题：场景切换时如何显示加载界面？
+`GodotSceneFactory` 会优先使用 `ISceneBehaviorProvider`，但没有 provider 时仍会按节点类型自动包装。这个行为和 UI 系统不同；
+UI 工厂当前没有同等的自动回退。
 
-**解答**：
-使用场景转换处理器：
+### root 仍然是项目职责
 
-```csharp
-public class LoadingScreenHandler : ISceneTransitionHandler
-{
-    public async ValueTask OnBeforeLoadAsync(SceneTransitionEvent @event)
-    {
-        // 显示加载界面
-        ShowLoadingScreen();
-        await Task.CompletedTask;
-    }
+`ISceneRoot` 的实现决定：
 
-    public async ValueTask OnAfterEnterAsync(SceneTransitionEvent @event)
-    {
-        // 隐藏加载界面
-        HideLoadingScreen();
-        await Task.CompletedTask;
-    }
-}
-```
+- 节点挂到哪里
+- 移除时如何释放
+- 是否保留额外的当前视图引用
 
-## 相关文档
+Godot runtime 不会替项目生成统一的 root 节点。
 
-- [场景系统](/zh-CN/game/scene) - 核心场景管理
-- [Godot 架构集成](/zh-CN/godot/architecture) - Godot 架构基础
-- [Godot UI 系统](/zh-CN/godot/ui) - Godot UI 集成
-- [Godot 扩展](/zh-CN/godot/extensions) - Godot 扩展方法
+## 继续阅读
+
+1. [Godot 运行时集成](./index.md)
+2. [Godot 架构集成](./architecture.md)
+3. [Game 场景系统](../game/scene.md)
+4. [AutoScene 生成器](../source-generators/auto-scene-generator.md)
