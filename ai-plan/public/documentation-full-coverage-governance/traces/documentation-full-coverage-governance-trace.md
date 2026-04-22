@@ -99,3 +99,45 @@
 
 1. 在 `Cqrs` 波次核对模块 README、`docs/zh-CN/core/cqrs.md` 与 `docs/zh-CN/source-generators/**` 的真实 owner
 2. 决定 `Cqrs` family 是补 dedicated landing 还是拆分现有入口页
+
+### 当前恢复点：RP-004
+
+- 完成 `Cqrs` 波次的模块族入口刷新：
+  - 重写 `docs/zh-CN/core/cqrs.md`
+  - 新建 `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
+  - 更新 `docs/zh-CN/source-generators/index.md`
+  - 更新 `docs/zh-CN/api-reference/index.md`
+  - 更新 `docs/.vitepress/config.mts`
+- 将 `Cqrs` family 从“README 已存在但 generator 入口分散”推进到“runtime / abstractions / source generator 都有明确站内入口”
+- 为 `GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs` 与
+  `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中缺失的内部类型补齐 XML 注释
+- 基于轻量扫描确认：
+  - `GFramework.Cqrs.Abstractions/Cqrs/` 当前类型声明级 XML 覆盖为 `20/20`
+  - `GFramework.Cqrs` 根入口与 `Internal/` 已补到 `19/19`
+  - `GFramework.Cqrs.SourceGenerators/Cqrs/` 当前类型声明级 XML 覆盖为 `3/3`
+
+### 当前决策（RP-004）
+
+- `docs/zh-CN/core/cqrs.md` 继续保留在 `Core` 栏目，但其角色调整为 `Cqrs` family landing，而不再只是 runtime 简介页
+- `Cqrs.SourceGenerators` 不单独新建一级导航栏目，而是在 `source-generators` 栏目内补一个专用专题页，保持站点 taxonomy 稳定
+- generator 入口以“专题页 + API reference 链接 + sidebar”三点联动，而不是只在 `source-generators/index.md` 留一个段落链接
+- XML inventory 仍维持“类型声明级基线”口径，不在本轮扩展成成员级 `param/returns/exception` 细审
+
+### 当前验证（RP-004）
+
+- 文档校验：
+  - `validate-all.sh docs/zh-CN/core/cqrs.md`：通过
+  - `validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`：通过
+- 轻量 XML inventory：
+  - `GFramework.Cqrs/Internal/`：`14/14`
+  - `GFramework.Cqrs.Abstractions/Cqrs/`：`20/20`
+  - `GFramework.Cqrs.SourceGenerators/Cqrs/`：`3/3`
+- 构建校验：
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -p:RestoreFallbackFolders=`：通过
+  - `cd docs && bun run build`：通过；仅保留 VitePress 大 chunk warning，无构建失败
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`：失败；当前 WSL / dotnet 环境仍引用失效的 Windows fallback package folder，并在多目标 inner build 阶段触发 `MSB4276` / `MSB4018`
+
+### 下一步
+
+1. 切换到 `Game` family 波次，按 `Core` / `Ecs` / `Cqrs` 已验证模板继续补 XML inventory 与教程链路
+2. 把 `GFramework.Cqrs` 的本地构建阻塞留给后续环境治理或构建脚本清理，不在本 topic 内扩张为环境修复任务

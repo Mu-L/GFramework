@@ -12,12 +12,12 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-003`
-- 当前阶段：`Phase 3 - Cqrs Docs Refresh Preparation`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-004`
+- 当前阶段：`Phase 3 - Cqrs Docs Refresh`
 - 当前焦点：
-  - 准备进入 `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` 波次
+  - 收口 `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` 的 landing / generator topic / API 入口
   - 延续 `README / landing / API reference / XML inventory` 的同一治理模板
-  - 继续把模块族 inventory 从“入口存在”推进到“可审计的 XML / README / landing 对照表”
+  - 为下一波 `Game` family 审计保留统一的恢复模板与验证口径
 
 ## 当前状态摘要
 
@@ -43,13 +43,17 @@
   - 重写 `docs/zh-CN/ecs/arch.md`，明确 `UseArch(...)` 需早于 `Initialize()` 的真实接入时机
   - 刷新 `GFramework.Ecs.Arch/README.md`，使运行时 README 与源码 / 测试一致
   - 为 `GFramework.Ecs.Arch.Abstractions/README.md` 与 `docs/zh-CN/abstractions/ecs-arch-abstractions.md` 补齐类型族级 XML inventory
+  - 重写 `docs/zh-CN/core/cqrs.md`，将其收敛为 `Cqrs` family landing，并补齐运行时 / 契约层 / 生成器的 XML inventory
+  - 新建 `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`，为 `Cqrs.SourceGenerators` 补齐站内专题入口
+  - 更新 `docs/zh-CN/source-generators/index.md`、`docs/zh-CN/api-reference/index.md` 与 VitePress sidebar，使 `Cqrs` family 的 generator 入口可导航
+  - 为 `GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs` 与 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中缺失的内部类型补齐 XML 注释，使本轮轻量 inventory 达到声明级闭环
 
 ## Inventory（第一版）
 
 | 模块族 | 当前状态 | 当前证据 | 下一动作 |
 | --- | --- | --- | --- |
 | `Core` / `Core.Abstractions` | `README / landing / 类型族级 XML inventory 已收口，成员级审计待补齐` | 根 README、模块 README、`docs/zh-CN/core/**`、`docs/zh-CN/abstractions/core-abstractions.md` 已对齐当前目录与类型族基线 | 进入巡检；如有新 API 变更，再追加成员级 XML 审计 |
-| `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` | `待重写` | README 已存在；站内入口目前分散在 `docs/zh-CN/core/cqrs.md` 与 `docs/zh-CN/source-generators/**` | 进入下一波次，补 dedicated landing / API map 审计 |
+| `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` | `README / landing / generator topic / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Cqrs/README.md`、`GFramework.Cqrs.Abstractions/README.md`、`GFramework.Cqrs.SourceGenerators/README.md`、`docs/zh-CN/core/cqrs.md`、`docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`、`docs/zh-CN/api-reference/index.md` 已对齐当前源码与测试 | 转入巡检；下一波切到 `Game` family 的 XML / 教程链路审计 |
 | `Game` / `Game.Abstractions` / `Game.SourceGenerators` | `已验证` | 根 README、模块 README、`docs/zh-CN/game/**` 和 abstractions 页已存在 | 后续波次补 XML / 教程链路审计 |
 | `Godot` / `Godot.SourceGenerators` | `已验证` | 上一轮归档 topic 已完成核心 landing / topic / tutorial 校验 | 进入巡检周期，重点看回漂 |
 | `Ecs.Arch` / `Ecs.Arch.Abstractions` | `README / landing / abstractions / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Ecs.Arch/README.md`、`GFramework.Ecs.Arch.Abstractions/README.md`、`docs/zh-CN/ecs/**`、`docs/zh-CN/abstractions/ecs-arch-abstractions.md` 已对齐当前源码与测试 | 转入巡检；后续仅在运行时公共 API 变动时补成员级 XML 细审 |
@@ -70,8 +74,6 @@
 
 ## 当前风险
 
-- `Cqrs` family 目前仍缺 dedicated landing 与统一 API / XML 阅读链路，站内入口散落在 `core` 与 `source-generators` 栏目
-  - 缓解措施：下一恢复点直接进入 `Cqrs` 波次，按 `Core` / `Ecs` 已验证模板重写入口
 - 当前 `Core` / `Core.Abstractions` 只完成了类型族级 XML 基线，不等于成员级契约全审计
   - 缓解措施：后续只在共享抽象或高风险生命周期接口发生改动时补成员级细审，不在本轮扩张范围
 - 其他模块族尚未全部建立同粒度的 XML inventory
@@ -80,6 +82,8 @@
   - 缓解措施：将本 topic 作为长期 active topic 保留，并在后续巡检中记录回漂来源
 - VitePress 页面不能直接链接到 `docs/` 目录之外的模块 `README.md`
   - 缓解措施：站内页面用模块路径文本或站内 API 入口表达，仓库级 README 仍保留仓库文件链接
+- `GFramework.Cqrs` 在当前 WSL / dotnet 环境下，本地 build 仍会读取失效的 fallback package folder 配置，导致无法完成该项目的标准编译验证
+  - 缓解措施：本轮先以 `GFramework.Cqrs.SourceGenerators` 编译通过和 docs site build 通过作为有效验证，并在后续环境治理或构建脚本清理时单独处理 `RestoreFallbackFolders` / 资产文件问题
 
 ## 验证说明
 
@@ -116,9 +120,27 @@
 - `cd docs && bun run build`
 - 结果：通过
 - 备注：`2026-04-22` 在 Ecs 波次重写后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/cqrs.md`
+- 结果：通过
+- 备注：`2026-04-22` 在重写 `Cqrs` family landing 后重新验证
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
+- 结果：通过
+- 备注：`2026-04-22` 在新增 `Cqrs.SourceGenerators` 专题页后验证通过
+- `python3` 轻量 XML inventory 扫描
+- 结果：通过
+- 备注：`2026-04-22` 确认 `GFramework.Cqrs` 的 `Internal/` 为 `14/14`、`GFramework.Cqrs.SourceGenerators/Cqrs/` 为 `3/3`、`GFramework.Cqrs.Abstractions/Cqrs/` 为 `20/20`
+- `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -p:RestoreFallbackFolders=`
+- 结果：通过
+- 备注：保留既有 `NU1900` 与 `MA0051` warnings；无新增编译错误
+- `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+- 结果：失败
+- 备注：当前环境会命中失效的 Windows fallback package folder，并在多目标 inner build 阶段触发 `MSB4276` / `MSB4018`；失败原因已记录为环境阻塞，不属于本轮文档改动回归
+- `cd docs && bun run build`
+- 结果：通过
+- 备注：`2026-04-22` 在 `Cqrs` 波次文档刷新后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
 
 ## 下一步
 
-1. 进入 `Cqrs` 波次，梳理 `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` 的模块边界与 docs 入口
-2. 判断是否需要为 `Cqrs` family 新建 dedicated landing，或把现有 `core/cqrs.md` 拆分成模块族入口页
-3. 继续为每个模块族补“README / landing / tutorials / API reference / XML”对照表，持续清零 `P0` / `P1`
+1. 切换到 `Game` / `Game.Abstractions` / `Game.SourceGenerators` 波次，按 `Cqrs` 模板核对 README / landing / tutorials / API reference / XML 链路
+2. 评估 `Game` family 当前是否已经具备类型族级 XML inventory，还是仍停留在“README / 页面存在但不可审计”
+3. 在后续环境治理任务中单独处理 `GFramework.Cqrs` 本地 build 的 fallback package folder 阻塞，避免影响后续代码类验证
