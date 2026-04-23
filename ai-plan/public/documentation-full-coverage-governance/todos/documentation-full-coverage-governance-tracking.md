@@ -12,7 +12,7 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-017`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-018`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
   - 保持 `Game` persistence docs surface 与当前 `README`、源码、`PersistenceTests` 使用同一套 owner / adoption path 叙述
@@ -31,7 +31,13 @@
   - 为 `docs/zh-CN/game/data.md` 补充 `UnifiedSettingsDataRepository` 的统一文件布局示例
   - 为 `GFramework.Godot.SourceGenerators/README.md` 补充手写 `_Ready()` / `_ExitTree()` 时显式调用生成方法的最小样例
   - 将过长的 active tracking / trace 瘦身，并把历史摘要迁回 `archive/`
-- 当前唯一剩余的 PR 信号是 GitHub `Title check` 对 PR 标题过泛的 inconclusive 提示；这属于托管侧元数据，不是本地文件缺陷。
+- `2026-04-23` 使用 `$gframework-pr-review` 重新抓取 PR `#272` 后，确认最新 latest-head review 里仍有 1 条
+  Greptile open thread，指出 `GFramework.Godot.SourceGenerators/README.md` 的最小样例误写成
+  `using GFramework.Godot.Attribute;`。
+- 该命名空间错误已在本地修正为 `using GFramework.Godot.SourceGenerators.Abstractions;`，待提交并推送后再回到
+  GitHub 侧确认 open thread 是否消失。
+- 当前剩余的托管侧信号是 GitHub `Title check` 对 PR 标题过泛的 inconclusive 提示；这属于 PR 元数据，不是本地
+  文件缺陷。
 
 ## 当前风险
 
@@ -51,21 +57,22 @@
 
 ## 最新验证
 
-- `2026-04-23` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
-  - 结果：通过；PR `#272` 处于 `OPEN`，latest head commit 没有未解决 open thread，当前只剩 `Title check` 的 PR 标题提示。
-- `2026-04-23` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/data.md`
-  - 结果：通过。
+- `2026-04-23` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过；PR `#272` 处于 `OPEN`，latest head commit 存在 1 条 Greptile open thread，定位到
+    `GFramework.Godot.SourceGenerators/README.md:135` 的错误命名空间引用。
 - `2026-04-23` `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Godot.SourceGenerators/README.md`
   - 结果：通过。
 - `2026-04-23` `bash .agents/skills/gframework-doc-refresh/scripts/validate-code-blocks.sh GFramework.Godot.SourceGenerators/README.md`
   - 结果：通过。
-- `2026-04-23` `cd docs && bun run build`
+- `2026-04-23` `bun run build`（工作目录：`docs/`）
   - 结果：通过；仅保留既有 VitePress 大 chunk warning，无构建失败。
 
 ## 下一步
 
-1. 如果 PR `#272` 的 `Title check` 仍需要消除，到 GitHub 上把标题改成更具体的文档治理描述。
-2. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
+1. 提交并推送本地对 `GFramework.Godot.SourceGenerators/README.md` 的命名空间修正，然后重新抓取 PR `#272`
+   确认 Greptile open thread 是否消失。
+2. 如果 PR `#272` 的 `Title check` 仍需要消除，到 GitHub 上把标题改成更具体的文档治理描述。
+3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
-3. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
+4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
    `docs/zh-CN/tutorials/godot-integration.md` 与相关专题页是否仍保持一致。

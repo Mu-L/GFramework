@@ -132,7 +132,7 @@
 最小接法可以直接写成：
 
 ```csharp
-using GFramework.Godot.Attribute;
+using GFramework.Godot.SourceGenerators.Abstractions;
 using Godot;
 
 public partial class MainMenu : Control
