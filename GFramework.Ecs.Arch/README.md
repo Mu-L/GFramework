@@ -1,16 +1,30 @@
 # GFramework.Ecs.Arch
 
-GFramework 的 Arch ECS 集成包，提供开箱即用的 ECS（Entity Component System）支持。
+`GFramework.Ecs.Arch` 是 `GFramework` 当前 Arch ECS family 的默认运行时实现包。
 
-## 特性
+它负责把 Arch `World`、GFramework 的服务模块生命周期，以及 `ArchSystemAdapter<T>` 系统桥接到同一条采用路径中。
+如果你需要的只是共享契约，请改为依赖 `GFramework.Ecs.Arch.Abstractions`。
 
-- 🎯 **显式集成** - 符合 .NET 生态习惯的显式注册方式
-- 🔌 **零依赖** - 不使用时，Core 包无 Arch 依赖
-- 🎯 **类型安全** - 完整的类型系统和编译时检查
-- ⚡ **高性能** - 基于 Arch ECS 的高性能实现
-- 🔧 **易扩展** - 简单的系统适配器模式
+## 包定位
 
-## 快速开始
+- 这是运行时实现层，不是纯契约层。
+- 适合需要 `UseArch(...)`、`World` 自动注册、默认模块生命周期和系统桥接基类的项目。
+- 常见场景：
+  - 在架构实例上显式接入 Arch ECS
+  - 让 `World` 由默认模块创建并放入容器
+  - 让 ECS 系统复用 `ArchSystemAdapter<float>` 生命周期桥接
+  - 通过 `IArchEcsModule.Update(deltaTime)` 统一驱动 ECS 帧更新
+
+## 与相邻包的关系
+
+- `GFramework.Core`
+  - 提供架构、容器、生命周期和系统注册基础设施。
+- `GFramework.Ecs.Arch.Abstractions`
+  - 提供 `IArchEcsModule`、`IArchSystemAdapter<T>` 和契约层 `ArchOptions`。
+- `GFramework.Ecs.Arch`
+  - 提供 `UseArch(...)`、默认 `ArchEcsModule`、`World` 注册，以及系统适配器基类与示例类型。
+
+## 最小接入路径
 
 ### 1. 安装包
 
@@ -18,53 +32,43 @@ GFramework 的 Arch ECS 集成包，提供开箱即用的 ECS（Entity Component
 dotnet add package GeWuYou.GFramework.Ecs.Arch
 ```
 
-### 2. 注册 ECS 模块
+### 2. 在 `Initialize()` 之前显式接入 Arch runtime
+
+按当前实现，`UseArch(...)` 会把 `ArchEcsModule` 提前登记到 `ArchitectureModuleRegistry`，因此调用时机应早于
+`Initialize()`。
 
 ```csharp
-// 在架构初始化时添加 Arch ECS 支持
-var architecture = new GameArchitecture(config)
-    .UseArch();  // 添加 ECS 支持
+using GFramework.Core.Architectures;
+using GFramework.Ecs.Arch.Extensions;
 
-architecture.Initialize();
-```
+public sealed class GameArchitecture : Architecture
+{
+    public GameArchitecture() : base(new ArchitectureConfiguration())
+    {
+    }
 
-### 3. 带配置的注册
+    protected override void OnInitialize()
+    {
+        RegisterSystem<MovementSystem>();
+    }
+}
 
-```csharp
-var architecture = new GameArchitecture(config)
+var architecture = new GameArchitecture()
     .UseArch(options =>
     {
-        options.WorldCapacity = 2000;
-        options.EnableStatistics = true;
+        options.WorldCapacity = 2048;
         options.Priority = 50;
     });
 
 architecture.Initialize();
 ```
 
-```csharp
-using System.Runtime.InteropServices;
-
-[StructLayout(LayoutKind.Sequential)]
-public struct Position(float x, float y)
-{
-    public float X { get; set; } = x;
-    public float Y { get; set; } = y;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public struct Velocity(float x, float y)
-{
-    public float X { get; set; } = x;
-    public float Y { get; set; } = y;
-}
-```
-
-### 5. 创建系统
+### 3. 编写并注册系统
 
 ```csharp
 using Arch.Core;
 using GFramework.Ecs.Arch;
+using GFramework.Ecs.Arch.Components;
 
 public sealed class MovementSystem : ArchSystemAdapter<float>
 {
@@ -78,115 +82,57 @@ public sealed class MovementSystem : ArchSystemAdapter<float>
 
     protected override void OnUpdate(in float deltaTime)
     {
-        World.Query(in _query, (ref Position pos, ref Velocity vel) =>
+        var frameDelta = deltaTime;
+
+        World.Query(in _query, (ref Position position, ref Velocity velocity) =>
         {
-            pos.X += vel.X * deltaTime;
-            pos.Y += vel.Y * deltaTime;
+            position.X += velocity.X * frameDelta;
+            position.Y += velocity.Y * frameDelta;
         });
     }
 }
 ```
 
-### 6. 注册系统
+### 4. 初始化后获取 `World` 与 ECS 模块
 
 ```csharp
-public class MyArchitecture : Architecture
-{
-    protected override void OnRegisterSystem(IIocContainer container)
-    {
-        container.Register<MovementSystem>();
-    }
-}
+using Arch.Core;
+using GFramework.Ecs.Arch.Abstractions;
+
+var world = architecture.Context.GetService<World>();
+var ecsModule = architecture.Context.GetService<IArchEcsModule>();
 ```
 
-### 7. 创建实体
+### 5. 由宿主循环驱动更新
 
 ```csharp
-var world = this.GetService<World>();
-var entity = world.Create(
-    new Position(0, 0),
-    new Velocity(1, 1)
-);
-```
-
-### 8. 更新系统
-
-```csharp
-var ecsModule = this.GetService<IArchEcsModule>();
 ecsModule.Update(deltaTime);
 ```
 
-## 配置选项
+## 运行时职责地图
 
-### 代码配置
+| 文件 | 作用 |
+| --- | --- |
+| `Extensions/ArchExtensions.cs` | 通过 `UseArch(...)` 把默认模块注册到 `ArchitectureModuleRegistry` |
+| `ArchEcsModule.cs` | 创建并注册 `World`，按优先级收集 `ArchSystemAdapter<float>`，负责初始化、销毁和逐帧更新 |
+| `ArchSystemAdapter.cs` | 把 GFramework 系统生命周期桥接到 Arch `ISystem<T>` 生命周期 |
+| `ArchOptions.cs` | 承载 `WorldCapacity`、`EnableStatistics`、`Priority` 这组运行时配置 |
+| `Components/*.cs`、`Systems/*.cs` | 提供最小组件与系统示例，帮助对照查询写法和更新模式 |
 
-```csharp
-var architecture = new GameArchitecture(config)
-    .UseArch(options =>
-    {
-        options.WorldCapacity = 2000;
-        options.EnableStatistics = true;
-        options.Priority = 50;
-    });
-```
+## XML 阅读基线
 
-### 配置说明
+下表记录当前模块 README 与源码可对照的类型声明级 XML 基线。
 
-- `WorldCapacity` - World 初始容量（默认：1000）
-- `EnableStatistics` - 是否启用统计信息（默认：false）
-- `Priority` - 模块优先级（默认：50）
+| 类型族 | 代表类型 | XML 状态 | 阅读重点 |
+| --- | --- | --- | --- |
+| 装配入口 | `ArchExtensions` | 已覆盖 | `UseArch(...)` 的时机与返回值 |
+| 运行时模块 | `ArchEcsModule` | 已覆盖 | `World` 注册、系统排序、销毁顺序 |
+| 系统桥接层 | `ArchSystemAdapter<T>` | 已覆盖 | `OnArchInitialize`、`OnUpdate`、`OnArchDispose` |
+| 示例类型 | `Position`、`Velocity`、`MovementSystem` | 已覆盖 | 组件布局、查询写法、最小示例 |
 
-## 架构说明
+## 对应文档入口
 
-### 显式注册模式
-
-本包采用 .NET 生态标准的显式注册模式，基于架构实例：
-
-**优点：**
-
-- ✅ 符合 .NET 生态习惯
-- ✅ 显式、可控
-- ✅ 易于测试和调试
-- ✅ 支持配置
-- ✅ 支持链式调用
-- ✅ 避免"魔法"行为
-
-**使用方式：**
-```csharp
-// 在架构初始化时添加
-var architecture = new GameArchitecture(config)
-    .UseArch();  // 显式注册
-
-architecture.Initialize();
-```
-
-详见：[INTEGRATION_PATTERN.md](INTEGRATION_PATTERN.md)
-
-### 系统适配器
-
-`ArchSystemAdapter<T>` 桥接 Arch.System.ISystem<T> 到 GFramework 架构：
-
-- 自动获取 World 实例
-- 集成到框架生命周期
-- 支持上下文感知（Context-Aware）
-
-### 生命周期
-
-1. **注册阶段** - 模块自动注册到架构
-2. **初始化阶段** - 创建 World，初始化系统
-3. **运行阶段** - 每帧调用 Update
-4. **销毁阶段** - 清理资源，销毁 World
-
-## 示例
-
-完整示例请参考 `GFramework.Ecs.Arch.Tests` 项目。
-
-## 依赖
-
-- GFramework.Core >= 1.0.0
-- Arch >= 2.1.0
-- Arch.System >= 1.1.0
-
-## 许可证
-
-MIT License
+- ECS 总览：[`../docs/zh-CN/ecs/index.md`](../docs/zh-CN/ecs/index.md)
+- Arch ECS 集成：[`../docs/zh-CN/ecs/arch.md`](../docs/zh-CN/ecs/arch.md)
+- 抽象契约页：[`../docs/zh-CN/abstractions/ecs-arch-abstractions.md`](../docs/zh-CN/abstractions/ecs-arch-abstractions.md)
+- 统一 API / XML 导航：[`../docs/zh-CN/api-reference/index.md`](../docs/zh-CN/api-reference/index.md)

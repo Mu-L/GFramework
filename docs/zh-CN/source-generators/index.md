@@ -65,7 +65,9 @@ GFramework 当前发布的生成器包是：
 
 - 配置 schema 生成与运行时接法：
   - [../game/config-system.md](../game/config-system.md)
-- CQRS registry 生成入口：
+- CQRS handler registry 生成器：
+  - [cqrs-handler-registry-generator](./cqrs-handler-registry-generator.md)
+- CQRS 模块族采用入口：
   - [../core/cqrs.md](../core/cqrs.md)
 
 ### Godot 专用生成器

@@ -131,6 +131,20 @@ Scene 与 UI 路由共享这套基础约定。
 - `Enums/`
   - UI/Scene 转场、UI 层级、输入动作、存储类型等公共枚举
 
+## XML 覆盖基线
+
+下面这份 inventory 记录的是 `2026-04-23` 对 `GFramework.Game.Abstractions` 做的一轮轻量 XML 盘点结果：只统计公开 /
+内部类型声明是否带 XML 注释，用来建立契约层阅读入口；成员级参数、返回值、异常和生命周期说明仍需要在后续 API 波次继续细化。
+
+| 契约族 | 基线状态 | 代表类型 | 阅读重点 |
+| --- | --- | --- | --- |
+| `Config/` | `7/7` 个类型声明已带 XML 注释 | `IConfigLoader`、`IConfigRegistry`、`IConfigTable<TKey, TValue>`、`ConfigLoadException` | 看配置表注册、读取约定和失败诊断模型 |
+| `Data/` | `14/14` 个类型声明已带 XML 注释 | `IDataRepository`、`ISettingsDataRepository`、`ISaveRepository<TSaveData>`、`DataRepositoryOptions` | 看业务数据、设置持久化、槽位存档和版本迁移契约 |
+| `Setting/` | `12/12` 个类型声明已带 XML 注释 | `ISettingsData`、`ISettingsModel`、`ISettingsSystem`、`LocalizationSettings` | 看设置数据、应用语义、迁移接口和内置设置对象 |
+| `Scene/` | `14/14` 个类型声明已带 XML 注释 | `IScene`、`ISceneRouter`、`ISceneFactory`、`SceneTransitionEvent` | 看场景行为、路由、工厂 / root 边界与转场事件模型 |
+| `UI/` | `19/19` 个类型声明已带 XML 注释 | `IUiPage`、`IUiRouter`、`IUiFactory`、`UiInteractionProfile`、`UiTransitionHandlerOptions` | 看页面栈、层级 UI、输入动作与 UI 转场契约 |
+| `Routing/` `Storage/` `Asset/` `Enums/` | `13/13` 个类型声明已带 XML 注释 | `IRoute`、`IRouteContext`、`IFileStorage`、`IAssetRegistry<T>`、`UiLayer`、`SceneTransitionType` | 看公共路由上下文、存储角色、资源注册表与跨层共享枚举 |
+
 ## 最小接入路径
 
 ### 1. 只想在公共业务层声明游戏对象

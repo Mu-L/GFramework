@@ -21,8 +21,11 @@ from typing import Any
 
 OWNER = "GeWuYou"
 REPO = "GFramework"
+WORKTREE_ROOT_DIRECTORY_NAME = "GFramework-WorkTree"
 DEFAULT_WINDOWS_GIT = "/mnt/d/Tool/Development Tools/Git/cmd/git.exe"
 GIT_ENVIRONMENT_KEY = "GFRAMEWORK_WINDOWS_GIT"
+GIT_DIR_ENVIRONMENT_KEY = "GFRAMEWORK_GIT_DIR"
+WORK_TREE_ENVIRONMENT_KEY = "GFRAMEWORK_WORK_TREE"
 USER_AGENT = "codex-gframework-pr-review"
 CODERABBIT_LOGIN = "coderabbitai[bot]"
 GREPTILE_LOGIN = "greptile-apps[bot]"
@@ -83,6 +86,43 @@ def resolve_git_command() -> str:
     raise RuntimeError(f"No usable git executable found. Set {GIT_ENVIRONMENT_KEY} to override it.")
 
 
+def find_repository_root(start_path: Path) -> Path | None:
+    """Locate the repository root by walking parent directories for repo markers."""
+    for candidate in (start_path, *start_path.parents):
+        if (candidate / "AGENTS.md").exists() and (candidate / ".ai/environment/tools.ai.yaml").exists():
+            return candidate
+
+    return None
+
+
+def resolve_worktree_git_dir(repository_root: Path) -> Path | None:
+    """Resolve the main-repository worktree gitdir for this WSL worktree layout."""
+    if repository_root.parent.name != WORKTREE_ROOT_DIRECTORY_NAME:
+        return None
+
+    primary_repository_root = repository_root.parent.parent / REPO
+    candidate_git_dir = primary_repository_root / ".git" / "worktrees" / repository_root.name
+    return candidate_git_dir if candidate_git_dir.exists() else None
+
+
+def resolve_git_invocation() -> list[str]:
+    """Resolve the git command arguments, preferring explicit WSL worktree binding."""
+    configured_git_dir = os.environ.get(GIT_DIR_ENVIRONMENT_KEY)
+    configured_work_tree = os.environ.get(WORK_TREE_ENVIRONMENT_KEY)
+    linux_git = shutil.which("git")
+
+    if configured_git_dir and configured_work_tree and linux_git:
+        return [linux_git, f"--git-dir={configured_git_dir}", f"--work-tree={configured_work_tree}"]
+
+    repository_root = find_repository_root(Path.cwd())
+    if repository_root is not None and linux_git:
+        worktree_git_dir = resolve_worktree_git_dir(repository_root)
+        if worktree_git_dir is not None:
+            return [linux_git, f"--git-dir={worktree_git_dir}", f"--work-tree={repository_root}"]
+
+    return [resolve_git_command()]
+
+
 def resolve_request_timeout_seconds() -> int:
     """Return the GitHub request timeout in seconds."""
     configured_timeout = os.environ.get(REQUEST_TIMEOUT_ENVIRONMENT_KEY)
@@ -113,7 +153,7 @@ def run_command(args: list[str]) -> str:
 
 def get_current_branch() -> str:
     """Return the current git branch name."""
-    return run_command([resolve_git_command(), "rev-parse", "--abbrev-ref", "HEAD"])
+    return run_command([*resolve_git_invocation(), "rev-parse", "--abbrev-ref", "HEAD"])
 
 
 def open_url(url: str, accept: str) -> tuple[str, Any]:

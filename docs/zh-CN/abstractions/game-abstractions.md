@@ -1,94 +1,122 @@
-# Game Abstractions
-
-> GFramework.Game.Abstractions 游戏模块抽象接口定义
-
-## 概述
-
-GFramework.Game.Abstractions 包含了游戏特定功能的抽象接口，这些接口定义了游戏开发中的通用契约。
-
-## 存档接口
-
-### ISaveSystem
-
-存档系统接口：
-
-```csharp
-public interface ISaveSystem
-{
-    void Save(string slotId, SaveData data);
-    SaveData Load(string slotId);
-    bool HasSave(string slotId);
-    void Delete(string slotId);
-    List<SaveSlotInfo> GetAllSaveSlots();
-}
-```
-
-### ISaveData
-
-存档数据接口：
-
-```csharp
-public interface ISaveData
-{
-    int Version { get; }
-    DateTime Timestamp { get; }
-    void Validate();
-}
-```
-
-## 设置接口
-
-### IGameSettings
-
-游戏设置接口：
-
-```csharp
-public interface IGameSettings
-{
-    AudioSettings Audio { get; }
-    GraphicsSettings Graphics { get; }
-    InputSettings Input { get; }
-    
-    void Save();
-    void Load();
-    void ResetToDefaults();
-}
-```
-
-## 场景管理接口
-
-### ISceneManager
-
-场景管理器接口：
-
-```csharp
-public interface ISceneManager
-{
-    void SwitchScene<TScene>() where TScene : IScene;
-    Task SwitchSceneAsync<TScene>() where TScene : IScene;
-    
-    void PushScene<TScene>() where TScene : IScene;
-    void PopScene();
-    
-    IScene CurrentScene { get; }
-}
-```
-
-### IScene
-
-场景接口：
-
-```csharp
-public interface IScene
-{
-    void OnEnter();
-    void OnExit();
-    void OnUpdate(float delta);
-}
-```
+---
+title: Game Abstractions
+description: GFramework.Game.Abstractions 的契约边界、包关系与 XML 阅读重点。
 ---
 
-**相关文档**：
+# Game Abstractions
 
-- [Game 概述](../game/index.md)
-- [核心抽象](./core-abstractions.md)
+`GFramework.Game.Abstractions` 是 `Game` 运行时的契约包。
+
+它建立在 `GFramework.Core.Abstractions` 之上，负责定义配置、数据、设置、场景、UI、路由、存储和资源注册表相关的接口、
+枚举与事件契约；默认实现、路由基类、YAML 加载器、文件存储和设置 / 存档仓库则在 `GFramework.Game` 中。
+
+如果你要开箱即用地接入游戏运行时能力，应依赖 `GFramework.Game`；如果你在做共享业务层、feature 包、测试替身或引擎适配层，
+才单独消费本包。
+
+## 什么时候单独依赖它
+
+- 你希望公共业务层只依赖 `ISceneRouter`、`IUiRouter`、`ISettingsSystem`、`ISaveRepository<TSaveData>` 这类契约
+- 你要让多个程序集共享 `ISettingsData`、`IData`、`ISceneEnterParam`、`IUiPageEnterParam` 等数据和路由上下文
+- 你需要自己实现 factory、root、存储或配置加载器，但不想把默认运行时一起带进来
+
+## 包关系
+
+- 契约层：`GFramework.Game.Abstractions`
+- 运行时实现：`GFramework.Game`
+- 底层基础契约：`GFramework.Core.Abstractions`
+
+## 契约地图
+
+| 契约族 | 作用 |
+| --- | --- |
+| `Config/` | `IConfigLoader`、`IConfigRegistry`、`IConfigTable<TKey, TValue>` 和配置失败诊断模型 |
+| `Data/` | `IData`、`IVersionedData`、`IDataRepository`、`ISettingsDataRepository`、`ISaveRepository<TSaveData>` 及数据事件 |
+| `Setting/` | `ISettingsData`、`ISettingsModel`、`ISettingsSystem`、设置迁移契约与内置设置数据类型 |
+| `Scene/` | `IScene`、`ISceneRouter`、`ISceneFactory`、`ISceneRoot`、转场处理器与事件 |
+| `UI/` | `IUiPage`、`IUiRouter`、`IUiFactory`、`IUiRoot`、交互配置与 UI 转场选项 |
+| `Routing/` | `IRoute`、`IRouteContext`、`IRouteGuard<TRoute>`，作为 Scene / UI 共享的路由基础约定 |
+| `Storage/` `Asset/` `Enums/` | 文件存储角色、资源注册表，以及转场 / UI 层级 / 输入动作等跨层枚举 |
+
+## XML 覆盖基线
+
+下面这份 inventory 记录的是 `2026-04-23` 对 `GFramework.Game.Abstractions` 做的一轮轻量 XML 盘点结果：只统计公开 /
+内部类型声明是否带 XML 注释，用来建立契约层阅读入口；成员级参数、返回值、异常和生命周期说明仍需要后续 API 波次继续细化。
+
+| 契约族 | 基线状态 | 代表类型 | 阅读重点 |
+| --- | --- | --- | --- |
+| `Config/` | `7/7` 个类型声明已带 XML 注释 | `IConfigLoader`、`IConfigRegistry`、`IConfigTable<TKey, TValue>`、`ConfigLoadException` | 看配置表注册、只读访问和失败诊断边界 |
+| `Data/` | `14/14` 个类型声明已带 XML 注释 | `IDataRepository`、`ISettingsDataRepository`、`ISaveRepository<TSaveData>`、`DataRepositoryOptions` | 看业务数据、统一设置文件、槽位存档与迁移契约 |
+| `Setting/` | `12/12` 个类型声明已带 XML 注释 | `ISettingsData`、`ISettingsModel`、`ISettingsSystem`、`LocalizationSettings` | 看设置生命周期、应用语义、迁移接口和内置设置对象 |
+| `Scene/` | `14/14` 个类型声明已带 XML 注释 | `IScene`、`ISceneRouter`、`ISceneFactory`、`SceneTransitionEvent` | 看场景行为、工厂 / root 边界和转场模型 |
+| `UI/` | `19/19` 个类型声明已带 XML 注释 | `IUiPage`、`IUiRouter`、`IUiFactory`、`UiInteractionProfile`、`UiTransitionHandlerOptions` | 看页面栈、层级 UI、输入动作和 UI 转场契约 |
+| `Routing/` `Storage/` `Asset/` `Enums/` | `13/13` 个类型声明已带 XML 注释 | `IRoute`、`IRouteContext`、`IFileStorage`、`IAssetRegistry<T>`、`UiLayer`、`SceneTransitionType` | 看公共路由上下文、存储角色、资源注册表与共享枚举 |
+
+## 最小接入路径
+
+### 1. 只在公共业务层声明游戏对象
+
+```csharp
+using GFramework.Game.Abstractions.Data;
+using GFramework.Game.Abstractions.Scene;
+using GFramework.Game.Abstractions.UI;
+
+public sealed class GameSaveData : IVersionedData
+{
+    public int Version { get; set; } = 1;
+    public DateTime LastModified { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class GameplayEnterParam : ISceneEnterParam
+{
+    public required string Seed { get; init; }
+}
+
+public sealed class PauseMenuParam : IUiPageEnterParam
+{
+    public bool AllowRestart { get; init; }
+}
+```
+
+### 2. 让 feature 包只依赖抽象
+
+```csharp
+using GFramework.Game.Abstractions.Data;
+using GFramework.Game.Abstractions.Scene;
+
+public sealed class ContinueGameCommandHandler
+{
+    private readonly ISaveRepository<GameSaveData> _saveRepository;
+    private readonly ISceneRouter _sceneRouter;
+
+    public ContinueGameCommandHandler(
+        ISaveRepository<GameSaveData> saveRepository,
+        ISceneRouter sceneRouter)
+    {
+        _saveRepository = saveRepository;
+        _sceneRouter = sceneRouter;
+    }
+}
+```
+
+### 3. 什么时候切到运行时包
+
+下面这些需求都属于 `GFramework.Game` 的职责，而不是本包：
+
+- 使用默认的 `JsonSerializer`、`FileStorage` 或 `ScopedStorage`
+- 使用 `SettingsModel<TRepository>`、`SettingsSystem`、`SaveRepository<TSaveData>` 等默认实现
+- 使用 `YamlConfigLoader`、`GameConfigBootstrap`、`GameConfigModule`
+- 继承 `SceneRouterBase`、`UiRouterBase` 或默认转场处理器基类
+
+## 阅读顺序
+
+1. 先读本页，确认你是否真的只需要契约层
+2. 再看 [`../game/index.md`](../game/index.md) 了解默认运行时怎么组织这些契约
+3. 继续读具体专题页：
+   - [`../game/config-system.md`](../game/config-system.md)
+   - [`../game/data.md`](../game/data.md)
+   - [`../game/setting.md`](../game/setting.md)
+   - [`../game/scene.md`](../game/scene.md)
+   - [`../game/ui.md`](../game/ui.md)
+4. 需要仓库侧入口时，回到：
+   - `GFramework.Game.Abstractions/README.md`
+   - `GFramework.Game/README.md`

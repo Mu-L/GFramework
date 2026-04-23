@@ -651,32 +651,70 @@ internal static class CqrsHandlerRegistrar
         }
     }
 
+    /// <summary>
+    ///     描述某个程序集在生成注册器之后仍需运行时补扫的 handler 元数据。
+    /// </summary>
+    /// <remarks>
+    ///     该对象把“是否存在精确 fallback 类型列表”与“是否只能回退到整程序集扫描”收敛为同一份内部状态，
+    ///     供注册流水线后续阶段统一判断。
+    /// </remarks>
     private sealed class ReflectionFallbackMetadata(IReadOnlyList<Type> types)
     {
+        /// <summary>
+        ///     获取需要通过运行时反射补充注册的 handler 类型集合。
+        /// </summary>
         public IReadOnlyList<Type> Types { get; } = types ?? throw new ArgumentNullException(nameof(types));
 
+        /// <summary>
+        ///     获取当前是否持有精确的 fallback 类型清单。
+        /// </summary>
         public bool HasExplicitTypes => Types.Count > 0;
     }
 
+    /// <summary>
+    ///     描述单个程序集在注册阶段提取到的 generated registry 与 reflection fallback 元数据。
+    /// </summary>
     private sealed class AssemblyRegistrationMetadata(
         IReadOnlyList<Type> registryTypes,
         ReflectionFallbackMetadata? reflectionFallbackMetadata)
     {
+        /// <summary>
+        ///     获取程序集上声明的 generated registry 类型集合。
+        /// </summary>
         public IReadOnlyList<Type> RegistryTypes { get; } =
             registryTypes ?? throw new ArgumentNullException(nameof(registryTypes));
 
+        /// <summary>
+        ///     获取该程序集是否还要求运行时补充 reflection fallback。
+        /// </summary>
         public ReflectionFallbackMetadata? ReflectionFallbackMetadata { get; } = reflectionFallbackMetadata;
     }
 
+    /// <summary>
+    ///     缓存 generated registry 激活所需的类型判定结果与工厂委托。
+    /// </summary>
+    /// <remarks>
+    ///     该缓存把“是否实现契约”“是否为抽象类型”“是否已构建激活委托”封装为不可变快照，
+    ///     避免对同一 registry 类型重复执行反射分析。
+    /// </remarks>
     private sealed class RegistryActivationMetadata(
         bool implementsRegistryContract,
         bool isAbstract,
         Func<ICqrsHandlerRegistry>? factory)
     {
+        /// <summary>
+        ///     获取目标类型是否实现了 <see cref="ICqrsHandlerRegistry" />。
+        /// </summary>
         public bool ImplementsRegistryContract { get; } = implementsRegistryContract;
 
+        /// <summary>
+        ///     获取目标类型是否为抽象类型。
+        /// </summary>
         public bool IsAbstract { get; } = isAbstract;
 
+        /// <summary>
+        ///     获取可用于实例化 registry 的工厂委托。
+        /// </summary>
         public Func<ICqrsHandlerRegistry>? Factory { get; } = factory;
     }
 }
