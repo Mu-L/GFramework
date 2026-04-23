@@ -12,9 +12,10 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-020`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-021`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
+  - 为 `gframework-batch-boot` 明确数字速记阈值语义，避免把“本轮新增文件数”与“整条分支 diff 阈值”混淆
   - 保持 `Core` functional docs surface 的 inline code / 泛型示例在 VitePress 下按真实 C# 语法渲染
   - 保持 `Game` persistence docs surface 与当前 `README`、源码、`PersistenceTests` 使用同一套 owner / adoption path 叙述
   - 保持 `GFramework.Godot.SourceGenerators/README.md` 与 `docs/zh-CN/tutorials/godot-integration.md` 在生命周期接法上的一致性
@@ -42,6 +43,11 @@
   `docs/zh-CN/core/functional.md` 与 `docs/zh-CN/tutorials/functional-programming.md` 共 8 处。
 - 上述 8 处 inline code 中的 `Option&lt;T&gt;`、`Result&lt;T&gt;`、`Nullable&lt;T&gt;` 已统一改为真实
   泛型写法，避免在 VitePress 中显示字面量 HTML entity。
+- `2026-04-23` 根据本轮使用反馈，已为 `.agents/skills/gframework-batch-boot/SKILL.md` 与
+  `.agents/skills/README.md` 补充数字速记阈值语义：
+  - `$gframework-batch-boot 75` 默认表示“当前分支全部提交相对远程 `origin/main` 接近 75 个分支 diff 文件时停止”
+  - `$gframework-batch-boot 75 2000` 默认表示“当前分支全部提交相对远程 `origin/main` 接近 75 个文件或 2000 行变更时停止”
+  - `75 | 2000` 仅作为可理解的 OR 写法保留，不再作为推荐写法，以避免与 shell pipe 混淆
 - 当前剩余的托管侧信号是 GitHub `Title check` 对 PR 标题过泛的 inconclusive 提示；这属于 PR 元数据，不是本地
   文件缺陷。
 
@@ -70,14 +76,18 @@
   - 结果：命中 `docs/zh-CN/godot/setting.md:75` 与 `docs/zh-CN/godot/storage.md:102` 两处同类写法，均已修正。
 - `2026-04-23` `rg -n '`[^`]*&lt;[^`]*`|`[^`]*&gt;[^`]*`' README.md GFramework.* docs/zh-CN -g '*.md'`
   - 结果：命中 `docs/zh-CN/core/functional.md` 与 `docs/zh-CN/tutorials/functional-programming.md` 共 8 处，已全部修正。
+- `2026-04-23` `sed -n '1,260p' .agents/skills/gframework-batch-boot/SKILL.md` 与 `sed -n '1,220p' .agents/skills/README.md`
+  - 结果：确认原文仅描述自然语言 stop condition，没有定义数字速记或多阈值 OR 语义；现已补齐。
 - `2026-04-23` `bun run build`（工作目录：`docs/`）
   - 结果：通过；仅保留既有 VitePress 大 chunk warning，无构建失败。
 
 ## 下一步
 
-1. 对 `README.md`、`GFramework.*` 与 `docs/zh-CN/**` 继续做下一类低风险 Markdown 渲染巡检，优先排查 code span 内
+1. 若后续继续扩展批处理 skill，可考虑再补充显式单位写法，例如 `75 files 2000 lines`，但当前默认速记已足够覆盖
+   常见分支阈值场景。
+2. 对 `README.md`、`GFramework.*` 与 `docs/zh-CN/**` 继续做下一类低风险 Markdown 渲染巡检，优先排查 code span 内
    的 HTML entity、站点内链接和标题锚点是否仍与当前页面结构一致。
-2. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
+3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
-3. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
+4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
    `docs/zh-CN/tutorials/godot-integration.md` 与相关专题页是否仍保持一致。
