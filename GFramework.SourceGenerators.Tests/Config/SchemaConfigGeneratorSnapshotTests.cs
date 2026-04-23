@@ -12,7 +12,7 @@ public class SchemaConfigGeneratorSnapshotTests
     ///     验证一个最小 monster schema 能生成配置类型、表包装和注册辅助。
     /// </summary>
     [Test]
-    public async Task Snapshot_SchemaConfigGenerator()
+    public Task Snapshot_SchemaConfigGenerator()
     {
         const string source = """
                               using System;
@@ -183,12 +183,7 @@ public class SchemaConfigGeneratorSnapshotTests
             "SchemaConfigGenerator");
         snapshotFolder = Path.GetFullPath(snapshotFolder);
 
-        await AssertSnapshotAsync(generatedSources, snapshotFolder, "MonsterConfig.g.cs", "MonsterConfig.g.txt");
-        await AssertSnapshotAsync(generatedSources, snapshotFolder, "MonsterTable.g.cs", "MonsterTable.g.txt");
-        await AssertSnapshotAsync(generatedSources, snapshotFolder, "MonsterConfigBindings.g.cs",
-            "MonsterConfigBindings.g.txt");
-        await AssertSnapshotAsync(generatedSources, snapshotFolder, "GeneratedConfigCatalog.g.cs",
-            "GeneratedConfigCatalog.g.txt");
+        return AssertAllSnapshotsAsync(generatedSources, snapshotFolder);
     }
 
     /// <summary>
@@ -213,15 +208,43 @@ public class SchemaConfigGeneratorSnapshotTests
         if (!File.Exists(path))
         {
             Directory.CreateDirectory(snapshotFolder);
-            await File.WriteAllTextAsync(path, actual);
+            await File.WriteAllTextAsync(path, actual).ConfigureAwait(false);
             Assert.Fail($"Snapshot not found. Generated new snapshot at:\n{path}");
         }
 
-        var expected = await File.ReadAllTextAsync(path);
+        var expected = await File.ReadAllTextAsync(path).ConfigureAwait(false);
         Assert.That(
             Normalize(expected),
             Is.EqualTo(Normalize(actual)),
             $"Snapshot mismatch: {generatedFileName}");
+    }
+
+    /// <summary>
+    ///     依次验证 schema 生成器产出的全部核心快照文件。
+    /// </summary>
+    /// <param name="generatedSources">生成结果字典。</param>
+    /// <param name="snapshotFolder">快照目录。</param>
+    /// <returns>全部快照断言完成后的异步任务。</returns>
+    private static async Task AssertAllSnapshotsAsync(
+        IReadOnlyDictionary<string, string> generatedSources,
+        string snapshotFolder)
+    {
+        await AssertSnapshotAsync(generatedSources, snapshotFolder, "MonsterConfig.g.cs", "MonsterConfig.g.txt")
+            .ConfigureAwait(false);
+        await AssertSnapshotAsync(generatedSources, snapshotFolder, "MonsterTable.g.cs", "MonsterTable.g.txt")
+            .ConfigureAwait(false);
+        await AssertSnapshotAsync(
+                generatedSources,
+                snapshotFolder,
+                "MonsterConfigBindings.g.cs",
+                "MonsterConfigBindings.g.txt")
+            .ConfigureAwait(false);
+        await AssertSnapshotAsync(
+                generatedSources,
+                snapshotFolder,
+                "GeneratedConfigCatalog.g.cs",
+                "GeneratedConfigCatalog.g.txt")
+            .ConfigureAwait(false);
     }
 
     /// <summary>

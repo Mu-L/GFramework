@@ -1,5 +1,42 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-23 — RP-030
+
+### 阶段：`GFramework.SourceGenerators.Tests` 低风险 `MA0004` / `MA0048` 收口（RP-030）
+
+- 启动复核：
+  - 按 `gframework-boot` 流程恢复当前 worktree 后，读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、
+    `ai-plan/public/README.md` 与 active topic 跟踪文件，确认当前分支 `fix/analyzer-warning-reduction-batch`
+    仍映射到 `analyzer-warning-reduction`
+  - 先对 `GFramework.SourceGenerators.Tests` 执行
+    `dotnet restore GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -p:RestoreFallbackFolders="" -nologo`，
+    刷新 Linux 侧 restore 资产，规避 Windows fallback package folder 干扰
+  - 用
+    `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    复核当前基线，确认该测试项目共有 `61` 条 warning，其中低风险切片集中在 `MA0004` 与单个 `MA0048`
+- 决策：
+  - 不直接进入大型 snapshot/test 方法的 `MA0051`，先收口纯 test-infrastructure 层的 `MA0004` / `MA0048`
+  - 对“只是转发异步调用”的 helper 直接返回 `Task`，只在真实文件 I/O 上显式补 `ConfigureAwait(false)`，避免无意义的
+    `async/await` 包装
+  - 将 `AnalyzerTestDriver<TAnalyzer>` 所在文件改名为与类型一致，单独清理 `MA0048`，不改类型名与调用方契约
+- 实施调整：
+  - 将 `AnalyzerTestDriver.RunAsync(...)` 与 `GeneratorTest.RunAsync(...)` 改为直接返回下游 `Task`
+  - 为 `GeneratorSnapshotTest`、`SchemaConfigGeneratorSnapshotTests` 与 `SchemaConfigGeneratorEnumTests` 中的异步文件读写
+    显式补齐 `ConfigureAwait(false)`，并把仅作转发的测试方法改为直接返回 `Task`
+  - 将 `GeneratorSnapshotTestSecurityTests` 的 `Assert.ThrowsAsync(...)` 改为直接返回目标 `Task`，移除无收益的
+    `async` 包装
+  - 将 `GFramework.SourceGenerators.Tests/Core/AnalyzerTest.cs` 重命名为
+    `GFramework.SourceGenerators.Tests/Core/AnalyzerTestDriver.cs`
+- 验证结果：
+  - `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release -t:Rebuild --no-restore -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`49 Warning(s)`，`0 Error(s)`；当前项目已不再出现 `MA0004` / `MA0048`，剩余 warning 全部为 `MA0051`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~GeneratorSnapshotTestSecurityTests|FullyQualifiedName~SchemaConfigGeneratorSnapshotTests|FullyQualifiedName~SchemaConfigGeneratorEnumTests" -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`6 Passed`，`0 Failed`
+- 下一步建议：
+  - 若继续 analyzer warning reduction，继续把 `GFramework.SourceGenerators.Tests` 作为独立写集，只处理 `MA0051`
+  - 下一轮优先选择单一测试域的同构长方法，例如 `LoggerGeneratorSnapshotTests`、`AutoRegisterModuleGeneratorTests`
+    或共享 helper `GeneratorSnapshotTest`
+
 ## 2026-04-23 — RP-029
 
 ### 阶段：`SchemaConfigGenerator.cs` 剩余 `MA0051` 收口（RP-029）

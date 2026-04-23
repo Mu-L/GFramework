@@ -83,13 +83,13 @@ public static class GeneratorSnapshotTest<TGenerator>
             {
                 // 第一次运行：生成 snapshot
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await File.WriteAllTextAsync(path, content.ToString());
+                await File.WriteAllTextAsync(path, content.ToString()).ConfigureAwait(false);
 
                 Assert.Fail(
                     $"未找到快照文件，已在以下路径生成新快照：\n{path}");
             }
 
-            var expected = await File.ReadAllTextAsync(path);
+            var expected = await File.ReadAllTextAsync(path).ConfigureAwait(false);
 
             Assert.That(
                 Normalize(expected),
