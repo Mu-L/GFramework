@@ -2553,7 +2553,7 @@ public class SchemaConfigGeneratorTests
     /// <param name="source">测试输入源码。</param>
     /// <param name="additionalFiles">参与本次生成的 schema 文件集合。</param>
     /// <returns>按 HintName 索引的生成源码字典。</returns>
-    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string> RunAndCollectGeneratedSources(
+    private static IReadOnlyDictionary<string, string> RunAndCollectGeneratedSources(
         string source,
         params (string path, string content)[] additionalFiles)
     {
