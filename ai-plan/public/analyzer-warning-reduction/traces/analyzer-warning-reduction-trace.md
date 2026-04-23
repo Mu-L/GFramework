@@ -1,5 +1,28 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-23 — RP-040
+
+### 阶段：subagent 循环第四个有效写集（RP-040）
+
+- 启动复核：
+  - 在 `RP-039` 成功后，继续按单方法级 subagent 推进同一热点文件
+  - 本轮目标收敛到 `Generates_Precise_Service_Type_For_Hidden_Array_Type_Arguments()`
+- 决策：
+  - 仅提取该方法的内联 `source` 文本，继续复用现有
+    `HiddenArrayResponseFallbackExpected`
+  - 不改变 method name、expected 常量、生成文件名与断言语义
+- 实施调整：
+  - 新增类级常量 `HiddenArrayResponseFallbackSource`
+  - 将目标测试方法改为复用该常量调用 `GeneratorTest<CqrsHandlerRegistryGenerator>.RunAsync(...)`
+- 验证结果：
+  - `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release -t:Rebuild --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`11 Warning(s)`，`0 Error(s)`；原先位于行号 `607` 的 `MA0051` 已消失
+- 当前结论：
+  - subagent 循环已经连续四轮产出 patch，但仍然只是在单个热点文件内收口 warning
+  - 以“唯一变更文件数接近 `75`”作为停止条件，和当前单文件 warning 收口节奏存在明显张力
+- 下一步建议：
+  - 继续处理 `CqrsHandlerRegistryGeneratorTests.cs` 的下一处前半段热点：行号 `680`
+
 ## 2026-04-23 — RP-039
 
 ### 阶段：subagent 循环第三个有效写集（RP-039）
