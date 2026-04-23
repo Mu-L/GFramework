@@ -1,5 +1,27 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-23 — RP-038
+
+### 阶段：subagent 循环第二个有效写集（RP-038）
+
+- 启动复核：
+  - 在 `RP-037` 成功后，继续沿用“单方法级 subagent”节奏推进同一热点文件
+  - 本轮目标收敛到 `Generates_Visible_Handlers_And_Self_Registers_Private_Nested_Handler_When_Assembly_Contains_Hidden_Handler()`
+- 决策：
+  - 仅提取该方法的内联 `source` 文本，继续复用现有 `HiddenNestedHandlerSelfRegistrationExpected`
+  - 保持 method name、expected 常量、生成文件名和断言语义不变
+- 实施调整：
+  - 新增类级常量 `HiddenNestedHandlerSelfRegistrationSource`
+  - 将目标测试方法改为复用该常量调用 `GeneratorTest<CqrsHandlerRegistryGenerator>.RunAsync(...)`
+- 验证结果：
+  - `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release -t:Rebuild --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`13 Warning(s)`，`0 Error(s)`；原先位于行号 `454` 的 `MA0051` 已消失
+- 当前结论：
+  - subagent 循环已连续两轮产出稳定 patch，但仍只是在同一个文件内逐点消除 warning
+  - 当前分支相对 `origin/main` 的唯一变更文件数仍远低于 `75`
+- 下一步建议：
+  - 继续处理 `CqrsHandlerRegistryGeneratorTests.cs` 的下一处前半段热点：行号 `536`
+
 ## 2026-04-23 — RP-037
 
 ### 阶段：subagent 循环首个有效写集（RP-037）
