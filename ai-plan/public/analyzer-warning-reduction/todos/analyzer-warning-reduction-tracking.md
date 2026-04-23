@@ -7,8 +7,8 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-032`
-- 当前阶段：`Phase 32`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-033`
+- 当前阶段：`Phase 33`
 - 当前焦点：
   - 已完成 `GFramework.Core` 当前 `MA0016` / `MA0002` / `MA0015` / `MA0077` 低风险收口批次
   - 已复核 `net10.0` 下的 `MA0158` 基线：`GFramework.Core` / `GFramework.Cqrs` 当前共有 `16` 个 object lock
@@ -61,10 +61,15 @@
     将内联测试源码与期望快照抽到类级常量、补齐测试类 XML 文档，并将仅作转发的异步测试改为直接返回 `Task`
   - 当前 `GFramework.SourceGenerators.Tests` Release build 基线已从 `43` 条降到 `40` 条；
     `AutoRegisterModuleGeneratorTests.cs` 已不再出现在 `MA0051` 列表中
+  - 已完成 `GFramework.SourceGenerators.Tests/Config/SchemaConfigGeneratorSnapshotTests.cs` 的 `MA0051` 收口：
+    将 monster 场景的运行时契约与 schema 输入提取为类级常量，并把生成结果与快照目录解析拆成小 helper，保持
+    生成文件名、快照目录和断言语义不变
+  - 当前 `GFramework.SourceGenerators.Tests` Release build 基线已从 `40` 条降到 `39` 条；
+    `SchemaConfigGeneratorSnapshotTests.cs` 已不再出现在 `MA0051` 列表中
   - `GFramework.Godot` 的 `Timing.cs` 已同步适配新事件签名，但当前 worktree 的 Godot restore 资产仍受 Windows fallback package folder 干扰，独立 build 需在修复资产后补跑
   - 后续继续按 warning 类型和数量批处理，而不是回退到按单文件切片推进
   - 下一轮默认继续拆分 `GFramework.SourceGenerators.Tests` 的 `MA0051` 热点，优先处理
-    `GeneratorSnapshotTest` 或 `ContextGetGeneratorTests`
+    `GeneratorSnapshotTest` 或 `ContextRegistrationAnalyzerTests`
   - 单次 `boot` 的工作树改动上限控制在约 `100` 个文件以内，避免 recovery context 与 review 面同时失控
   - 若任务边界互不冲突，允许使用不同模型的 subagent 并行处理不同 warning 类型或不同目录，但必须遵守显式 ownership
 
@@ -104,6 +109,8 @@
   `43` 条，并通过 focused snapshot tests 保持行为不变
 - 已完成 `AutoRegisterModuleGeneratorTests` 的单文件 `MA0051` 收口；当前 `GFramework.SourceGenerators.Tests` Release build 基线已降到
   `40` 条，并通过 focused generator tests 保持输出契约不变
+- 已完成 `SchemaConfigGeneratorSnapshotTests` 的单文件 `MA0051` 收口；当前 `GFramework.SourceGenerators.Tests`
+  Release build 基线已降到 `39` 条，并通过 focused snapshot test 保持生成输出契约不变
 
 ## 当前活跃事实
 
@@ -146,6 +153,8 @@
   并用 focused schema generator tests 验证 50 个用例通过
 - `RP-032` 已完成 `AutoRegisterModuleGeneratorTests` 的 3 个 `MA0051` 收口：通过提取类级常量承载测试源码与快照，保持
   生成文件名、断言路径与源生成输出不变；`GFramework.SourceGenerators.Tests` warnings-only 基线由 `43` 降至 `40`
+- `RP-033` 已完成 `SchemaConfigGeneratorSnapshotTests` 的 `MA0051` 收口：monster schema 运行时契约与 schema 输入已提取为
+  类级常量，生成结果映射与快照目录解析已拆为小 helper；`GFramework.SourceGenerators.Tests` warnings-only 基线由 `40` 降至 `39`
 - `RP-021` 使用 `$gframework-pr-review` 复核当前分支 PR #269 后，修复仍在本地成立的 4 个项：将
   `CqrsHandlerRegistryGenerator` 拆分为职责清晰的 partial 文件、为 `ContextAwareGenerator` 生成字段增加稳定前缀并补上
   `SetContextProvider` 的运行时 null 校验、为 `Option<T>` 补齐 `<remarks>`，并新增字段重名场景的生成器快照测试
@@ -362,13 +371,18 @@
     - 结果：`43 Warning(s)`，`0 Error(s)`；`LoggerGeneratorSnapshotTests.cs` 已不再出现在 `MA0051` 列表中
   - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-build --disable-build-servers --filter FullyQualifiedName~LoggerGeneratorSnapshotTests -m:1 -p:RestoreFallbackFolders="" -nologo`
     - 结果：`6 Passed`，`0 Failed`
+- `RP-033` 的验证结果：
+  - `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release -t:Rebuild --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`39 Warning(s)`，`0 Error(s)`；`SchemaConfigGeneratorSnapshotTests.cs` 已不再出现在 `MA0051` 列表中
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-build --disable-build-servers --filter FullyQualifiedName~SchemaConfigGeneratorSnapshotTests -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`1 Passed`，`0 Failed`
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
 
 ## 下一步
 
 1. 若要继续该主题，先读 active tracking，再按需展开历史归档中的 warning 热点与验证记录
-2. 下一轮优先继续 `GFramework.SourceGenerators.Tests` 的 `MA0051` 收口，先在 `AutoRegisterModuleGeneratorTests`、
-   `GeneratorSnapshotTest` 或 `ContextGetGeneratorTests` 中选择一个单写集推进，不再把已清零的 `MA0004` / `MA0048` 混回写集
+2. 下一轮优先继续 `GFramework.SourceGenerators.Tests` 的 `MA0051` 收口，先在 `GeneratorSnapshotTest`、
+   `ContextRegistrationAnalyzerTests` 或 `ContextGetGeneratorTests` 中选择一个单写集推进，不再把已清零的 `MA0004` / `MA0048` 混回写集
 3. 若改回推进 `MA0158`，先设计 `net8.0` / `net9.0` / `net10.0` 多 target 条件编译方案，不直接批量替换共享源码中的
    `object` lock
 4. 若后续继续改动 `GFramework.Godot`，先修复该项目的 Linux 侧 restore 资产，再补跑独立 build

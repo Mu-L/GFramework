@@ -1,5 +1,34 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-23 — RP-033
+
+### 阶段：`SchemaConfigGeneratorSnapshotTests.cs` `MA0051` 收口（RP-033）
+
+- 启动复核：
+  - 按 `gframework-boot` 流程恢复当前 worktree，读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、
+    `ai-plan/public/README.md` 与 active topic 跟踪文件，确认当前分支 `fix/analyzer-warning-reduction-batch`
+    仍映射到 `analyzer-warning-reduction`
+  - 用
+    `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release -t:Rebuild --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    复核当前 `MA0051` 热点，确认 `SchemaConfigGeneratorSnapshotTests.cs` 仍保留 1 个超长方法，适合作为单文件低风险写集
+- 决策：
+  - 保持 monster schema 场景的输入源码、schema 文本、生成文件名与快照目录不变，只收敛测试方法长度
+  - 沿用前几轮 snapshot test 的收口策略：提取类级常量承载大段 fixture 输入，再用小 helper 封装生成结果映射与快照目录解析
+  - 同一测试项目的 build/test 继续采用串行验证；并行执行会在 WSL worktree 上制造瞬时输出缺失，导致 `MSB3030` / `CS0006`
+- 实施调整：
+  - 为 `SchemaConfigGeneratorSnapshotTests` 新增 `RuntimeContractsSource` 与 `MonsterSchema` 类级常量，保留既有 monster 场景内容
+  - 把生成结果字典构造拆到 `GenerateSourcesForMonsterSchema()`，把快照目录解析拆到 `GetSchemaSnapshotFolder()`
+  - 保持 `AssertAllSnapshotsAsync(...)`、快照文件名与断言流程不变，不改生成器逻辑和 snapshot 资产
+- 验证结果：
+  - `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release -t:Rebuild --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:"Summary;WarningsOnly"`
+    - 结果：`39 Warning(s)`，`0 Error(s)`；`SchemaConfigGeneratorSnapshotTests.cs` 已不再出现在 `MA0051` 列表中
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-build --disable-build-servers --filter FullyQualifiedName~SchemaConfigGeneratorSnapshotTests -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`1 Passed`，`0 Failed`
+- 下一步建议：
+  - 若继续压缩 `GFramework.SourceGenerators.Tests` 的 `MA0051`，优先处理只剩单个超长方法的 `GeneratorSnapshotTest` 或
+    `ContextRegistrationAnalyzerTests`
+  - 若希望继续按 warning 数量收敛，则回到 `ContextGetGeneratorTests.cs`，但需要接受更大的单文件写集
+
 ## 2026-04-23 — RP-032
 
 ### 阶段：`AutoRegisterModuleGeneratorTests.cs` `MA0051` 收口（RP-032）
