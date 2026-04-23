@@ -431,3 +431,52 @@
 
 1. 继续抽查 `docs/zh-CN/tutorials/godot-integration.md`、`docs/zh-CN/godot/index.md` 与根 `README.md` 的职责摘要是否继续保持同一口径
 2. 当后续分支继续修改 `Game` / `Godot` family 入口时，沿用当前 README -> landing -> API reference 的最小修复顺序
+
+### 当前恢复点：RP-013
+
+- 使用 `$gframework-boot` 恢复当前 worktree 后，按 `documentation-full-coverage-governance` 的默认下一步执行一次
+  validation-only 巡检，并补读：
+  - `README.md`
+  - `docs/zh-CN/godot/index.md`
+  - `docs/zh-CN/tutorials/godot-integration.md`
+  - `docs/zh-CN/source-generators/index.md`
+  - `docs/zh-CN/api-reference/index.md`
+  - `GFramework.Godot/README.md`
+  - `.agents/skills/gframework-doc-refresh/SKILL.md`
+- 同时执行 `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Godot`，确认当前 `Godot`
+  docs surface 除 `index.md`、`architecture.md`、`scene.md`、`ui.md`、`signal.md`、`extensions.md`、`logging.md`
+  外，还应把 `storage.md` 与 `setting.md` 视为默认恢复集合的一部分
+- 巡检结论：
+  - 根 `README.md`、`docs/zh-CN/godot/index.md`、`docs/zh-CN/tutorials/godot-integration.md`、
+    `docs/zh-CN/source-generators/index.md` 与 `docs/zh-CN/api-reference/index.md` 当前仍保持同一套 `Godot`
+    owner / adoption path 叙述，没有发现新的入口漂移
+  - 本轮不需要改动稳定的 README / docs 页面，只需要把 active topic 的最小恢复摘要补齐到当前 landing page
+    实际覆盖的页集合
+- 因此本轮执行的唯一修改是：
+  - 更新 `ai-plan/public/documentation-full-coverage-governance/todos/documentation-full-coverage-governance-tracking.md`
+    的恢复点、`Godot` 页面集合、稳定性巡检结论与下一步
+  - 记录本条 `RP-013` trace，保证未来 `boot` 不会漏掉 `storage.md` / `setting.md`
+
+### 当前决策（RP-013）
+
+- 当前 topic 继续保持“巡检优先、最小修复”的节奏；验证通过时不为凑改动而重写稳定页面
+- `scan_module_evidence.py` 识别出的 docs surface 应优先反映到 active recovery artifact，而不是只留在一次性 chat
+  上下文
+- `Godot` family 的后续巡检重点从“根入口是否还残留旧描述”切换为“storage / setting 子页是否和 landing / README
+  保持同一口径”
+
+### 当前验证（RP-013）
+
+- 模块扫描：
+  - `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Godot`：通过
+- 文档校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`：通过
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`：通过
+- 构建校验：
+  - `cd docs && bun run build`：通过；仅保留既有 VitePress 大 chunk warning，无构建失败
+
+### 下一步
+
+1. 若后续分支继续调整 `GFramework.Godot` 运行时入口，优先复核 `docs/zh-CN/godot/storage.md`、`setting.md` 与根
+   `README.md` / landing page 是否仍保持同一套职责边界
+2. 当后续分支再修改 `Godot` / `Game` family 的 README、docs 或公共 API 时，回到对应模块追加 targeted 巡检与验证
