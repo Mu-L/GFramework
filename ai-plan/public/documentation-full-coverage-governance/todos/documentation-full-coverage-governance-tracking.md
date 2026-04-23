@@ -12,11 +12,11 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-009`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-010`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
-  - 记录 `2026-04-23` 再次执行 `$gframework-pr-review` 的结论，并把 closed PR 的陈旧 open-thread 信号标记为已本地核销
-  - 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic
+  - 将 `Godot` family 的关键恢复摘要回填到 active topic，避免后续 `boot` 默认依赖 archive 才能恢复核心上下文
+  - 保留 `documentation-governance-and-refresh` archive 的细节历史，但在 active topic 中记录足够的页面范围、owner 与运行时边界
   - 继续抽查 README / landing page / API reference 之间的 cross-link 是否出现新的漂移
 
 ## 当前状态摘要
@@ -35,6 +35,10 @@
   - `GFramework.Core.SourceGenerators.Abstractions`：`IsPackable=false`，按内部支撑模块处理
   - `GFramework.Godot.SourceGenerators.Abstractions`：`IsPackable=false`，按内部支撑模块处理
   - `GFramework.SourceGenerators.Common`：`IsPackable=false`，按内部支撑模块处理
+- 本轮已确认的 `Godot` family 恢复摘要：
+  - `docs/zh-CN/godot/index.md`、`architecture.md`、`scene.md`、`ui.md`、`signal.md`、`extensions.md`、`logging.md` 与 `docs/zh-CN/tutorials/godot-integration.md` 是当前需要保留的核心页面集
+  - `GFramework.Godot.SourceGenerators` 继续作为 `[GetNode]`、`[BindNodeSignal]`、`AutoLoads` 与 `InputActions` 的 owner；`GFramework.Godot.SourceGenerators.Abstractions` 仍按内部支撑模块处理
+  - `Godot` Scene / UI 采用边界已经稳定：当前没有 `GodotSceneRouter` 或 `GodotUiRouter`；`GodotSceneFactory` 在 provider 缺失时会回退到 `SceneBehaviorFactory`，而 `GodotUiFactory` 仍要求 `IUiPageBehaviorProvider`
 - 本轮已完成的治理动作：
   - 新建 `GFramework.Ecs.Arch.Abstractions/README.md`
   - 在根 `README.md` 中补齐 `GFramework.Ecs.Arch.Abstractions` 入口，并声明内部支撑模块 owner
@@ -62,6 +66,7 @@
   - 更新 `AGENTS.md` 的 WSL Git 策略，将显式 `--git-dir` / `--work-tree` 绑定提升为高于 `git.exe` 的默认优先级
   - 记录当前环境偏差：本会话 `git.exe` 可解析但执行会触发 `Exec format error`，而 plain Linux `git` 会命中 worktree 路径翻译错误，需要显式仓库绑定
   - 完成 `Game` family 巡检，确认 `docs/zh-CN/game/config-system.md`、`scene.md`、`ui.md` 与 `docs/zh-CN/source-generators/index.md` 的核心采用说明、包关系与交叉引用仍与当前源码 / README 一致，没有发现需要立刻修正的回漂
+  - 将 `Godot` family 的最小恢复摘要迁回 active topic，保留核心页面集、生成器 owner、Scene / UI 真实边界与归档指针，避免长期治理默认恢复路径继续依赖 archive 明细
 
 ## Inventory（第一版）
 
@@ -70,7 +75,7 @@
 | `Core` / `Core.Abstractions` | `README / landing / 类型族级 XML inventory 已收口，成员级审计待补齐` | 根 README、模块 README、`docs/zh-CN/core/**`、`docs/zh-CN/abstractions/core-abstractions.md` 已对齐当前目录与类型族基线 | 进入巡检；如有新 API 变更，再追加成员级 XML 审计 |
 | `Cqrs` / `Cqrs.Abstractions` / `Cqrs.SourceGenerators` | `README / landing / generator topic / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Cqrs/README.md`、`GFramework.Cqrs.Abstractions/README.md`、`GFramework.Cqrs.SourceGenerators/README.md`、`docs/zh-CN/core/cqrs.md`、`docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`、`docs/zh-CN/api-reference/index.md` 已对齐当前源码与测试 | 转入巡检；下一波切到 `Game` family 的 XML / 教程链路审计 |
 | `Game` / `Game.Abstractions` / `Game.SourceGenerators` | `README / landing / abstractions / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Game/README.md`、`GFramework.Game.Abstractions/README.md`、`GFramework.Game.SourceGenerators/README.md`、`docs/zh-CN/game/index.md`、`docs/zh-CN/abstractions/game-abstractions.md` 已对齐当前源码与目录基线 | 转入巡检；优先抽查 `config-system`、`scene`、`ui` 与 `source-generators` 交叉链路是否回漂 |
-| `Godot` / `Godot.SourceGenerators` | `已验证` | 上一轮归档 topic 已完成核心 landing / topic / tutorial 校验 | 进入巡检周期，重点看回漂 |
+| `Godot` / `Godot.SourceGenerators` | `核心 landing / topic / tutorial 已校验，active topic 已回填最小恢复摘要` | `docs/zh-CN/godot/index.md`、`architecture.md`、`scene.md`、`ui.md`、`signal.md`、`extensions.md`、`logging.md`、`docs/zh-CN/tutorials/godot-integration.md`，以及归档 topic 中的 `Godot` 治理历史 | 进入巡检周期，优先抽查 cross-link 与源码回漂；详细历史继续留在 archive |
 | `Ecs.Arch` / `Ecs.Arch.Abstractions` | `README / landing / abstractions / 类型族级 XML inventory 已收口，成员级审计待补齐` | `GFramework.Ecs.Arch/README.md`、`GFramework.Ecs.Arch.Abstractions/README.md`、`docs/zh-CN/ecs/**`、`docs/zh-CN/abstractions/ecs-arch-abstractions.md` 已对齐当前源码与测试 | 转入巡检；后续仅在运行时公共 API 变动时补成员级 XML 细审 |
 | `SourceGenerators.Common` 与 `*.SourceGenerators.Abstractions` | `已判定为内部支撑` | `*.csproj` 明确 `IsPackable=false` | 由所属模块 README 与生成器栏目说明 owner，不建独立采用页 |
 
@@ -91,8 +96,8 @@
 
 - 当前 `Core` / `Core.Abstractions` 只完成了类型族级 XML 基线，不等于成员级契约全审计
   - 缓解措施：后续只在共享抽象或高风险生命周期接口发生改动时补成员级细审，不在本轮扩张范围
-- `Godot` family 的治理结论主要留在已归档 topic 中，active topic 当前只保留摘要
-  - 缓解措施：下一恢复点优先判断是否要把关键 XML inventory 摘要迁回 active topic，避免后续 boot 仍过度依赖 archive
+- `Godot` family 的详细治理历史仍保留在 archive，active topic 只回填了最小恢复摘要
+  - 缓解措施：active topic 记录核心页面集、owner、运行时边界与 archive 指针；只有在需要阶段级历史时再读取归档材料
 - 新功能分支若修改 README / docs / 公共 API 却不挂文档 topic，仍可能回漂
   - 缓解措施：将本 topic 作为长期 active topic 保留，并在后续巡检中记录回漂来源
 - VitePress 页面不能直接链接到 `docs/` 目录之外的模块 `README.md`
@@ -111,6 +116,9 @@
 - 最新构建结论：
   - `2026-04-23` `cd docs && bun run build`
   - 结果：通过；仅保留既有 VitePress 大 chunk warning，无构建失败
+- 最新恢复治理结论：
+  - `2026-04-23` 重新读取 `ai-plan/public/archive/documentation-governance-and-refresh/**`
+  - 结果：通过；确认 `Godot` family 适合把最小恢复摘要迁回 active topic，但不需要把整段归档历史重新放回默认 `boot` 路径
 - 已完成的针对性校验：
   - `2026-04-23` `python3 -B -c "from pathlib import Path; compile(Path('.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py').read_text(encoding='utf-8'), '.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py', 'exec')"`：通过
   - `2026-04-23` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`：通过
@@ -119,6 +127,6 @@
 
 ## 下一步
 
-1. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，避免长期治理只依赖 archive 恢复
-2. 若不迁回，则在 active todo / trace 保留足够的 archive 指针，并继续抽查 README / landing page / API reference 的 cross-link 是否出现新的漂移
-3. 当后续分支再修改 README / docs / 公共 API 时，回到对应 module family 追加 targeted 巡检与验证
+1. 继续抽查 README / landing page / API reference 的 cross-link 是否出现新的漂移，优先覆盖 `Godot` 与 `Game` 相关入口
+2. 当后续分支再修改 README / docs / 公共 API 时，回到对应 module family 追加 targeted 巡检与验证
+3. 仅在需要阶段级细节时再读取 `documentation-governance-and-refresh` archive，而不是把 archive 重新当作默认 `boot` 入口

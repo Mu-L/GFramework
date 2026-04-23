@@ -303,3 +303,52 @@
 
 1. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic
 2. 若不迁回，则在 active todo / trace 保留足够的 archive 指针，并继续抽查 README / landing page / API reference 的 cross-link 是否出现新的漂移
+
+### 当前恢复点：RP-010
+
+- 按 `boot` 恢复当前 topic 后，重新读取：
+  - `AGENTS.md`
+  - `.ai/environment/tools.ai.yaml`
+  - `ai-plan/public/README.md`
+  - `ai-plan/public/documentation-full-coverage-governance/todos/documentation-full-coverage-governance-tracking.md`
+  - `ai-plan/public/documentation-full-coverage-governance/traces/documentation-full-coverage-governance-trace.md`
+- 确认当前任务状态属于 `resume`：
+  - 当前分支仍为 `docs/sdk-update-documentation`
+  - `ai-plan/public/README.md` 继续把本 worktree 映射到 `documentation-full-coverage-governance`
+  - 当前 worktree 没有 `ai-plan/private/` 私有恢复材料
+- 为判断 `Godot` family 是否需要回填恢复摘要，补读归档主题：
+  - `ai-plan/public/archive/documentation-governance-and-refresh/todos/documentation-governance-and-refresh-tracking.md`
+  - `ai-plan/public/archive/documentation-governance-and-refresh/traces/documentation-governance-and-refresh-trace.md`
+  - `ai-plan/public/archive/documentation-governance-and-refresh/archive/todos/documentation-governance-and-refresh-history-through-2026-04-22.md`
+- 归档材料表明，`Godot` family 的可恢复关键信号已经稳定，且足以压缩成 active topic 里的最小摘要：
+  - 核心页面集为 `docs/zh-CN/godot/index.md`、`architecture.md`、`scene.md`、`ui.md`、`signal.md`、`extensions.md`、`logging.md` 与 `docs/zh-CN/tutorials/godot-integration.md`
+  - `GFramework.Godot.SourceGenerators` 继续作为 `[GetNode]`、`[BindNodeSignal]`、`AutoLoads`、`InputActions` 的 owner
+  - `GFramework.Godot.SourceGenerators.Abstractions` 继续按 `IsPackable=false` 的内部支撑模块处理
+  - `GodotSceneFactory` 在 provider 缺失时回退到 `SceneBehaviorFactory`，而 `GodotUiFactory` 仍要求 `IUiPageBehaviorProvider`
+- 因此本轮决定：
+  - 不把整段 `documentation-governance-and-refresh` 历史重新迁回 active 路径
+  - 只把足够让未来 `boot` 快速恢复的 `Godot` family 摘要写回 active todo
+  - 继续把阶段级细节留在 archive，保持默认恢复入口轻量
+
+### 当前决策（RP-010）
+
+- `Godot` family 的“最小恢复摘要”应当留在 active topic，因为它已经属于长期治理 backlog 的默认上下文，而不仅仅是已完成项目的历史注脚
+- active topic 只保留对后续判断有用的事实：
+  - 页面范围
+  - generator owner
+  - Scene / UI 真实运行时边界
+  - archive 指针
+- `documentation-governance-and-refresh` archive 继续作为阶段级历史证据，不重新回到 `boot` 默认扫描路径
+- 下一步从“是否回填摘要”切换回“继续巡检 cross-link 漂移”，避免治理入口停留在已经完成的元问题上
+
+### 当前验证（RP-010）
+
+- 归档恢复检查：
+  - `sed -n '1,260p' ai-plan/public/archive/documentation-governance-and-refresh/todos/documentation-governance-and-refresh-tracking.md`：通过
+  - `sed -n '1,260p' ai-plan/public/archive/documentation-governance-and-refresh/traces/documentation-governance-and-refresh-trace.md`：通过
+  - `sed -n '1,240p' ai-plan/public/archive/documentation-governance-and-refresh/archive/todos/documentation-governance-and-refresh-history-through-2026-04-22.md`：通过
+
+### 下一步
+
+1. 抽查 `Godot` 与 `Game` 相关 README / landing page / API reference 的 cross-link 是否出现新的漂移
+2. 当后续分支修改相关 README / docs / 公共 API 时，回到对应 module family 追加 targeted 巡检与验证
