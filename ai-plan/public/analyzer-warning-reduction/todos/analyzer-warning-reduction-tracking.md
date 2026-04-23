@@ -7,8 +7,8 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-026`
-- 当前阶段：`Phase 26`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-027`
+- 当前阶段：`Phase 27`
 - 当前焦点：
   - 已完成 `GFramework.Core` 当前 `MA0016` / `MA0002` / `MA0015` / `MA0077` 低风险收口批次
   - 已复核 `net10.0` 下的 `MA0158` 基线：`GFramework.Core` / `GFramework.Cqrs` 当前共有 `16` 个 object lock
@@ -33,6 +33,8 @@
   - 已完成当前 PR #269 failed-test follow-up：修正 `SchemaConfigGeneratorTests`
     `Run_Should_Assign_Globally_Unique_Reference_Metadata_Member_Names` 的测试输入，使其继续覆盖
     reference metadata 成员名全局去冲突，但不再依赖现已被 `GF_ConfigSchema_014` 拦截的非法同层 schema key 冲突
+  - 已完成当前 PR #269 Greptile follow-up：`ContextAwareGenerator` 现在会把基类链显式成员名也纳入
+    `_gFrameworkContextAware*` 字段分配冲突检测，并新增 inherited-field collision 快照回归测试
   - 已更新 `AGENTS.md`：变更模块必须运行对应 `dotnet build -c Release`，并处理或显式报告模块构建 warning，
     不再默认留给长期 warning 清理分支
   - `CoroutineScheduler` 的 tag/group 字典已显式使用 `StringComparer.Ordinal`，保持既有区分大小写语义
@@ -75,6 +77,8 @@
   `CqrsHandlerRegistryGenerator` 的 `dynamic` 类型引用风险，并同步更新 `AGENTS.md` 的模块 build / warning 治理规范
 - 已完成当前 PR #269 的 failed-test follow-up：将 reference metadata 成员名唯一性回归测试改为合法 schema 路径组合，
   并重新通过定向 generator test
+- 已完成当前 PR #269 的 Greptile follow-up：修复 `ContextAwareGenerator` 未覆盖基类成员名冲突的问题，并补齐
+  inherited-collision 快照测试
 - 已完成 `GFramework.Game.SourceGenerators` 中 `SchemaConfigGenerator` 的第一批 `MA0051` 收口；warnings-only 基线剩余 `9` 条
   `MA0051`
 
@@ -151,6 +155,9 @@
   warning，本轮 focused test 已通过，但测试项目整包 warning 尚未进入本轮写集
   - 缓解措施：本轮已在 failed-test follow-up 的定向 `dotnet test` 中再次确认这些 warning 仍为既有基线；后续若继续修改该测试项目，
     应按新增 `AGENTS.md` 规则先明确 warning 收口范围，再决定是否进入专门清理切片
+- ContextAware 基类命名隐藏风险：若生成器只看当前类型声明成员，派生规则会重新占用基类已声明的
+  `_gFrameworkContextAware*` 字段名，导致生成成员隐藏继承状态并让快照无法锁定后缀分配行为
+  - 缓解措施：本轮已改为遍历完整 base-type 链收集保留名，并用 inherited collision 快照用例锁定该行为
 - Godot 资产文件环境风险：当前 worktree 的 `GFramework.Godot` restore/build 仍会命中 Windows fallback package folder
   - 缓解措施：后续若继续触达 Godot 模块，先用 Linux 侧 restore 资产或 Windows-hosted 构建链刷新该项目，再补跑定向 build
 - 并行实现风险：批量收敛时若 subagent 写入边界不清晰，容易引入命名冲突或重复重构

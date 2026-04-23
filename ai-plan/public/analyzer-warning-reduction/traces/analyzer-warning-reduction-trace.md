@@ -1,5 +1,30 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-23 — RP-027
+
+### 阶段：PR #269 Greptile inherited-member collision follow-up（RP-027）
+
+- 启动复核：
+  - 根据用户补充，重新核对 `$gframework-pr-review` 抓下来的 `greptile-apps[bot]` unresolved 线程，确认仍有一条
+    `ContextAwareGenerator` 关于 inherited member names 未参与 collision detection 的 P1 评论
+  - 本地读取 `CreateGeneratedContextMemberNames(...)` 后确认当前实现只收集 `symbol.GetMembers()`，确实没有遍历基类链
+- 决策：
+  - 保持现有 `_gFrameworkContextAware*` 前缀和数字后缀分配规则不变，只把保留名集合扩展为“当前类型 + 基类链显式成员”
+  - 沿用既有 `ContextAwareGeneratorSnapshotTests` 模式，新增 inherited-field collision 快照，而不是只写松散字符串断言
+- 实施调整：
+  - 为 `ContextAwareGenerator` 新增 `CollectReservedContextMemberNames(...)` helper，遍历完整 `BaseType` 链收集显式成员名
+  - 为 `ContextAwareGeneratorSnapshotTests` 增加 `InheritedCollisionRule` 场景，并抽出公共测试源码 helper，避免重复样板
+  - 新增快照 `InheritedCollisionRule.ContextAware.g.cs`，锁定基类已声明 `_gFrameworkContextAware*` 时生成器会回退到 `...1` 后缀
+- 验证结果：
+  - `dotnet build GFramework.Core.SourceGenerators/GFramework.Core.SourceGenerators.csproj -c Release --no-restore -p:RestoreFallbackFolders="" -clp:"Summary;WarningsOnly" -nologo`
+    - 结果：`0 Warning(s)`，`0 Error(s)`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~ContextAwareGeneratorSnapshotTests.Snapshot_ContextAwareGenerator_With_Inherited_Field_Name_Collisions|FullyQualifiedName~ContextAwareGeneratorSnapshotTests.Snapshot_ContextAwareGenerator_With_User_Field_Name_Collisions|FullyQualifiedName~ContextAwareGeneratorSnapshotTests.Snapshot_ContextAwareGenerator" -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`3 Passed`，`0 Failed`
+    - 说明：`GFramework.SourceGenerators.Tests` 仍打印既有 `MA0048`、`MA0051`、`MA0004` warning；本轮未扩大到测试项目 warning 清理
+- 下一步建议：
+  - 若继续收口 PR #269，可再次抓取最新 unresolved threads，确认 Greptile / CodeRabbit 当前是否只剩陈旧信号
+  - 若继续推进 analyzer 主线，可单独评估 `GFramework.SourceGenerators.Tests` 的 warning 清理是否值得开新切片
+
 ## 2026-04-23 — RP-026
 
 ### 阶段：PR #269 failed-test follow-up（RP-026）

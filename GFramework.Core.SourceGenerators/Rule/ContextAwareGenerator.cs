@@ -353,16 +353,36 @@ public sealed class ContextAwareGenerator : MetadataAttributeClassGeneratorBase
     /// <returns>当前生成轮次应使用的上下文字段名集合。</returns>
     private static GeneratedContextMemberNames CreateGeneratedContextMemberNames(INamedTypeSymbol symbol)
     {
-        var reservedNames = new HashSet<string>(
-            symbol.GetMembers()
-                .Where(static member => !member.IsImplicitlyDeclared)
-                .Select(static member => member.Name),
-            StringComparer.Ordinal);
+        var reservedNames = CollectReservedContextMemberNames(symbol);
 
         return new GeneratedContextMemberNames(
             AllocateGeneratedMemberName(reservedNames, "_gFrameworkContextAwareContext"),
             AllocateGeneratedMemberName(reservedNames, "_gFrameworkContextAwareProvider"),
             AllocateGeneratedMemberName(reservedNames, "_gFrameworkContextAwareSync"));
+    }
+
+    /// <summary>
+    ///     收集当前类型及其基类链上所有显式声明的成员名，确保生成字段不会意外隐藏继承成员。
+    /// </summary>
+    /// <param name="symbol">当前需要补充 ContextAware 实现的目标类型。</param>
+    /// <returns>已被当前类型层级占用的成员名集合。</returns>
+    private static HashSet<string> CollectReservedContextMemberNames(INamedTypeSymbol symbol)
+    {
+        var reservedNames = new HashSet<string>(StringComparer.Ordinal);
+
+        // Walk the full inheritance chain so numeric suffix allocation also covers members introduced by base types.
+        for (var currentType = symbol; currentType is not null; currentType = currentType.BaseType)
+        {
+            foreach (var member in currentType.GetMembers())
+            {
+                if (!member.IsImplicitlyDeclared)
+                {
+                    reservedNames.Add(member.Name);
+                }
+            }
+        }
+
+        return reservedNames;
     }
 
     /// <summary>
