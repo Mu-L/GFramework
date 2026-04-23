@@ -1,5 +1,37 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-23 — RP-031
+
+### 阶段：`LoggerGeneratorSnapshotTests.cs` `MA0051` 收口（RP-031）
+
+- 启动复核：
+  - 按 `gframework-boot` 流程恢复当前 worktree，读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、
+    `ai-plan/public/README.md` 与 active topic 跟踪文件，确认当前分支 `fix/analyzer-warning-reduction-batch`
+    仍映射到 `analyzer-warning-reduction`
+  - 结合 `RP-030` 的下一步建议与当前文件规模，优先选择 `GFramework.SourceGenerators.Tests/Logging/LoggerGeneratorSnapshotTests.cs`
+    作为单文件、同构 snapshot 场景的低风险写集
+- 决策：
+  - 保持 `LoggerGenerator` 现有快照资产、场景命名与输入语义不变，只压缩测试方法和样板源码构造的结构复杂度
+  - 先把重复场景统一为模板化 helper，再根据 analyzer 结果继续拆分 helper，直到 `LoggerGeneratorSnapshotTests.cs`
+    不再出现在 `MA0051` 输出中
+  - 验证阶段避免并行运行同一测试项目的 build/test，防止 WSL worktree 上的 `bin/Release` 文件占用噪音污染结果
+- 实施调整：
+  - 为 `LoggerGeneratorSnapshotTests` 补齐类与测试方法 XML 文档
+  - 将 6 个 snapshot 场景改为统一调用 `RunScenarioAsync(...)`
+  - 将原先重复内联的完整测试源码拆成 `CreateLoggingAttributeSource()`、
+    `CreateLoggingContractsSource()`、`CreateLoggingRuntimeSource()` 与 `CreateTestAppSource(...)`
+- 验证结果：
+  - `dotnet restore GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -p:RestoreFallbackFolders="" -nologo`
+    - 结果：通过
+  - `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:Summary`
+    - 结果：`43 Warning(s)`，`0 Error(s)`；`LoggerGeneratorSnapshotTests.cs` 已不再出现在 `MA0051` 列表中
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-build --disable-build-servers --filter FullyQualifiedName~LoggerGeneratorSnapshotTests -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`6 Passed`，`0 Failed`
+- 下一步建议：
+  - 若继续 `GFramework.SourceGenerators.Tests` 的 `MA0051` 治理，优先选择 `AutoRegisterModuleGeneratorTests` 或
+    `GeneratorSnapshotTest` 作为下一批单写集
+  - 若需要先压缩 warning 数量而不是单文件难度，可转向 `ContextGetGeneratorTests`，但应先明确本轮允许的文件数上限
+
 ## 2026-04-23 — RP-030
 
 ### 阶段：`GFramework.SourceGenerators.Tests` 低风险 `MA0004` / `MA0048` 收口（RP-030）

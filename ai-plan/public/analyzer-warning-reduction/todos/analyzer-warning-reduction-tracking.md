@@ -7,8 +7,8 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-030`
-- 当前阶段：`Phase 30`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-031`
+- 当前阶段：`Phase 31`
 - 当前焦点：
   - 已完成 `GFramework.Core` 当前 `MA0016` / `MA0002` / `MA0015` / `MA0077` 低风险收口批次
   - 已复核 `net10.0` 下的 `MA0158` 基线：`GFramework.Core` / `GFramework.Cqrs` 当前共有 `16` 个 object lock
@@ -53,10 +53,14 @@
   - 已完成 `GFramework.SourceGenerators.Tests` 低风险 `MA0004` / `MA0048` 收口：测试辅助器改为直接返回 `Task`，
     文件 I/O 显式补齐 `ConfigureAwait(false)`，`AnalyzerTestDriver` 文件名与类型名重新对齐
   - 当前 `GFramework.SourceGenerators.Tests` warnings-only 基线已从 `61` 条降到 `49` 条，剩余 warning 均为 `MA0051`
+  - 已完成 `GFramework.SourceGenerators.Tests/Logging/LoggerGeneratorSnapshotTests.cs` 的 `MA0051` 收口：同构 snapshot
+    场景已收敛为模板化 helper，保留原有快照目录与生成器输入语义不变
+  - 当前 `GFramework.SourceGenerators.Tests` Release build 基线已从 `49` 条降到 `43` 条；`LoggerGeneratorSnapshotTests.cs`
+    已不再出现在 `MA0051` 列表中
   - `GFramework.Godot` 的 `Timing.cs` 已同步适配新事件签名，但当前 worktree 的 Godot restore 资产仍受 Windows fallback package folder 干扰，独立 build 需在修复资产后补跑
   - 后续继续按 warning 类型和数量批处理，而不是回退到按单文件切片推进
-  - 下一轮默认继续拆分 `GFramework.SourceGenerators.Tests` 的 `MA0051` 热点，或评估跨 target 的 `MA0158`
-    锁替换风险
+  - 下一轮默认继续拆分 `GFramework.SourceGenerators.Tests` 的 `MA0051` 热点，优先处理
+    `AutoRegisterModuleGeneratorTests`、`GeneratorSnapshotTest` 或 `ContextGetGeneratorTests`
   - 单次 `boot` 的工作树改动上限控制在约 `100` 个文件以内，避免 recovery context 与 review 面同时失控
   - 若任务边界互不冲突，允许使用不同模型的 subagent 并行处理不同 warning 类型或不同目录，但必须遵守显式 ownership
 
@@ -92,6 +96,8 @@
 - 已完成 `GFramework.Game.SourceGenerators` 中 `SchemaConfigGenerator` 的剩余 `MA0051` 收口；warnings-only 基线已降到 `0` 条
 - 已完成 `GFramework.SourceGenerators.Tests` 的首轮低风险 warning 清理；当前项目已清空 `MA0004` / `MA0048`，剩余 warning
   全部收敛为 `MA0051`
+- 已完成 `LoggerGeneratorSnapshotTests` 的单文件 `MA0051` 收口；当前 `GFramework.SourceGenerators.Tests` Release build 基线已降到
+  `43` 条，并通过 focused snapshot tests 保持行为不变
 
 ## 当前活跃事实
 
@@ -152,6 +158,8 @@
 - `RP-030` 已完成 `GFramework.SourceGenerators.Tests` 低风险 `MA0004` / `MA0048` 收口：`AnalyzerTestDriver` 文件名已与
   类型名一致，测试辅助器与 schema snapshot 断言路径已改为直接返回 `Task` 或显式使用 `ConfigureAwait(false)`；
   当前测试项目 warnings-only 基线从 `61` 条降到 `49` 条，剩余均为 `MA0051`
+- `RP-031` 已完成 `LoggerGeneratorSnapshotTests` 的 `MA0051` 收口：重复场景源码改为模板化 helper 生成，
+  当前 `GFramework.SourceGenerators.Tests` Release build 基线从 `49` 条降到 `43` 条，并通过 focused test 验证 6 个用例全部通过
 - 当前工作树分支 `fix/analyzer-warning-reduction-batch` 已在 `ai-plan/public/README.md` 建立 topic 映射
 
 ## 当前风险
@@ -167,7 +175,7 @@
 - source generator warning 外溢风险：运行 `GFramework.SourceGenerators.Tests` 会构建相邻 generator/test 项目，并在输出中混入
   测试项目自身的结构性 warning 基线
   - 缓解措施：继续以被修改项目的独立 warnings-only build 作为主验收，并用 focused generator test 验证行为
-- source generator test warning 治理风险：`GFramework.SourceGenerators.Tests` 当前仍有 `49` 条既有 `MA0051` warning；
+- source generator test warning 治理风险：`GFramework.SourceGenerators.Tests` 当前仍有 `43` 条既有 `MA0051` warning；
   一旦继续进入该写集，就必须把测试项目 warning 一并纳入本轮完成条件
   - 缓解措施：已先清空低风险 `MA0004` / `MA0048`，后续继续保持“单 warning family、单测试域”的节奏推进 `MA0051`
 - ContextAware 基类命名隐藏风险：若生成器只看当前类型声明成员，派生规则会重新占用基类已声明的
@@ -339,13 +347,20 @@
     - 结果：`49 Warning(s)`，`0 Error(s)`；当前项目已不再出现 `MA0004` / `MA0048`，剩余 warning 全部为 `MA0051`
   - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~GeneratorSnapshotTestSecurityTests|FullyQualifiedName~SchemaConfigGeneratorSnapshotTests|FullyQualifiedName~SchemaConfigGeneratorEnumTests" -m:1 -p:RestoreFallbackFolders="" -nologo`
     - 结果：`6 Passed`，`0 Failed`
+- `RP-031` 的验证结果：
+  - `dotnet restore GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -p:RestoreFallbackFolders="" -nologo`
+    - 结果：通过；刷新 Linux 侧 restore 资产以支持后续串行 build/test 验证
+  - `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:RestoreFallbackFolders="" -nologo -clp:Summary`
+    - 结果：`43 Warning(s)`，`0 Error(s)`；`LoggerGeneratorSnapshotTests.cs` 已不再出现在 `MA0051` 列表中
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-build --disable-build-servers --filter FullyQualifiedName~LoggerGeneratorSnapshotTests -m:1 -p:RestoreFallbackFolders="" -nologo`
+    - 结果：`6 Passed`，`0 Failed`
 - active 跟踪文件只保留当前恢复点、活跃事实、风险与下一步，不再重复保存已完成阶段的长篇历史
 
 ## 下一步
 
 1. 若要继续该主题，先读 active tracking，再按需展开历史归档中的 warning 热点与验证记录
-2. 下一轮优先继续 `GFramework.SourceGenerators.Tests` 的 `MA0051` 收口，先在单一测试域内选择一个文件或一组同构 snapshot
-   用例拆分，不再把已清零的 `MA0004` / `MA0048` 混回写集
+2. 下一轮优先继续 `GFramework.SourceGenerators.Tests` 的 `MA0051` 收口，先在 `AutoRegisterModuleGeneratorTests`、
+   `GeneratorSnapshotTest` 或 `ContextGetGeneratorTests` 中选择一个单写集推进，不再把已清零的 `MA0004` / `MA0048` 混回写集
 3. 若改回推进 `MA0158`，先设计 `net8.0` / `net9.0` / `net10.0` 多 target 条件编译方案，不直接批量替换共享源码中的
    `object` lock
 4. 若后续继续改动 `GFramework.Godot`，先修复该项目的 Linux 侧 restore 资产，再补跑独立 build
