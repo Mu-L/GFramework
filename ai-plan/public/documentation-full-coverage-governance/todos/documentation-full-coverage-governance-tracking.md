@@ -12,11 +12,11 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-021`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-022`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
-  - 为 `gframework-batch-boot` 明确数字速记阈值语义，避免把“本轮新增文件数”与“整条分支 diff 阈值”混淆
-  - 保持 `Core` functional docs surface 的 inline code / 泛型示例在 VitePress 下按真实 C# 语法渲染
+  - 保持 landing page / API 导航页中的仓库 README 入口可点击，避免读者在 docs 站点里遇到裸路径文本
+  - 继续按 `origin/main` 分支 diff 阈值做小批量文档治理，优先处理低风险导航 / 渲染热点
   - 保持 `Game` persistence docs surface 与当前 `README`、源码、`PersistenceTests` 使用同一套 owner / adoption path 叙述
   - 保持 `GFramework.Godot.SourceGenerators/README.md` 与 `docs/zh-CN/tutorials/godot-integration.md` 在生命周期接法上的一致性
   - 保持 active tracking / trace 只承载当前恢复入口，把阶段细节留在 `archive/`
@@ -48,6 +48,11 @@
   - `$gframework-batch-boot 75` 默认表示“当前分支全部提交相对远程 `origin/main` 接近 75 个分支 diff 文件时停止”
   - `$gframework-batch-boot 75 2000` 默认表示“当前分支全部提交相对远程 `origin/main` 接近 75 个文件或 2000 行变更时停止”
   - `75 | 2000` 仅作为可理解的 OR 写法保留，不再作为推荐写法，以避免与 shell pipe 混淆
+- `2026-04-23` 以 `origin/main`（`aa879d2`，`2026-04-23T17:51:41+08:00`）为批处理基线，对
+  `docs/zh-CN/getting-started/index.md`、`core/index.md`、`game/index.md`、`source-generators/index.md`、
+  `api-reference/index.md`、`abstractions/core-abstractions.md`、`abstractions/game-abstractions.md`
+  做导航可达性修复，把仓库 README / 根 README 裸路径统一改为指向 GitHub `main` 分支的可点击链接。
+- 该批次不改变文档语义，只收口 docs 站点中的入口可达性；适合继续作为小步快跑的低风险治理模式。
 - 当前剩余的托管侧信号是 GitHub `Title check` 对 PR 标题过泛的 inconclusive 提示；这属于 PR 元数据，不是本地
   文件缺陷。
 
@@ -78,15 +83,18 @@
   - 结果：命中 `docs/zh-CN/core/functional.md` 与 `docs/zh-CN/tutorials/functional-programming.md` 共 8 处，已全部修正。
 - `2026-04-23` `sed -n '1,260p' .agents/skills/gframework-batch-boot/SKILL.md` 与 `sed -n '1,220p' .agents/skills/README.md`
   - 结果：确认原文仅描述自然语言 stop condition，没有定义数字速记或多阈值 OR 语义；现已补齐。
+- `2026-04-23` `rg -n '`GFramework\\.[^`]+/README\\.md`|`docs/zh-CN/[^`]+\\.md`|仓库根 `README\\.md`' docs/zh-CN -g '*.md'`
+  - 结果：确认 landing / API 导航页仍有一批裸路径仓库入口；本轮已先修复 `getting-started`、`core`、`game`、
+    `source-generators`、`api-reference` 与两个 abstractions 页面。
 - `2026-04-23` `bun run build`（工作目录：`docs/`）
-  - 结果：通过；仅保留既有 VitePress 大 chunk warning，无构建失败。
+  - 结果：通过；仓库 README 外链改为 GitHub `main` blob 后，不再触发 VitePress dead link；仅保留既有大 chunk warning。
 
 ## 下一步
 
-1. 若后续继续扩展批处理 skill，可考虑再补充显式单位写法，例如 `75 files 2000 lines`，但当前默认速记已足够覆盖
+1. 对 `docs/zh-CN/**` 继续做下一类低风险导航巡检，优先收口 `core/cqrs.md`、`ecs/arch.md`、`game/scene.md`、
+   `game/ui.md` 与若干 source generator 专题页里剩余的裸路径 README 入口。
+2. 若后续继续扩展批处理 skill，可考虑再补充显式单位写法，例如 `75 files 2000 lines`，但当前默认速记已足够覆盖
    常见分支阈值场景。
-2. 对 `README.md`、`GFramework.*` 与 `docs/zh-CN/**` 继续做下一类低风险 Markdown 渲染巡检，优先排查 code span 内
-   的 HTML entity、站点内链接和标题锚点是否仍与当前页面结构一致。
 3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
 4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
