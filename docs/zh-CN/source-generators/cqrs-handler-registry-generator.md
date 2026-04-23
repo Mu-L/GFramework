@@ -67,6 +67,10 @@ RegisterCqrsHandlersFromAssemblies(
 ]);
 ```
 
+文档示例统一用 marker 类型承载程序集引用。框架本身不要求固定目录或固定命名，但团队实践里可以把这类空 marker
+集中放在每个业务程序集自己的 `Application/Markers` 或等价目录，并采用 `InventoryCqrsMarker` 这类能直接看出来源
+的名字，避免多人协作时拿无关业务类型充当程序集定位锚点。
+
 ## 运行时如何消费生成结果
 
 `Cqrs` runtime 当前的注册顺序是：

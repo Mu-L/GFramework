@@ -92,12 +92,3 @@ var options = new ArchOptions
 3. 回到对应模块 README：
    - `GFramework.Ecs.Arch.Abstractions/README.md`
    - `GFramework.Ecs.Arch/README.md`
-
-## 边界提醒
-
-- `GFramework.Core.SourceGenerators.Abstractions`
-- `GFramework.Godot.SourceGenerators.Abstractions`
-- `GFramework.SourceGenerators.Common`
-
-这些目录当前都不是独立消费模块，而是源码生成器家族的内部支撑组件。它们不属于抽象接口栏目里的独立采用入口，
-应分别跟随 `Core.SourceGenerators`、`Godot.SourceGenerators` 或其他生成器模块的 README 与专题页维护。

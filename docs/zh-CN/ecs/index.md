@@ -131,6 +131,6 @@ public sealed class GameLoop
 
 ## 边界说明
 
-- 当前仓库没有交付其他可直接消费的 ECS 运行时包；旧文档里把“可能支持的其他 ECS 框架”写成现有能力会误导采用路径。
+- 当前仓库没有交付其他可直接消费的 ECS 运行时包；旧文档把“未来可能支持的其他 ECS 框架”写成现有能力，会误导采用路径。
 - `GFramework.Ecs.Arch.Abstractions` 负责“边界”，`GFramework.Ecs.Arch` 负责“默认实现”。
 - 站内页面只维护可构建的 docs 链路；仓库根 README 和模块 README 继续承担包目录入口职责。

@@ -12,16 +12,23 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-007`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-008`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
-  - 完成 `Game` family 巡检，确认 `config-system`、`scene`、`ui` 与 `source-generators` 入口没有再次偏离当前源码与 README
+  - 消化 PR #271 的 latest-head review follow-up，修正仍在本地成立的 docs / skill / ai-plan 问题
+  - 将 active tracking 的重复验证明细迁出默认 boot 路径，只保留最新可恢复摘要
   - 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic
-  - 继续把 active topic 收敛为可恢复入口，而不是把详细历史长期堆在默认 boot 路径
 
 ## 当前状态摘要
 
 - 已归档的 `documentation-governance-and-refresh` 仅保留为历史证据，不再作为默认 `boot` 入口
+- 本轮已消化的 PR #271 review follow-up：
+  - 为 `.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py` 补齐 WSL worktree 下的显式 Linux Git 绑定，避免 `git.exe` 在当前会话触发 `Exec format error`
+  - 同步更新 `.agents/skills/gframework-pr-review/SKILL.md`，改为与 `AGENTS.md` 一致的 Git 策略，并把命令示例统一到 `.agents/...` 路径
+  - 为 `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md` 补充 marker 类型放置与命名约定说明
+  - 从 `docs/zh-CN/abstractions/ecs-arch-abstractions.md` 删除误放的 source-generator 内部模块提醒，并微调 `docs/zh-CN/ecs/index.md` 的边界说明语序
+  - 为 `ai-plan/public/archive/documentation-governance-and-refresh/traces/documentation-governance-and-refresh-trace.md` 的归档验证补写结果态
+  - 将 RP-001 至 RP-007 的详细验证历史迁入 `ai-plan/public/documentation-full-coverage-governance/archive/todos/documentation-full-coverage-governance-validation-history-through-rp-007.md`
 - 本轮已确认的消费属性结论：
   - `GFramework.Ecs.Arch.Abstractions`：可打包直接消费模块，需要 README 和文档入口
   - `GFramework.Core.SourceGenerators.Abstractions`：`IsPackable=false`，按内部支撑模块处理
@@ -96,78 +103,22 @@
 
 ## 验证说明
 
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/index.md`
+- 详细验证历史已归档到 `ai-plan/public/documentation-full-coverage-governance/archive/todos/documentation-full-coverage-governance-validation-history-through-rp-007.md`
+- `2026-04-23` `python3 -B -c "from pathlib import Path; compile(Path('.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py').read_text(encoding='utf-8'), '.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py', 'exec')"`
 - 结果：通过
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/ecs-arch-abstractions.md`
+- `2026-04-23` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
+- 结果：通过；成功抓取 PR `#271`，并确认当前 latest-head review threads 为 `4` 条 open
+- `2026-04-23` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
 - 结果：通过
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/api-reference/index.md`
+- `2026-04-23` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/index.md`
 - 结果：通过
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/index.md`
+- `2026-04-23` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/ecs-arch-abstractions.md`
 - 结果：通过
-- 备注：`2026-04-22` 在补充 Core XML inventory 后重新验证
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/core-abstractions.md`
-- 结果：通过
-- 备注：`2026-04-22` 在补充 Core.Abstractions XML inventory 后重新验证
-- `cd docs && bun run build`
-- 结果：通过
-- 备注：`2026-04-22` 重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
-- `dotnet build GFramework.Ecs.Arch.Abstractions/GFramework.Ecs.Arch.Abstractions.csproj -c Release -p:RestoreFallbackFolders=`
-- 结果：通过
-- 备注：`0 Warning(s) / 0 Error(s)`
-- `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.Core.Abstractions/GFramework.Core.Abstractions.csproj -c Release -p:RestoreFallbackFolders=`
-- 结果：通过
-- 备注：`0 Warning(s) / 0 Error(s)`
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/index.md`
-- 结果：通过
-- 备注：`2026-04-22` 在重写 ECS landing 后重新验证
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/arch.md`
-- 结果：通过
-- 备注：`2026-04-22` 在重写 Arch ECS 专题页后重新验证
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/ecs-arch-abstractions.md`
-- 结果：通过
-- 备注：`2026-04-22` 在补充抽象页 XML inventory 后重新验证
-- `cd docs && bun run build`
-- 结果：通过
-- 备注：`2026-04-22` 在 Ecs 波次重写后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/cqrs.md`
-- 结果：通过
-- 备注：`2026-04-22` 在重写 `Cqrs` family landing 后重新验证
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
-- 结果：通过
-- 备注：`2026-04-22` 在新增 `Cqrs.SourceGenerators` 专题页后验证通过
-- `python3` 轻量 XML inventory 扫描
-- 结果：通过
-- 备注：`2026-04-22` 确认 `GFramework.Cqrs` 的 `Internal/` 为 `14/14`、`GFramework.Cqrs.SourceGenerators/Cqrs/` 为 `3/3`、`GFramework.Cqrs.Abstractions/Cqrs/` 为 `20/20`
-- `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release -p:RestoreFallbackFolders=`
-- 结果：通过
-- 备注：保留既有 `NU1900` 与 `MA0051` warnings；无新增编译错误
-- `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
-- 结果：失败
-- 备注：当前环境会命中失效的 Windows fallback package folder，并在多目标 inner build 阶段触发 `MSB4276` / `MSB4018`；失败原因已记录为环境阻塞，不属于本轮文档改动回归
-- `cd docs && bun run build`
-- 结果：通过
-- 备注：`2026-04-22` 在 `Cqrs` 波次文档刷新后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/game-abstractions.md`
-- 结果：通过
-- 备注：`2026-04-23` 在重写 `Game.Abstractions` 页面后验证通过
-- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/index.md`
-- 结果：通过
-- 备注：`2026-04-23` 在补充 frontmatter 与 XML inventory 后重新验证
-- `python3` 轻量 XML inventory 扫描
-- 结果：通过
-- 备注：`2026-04-23` 确认 `GFramework.Game` 为 `56/56`、`GFramework.Game.Abstractions` 为 `80/80`、`GFramework.Game.SourceGenerators` 为 `2/2`
-- `cd docs && bun run build`
-- 结果：通过
-- 备注：`2026-04-23` 在 `Game` 波次文档刷新后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
-- `cd docs && bun run build`
-- 结果：通过
-- 备注：`2026-04-23` 在更新 `AGENTS.md` 的 WSL Git 优先级后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
-- `cd docs && bun run build`
-- 结果：通过
-- 备注：`2026-04-23` 在推进 `DOCUMENTATION-FULL-COVERAGE-GOV-RP-007`、回写 `Game` family 巡检结论后重新构建通过；仅保留 VitePress 大 chunk warning，无构建失败
+- `2026-04-23` `cd docs && bun run build`
+- 结果：通过；仅保留既有 VitePress 大 chunk warning，无构建失败
 
 ## 下一步
 
-1. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，避免长期治理只依赖 archive 恢复
-2. 继续巡检 `Game` family 之外的高频入口页，优先关注 README / landing page / API reference 之间是否出现新的术语或包关系漂移
-3. 在后续环境治理任务中单独处理 `GFramework.Cqrs` 本地 build 的 fallback package folder 阻塞，避免影响后续代码类验证
+1. 完成本轮 PR #271 follow-up 的针对性验证与 docs build，确认 open threads 是否都已被本地收敛
+2. 推送当前分支后重新执行 `$gframework-pr-review`，确认 PR #271 的 latest-head open threads 是否按预期收敛
+3. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic，避免长期治理只依赖 archive 恢复

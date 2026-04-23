@@ -12,7 +12,9 @@ Shortcut: `$gframework-pr-review`
 ## Workflow
 
 1. Read `AGENTS.md` before deciding how to validate or fix anything.
-2. Resolve the current branch with Windows Git from WSL, following the repository worktree rule.
+2. Resolve the current branch following the repository worktree rule:
+   - prefer Linux `git` with explicit `--git-dir` / `--work-tree` binding in WSL worktrees
+   - only fall back to `git.exe` when that executable is available and actually runnable in the current session
 3. Run `scripts/fetch_current_pr_review.py` to:
    - locate the PR for the current branch through the GitHub PR API
    - fetch PR metadata, issue comments, reviews, and review comments through the GitHub API
@@ -31,20 +33,20 @@ Shortcut: `$gframework-pr-review`
 ## Commands
 
 - Default:
-  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py`
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py`
 - Recommended machine-readable workflow:
-  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 265 --json-output /tmp/pr265-review.json`
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 265 --json-output /tmp/pr265-review.json`
   - `jq '.coderabbit_review.outside_diff_comments' /tmp/pr265-review.json`
 - Force a PR number:
-  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253`
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253`
 - Machine-readable output:
-  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json`
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json`
 - Write machine-readable output to a file instead of stdout:
-  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253 --format json --json-output /tmp/pr253-review.json`
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253 --format json --json-output /tmp/pr253-review.json`
 - Inspect only a high-signal section:
-  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253 --section outside-diff`
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253 --section outside-diff`
 - Narrow text output to one path fragment:
-  - `python3 .codex/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253 --section outside-diff --path GFramework.Core/Events/Event.cs`
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --pr 253 --section outside-diff --path GFramework.Core/Events/Event.cs`
 
 ## Output Expectations
 
@@ -67,6 +69,7 @@ The script should produce:
 
 - If the current branch has no matching public PR, report that clearly instead of guessing.
 - If GitHub access fails because of proxy configuration, rerun the fetch with proxy variables removed.
+- If the current WSL session resolves `git.exe` but cannot execute it cleanly, keep using the explicit Linux worktree binding instead of retrying Windows Git.
 - Prefer GitHub API results over PR HTML. The PR HTML page is now a fallback/debugging source, not the primary source of truth.
 - If the summary block and the latest head review threads disagree, trust the latest unresolved head-review threads and treat older summary findings as stale until re-verified locally.
 - Do not assume every AI reviewer behaves like CodeRabbit. `greptile-apps[bot]` findings may exist only as latest-head review threads, without CodeRabbit-style issue comments or folded review-body sections.

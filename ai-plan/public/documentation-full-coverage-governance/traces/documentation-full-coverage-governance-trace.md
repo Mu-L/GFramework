@@ -234,3 +234,42 @@
 
 1. 评估是否需要把 `Godot` family 的关键 XML inventory 摘要迁回 active topic
 2. 若不需要迁回，则继续抽查 README / landing page / API reference 之间的 cross-link 是否出现新的漂移
+
+### 当前恢复点：RP-008
+
+- 使用 `$gframework-pr-review` 抓取当前分支 PR `#271` 后，确认 latest head review threads 仍有 `4` 条 open：
+  - `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md` 的 marker 类型约定说明缺口
+  - `docs/zh-CN/ecs/index.md` 的边界说明语序问题
+  - `docs/zh-CN/abstractions/ecs-arch-abstractions.md` 误放的 source-generator 内部模块提醒
+  - `ai-plan/public/documentation-full-coverage-governance/todos/documentation-full-coverage-governance-tracking.md` 的验证历史过长，以及
+    `ai-plan/public/archive/documentation-governance-and-refresh/traces/documentation-governance-and-refresh-trace.md` 缺少显式结果态
+- 在当前 WSL 会话里，`gframework-pr-review` 脚本先命中了 `git.exe` 的 `Exec format error`
+- 已将 `.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py` 改为优先使用 Linux `git` 的显式
+  `--git-dir` / `--work-tree` 绑定，并仅在无法建立该绑定时回退到旧的可执行解析逻辑
+- 已同步更新 `.agents/skills/gframework-pr-review/SKILL.md`，使其 Git 策略与命令示例都与当前仓库状态一致
+- 已把 `DOCUMENTATION-FULL-COVERAGE-GOV-RP-001` 到 `RP-007` 的详细验证历史迁入
+  `ai-plan/public/documentation-full-coverage-governance/archive/todos/documentation-full-coverage-governance-validation-history-through-rp-007.md`
+
+### 当前决策（RP-008）
+
+- 继续把 latest-head unresolved threads 作为主信号，只修仍在本地成立的评论，不为已失效的历史 summary 做无意义回写
+- active tracking 只保留最新验证摘要与恢复点；详细验证历史留在 topic 自己的 archive，而不是继续堆在默认 boot 路径
+- `gframework-pr-review` 的脚本行为、技能文案与 `AGENTS.md` 必须保持同一套 WSL Git 策略，避免再次出现“文档说法正确但工具实现仍跑偏”的情况
+
+### 当前验证（RP-008）
+
+- PR review 抓取：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`：通过
+- 脚本语法校验：
+  - `python3 -B -c "from pathlib import Path; compile(Path('.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py').read_text(encoding='utf-8'), '.agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py', 'exec')"`：通过
+- 文档校验：
+  - `validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`：通过
+  - `validate-all.sh docs/zh-CN/ecs/index.md`：通过
+  - `validate-all.sh docs/zh-CN/abstractions/ecs-arch-abstractions.md`：通过
+- 构建校验：
+  - `cd docs && bun run build`：通过；仅保留既有 VitePress 大 chunk warning，无构建失败
+
+### 下一步
+
+1. 提交本轮 PR review follow-up
+2. 推送当前分支后重新执行 `$gframework-pr-review`，观察 PR #271 的 open threads 是否收敛
