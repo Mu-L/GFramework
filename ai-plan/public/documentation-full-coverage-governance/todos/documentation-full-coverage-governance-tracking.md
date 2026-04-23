@@ -56,6 +56,8 @@
 - `2026-04-23` 在同一基线下继续收口第二批专题页导航热点，已将 `core/cqrs.md`、`ecs/arch.md`、
   `abstractions/ecs-arch-abstractions.md`、`game/scene.md`、`game/ui.md` 和 6 个
   `source-generators/*.md` 专题页里的 README 裸路径统一改为 GitHub `main` blob 外链。
+- 截至提交 `8a11720`（`2026-04-23T21:01:28+08:00`），当前分支相对 `origin/main`（`aa879d2`）的累计 diff
+  为 `24` 个文件、`264` 行，仍低于 `$gframework-batch-boot 75` 的停止阈值；但剩余命中已主要是正文语义性提及，不再适合作为同类批处理。
 - 当前剩余的托管侧信号是 GitHub `Title check` 对 PR 标题过泛的 inconclusive 提示；这属于 PR 元数据，不是本地
   文件缺陷。
 
@@ -97,7 +99,7 @@
 
 ## 下一步
 
-1. 对 `docs/zh-CN/**` 继续做下一类低风险导航 / 渲染巡检，优先排查剩余的非导航型裸路径引用、标题锚点与站内链接是否仍和页面结构一致。
+1. 若继续执行文档治理批处理，优先改做标题锚点、站内链接和少量非导航型裸路径引用的逐页复核，而不是继续按统一模板机械替换。
 2. 若后续继续扩展批处理 skill，可考虑再补充显式单位写法，例如 `75 files 2000 lines`，但当前默认速记已足够覆盖
    常见分支阈值场景。
 3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、

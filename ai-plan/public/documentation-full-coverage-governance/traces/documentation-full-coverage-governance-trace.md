@@ -34,6 +34,10 @@
 - 构建校验：
   - `bun run build`（工作目录：`docs/`）
   - 结果：通过；将仓库 README 跳转改为 GitHub `main` blob 外链后，不再触发 VitePress dead link；仅保留既有大 chunk warning。
+- 当前阈值状态：
+  - `git diff --name-only origin/main...HEAD | wc -l` => `24`
+  - `git diff --numstat origin/main...HEAD` 汇总 => `264` changed lines
+  - 结论：尚未接近 `75` 文件阈值，但剩余命中主要是正文语义性提及，当前批次在低风险模板化导航治理上可先收口。
 
 ### 归档摘要（RP-022）
 
