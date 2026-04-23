@@ -12,9 +12,10 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-019`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-020`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
+  - 保持 `Core` functional docs surface 的 inline code / 泛型示例在 VitePress 下按真实 C# 语法渲染
   - 保持 `Game` persistence docs surface 与当前 `README`、源码、`PersistenceTests` 使用同一套 owner / adoption path 叙述
   - 保持 `GFramework.Godot.SourceGenerators/README.md` 与 `docs/zh-CN/tutorials/godot-integration.md` 在生命周期接法上的一致性
   - 保持 active tracking / trace 只承载当前恢复入口，把阶段细节留在 `archive/`
@@ -36,6 +37,11 @@
   `SettingsModel&lt;ISettingsDataRepository&gt;`。
 - 结合当前 PR 已改动的 `docs/zh-CN/godot/storage.md` 做同类巡检后，确认 `SaveRepository&lt;TSaveData&gt;`
   也会在 VitePress code span 中按字面量渲染；两处现已在本地统一改为真实泛型写法。
+- `2026-04-23` 以 `origin/main`（`aa879d2`，`2026-04-23T17:51:41+08:00`）为批处理基线，对
+  `README.md`、`GFramework.*` 与 `docs/zh-CN/**` 执行同类模式巡检，确认剩余热点仅位于
+  `docs/zh-CN/core/functional.md` 与 `docs/zh-CN/tutorials/functional-programming.md` 共 8 处。
+- 上述 8 处 inline code 中的 `Option&lt;T&gt;`、`Result&lt;T&gt;`、`Nullable&lt;T&gt;` 已统一改为真实
+  泛型写法，避免在 VitePress 中显示字面量 HTML entity。
 - 当前剩余的托管侧信号是 GitHub `Title check` 对 PR 标题过泛的 inconclusive 提示；这属于 PR 元数据，不是本地
   文件缺陷。
 
@@ -62,15 +68,16 @@
     `docs/zh-CN/godot/setting.md:75` 的 inline code HTML entity 渲染问题。
 - `2026-04-23` `rg -n '`[^`]*&lt;[^`]*`|`[^`]*&gt;[^`]*`' GFramework.Godot.SourceGenerators/README.md GFramework.Godot/README.md README.md docs/zh-CN/api-reference/index.md docs/zh-CN/game/data.md docs/zh-CN/game/serialization.md docs/zh-CN/game/setting.md docs/zh-CN/game/storage.md docs/zh-CN/godot/setting.md docs/zh-CN/godot/storage.md docs/zh-CN/source-generators/index.md`
   - 结果：命中 `docs/zh-CN/godot/setting.md:75` 与 `docs/zh-CN/godot/storage.md:102` 两处同类写法，均已修正。
+- `2026-04-23` `rg -n '`[^`]*&lt;[^`]*`|`[^`]*&gt;[^`]*`' README.md GFramework.* docs/zh-CN -g '*.md'`
+  - 结果：命中 `docs/zh-CN/core/functional.md` 与 `docs/zh-CN/tutorials/functional-programming.md` 共 8 处，已全部修正。
 - `2026-04-23` `bun run build`（工作目录：`docs/`）
   - 结果：通过；仅保留既有 VitePress 大 chunk warning，无构建失败。
 
 ## 下一步
 
-1. 提交并推送本地对 `docs/zh-CN/godot/setting.md` 与 `docs/zh-CN/godot/storage.md` 的 Markdown 泛型写法修正，
-   然后重新抓取 PR `#272` 确认 Greptile open thread 是否已在新 head commit 上消失。
-2. 如果 PR `#272` 的 `Title check` 仍需要消除，到 GitHub 上把标题改成更具体的文档治理描述。
-3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
+1. 对 `README.md`、`GFramework.*` 与 `docs/zh-CN/**` 继续做下一类低风险 Markdown 渲染巡检，优先排查 code span 内
+   的 HTML entity、站点内链接和标题锚点是否仍与当前页面结构一致。
+2. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
-4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
+3. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
    `docs/zh-CN/tutorials/godot-integration.md` 与相关专题页是否仍保持一致。
