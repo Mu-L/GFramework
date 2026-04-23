@@ -12,7 +12,7 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-022`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-023`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
   - 保持 landing page / API 导航页中的仓库 README 入口可点击，避免读者在 docs 站点里遇到裸路径文本
@@ -53,6 +53,9 @@
   `api-reference/index.md`、`abstractions/core-abstractions.md`、`abstractions/game-abstractions.md`
   做导航可达性修复，把仓库 README / 根 README 裸路径统一改为指向 GitHub `main` 分支的可点击链接。
 - 该批次不改变文档语义，只收口 docs 站点中的入口可达性；适合继续作为小步快跑的低风险治理模式。
+- `2026-04-23` 在同一基线下继续收口第二批专题页导航热点，已将 `core/cqrs.md`、`ecs/arch.md`、
+  `abstractions/ecs-arch-abstractions.md`、`game/scene.md`、`game/ui.md` 和 6 个
+  `source-generators/*.md` 专题页里的 README 裸路径统一改为 GitHub `main` blob 外链。
 - 当前剩余的托管侧信号是 GitHub `Title check` 对 PR 标题过泛的 inconclusive 提示；这属于 PR 元数据，不是本地
   文件缺陷。
 
@@ -86,13 +89,15 @@
 - `2026-04-23` `rg -n '`GFramework\\.[^`]+/README\\.md`|`docs/zh-CN/[^`]+\\.md`|仓库根 `README\\.md`' docs/zh-CN -g '*.md'`
   - 结果：确认 landing / API 导航页仍有一批裸路径仓库入口；本轮已先修复 `getting-started`、`core`、`game`、
     `source-generators`、`api-reference` 与两个 abstractions 页面。
+- `2026-04-23` `rg -n '`GFramework\\.[^`]+/README\\.md`|仓库根 `README\\.md`' docs/zh-CN -g '*.md'`
+  - 结果：定位第二批专题页导航热点，已修复 `core/cqrs.md`、`ecs/arch.md`、`abstractions/ecs-arch-abstractions.md`、
+    `game/scene.md`、`game/ui.md` 以及 6 个 `source-generators/*.md` 页面。
 - `2026-04-23` `bun run build`（工作目录：`docs/`）
   - 结果：通过；仓库 README 外链改为 GitHub `main` blob 后，不再触发 VitePress dead link；仅保留既有大 chunk warning。
 
 ## 下一步
 
-1. 对 `docs/zh-CN/**` 继续做下一类低风险导航巡检，优先收口 `core/cqrs.md`、`ecs/arch.md`、`game/scene.md`、
-   `game/ui.md` 与若干 source generator 专题页里剩余的裸路径 README 入口。
+1. 对 `docs/zh-CN/**` 继续做下一类低风险导航 / 渲染巡检，优先排查剩余的非导航型裸路径引用、标题锚点与站内链接是否仍和页面结构一致。
 2. 若后续继续扩展批处理 skill，可考虑再补充显式单位写法，例如 `75 files 2000 lines`，但当前默认速记已足够覆盖
    常见分支阈值场景。
 3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
