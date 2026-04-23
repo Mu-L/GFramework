@@ -129,6 +129,58 @@ public class SchemaConfigGeneratorSnapshotTests
                                                    "type": "string",
                                                    "enum": ["coin", "gem"]
                                                  }
+                                               },
+                                               "dependentRequired": {
+                                                 "currency": ["gold"]
+                                               },
+                                               "dependentSchemas": {
+                                                 "currency": {
+                                                   "type": "object",
+                                                   "required": ["gold"],
+                                                   "properties": {
+                                                     "gold": {
+                                                       "type": "integer"
+                                                     }
+                                                   }
+                                                 }
+                                               },
+                                               "allOf": [
+                                                 {
+                                                   "type": "object",
+                                                   "required": ["gold"],
+                                                   "properties": {
+                                                     "gold": {
+                                                       "type": "integer"
+                                                     }
+                                                   }
+                                                 }
+                                               ],
+                                               "if": {
+                                                 "type": "object",
+                                                 "properties": {
+                                                   "currency": {
+                                                     "type": "string",
+                                                     "const": "gem"
+                                                   }
+                                                 }
+                                               },
+                                               "then": {
+                                                 "type": "object",
+                                                 "required": ["gold"],
+                                                 "properties": {
+                                                   "gold": {
+                                                     "type": "integer"
+                                                   }
+                                                 }
+                                               },
+                                               "else": {
+                                                 "type": "object",
+                                                 "required": ["currency"],
+                                                 "properties": {
+                                                   "currency": {
+                                                     "type": "string"
+                                                   }
+                                                 }
                                                }
                                              },
                                              "phases": {
@@ -156,8 +208,8 @@ public class SchemaConfigGeneratorSnapshotTests
                                          """;
 
     /// <summary>
-     ///     验证一个最小 monster schema 能生成配置类型、表包装和注册辅助。
-     /// </summary>
+    ///     验证一个最小 monster schema 能生成配置类型、表包装和注册辅助。
+    /// </summary>
     [Test]
     public Task Snapshot_SchemaConfigGenerator()
     {

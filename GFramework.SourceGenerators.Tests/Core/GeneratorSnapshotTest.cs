@@ -44,7 +44,7 @@ public static class GeneratorSnapshotTest<TGenerator>
     /// <returns>标准化后的文本</returns>
     private static string Normalize(string text)
     {
-        return text.Replace("\r\n", "\n").Trim();
+        return text.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
     }
 
     /// <summary>
@@ -194,7 +194,11 @@ public static class GeneratorSnapshotTest<TGenerator>
     /// <param name="generatedContent">要写入的生成输出。</param>
     private static async Task WriteMissingSnapshotAndFailAsync(string path, string generatedContent)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        // ResolveSnapshotPath 保证快照不会越界，但根目录路径仍会让 GetDirectoryName 返回 null。
+        var snapshotDirectory = Path.GetDirectoryName(path)
+                                ?? throw new InvalidOperationException(
+                                    $"Snapshot path '{path}' must include a parent directory.");
+        Directory.CreateDirectory(snapshotDirectory);
         await File.WriteAllTextAsync(path, generatedContent).ConfigureAwait(false);
         Assert.Fail($"未找到快照文件，已在以下路径生成新快照：\n{path}");
     }

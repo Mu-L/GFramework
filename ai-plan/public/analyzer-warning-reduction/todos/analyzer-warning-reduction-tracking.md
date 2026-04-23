@@ -7,8 +7,8 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-033`
-- 当前阶段：`Phase 33`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-034`
+- 当前阶段：`Phase 34`
 - 当前焦点：
   - 已完成 `GFramework.Core` 当前 `MA0016` / `MA0002` / `MA0015` / `MA0077` 低风险收口批次
   - 已复核 `net10.0` 下的 `MA0158` 基线：`GFramework.Core` / `GFramework.Cqrs` 当前共有 `16` 个 object lock
@@ -66,10 +66,23 @@
     生成文件名、快照目录和断言语义不变
   - 当前 `GFramework.SourceGenerators.Tests` Release build 基线已从 `40` 条降到 `39` 条；
     `SchemaConfigGeneratorSnapshotTests.cs` 已不再出现在 `MA0051` 列表中
+  - 已完成当前 PR #273 review follow-up 首轮核对：确认本地仍成立的问题集中在
+    `SchemaConfigGenerator` helper XML 文档、`GeneratorSnapshotTest` 的 `StringComparison.Ordinal` /
+    snapshot 路径空值防御、`AutoRegisterModuleGeneratorTests` 的 XML 文档位置，以及
+    `SchemaConfigGeneratorSnapshotTests` 的 monster 快照覆盖缺口
+  - 已将 monster 快照场景扩展到 `dependentRequired`、`dependentSchemas`、`allOf` 与 object-focused
+    `if/then/else`，以便把新增 schema 约束文档纳入 snapshot 验证
+  - 已完成本轮定向验证：
+    `GFramework.Game.SourceGenerators` Release build 通过；
+    `GFramework.SourceGenerators.Tests` 在 `-m:1 --no-restore` 下 Release build 通过；
+    `SchemaConfigGeneratorSnapshotTests` 与 `AutoRegisterModuleGeneratorTests` 定向测试共 `4` 项全部通过
+  - 当前验证仍受环境/基线约束：
+    `GFramework.SourceGenerators.Tests` Release build 保留既有 `MA0051` warning 基线；
+    NuGet vulnerability audit 在离线环境下产生 `NU1900`
   - `GFramework.Godot` 的 `Timing.cs` 已同步适配新事件签名，但当前 worktree 的 Godot restore 资产仍受 Windows fallback package folder 干扰，独立 build 需在修复资产后补跑
   - 后续继续按 warning 类型和数量批处理，而不是回退到按单文件切片推进
-  - 下一轮默认继续拆分 `GFramework.SourceGenerators.Tests` 的 `MA0051` 热点，优先处理
-    `GeneratorSnapshotTest` 或 `ContextRegistrationAnalyzerTests`
+  - 下一轮默认重新抓取 PR #273 最新 review 线程，并确认本轮 snapshot 更新后是否还存在剩余 open thread 或
+    `dotnet-format` 细项
   - 单次 `boot` 的工作树改动上限控制在约 `100` 个文件以内，避免 recovery context 与 review 面同时失控
   - 若任务边界互不冲突，允许使用不同模型的 subagent 并行处理不同 warning 类型或不同目录，但必须遵守显式 ownership
 

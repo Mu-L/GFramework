@@ -3,10 +3,10 @@ using GFramework.SourceGenerators.Tests.Core;
 
 namespace GFramework.SourceGenerators.Tests.Architectures;
 
-[TestFixture]
 /// <summary>
 ///     验证 <see cref="AutoRegisterModuleGenerator" /> 在模块自动注册场景下的生成契约与输出顺序。
 /// </summary>
+[TestFixture]
 public class AutoRegisterModuleGeneratorTests
 {
     private const string AttributeOrderSource = """

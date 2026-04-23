@@ -1270,6 +1270,17 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    ///     验证单个 <c>dependentRequired</c> 触发项的声明形状。
+    ///     该 helper 先锁定 trigger 字段本身是否属于当前对象，再把每个 target 交给更细粒度的 sibling 校验，
+    ///     让诊断能够明确区分“触发字段不存在”和“依赖目标非法”两类失败语义。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">父对象逻辑路径。</param>
+    /// <param name="dependency">当前 dependentRequired 触发项。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前 dependentRequired 触发项是否有效。</returns>
     private static bool TryValidateDependentRequiredEntry(
         string filePath,
         string displayPath,
@@ -1317,6 +1328,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    ///     验证单个 <c>dependentRequired</c> target 是否为已声明的 sibling 字段名。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">父对象逻辑路径。</param>
+    /// <param name="dependencyName">触发依赖的字段名。</param>
+    /// <param name="dependencyTarget">当前 target 元素。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前 dependentRequired target 是否有效。</returns>
     private static bool TryValidateDependentRequiredTarget(
         string filePath,
         string displayPath,
@@ -1497,6 +1518,15 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    ///     验证单个 <c>dependentSchemas</c> 触发项是否保持为当前运行时支持的 object 子 schema 形状。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">父对象逻辑路径。</param>
+    /// <param name="dependency">当前 dependentSchemas 触发项。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前 dependentSchemas 触发项是否有效。</returns>
     private static bool TryValidateDependentSchemaEntry(
         string filePath,
         string displayPath,
@@ -1690,6 +1720,15 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    ///     验证单个 <c>allOf</c> 条目是否维持 object-valued、object-typed 的 focused constraint 形状。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">父对象逻辑路径。</param>
+    /// <param name="allOfSchema">当前 allOf 条目。</param>
+    /// <param name="allOfIndex">从 0 开始的条目索引。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前 allOf 条目形状是否有效。</returns>
     private static bool TryValidateAllOfEntryShape(
         string filePath,
         string displayPath,
@@ -1854,6 +1893,21 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             out diagnostic);
     }
 
+    /// <summary>
+    ///     验证 object-focused 条件分支集合。
+    ///     <c>if</c> 分支始终必检，<c>then</c> / <c>else</c> 仅在声明时校验，
+    ///     以保持生成器对分支缺失与分支内容错误的诊断顺序稳定。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">父对象逻辑路径。</param>
+    /// <param name="ifElement">if 分支 schema。</param>
+    /// <param name="hasThen">是否声明 then。</param>
+    /// <param name="thenElement">then 分支 schema。</param>
+    /// <param name="hasElse">是否声明 else。</param>
+    /// <param name="elseElement">else 分支 schema。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前条件分支集合是否有效。</returns>
     private static bool TryValidateConditionalSchemaBranches(
         string filePath,
         string displayPath,
@@ -1898,6 +1952,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                    out diagnostic);
     }
 
+    /// <summary>
+    ///     验证 object-focused <c>if</c> / <c>then</c> / <c>else</c> 的存在性组合是否合法。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">父对象逻辑路径。</param>
+    /// <param name="hasIf">是否声明 if。</param>
+    /// <param name="hasThen">是否声明 then。</param>
+    /// <param name="hasElse">是否声明 else。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前条件关键字组合是否有效。</returns>
     private static bool TryValidateConditionalSchemaPresence(
         string filePath,
         string displayPath,
@@ -2060,6 +2124,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             out diagnostic);
     }
 
+    /// <summary>
+    ///     验证 object-focused 条件 schema 的 <c>properties</c> 只引用父对象已声明字段。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">当前分支逻辑路径。</param>
+    /// <param name="entryLabel">分支标签。</param>
+    /// <param name="schemaElement">当前分支 schema。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前分支 properties 是否有效。</returns>
     private static bool TryValidateObjectFocusedSchemaProperties(
         string filePath,
         string displayPath,
@@ -2104,6 +2178,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    ///     验证 object-focused 条件 schema 的 <c>required</c> 约束只引用父对象已声明字段。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">当前分支逻辑路径。</param>
+    /// <param name="entryLabel">分支标签。</param>
+    /// <param name="schemaElement">当前分支 schema。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前分支 required 是否有效。</returns>
     private static bool TryValidateObjectFocusedSchemaRequiredProperties(
         string filePath,
         string displayPath,
@@ -2211,6 +2295,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             out diagnostic);
     }
 
+    /// <summary>
+    ///     验证单个 <c>allOf</c> 条目的 <c>properties</c> 映射不会引入父对象未声明字段。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="allOfEntryPath">当前 allOf 条目逻辑路径。</param>
+    /// <param name="allOfSchema">当前 allOf 条目。</param>
+    /// <param name="allOfIndex">从 0 开始的条目索引。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前 allOf 条目的 properties 映射是否有效。</returns>
     private static bool TryValidateAllOfEntryProperties(
         string filePath,
         string allOfEntryPath,
@@ -2255,6 +2349,16 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    ///     验证单个 <c>allOf</c> 条目的 <c>required</c> 约束不会引用父对象未声明字段。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="allOfEntryPath">当前 allOf 条目逻辑路径。</param>
+    /// <param name="allOfSchema">当前 allOf 条目。</param>
+    /// <param name="allOfIndex">从 0 开始的条目索引。</param>
+    /// <param name="declaredProperties">父对象已声明属性集合。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前 allOf 条目的 required 约束是否有效。</returns>
     private static bool TryValidateAllOfEntryRequiredProperties(
         string filePath,
         string allOfEntryPath,

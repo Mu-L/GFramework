@@ -964,3 +964,20 @@
 
 1. 若继续 analyzer warning reduction，优先回到 `GFramework.Core` 剩余 `MA0051` 热点，并继续保持“单 warning family、单切入点”的节奏
 2. 后续所有 WSL 下的 .NET 定向验证命令继续显式附带 `-p:RestoreFallbackFolders=`，避免把环境问题误判成代码回归
+# 2026-04-23
+
+- RP-034 / PR #273 review follow-up：
+  - 使用 `gframework-pr-review` 抓取当前分支 PR #273 的 latest-head review threads、MegaLinter 和测试摘要。
+  - 本地复核后确认仍成立的项集中在 `SchemaConfigGenerator` helper XML 文档、
+    `GeneratorSnapshotTest` 的 `StringComparison.Ordinal` 与 snapshot 路径空值防御、
+    `AutoRegisterModuleGeneratorTests` 的 XML 文档位置，以及
+    `SchemaConfigGeneratorSnapshotTests` 的 monster snapshot 覆盖缺口。
+  - 已扩展 monster schema 场景以覆盖 `dependentRequired`、`dependentSchemas`、`allOf` 与 object-focused
+    `if/then/else`，并同步更新 `MonsterConfig.g.txt` 的约束快照。
+  - `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release -p:RestoreFallbackFolders=`
+    通过；离线 NuGet vulnerability audit 产生 `NU1900`。
+  - `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1`
+    通过；测试项目保留既有 `MA0051` warning 基线。
+  - `DOTNET_CLI_HOME=/tmp/dotnet-home dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~SchemaConfigGeneratorSnapshotTests|FullyQualifiedName~AutoRegisterModuleGeneratorTests" -m:1`
+    通过，`4` 个用例全部通过；需要在沙箱外执行以绕过 `vstest` 本地 socket 权限限制。
+  - 下一步：提交本轮修复并在需要时重新抓取 PR review，确认 open threads 是否随新提交收敛。
