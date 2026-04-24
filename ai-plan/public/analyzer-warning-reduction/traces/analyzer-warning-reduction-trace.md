@@ -1,27 +1,28 @@
 # Analyzer Warning Reduction 追踪
 
-## 2026-04-24 — RP-048
+## 2026-04-24 — RP-049
 
-### 阶段：plain `dotnet build` 复核与 batch 停点确认
+### 阶段：plain `dotnet build` 入口固化与 active 文档归档压缩
 
 - 触发背景：
-  - 用户继续按 `$gframework-batch-boot 75` 恢复 analyzer warning reduction
-  - 启动后发现 active todo 仍描述“工作树有未提交 warning 切片”，需要先核对仓库真值
-  - 用户随后明确要求“用 `dotnet build` 不用加其它参数试试”
+  - 用户要求把“执行 `dotnet build` 来检查警告”写入 `AGENTS.md`
+  - 用户要求清理或归档 `analyzer-warning-reduction` 的 active todo / trace 内容
+  - 用户明确要求继续当前分支的真实目标：修复项目构建时打印的 warning，而不是继续纠结 warning 检查命令本身
 - 主线程实施：
-  - 读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md` 以及 `analyzer-warning-reduction` 的 active todo / trace
-  - 使用显式 `git --git-dir/--work-tree` 绑定确认当前分支为 `fix/analyzer-warning-reduction-batch`
-  - 重新选择 batch baseline 为 `origin/main`，并记录最新可用 ref：`a8447a6`（`2026-04-24 12:53:39 +0800`）；不再使用落后的本地 `main`（`84b40a2`）
-  - 复核 `origin/main...HEAD` 指标，当前 branch diff 为 `6` 个文件、`1566` 行
-  - 复核最近提交，确认 warning-reduction 代码切片已经在 `77e332f`（`fix(analyzer): 收口当前批次警告切片`）落地，工作树当前除 `.codex` 外无活动修改
-  - 按用户要求在仓库根目录直接执行 `dotnet build`，默认选中 solution 并成功完成，结果为 `Build succeeded in 16.2s`
+  - 直接在仓库根目录执行 plain `dotnet build`
+  - 构建结果为 `Build succeeded.`、`0 Warning(s)`、`0 Error(s)`、`Time Elapsed 00:00:14.97`
+  - 更新 `AGENTS.md`，明确 plain `dotnet build` 是当前仓库默认的 build-warning 检查入口
+  - 将 RP-048 之前 active 文档中关于旧 baseline、batch 停点与构建参数形态的细节移入新的 archive 文件
+  - 重写 active todo / trace，只保留当前恢复点需要的真值
 - 当前结论：
-  - 当前 solution 在默认 `dotnet build` 路径下可正常通过，RP-047 中“需要额外构建参数才能稳定验证”的假设不应继续作为 active 真值
-  - 当前 warning-reduction branch 已没有新的低风险 warning hotspot；继续推进 batch 只会增加 branch 体积，不会继续降低 warning
-  - 因此本轮批处理应在 `6 / 75` 文件阈值处主动停止，而不是机械地继续扩展
+  - 当前分支在默认 solution 构建入口下没有打印 warning，因此此刻没有新的 warning-fix 代码切片可继续实施
+  - 当前分支目标没有改变：后续只要 plain `dotnet build` 再次打印 warning，就以该输出为唯一切片来源继续修复
 
 ## Archive Context
 
+- 当前轮次归档：
+  - [analyzer-warning-reduction-history-rp042-rp048.md](../archive/todos/analyzer-warning-reduction-history-rp042-rp048.md)
+  - [analyzer-warning-reduction-history-rp042-rp048.md](../archive/traces/analyzer-warning-reduction-history-rp042-rp048.md)
 - 历史跟踪归档：
   - [analyzer-warning-reduction-history-rp001.md](../archive/todos/analyzer-warning-reduction-history-rp001.md)
   - [analyzer-warning-reduction-history-rp002-rp041.md](../archive/todos/analyzer-warning-reduction-history-rp002-rp041.md)
