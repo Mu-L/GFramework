@@ -1,5 +1,7 @@
-﻿---
+---
 layout: page
+title: Language Selection
+description: Redirects visitors to the current Chinese documentation entry and keeps the language landing page discoverable.
 ---
 
 <script setup>

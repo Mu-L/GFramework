@@ -139,14 +139,14 @@ Godot 上。
 
 ## 文档入口
 
-- Godot 运行时总览：[docs/zh-CN/godot/index.md](../docs/zh-CN/godot/index.md)
-- 架构集成：[docs/zh-CN/godot/architecture.md](../docs/zh-CN/godot/architecture.md)
-- 场景系统：[docs/zh-CN/godot/scene.md](../docs/zh-CN/godot/scene.md)
-- UI 系统：[docs/zh-CN/godot/ui.md](../docs/zh-CN/godot/ui.md)
-- 节点扩展：[docs/zh-CN/godot/extensions.md](../docs/zh-CN/godot/extensions.md)
-- 信号系统：[docs/zh-CN/godot/signal.md](../docs/zh-CN/godot/signal.md)
-- 日志系统：[docs/zh-CN/godot/logging.md](../docs/zh-CN/godot/logging.md)
-- 集成教程：[docs/zh-CN/tutorials/godot-integration.md](../docs/zh-CN/tutorials/godot-integration.md)
+- Godot 运行时总览：[Godot 模块总览](../docs/zh-CN/godot/index.md)
+- 架构集成：[Godot 架构集成](../docs/zh-CN/godot/architecture.md)
+- 场景系统：[Godot 场景系统](../docs/zh-CN/godot/scene.md)
+- UI 系统：[Godot UI 系统](../docs/zh-CN/godot/ui.md)
+- 节点扩展：[Godot 节点扩展](../docs/zh-CN/godot/extensions.md)
+- 信号系统：[Godot 信号系统](../docs/zh-CN/godot/signal.md)
+- 日志系统：[Godot 日志系统](../docs/zh-CN/godot/logging.md)
+- 集成教程：[Godot 集成教程](../docs/zh-CN/tutorials/godot-integration.md)
 - 生成器入口：[../GFramework.Godot.SourceGenerators/README.md](../GFramework.Godot.SourceGenerators/README.md)
 
 ## 什么时候不该把它当成主入口

@@ -236,14 +236,14 @@ public sealed class ContinueGameCommandHandler
 
 虽然大部分详细文档写在 `GFramework.Game` 侧，但阅读顺序仍然适用于本包：
 
-- 游戏模块总览：[docs/zh-CN/game/index.md](../docs/zh-CN/game/index.md)
-- 内容配置系统：[docs/zh-CN/game/config-system.md](../docs/zh-CN/game/config-system.md)
-- 数据与存档：[docs/zh-CN/game/data.md](../docs/zh-CN/game/data.md)
-- 设置系统：[docs/zh-CN/game/setting.md](../docs/zh-CN/game/setting.md)
-- 存储系统：[docs/zh-CN/game/storage.md](../docs/zh-CN/game/storage.md)
-- 序列化系统：[docs/zh-CN/game/serialization.md](../docs/zh-CN/game/serialization.md)
-- 场景系统：[docs/zh-CN/game/scene.md](../docs/zh-CN/game/scene.md)
-- UI 系统：[docs/zh-CN/game/ui.md](../docs/zh-CN/game/ui.md)
+- 游戏模块总览：[Game 模块总览](../docs/zh-CN/game/index.md)
+- 内容配置系统：[内容配置系统](../docs/zh-CN/game/config-system.md)
+- 数据与存档：[数据与存档系统](../docs/zh-CN/game/data.md)
+- 设置系统：[设置系统](../docs/zh-CN/game/setting.md)
+- 存储系统：[存储系统](../docs/zh-CN/game/storage.md)
+- 序列化系统：[序列化系统](../docs/zh-CN/game/serialization.md)
+- 场景系统：[场景系统](../docs/zh-CN/game/scene.md)
+- UI 系统：[UI 系统](../docs/zh-CN/game/ui.md)
 
 ## 选择建议
 

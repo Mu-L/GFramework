@@ -150,5 +150,5 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
 
 ## 文档入口
 
-- 总体文档：`docs/zh-CN/core/cqrs.md`
-- 契约层说明：`GFramework.Cqrs.Abstractions/README.md`
+- 总体文档：[CQRS 栏目](../docs/zh-CN/core/cqrs.md)
+- 契约层说明：[GFramework.Cqrs.Abstractions README](../GFramework.Cqrs.Abstractions/README.md)
