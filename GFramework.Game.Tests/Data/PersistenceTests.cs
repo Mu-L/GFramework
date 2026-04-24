@@ -271,7 +271,7 @@ public class PersistenceTests
         continueMigration.Set();
 
         var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await loadTask.ConfigureAwait(false));
-        var persisted = await storage.ReadAsync<TestVersionedSaveData>("saves/slot_1/save");
+        var persisted = await storage.ReadAsync<TestVersionedSaveData>("saves/slot_1/save").ConfigureAwait(false);
 
         Assert.Multiple(() =>
         {
@@ -593,7 +593,7 @@ public class PersistenceTests
 
         throwingStorage.ThrowOnWrite = true;
         Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await repository.SaveAsync(primaryLocation, new TestSimpleData { Value = 99 }));
+            async () => await repository.SaveAsync(primaryLocation, new TestSimpleData { Value = 99 }).ConfigureAwait(false));
 
         var cachedAfterFailure = await repository.LoadAsync<TestSimpleData>(primaryLocation);
         Assert.That(cachedAfterFailure.Value, Is.EqualTo(1));

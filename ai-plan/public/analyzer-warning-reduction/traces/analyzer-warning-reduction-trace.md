@@ -2,6 +2,31 @@
 
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-24 — RP-055
+
+### 阶段：修正 stop-condition 口径并继续 `GFramework.Game.Tests` 小热点
+
+- 触发背景：
+  - `RP-054` 之后复核 batch stop-condition 时，发现之前一度把工作树 diff 错当成了 skill 要求的 branch diff
+  - 按正确口径 `merge-base(origin/main, HEAD)` 计算，`RP-054` 提交后的真实分支体积是 `23` 个文件、`603` 行，因此仍可继续下一批
+  - 当前剩余 warning 里，`ArchitectureConfigIntegrationTests`、`GameConfigBootstrapTests`、`JsonSerializerTests` 属于独立且低风险的小切片
+- 主线程实施：
+  - 在 `ArchitectureConfigIntegrationTests.cs` 中补齐异步架构初始化 / 销毁和异常断言的 `.ConfigureAwait(false)`
+  - 在 `GameConfigBootstrapTests.cs` 中补齐启动流程、并发初始化断言与 `WaitForTaskWithinAsync` 的 `.ConfigureAwait(false)`
+  - 在 `JsonSerializerTests.cs` 中将坐标解析改为 `CultureInfo.InvariantCulture`
+  - 顺手清理 `YamlConfigLoaderAllOfTests.cs` 与 `PersistenceTests.cs` 中上一批遗漏的字段态状态检查和异步等待 warning
+  - 纠正 active tracking：明确 stop-condition 必须使用 `origin/main...HEAD` 的 merge-base 分支 diff，而不是工作树 diff
+- 验证里程碑：
+  - `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release`
+    - 并行误用 build/test 时：出现 `MSB3026` / `CS2012` 文件占用噪声，不计入代码结论
+    - 串行复验：成功；`63 Warning(s)`、`0 Error(s)`
+  - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureConfigIntegrationTests|FullyQualifiedName~GameConfigBootstrapTests|FullyQualifiedName~JsonSerializerTests"`
+    - 结果：成功；`Passed: 19`、`Failed: 0`
+- 当前结论：
+  - `GFramework.Game.Tests` 已从上一批收尾时的 `71 warning(s)` 进一步降到 `63 warning(s)`
+  - 这次提交后的分支体积投影为 `26` 个文件、`691` 行，仍低于 `$gframework-batch-boot 75`
+  - 剩余热点越来越集中到 `YamlConfigLoaderTests.cs` 与 `GeneratedConfigConsumerIntegrationTests.cs`，后续继续时应把它们视为高上下文批次
+
 ## 2026-04-24 — RP-054
 
 ### 阶段：`GFramework.Game.Tests` 低风险测试 warning 批次（触发文件数停止阈值）
