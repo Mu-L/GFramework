@@ -97,5 +97,5 @@ public sealed class GetPlayerProfileHandler
 
 ## 文档入口
 
-- 运行时与整体接入说明：`docs/zh-CN/core/cqrs.md`
-- 如果你需要默认实现而不是契约层，请看 `GFramework.Cqrs/README.md`
+- 运行时与整体接入说明：[CQRS 栏目](../docs/zh-CN/core/cqrs.md)
+- 如果你需要默认实现而不是契约层，请看 [GFramework.Cqrs README](../GFramework.Cqrs/README.md)

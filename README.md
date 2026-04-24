@@ -11,8 +11,8 @@
 
 ## 从哪里开始
 
-- 第一次接触框架：[`docs/zh-CN/getting-started/index.md`](docs/zh-CN/getting-started/index.md)
-- 想先跑一个最小例子：[`docs/zh-CN/getting-started/quick-start.md`](docs/zh-CN/getting-started/quick-start.md)
+- 第一次接触框架：[入门指南](docs/zh-CN/getting-started/index.md)
+- 想先跑一个最小例子：[快速开始](docs/zh-CN/getting-started/quick-start.md)
 - 已经知道要用哪个模块：直接进入对应模块目录下的 `README.md`
 
 ## 模块地图
@@ -41,25 +41,25 @@
 | --- | --- | --- |
 | `GFramework.Core.SourceGenerators.Abstractions` | `Core.SourceGenerators` 的内部契约层 | [GFramework.Core.SourceGenerators/README.md](GFramework.Core.SourceGenerators/README.md) |
 | `GFramework.Godot.SourceGenerators.Abstractions` | `Godot.SourceGenerators` 的内部契约层 | [GFramework.Godot.SourceGenerators/README.md](GFramework.Godot.SourceGenerators/README.md) |
-| `GFramework.SourceGenerators.Common` | 生成器家族共享的公共支撑代码 | [docs/zh-CN/source-generators/index.md](docs/zh-CN/source-generators/index.md) |
+| `GFramework.SourceGenerators.Common` | 生成器家族共享的公共支撑代码 | [源码生成器总览](docs/zh-CN/source-generators/index.md) |
 
 ## 文档导航
 
 仓库根 README 与文档站点保持同一套栏目命名：
 
-- 入门指南：[`docs/zh-CN/getting-started/index.md`](docs/zh-CN/getting-started/index.md)
-- Core：[`docs/zh-CN/core/index.md`](docs/zh-CN/core/index.md)
-- Game：[`docs/zh-CN/game/index.md`](docs/zh-CN/game/index.md)
-- Godot：[`docs/zh-CN/godot/index.md`](docs/zh-CN/godot/index.md)
-- 教程：[`docs/zh-CN/tutorials/index.md`](docs/zh-CN/tutorials/index.md)
-- 源码生成器：[`docs/zh-CN/source-generators/index.md`](docs/zh-CN/source-generators/index.md)
-- ECS：[`docs/zh-CN/ecs/index.md`](docs/zh-CN/ecs/index.md)
-- 抽象接口：[`docs/zh-CN/abstractions/index.md`](docs/zh-CN/abstractions/index.md)
-- 最佳实践：[`docs/zh-CN/best-practices/index.md`](docs/zh-CN/best-practices/index.md)
-- API 参考：[`docs/zh-CN/api-reference/index.md`](docs/zh-CN/api-reference/index.md)
-- FAQ：[`docs/zh-CN/faq.md`](docs/zh-CN/faq.md)
-- 故障排查：[`docs/zh-CN/troubleshooting.md`](docs/zh-CN/troubleshooting.md)
-- 贡献：[`docs/zh-CN/contributing.md`](docs/zh-CN/contributing.md)
+- 入门指南：[入门指南](docs/zh-CN/getting-started/index.md)
+- Core：[Core](docs/zh-CN/core/index.md)
+- Game：[Game](docs/zh-CN/game/index.md)
+- Godot：[Godot](docs/zh-CN/godot/index.md)
+- 教程：[教程](docs/zh-CN/tutorials/index.md)
+- 源码生成器：[源码生成器](docs/zh-CN/source-generators/index.md)
+- ECS：[ECS](docs/zh-CN/ecs/index.md)
+- 抽象接口：[抽象接口](docs/zh-CN/abstractions/index.md)
+- 最佳实践：[最佳实践](docs/zh-CN/best-practices/index.md)
+- API 参考：[API 参考](docs/zh-CN/api-reference/index.md)
+- FAQ：[常见问题](docs/zh-CN/faq.md)
+- 故障排查：[故障排查](docs/zh-CN/troubleshooting.md)
+- 贡献：[贡献指南](docs/zh-CN/contributing.md)
 
 ## 包选择
 
@@ -146,7 +146,7 @@ GFramework.sln
 提交功能或行为变更时，请把代码、测试和文档一起更新：
 
 1. 先阅读对应模块目录下的 `README.md`
-2. 如果改动影响采用路径、安装方式、公共 API 或目录结构，同时更新 `docs/zh-CN/`
+2. 如果改动影响采用路径、安装方式、公共 API 或目录结构，同时更新受影响的中文文档页面，必要时同步调整 [中文文档入口](docs/zh-CN/index.md)
 3. 对跨模块或多阶段任务，维护 `ai-plan/public/README.md` 与对应主题目录下的 tracking / trace
 
 ## 许可证

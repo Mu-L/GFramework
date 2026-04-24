@@ -57,8 +57,8 @@
 
 对应文档：
 
-- [docs/zh-CN/game/config-system.md](../docs/zh-CN/game/config-system.md)
-- [docs/zh-CN/game/index.md](../docs/zh-CN/game/index.md)
+- [内容配置系统](../docs/zh-CN/game/config-system.md)
+- [Game 模块总览](../docs/zh-CN/game/index.md)
 
 ### `Data/`
 
@@ -81,8 +81,8 @@
 
 对应文档：
 
-- [docs/zh-CN/game/data.md](../docs/zh-CN/game/data.md)
-- [docs/zh-CN/game/setting.md](../docs/zh-CN/game/setting.md)
+- [数据与存档系统](../docs/zh-CN/game/data.md)
+- [设置系统](../docs/zh-CN/game/setting.md)
 
 ### `Setting/`
 
@@ -105,7 +105,7 @@
 
 对应文档：
 
-- [docs/zh-CN/game/setting.md](../docs/zh-CN/game/setting.md)
+- [设置系统](../docs/zh-CN/game/setting.md)
 
 ### `Storage/`
 
@@ -121,7 +121,7 @@
 
 对应文档：
 
-- [docs/zh-CN/game/storage.md](../docs/zh-CN/game/storage.md)
+- [存储系统](../docs/zh-CN/game/storage.md)
 - [GFramework.Game/Storage/ReadMe.md](./Storage/ReadMe.md)
 
 ### `Serializer/`
@@ -134,7 +134,7 @@
 
 对应文档：
 
-- [docs/zh-CN/game/serialization.md](../docs/zh-CN/game/serialization.md)
+- [序列化系统](../docs/zh-CN/game/serialization.md)
 
 ### `Scene/` 与 `UI/`
 
@@ -157,8 +157,8 @@
 
 对应文档：
 
-- [docs/zh-CN/game/scene.md](../docs/zh-CN/game/scene.md)
-- [docs/zh-CN/game/ui.md](../docs/zh-CN/game/ui.md)
+- [场景系统](../docs/zh-CN/game/scene.md)
+- [UI 系统](../docs/zh-CN/game/ui.md)
 
 ### `Routing/` 与 `State/`
 
@@ -293,7 +293,7 @@ var registry = bootstrap.Registry;
 
 这一能力几乎总是与 source generators 绑定使用。目录、schema、生成器与热重载约定请直接看：
 
-- [docs/zh-CN/game/config-system.md](../docs/zh-CN/game/config-system.md)
+- [内容配置系统](../docs/zh-CN/game/config-system.md)
 
 ### 4. 接入 Scene / UI 路由
 
@@ -342,14 +342,14 @@ public sealed class MyUiRouter : UiRouterBase
 
 ## 文档入口
 
-- 游戏模块总览：[docs/zh-CN/game/index.md](../docs/zh-CN/game/index.md)
-- 内容配置系统：[docs/zh-CN/game/config-system.md](../docs/zh-CN/game/config-system.md)
-- 数据与存档：[docs/zh-CN/game/data.md](../docs/zh-CN/game/data.md)
-- 设置系统：[docs/zh-CN/game/setting.md](../docs/zh-CN/game/setting.md)
-- 存储系统：[docs/zh-CN/game/storage.md](../docs/zh-CN/game/storage.md)
-- 序列化系统：[docs/zh-CN/game/serialization.md](../docs/zh-CN/game/serialization.md)
-- 场景系统：[docs/zh-CN/game/scene.md](../docs/zh-CN/game/scene.md)
-- UI 系统：[docs/zh-CN/game/ui.md](../docs/zh-CN/game/ui.md)
+- 游戏模块总览：[Game 模块总览](../docs/zh-CN/game/index.md)
+- 内容配置系统：[内容配置系统](../docs/zh-CN/game/config-system.md)
+- 数据与存档：[数据与存档系统](../docs/zh-CN/game/data.md)
+- 设置系统：[设置系统](../docs/zh-CN/game/setting.md)
+- 存储系统：[存储系统](../docs/zh-CN/game/storage.md)
+- 序列化系统：[序列化系统](../docs/zh-CN/game/serialization.md)
+- 场景系统：[场景系统](../docs/zh-CN/game/scene.md)
+- UI 系统：[UI 系统](../docs/zh-CN/game/ui.md)
 
 ## 什么时候不该直接依赖本包
 

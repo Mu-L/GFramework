@@ -1,4 +1,6 @@
 ---
+title: 第 2 章：项目创建与初始化
+description: 指导创建 Godot C# 项目、引入 GFramework，并搭好基础目录与初始化结构。
 prev:
   text: '环境准备'
   link: './01-environment'

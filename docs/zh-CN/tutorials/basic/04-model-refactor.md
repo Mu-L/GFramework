@@ -1,4 +1,6 @@
 ---
+title: 第 4 章：引入 Model 重构
+description: 使用 Model 层与事件系统重构计数器应用，分离状态存储、事件通知与界面更新。
 prev:
   text: '基础计数器实现'
   link: './03-counter-basic'

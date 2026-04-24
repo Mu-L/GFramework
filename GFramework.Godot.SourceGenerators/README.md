@@ -183,15 +183,15 @@ public partial class MainMenu : Control
 
 ## 文档入口
 
-- 生成器总览：[docs/zh-CN/source-generators/index.md](../docs/zh-CN/source-generators/index.md)
-- Godot 项目元数据：[docs/zh-CN/source-generators/godot-project-generator.md](../docs/zh-CN/source-generators/godot-project-generator.md)
-- `GetNode`：[docs/zh-CN/source-generators/get-node-generator.md](../docs/zh-CN/source-generators/get-node-generator.md)
-- `BindNodeSignal`：[docs/zh-CN/source-generators/bind-node-signal-generator.md](../docs/zh-CN/source-generators/bind-node-signal-generator.md)
-- `AutoScene`：[docs/zh-CN/source-generators/auto-scene-generator.md](../docs/zh-CN/source-generators/auto-scene-generator.md)
-- `AutoUiPage`：[docs/zh-CN/source-generators/auto-ui-page-generator.md](../docs/zh-CN/source-generators/auto-ui-page-generator.md)
-- `AutoRegisterExportedCollections`：[docs/zh-CN/source-generators/auto-register-exported-collections-generator.md](../docs/zh-CN/source-generators/auto-register-exported-collections-generator.md)
+- 生成器总览：[源码生成器总览](../docs/zh-CN/source-generators/index.md)
+- Godot 项目元数据：[Godot 项目生成器](../docs/zh-CN/source-generators/godot-project-generator.md)
+- `GetNode`：[GetNode 生成器](../docs/zh-CN/source-generators/get-node-generator.md)
+- `BindNodeSignal`：[BindNodeSignal 生成器](../docs/zh-CN/source-generators/bind-node-signal-generator.md)
+- `AutoScene`：[AutoScene 生成器](../docs/zh-CN/source-generators/auto-scene-generator.md)
+- `AutoUiPage`：[AutoUiPage 生成器](../docs/zh-CN/source-generators/auto-ui-page-generator.md)
+- `AutoRegisterExportedCollections`：[AutoRegisterExportedCollections 生成器](../docs/zh-CN/source-generators/auto-register-exported-collections-generator.md)
 - Godot 运行时入口：[../GFramework.Godot/README.md](../GFramework.Godot/README.md)
-- 集成教程：[docs/zh-CN/tutorials/godot-integration.md](../docs/zh-CN/tutorials/godot-integration.md)
+- 集成教程：[Godot 集成教程](../docs/zh-CN/tutorials/godot-integration.md)
 
 ## 什么时候不该先看这个包
 
@@ -202,4 +202,4 @@ public partial class MainMenu : Control
 - 你只需要 `Game` 契约，不需要 Godot 宿主或生成器：
   - 先看 `GFramework.Game` 或 `GFramework.Game.Abstractions`
 - 你在确认项目接线顺序，而不是单个生成器契约：
-  - 先看 `docs/zh-CN/tutorials/godot-integration.md`
+  - 先看 [Godot 集成教程](../docs/zh-CN/tutorials/godot-integration.md)
