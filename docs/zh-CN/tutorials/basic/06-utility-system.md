@@ -1,4 +1,6 @@
 ---
+title: 第 6 章：Utility 与 System
+description: 引入 Utility 与 System 承载业务规则和阈值检查，完成基础分层架构闭环。
 prev:
   text: '命令系统优化'
   link: './05-command-system'

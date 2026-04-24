@@ -2,6 +2,7 @@
 # https://vitepress.dev/reference/default-theme-home-page
 layout: home
 title: GFramework
+description: 概览 GFramework 的模块能力、入门路径与主要中文文档入口。
 hero:
   name: "GFramework"
   text: 面向游戏开发的模块化 C# 架构体系

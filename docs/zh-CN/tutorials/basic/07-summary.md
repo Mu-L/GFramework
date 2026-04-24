@@ -1,4 +1,6 @@
 ---
+title: 第 7 章：总结与最佳实践
+description: 回顾基础教程的架构演进，整理最佳实践、常见问题与后续学习方向。
 prev:
   text: 'Utility 与 System'
   link: './06-utility-system'

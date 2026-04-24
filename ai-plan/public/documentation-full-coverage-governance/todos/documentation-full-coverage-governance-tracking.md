@@ -12,12 +12,12 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-026`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-027`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
-  - 收口 PR `#282` 的 latest-head review follow-up，保持 active tracking / trace 只承载当前恢复入口
+  - 继续按 `$gframework-batch-boot 75` 的 `origin/main` 分支 diff 阈值做小批量文档治理，本批已收口 `docs/zh-CN/index.md` 与 `tutorials/basic/01-07.md` 的 metadata 缺口
   - 保持 `README.md` 与 `docs/**` 公开页面只承载读者需要的采用信息，不再混入 XML inventory、覆盖基线、恢复点或治理批次说明
-  - 继续按 `$gframework-batch-boot 75` 的 `origin/main` 分支 diff 阈值做小批量文档治理，优先处理低风险 metadata 缺口、坏链与 Markdown 结构问题
+  - 继续优先处理低风险 metadata 缺口、坏链与 Markdown 结构问题，避免跨模块语义改写
   - 保持 `Game` persistence docs surface 与当前 `README`、源码、`PersistenceTests` 使用同一套 owner / adoption path 叙述
   - 保持 `GFramework.Godot.SourceGenerators/README.md` 与 `docs/zh-CN/tutorials/godot-integration.md` 在生命周期接法上的一致性
   - 保持 active tracking / trace 只承载当前恢复入口，把阶段细节留在 `archive/`
@@ -25,12 +25,14 @@
 ## 当前状态摘要
 
 - `Core`、`Ecs.Arch`、`Cqrs`、`Game`、`Godot` 五个模块族当前都已有 README / landing / topic / API 参考层级的已验证入口。
+- `2026-04-24` 以 `origin/main`（`a8447a6`，`2026-04-24T12:53:39+08:00`）为 batch baseline 时，当前分支累计 diff 为 `0` 个文件；本批 write set 聚焦 `8` 个文档页面与 `2` 个 `ai-plan` 入口文件，预计提交后分支 diff 为 `10 / 75` 个 changed files。
 - `2026-04-24` 使用 `$gframework-pr-review` 抓取 PR `#282` 后，确认 latest head commit
   `982249151ecf8acdff3e62e664034bf95dfacd75` 当前仍有 `3` 条 CodeRabbit 与 `1` 条 Greptile open thread；4 条建议均已在本地复核并纳入当前恢复点。
 - 本轮 PR follow-up 仅收口仍然成立的 review 项：
   - 将过长的 active tracking / trace 瘦身，并把 `RP-023` 到 `RP-025` 的细节迁入 `archive/`
   - 将 `docs/zh-CN/core/context.md` 的标题本地化为中文读者友好的写法
   - 统一 `docs/zh-CN/troubleshooting.md` 中 `/zh-CN/core/architecture` 与 `/zh-CN/faq` 的 `.md` 链接写法
+- 本批次补齐了 `docs/zh-CN/index.md` 的 `description`，以及 `docs/zh-CN/tutorials/basic/01-07.md` 的 `title` / `description`，让首页和基础教程章节页拥有完整 frontmatter metadata。
 - `Game` persistence docs surface 当前以 `docs/zh-CN/game/data.md`、`storage.md`、`serialization.md`、`setting.md`
   作为最小巡检集合；若后续 README、runtime public API 或 `PersistenceTests` 变动，应优先复核这一组页面。
 - `Godot` runtime 与 generator 入口当前以 `GFramework.Godot/README.md`、
@@ -68,12 +70,15 @@
   - 结果：当前无命中；`/zh-CN/core/architecture` 与 `/zh-CN/faq` 已统一补成显式 `.md` 链接。
 - `2026-04-24` `bun run build`（工作目录：`docs/`）
   - 结果：通过；文档标题本地化、站内链接修正与 `ai-plan` 归档瘦身落地后站点仍可正常构建，仅保留既有大 chunk warning。
+- `2026-04-24` `python3 - <<'PY' ...`（扫描 `docs/zh-CN/**/*.md` frontmatter 是否缺 `title` / `description`）
+  - 结果：通过；当前带 frontmatter 的 `docs/zh-CN` 页面已无 `title` / `description` 缺口。
+- `2026-04-24` `bun run build`（工作目录：`docs/`）
+  - 结果：通过；首页与基础教程 metadata 补齐后站点仍可正常构建，仅保留既有大 chunk warning。
 
 ## 下一步
 
-1. 若继续执行 `$gframework-batch-boot 75`，优先处理 `docs/zh-CN/index.md` 与 `tutorials/basic/01-07.md` 这 `8`
-   个“已有 frontmatter 但缺 `title` / `description`”的 metadata 缺口。
-2. 推送当前 follow-up commit 后，再次执行 `$gframework-pr-review`，确认 PR `#282` 的 unresolved review threads 是否已在新 head commit 上消失。
+1. 推送本批次 commit 后，再次执行 `$gframework-pr-review`，确认 PR `#282` 的 unresolved review threads 是否已在新 head commit 上消失。
+2. 若继续执行 `$gframework-batch-boot 75`，优先盘点 `docs/zh-CN` 中仍缺完整 frontmatter 的页面，并按模块或教程小批次补齐 metadata。
 3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
 4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、

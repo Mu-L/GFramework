@@ -1,4 +1,6 @@
 ---
+title: 第 3 章：基础计数器实现
+description: 通过直接实现计数器场景与交互逻辑，建立后续架构重构的起点示例。
 prev:
   text: '项目创建与初始化'
   link: './02-project-setup'

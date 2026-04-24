@@ -1,4 +1,6 @@
 ---
+title: 第 5 章：命令系统优化
+description: 通过引入 Command 模式拆分 Controller 交互逻辑，建立更清晰的执行职责边界。
 prev:
   text: '引入 Model 重构'
   link: './04-model-refactor'

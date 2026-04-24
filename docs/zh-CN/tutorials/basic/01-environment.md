@@ -1,4 +1,6 @@
 ---
+title: 第 1 章：环境准备
+description: 说明开始基础教程前需要准备的操作系统、.NET SDK、Godot 与常用开发工具环境。
 prev:
   text: '教程首页'
   link: './index'
