@@ -6,22 +6,23 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-056`
-- 当前阶段：`Phase 56`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-057`
+- 当前阶段：`Phase 57`
 - 当前焦点：
-  - `2026-04-24` 本轮延续 `RP-055` 的 `GFramework.Game.Tests` 小热点批次，修复了 `GeneratedConfigConsumerIntegrationTests.cs` 中 raw string 缩进导致的编译错误
-  - 进一步将 `GeneratedConfigConsumerIntegrationTests.cs` 的长断言逻辑拆分为多个辅助方法，并补齐异步等待的 `.ConfigureAwait(false)`，使该文件不再出现在项目构建 warning 输出中
-  - `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release` 已从上一轮收尾的 `63 Warning(s)` 进一步收敛到 `59 Warning(s)`
-  - 按当前工作树投影重新计算后，分支体积为 `27` 个文件、`943` 行，仍低于 `$gframework-batch-boot 75`
+  - `2026-04-24` 本轮继续吃掉 `GFramework.Game.Tests` 中仍然独立且低风险的 `PersistenceTests.cs` 残余 `MA0004`
+  - 已补齐两个失败缓存一致性测试中的剩余 `.ConfigureAwait(false)`，使 `PersistenceTests.cs` 不再出现在非增量构建 warning 输出中
+  - 非增量 `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --no-incremental` 从 `253 Warning(s)` 进一步收敛到 `249 Warning(s)`，剩余热点几乎全部集中在 `YamlConfigLoaderTests.cs`
+  - 按当前工作树投影重新计算后，分支体积为 `27` 个文件、`991` 行，仍低于 `$gframework-batch-boot 75`
 
 ## 当前活跃事实
 
 - 之前记录的 plain `dotnet build` `0 Warning(s)` 属于增量构建假阴性，不能再作为 warning 检查真值
 - 仓库根目录 `dotnet clean GFramework.sln -c Release` 仍在 `ValidateSolutionConfiguration` 阶段失败，项目级 `dotnet clean GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release` 也未能稳定提供 clean 基线
 - 当前整仓最近一次直接观测值仍是 `dotnet build GFramework.sln -c Release` 的 `116 warning(s)`
-- `RP-055` 后续补批已验证 `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release`，结果为 `59 Warning(s)`、`0 Error(s)`
-- 本轮已验证 `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~GeneratedConfigConsumerIntegrationTests"`，结果为 `Passed: 4`
-- `GeneratedConfigConsumerIntegrationTests.cs` 当前已不再出现在项目 build warning 输出中；`GFramework.Game.Tests` 剩余热点进一步集中到未触碰的 `YamlConfigLoaderTests.cs` 等高上下文文件
+- `RP-056` 已验证 `GeneratedConfigConsumerIntegrationTests.cs` 不再出现在项目 build warning 输出中
+- `RP-057` 已验证 `PersistenceTests.cs` 不再出现在 `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --no-incremental` 的 warning 输出中
+- 本轮已验证 `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~UnifiedSettingsDataRepository_SaveAsync_When_Persist_Fails_Should_Keep_Cache_Consistent|FullyQualifiedName~UnifiedSettingsDataRepository_DeleteAsync_When_Persist_Fails_Should_Keep_Cache_Consistent"`，结果为 `Passed: 2`
+- `GFramework.Game.Tests` 当前剩余热点已经几乎完全集中到 `YamlConfigLoaderTests.cs` 这一高上下文文件
 
 ## 当前风险
 
@@ -57,12 +58,17 @@
 - `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release`
   - `RP-055` 收尾结果：成功；`63 Warning(s)`、`0 Error(s)`
   - `RP-056` 当前结果：成功；`59 Warning(s)`、`0 Error(s)`
+- `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --no-incremental`
+  - `RP-057` 热点重排前：成功；`253 Warning(s)`、`0 Error(s)`
+  - `RP-057` 当前结果：成功；`249 Warning(s)`、`0 Error(s)`
 - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureConfigIntegrationTests|FullyQualifiedName~GameConfigBootstrapTests|FullyQualifiedName~JsonSerializerTests"`
   - 结果：成功；`Passed: 19`、`Failed: 0`
 - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~GeneratedConfigConsumerIntegrationTests"`
   - 结果：成功；`Passed: 4`、`Failed: 0`
+- `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~UnifiedSettingsDataRepository_SaveAsync_When_Persist_Fails_Should_Keep_Cache_Consistent|FullyQualifiedName~UnifiedSettingsDataRepository_DeleteAsync_When_Persist_Fails_Should_Keep_Cache_Consistent"`
+  - 结果：成功；`Passed: 2`、`Failed: 0`
 
 ## 下一步建议
 
-1. 提交 `GeneratedConfigConsumerIntegrationTests.cs` 与 `RP-056` tracking/trace 更新，继续保持只纳入本 topic 相关文件
-2. 下一轮若继续 warning reduction，应优先决定是否接受进入 `YamlConfigLoaderTests.cs` 的高上下文批次
+1. 提交 `PersistenceTests.cs` 与 `RP-057` tracking/trace 更新，继续保持只纳入本 topic 相关文件
+2. 若继续 warning reduction，应把 `YamlConfigLoaderTests.cs` 视为独立的高上下文批次，不再与其它文件混批

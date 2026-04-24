@@ -2,6 +2,29 @@
 
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-24 — RP-057
+
+### 阶段：清理 `PersistenceTests.cs` 残余 `MA0004`
+
+- 触发背景：
+  - `RP-056` 提交后重新做非增量热点排序时，`GFramework.Game.Tests` 的剩余测试项目 warning 已明显收敛，只剩 `PersistenceTests.cs` 少量 `MA0004` 与 `YamlConfigLoaderTests.cs` 大量 warning
+  - 为避免在同一轮直接进入 `YamlConfigLoaderTests.cs` 的大文件高上下文批次，先吃掉 `PersistenceTests.cs` 这个独立小切片
+- 主线程实施：
+  - 在 `PersistenceTests.cs` 中为统一设置仓库失败缓存一致性相关测试补齐剩余 `.ConfigureAwait(false)`
+  - 覆盖保存失败与删除失败两个测试场景中的缓存读取、存在性检查、后续保存和最终验证读取
+  - 更新 active tracking / trace，明确下一批若继续推进应单独进入 `YamlConfigLoaderTests.cs`
+- 验证里程碑：
+  - `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --no-incremental`
+    - 热点重排前：成功；`253 Warning(s)`、`0 Error(s)`
+    - 修复后：成功；`249 Warning(s)`、`0 Error(s)`
+    - 结论：`PersistenceTests.cs` 不再出现在 warning 输出中
+  - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~UnifiedSettingsDataRepository_SaveAsync_When_Persist_Fails_Should_Keep_Cache_Consistent|FullyQualifiedName~UnifiedSettingsDataRepository_DeleteAsync_When_Persist_Fails_Should_Keep_Cache_Consistent"`
+    - 结果：成功；`Passed: 2`、`Failed: 0`
+- 当前结论：
+  - `PersistenceTests.cs` 的残余 warning 已清零，`GFramework.Game.Tests` 剩余热点几乎全部压缩到了 `YamlConfigLoaderTests.cs`
+  - 当前工作树投影下，分支体积为 `27` 个文件、`991` 行，仍低于 `$gframework-batch-boot 75`
+  - 按 batch skill 的低风险边界，这一轮应在提交后收口；下一轮再把 `YamlConfigLoaderTests.cs` 作为单独批次处理
+
 ## 2026-04-24 — RP-056
 
 ### 阶段：修复 `GeneratedConfigConsumerIntegrationTests` 编译错误并清零该文件 warning
