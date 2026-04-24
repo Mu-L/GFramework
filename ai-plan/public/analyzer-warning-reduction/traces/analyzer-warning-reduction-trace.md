@@ -1,5 +1,36 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-24 — RP-051
+
+### 阶段：`GFramework.Godot.SourceGenerators.Tests` warning 清零
+
+- 触发背景：
+  - 用户要求直接运行 `dotnet clean`，不再添加额外 shell 包装；solution-level `dotnet clean` 仍然在 `ValidateSolutionConfiguration` 阶段失败
+  - 直接执行仓库根目录 `dotnet build` 成功，并输出 `1184 warning(s)`，说明当前真实热点已从 `GFramework.Godot.SourceGenerators` 转移到对应测试项目
+- 主线程实施：
+  - 以 `GFramework.Godot.SourceGenerators.Tests` 为独立批次，先确认该项目本地基线为 `24 warning(s)`
+  - 在 `BindNodeSignalGeneratorTests.cs`、`AutoSceneGeneratorTests.cs`、`AutoUiPageGeneratorTests.cs`、`GetNodeGeneratorTests.cs`、`AutoRegisterExportedCollectionsGeneratorTests.cs`、`GodotProjectMetadataGeneratorTests.cs` 中抽取共享 source / diagnostic helper，压缩重复长方法
+  - 在 `Core/GeneratorTest.cs` 中补充 `ConfigureAwait(false)`，清除项目内唯一 `MA0004`
+  - 把 `GFramework.Godot.SourceGenerators.Tests` 项目 warning 从 `24` 降到 `0`
+- 验证里程碑：
+  - `dotnet build`
+    - 结果：成功；`1184 Warning(s)`、`0 Error(s)`
+  - `dotnet build GFramework.Godot.SourceGenerators.Tests/GFramework.Godot.SourceGenerators.Tests.csproj`
+    - 初始结果：成功；`24 Warning(s)`、`0 Error(s)`
+    - 第一批（`BindNodeSignal` + `GeneratorTest`）后：`16 Warning(s)`
+    - 第二批（`AutoScene` / `AutoUiPage` / `GetNode`）后：`8 Warning(s)`
+    - 第三批（`Registration` / `Project`）后：`1 Warning(s)`
+    - 收尾修复后：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet build GFramework.Godot.SourceGenerators.Tests/GFramework.Godot.SourceGenerators.Tests.csproj -c Release`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet test GFramework.Godot.SourceGenerators.Tests/GFramework.Godot.SourceGenerators.Tests.csproj -c Release --no-build`
+    - 结果：成功；`Passed: 48`、`Failed: 0`
+- 当前结论：
+  - `GFramework.Godot.SourceGenerators.Tests` 已在 `Debug` / `Release` 构建下达到 `0 warning(s)`
+  - 按 `origin/main` merge-base 计算并只纳入当前暂存批次时，累计分支 diff 为 `23` 个文件，低于 `$gframework-batch-boot 75` 的主停止阈值
+  - 仓库根目录 `dotnet clean` 仍无法稳定产出新的 clean 基线，需要在下一轮单独排查
+  - 当前 worktree 已有与本批次无关的既有改动；提交时必须只暂存 analyzer warning reduction 相关文件
+
 ## 2026-04-24 — RP-050
 
 ### 阶段：clean-build 基线修正与 `GFramework.Godot.SourceGenerators` 切片清零
