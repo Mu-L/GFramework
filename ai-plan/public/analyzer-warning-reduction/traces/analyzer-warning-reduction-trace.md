@@ -2,6 +2,29 @@
 
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-24 — RP-056
+
+### 阶段：修复 `GeneratedConfigConsumerIntegrationTests` 编译错误并清零该文件 warning
+
+- 触发背景：
+  - `RP-055` 继续推进时，`GeneratedConfigConsumerIntegrationTests.cs` 在 raw string `invalidYaml` 段落附近出现 `CS8999`，导致 `GFramework.Game.Tests` 暂时无法编译
+  - 该文件同时仍是项目内少数残留 warning 热点之一，因此适合作为同一批次中的单文件收尾
+- 主线程实施：
+  - 修复 `GeneratedConfigConsumerIntegrationTests.cs` 中损坏的 `CreateMonsterFiles` raw string 与方法边界，恢复文件可编译状态
+  - 保留并整理上一轮已开始的 `.ConfigureAwait(false)` 与断言 helper 抽取
+  - 继续将 `AssertGeneratedBindingsLoadResults` 再拆分为 catalog / monster / item 三个辅助方法，清除该文件剩余 `MA0051`
+  - 更新 active tracking / trace，沿用 `merge-base(origin/main, HEAD)` 作为 `$gframework-batch-boot 75` 的唯一 stop-condition 口径
+- 验证里程碑：
+  - `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release`
+    - 结果：成功；`59 Warning(s)`、`0 Error(s)`
+    - 结论：`GeneratedConfigConsumerIntegrationTests.cs` 不再出现在 warning 输出中
+  - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~GeneratedConfigConsumerIntegrationTests"`
+    - 结果：成功；`Passed: 4`、`Failed: 0`
+- 当前结论：
+  - `GFramework.Game.Tests` 已从 `RP-055` 收尾时的 `63 warning(s)` 进一步收敛到 `59 warning(s)`
+  - 当前工作树投影下，分支体积为 `27` 个文件、`943` 行，仍低于 `$gframework-batch-boot 75`
+  - 后续若继续自动推进，最自然的下一批将进入 `YamlConfigLoaderTests.cs` 这类高上下文大文件
+
 ## 2026-04-24 — RP-055
 
 ### 阶段：修正 stop-condition 口径并继续 `GFramework.Game.Tests` 小热点
