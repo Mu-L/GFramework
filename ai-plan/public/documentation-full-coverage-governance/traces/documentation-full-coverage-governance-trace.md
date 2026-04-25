@@ -7,7 +7,7 @@
 - 本轮按 `$gframework-batch-boot 50` 执行，baseline 固定为 `origin/main`（`984fb21`，`2026-04-25 11:11:56 +08:00`）；开始时 committed branch diff 为 `5 / 50` 个 changed files。
 - 已接受 worker A 的 README 切片结果：5 个模块 README 的 reader-facing 链接标签修正已落在提交 `bd5cdb5`（`docs(readme): 优化链接标签`）。
 - 主线程补齐了 `docs/zh-CN/core` 下 7 个热点页面与 `docs/zh-CN/tutorials/basic` 下 7 个教程页面的裸 fenced code block opening 语言标记，按内容分别落为 `csharp` 或 `text`。
-- 以当前 write set 估算，本轮文档文件与 active tracking / trace 一并提交后，branch diff 预计为 `21 / 50` 个 changed files，仍有后续小批次空间。
+- 当前批次已提交为 `9dfee75`（`docs(documentation): 补齐文档代码块标记`）；提交后实际 branch diff 为 `21 / 50` 个 changed files，仍有后续小批次空间。
 
 ### 当前决策（RP-034）
 
@@ -43,5 +43,5 @@
 
 ### 下一步
 
-1. 提交当前批次后，复算 `origin/main...HEAD` 的实际 changed-file 数，确认是否与预计的 `21 / 50` 一致。
-2. 若继续下一轮 `$gframework-batch-boot 50`，优先重新抓取 `$gframework-pr-review`，再选择新的低风险 reader-facing 文档切片。
+1. 若继续下一轮 `$gframework-batch-boot 50`，优先重新抓取 `$gframework-pr-review`，再选择新的低风险 reader-facing 文档切片。
+2. 当前 branch diff 为 `21 / 50`，后续单批次仍应控制在剩余 `29` 个 changed files 的 headroom 内。

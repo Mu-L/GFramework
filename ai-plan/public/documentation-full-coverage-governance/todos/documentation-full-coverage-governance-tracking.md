@@ -18,7 +18,7 @@
   - 按本轮 `$gframework-batch-boot 50` 约束继续使用 `origin/main`（`984fb21`，`2026-04-25 11:11:56 +08:00`）作为唯一 baseline，只推进低风险、可切片的文档治理批次
   - 本轮已收口三类目标：5 个模块 README 的语义化链接标签、7 个 `Core` 热点页的代码块语言标记、7 个基础教程页的代码块语言标记
   - 当前已接收 worker A 的 README 切片结果；其余代码块标记批次由主线程统一复核并补齐
-  - 本轮 `19` 个文档文件连同 active tracking / trace 一并提交后，预计 branch diff 为 `21 / 50` 个 changed files，仍处于当前批次阈值安全区间
+  - 本轮 `19` 个文档文件连同 active tracking / trace 已落地；当前 branch diff 已确认达到 `21 / 50` 个 changed files，仍处于当前批次阈值安全区间
   - 下一轮若继续批处理，优先挑选新的低风险 reader-facing 缺口，并保持单批次预计落地规模不超过剩余 headroom
 
 ## 当前状态摘要
@@ -27,7 +27,7 @@
 - `2026-04-25` worker A 已完成并提交 5 个模块 README 的 reader-facing 链接标签修正，提交为 `bd5cdb5`（`docs(readme): 优化链接标签`）；当前批次已接受该切片结果。
 - `2026-04-25` 主线程补齐了 `docs/zh-CN/core/configuration.md`、`extensions.md`、`ioc.md`、`localization.md`、`pause.md`、`pool.md`、`system.md` 的裸 fenced code block opening 语言标记。
 - `2026-04-25` 教程批次当前覆盖 `docs/zh-CN/tutorials/basic/01-environment.md` 到 `07-summary.md`，补齐的内容以目录树、流程图和控制台输出为主，统一显式标注为 `text`。
-- `2026-04-25` 当前 committed branch diff 为 `5 / 50` 个 changed files；把本轮其余文档文件与 tracking / trace 一并提交后，预计 branch diff 为 `21 / 50`。
+- `2026-04-25` 当前实际 branch diff 已更新为 `21 / 50` 个 changed files；其中 `5` 个文件来自已提交的 README 标签切片，`16` 个文件来自本轮代码块标记与 active tracking / trace 更新。
 - `2026-04-25` 本轮目录级验证已覆盖 `docs/zh-CN/core` 与 `docs/zh-CN/tutorials/basic`，README 目标文件链接校验和 `docs/` 站点构建也都已通过。
 - `Game` persistence docs surface 当前以 `docs/zh-CN/game/data.md`、`storage.md`、`serialization.md`、`setting.md`
   作为最小巡检集合；若后续 README、runtime public API 或 `PersistenceTests` 变动，应优先复核这一组页面。
@@ -111,10 +111,9 @@
 
 ## 下一步
 
-1. 提交当前批次后，重新计算 `origin/main...HEAD` 的实际 branch diff，确认本轮落地值是否与预计的 `21 / 50` 一致。
-2. 若继续下一轮 `$gframework-batch-boot 50`，优先重新抓取 `$gframework-pr-review` 确认 PR `#287` 的 latest-head review 是否还有 open thread。
-3. 后续若继续处理 reader-facing 文档问题，优先筛查剩余页面里的维护者视角限制说明、模块 README 中仍可能存在的裸路径标签，以及 `docs/zh-CN` 其他目录里的代码块语言标记缺口。
-4. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
+1. 若继续下一轮 `$gframework-batch-boot 50`，优先重新抓取 `$gframework-pr-review` 确认 PR `#287` 的 latest-head review 是否还有 open thread；当前相对阈值仍有 `29` 个 changed files 的 headroom。
+2. 后续若继续处理 reader-facing 文档问题，优先筛查剩余页面里的维护者视角限制说明、模块 README 中仍可能存在的裸路径标签，以及 `docs/zh-CN` 其他目录里的代码块语言标记缺口。
+3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
-5. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
+4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
    `docs/zh-CN/tutorials/godot-integration.md` 与相关专题页是否仍保持一致。
