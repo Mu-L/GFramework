@@ -2,6 +2,31 @@
 
 ## 2026-04-25
 
+### 当前恢复点：RP-037
+
+- 通过 `$gframework-batch-boot 50` 重新进入后，先按技能要求读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md`、active topic tracking / trace，并确认当前 worktree 仍映射到 `documentation-full-coverage-governance`。
+- 使用显式 `git --git-dir=<repo>/.git/worktrees/GFramework-update-documentation --work-tree=<worktree-root>` 绑定确认 baseline 采用 `origin/main` `79934f7`（`2026-04-25 16:15:55 +08:00`）；branch diff vs baseline 当前为 `0` files，工作树仅有本批次改动。
+- 全量运行 `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN` 后确认 reader-facing 文档仅剩 `docs/zh-CN/contributing.md:631` 这一条既有代码块语言警告，适合作为单文件低风险批次收口。
+- 将 `docs/zh-CN/contributing.md` 的 Mermaid 示例从“真实嵌套 triple-backtick”改写为“外层 fenced block + 内层转义围栏文本”，避免当前 `validate-code-blocks.sh` 的简单 `^```` 状态机把内层 closing fence 误判成缺语言标记的新 opening fence。
+
+### 当前决策（RP-037）
+
+- 当前批处理目标收敛为“消除 `contributing.md` 中最后一个剩余代码块语言 warning”，不再继续扩展到别的栏目页。
+- 继续沿用 `origin/main` 作为 branch-size stop condition 基线，主指标仍是 `50` changed files；本批次只新增 1 个工作树文件，远未逼近阈值。
+- 对这类“文档中展示 Markdown 代码块”的示例，优先选择仓库现有校验脚本可稳定识别的转义文本写法，而不是依赖嵌套 fenced block 的解析细节。
+
+### 当前验证（RP-037）
+
+- 文档单文件校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/contributing.md`
+  - 结果：通过；`docs/zh-CN/contributing.md` 不再报告第 `631` 行代码块语言警告。
+- 文档全量校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN`
+  - 结果：通过；当前 `docs/zh-CN` 的 frontmatter、链接与代码块校验全部通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；站点仍可构建，仅保留既有大 chunk warning。
+
 ### 当前恢复点：RP-036
 
 - 本轮从 `$gframework-pr-review` 重新进入，目标不再是扩批，而是核对 PR `#290` latest-head review 仍未关闭的 reader-facing 文档问题。
