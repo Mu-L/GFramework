@@ -79,6 +79,11 @@ The extension currently validates the repository's stable config-schema subset:
 }
 ```
 
+## Documentation
+
+- Chinese adoption guide: [`docs/zh-CN/game/config-tool.md`](../../docs/zh-CN/game/config-tool.md)
+- Related config runtime guide: [`docs/zh-CN/game/config-system.md`](../../docs/zh-CN/game/config-system.md)
+
 ## Current Constraints
 
 - Multi-root workspaces use the first workspace folder

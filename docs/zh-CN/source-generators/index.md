@@ -31,7 +31,7 @@ GFramework 当前发布的生成器包是：
 - `GFramework.Godot.SourceGenerators.Abstractions`
   - 承载 Godot 侧生成器特性定义，例如 `[GetNode]`、`[BindNodeSignal]`、`[AutoScene]`、`[AutoUiPage]`。
 
-这些目录当前不是新的安装入口。对读者更重要的判断是：
+这些目录当前不是新的安装入口。对读者更重要的是先判断：
 
 - 应该安装哪个 `*.SourceGenerators` 包
 - 当前看到的 attribute 和 diagnostics 属于哪条生成链

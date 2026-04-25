@@ -2,6 +2,26 @@
 
 ## 2026-04-25
 
+### 当前恢复点：RP-039
+
+- 本轮从 `$gframework-pr-review` 重新进入，先按仓库规则读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md` 与 active topic tracking / trace，并继续使用显式 `--git-dir` / `--work-tree` 绑定确认当前分支为 `docs/sdk-update-documentation`。
+- 使用 `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json` 抓取后确认：PR `#292` 最新 reviewed commit 为 `b96565ffa367bade30f44c2d4e8955143fbff85e`，latest head review 仅剩 `2` 条 CodeRabbit open thread，无 failed tests；唯一 failed check 为 `Title check` inconclusive，属于 PR 标题文案元数据提示。
+- 本地逐项复核后，两条 review 仍成立且都属于低风险 reader-facing 修正：
+  - `docs/zh-CN/source-generators/index.md` 的“共享支撑模块”段落中，句式“对读者更重要的判断是”略拗口。
+  - `tools/gframework-config-tool/README.md` 缺少通往 `docs/zh-CN/game/config-tool.md` 的中文接入文档入口。
+
+### 当前决策（RP-039）
+
+- 接受这两条 latest-head review，并限定本轮只做文案可读性与 README 入口补链，不扩展到未被当前 review 指向的其它页面。
+- `Title check` 不通过仓库文件修复；保持在本轮结果中显式记录，等待后续通过 GitHub PR 标题更新处理。
+- 继续沿用 active topic 的治理要求，在同一变更里同步更新 tracking / trace，保证后续从 PR review 恢复时能直接看到最新 commit 与剩余风险。
+
+### 当前验证（RP-039）
+
+- PR review 抓取：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
+  - 结果：通过；PR `#292` 处于 `OPEN`，latest head review 还有 `2` 条 CodeRabbit open thread，测试汇总为 `2156 passed`，无 failed tests，另有 `Title check` inconclusive。
+
 ### 当前恢复点：RP-038
 
 - 用户明确要求从“低效的单次批次”切到“循环跑到接近阈值”，并允许通过 subagent 避免主线程上下文过长；因此本轮把批处理目标从 PR `#290` 的单点收口扩展为“覆盖整个项目功能的 reader-facing 文档补齐”。
