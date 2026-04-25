@@ -122,7 +122,7 @@
 对应文档：
 
 - [存储系统](../docs/zh-CN/game/storage.md)
-- [GFramework.Game/Storage/ReadMe.md](./Storage/ReadMe.md)
+- [Storage 子模块说明](./Storage/ReadMe.md)
 
 ### `Serializer/`
 

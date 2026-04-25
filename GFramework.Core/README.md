@@ -31,7 +31,7 @@
   - `GFramework.Game`
   - `GFramework.Godot`
 
-如果你只需要契约，不需要实现层，改为依赖 [`../GFramework.Core.Abstractions/README.md`](../GFramework.Core.Abstractions/README.md)。
+如果你只需要契约，不需要实现层，改为依赖 [Core 抽象层说明](../GFramework.Core.Abstractions/README.md)。
 
 ## 子系统地图
 

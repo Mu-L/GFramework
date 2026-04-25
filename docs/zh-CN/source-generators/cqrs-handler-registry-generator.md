@@ -127,5 +127,5 @@ RegisterCqrsHandlersFromAssemblies(
 
 模块族入口见：
 
-- [../core/cqrs.md](../core/cqrs.md)
-- [./index.md](./index.md)
+- [CQRS 运行时](../core/cqrs.md)
+- [源码生成器总览](./index.md)

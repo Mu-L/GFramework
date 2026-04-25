@@ -214,7 +214,7 @@ AutoLoad 名称也遵循同样的冲突处理策略。
 
 ## 推荐阅读
 
-1. [/zh-CN/source-generators/get-node-generator](./get-node-generator.md)
-2. [/zh-CN/source-generators/bind-node-signal-generator](./bind-node-signal-generator.md)
-3. [/zh-CN/tutorials/godot-integration](../tutorials/godot-integration.md)
-4. [`GFramework.Godot.SourceGenerators README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)
+1. [GetNode 生成器](./get-node-generator.md)
+2. [BindNodeSignal 生成器](./bind-node-signal-generator.md)
+3. [Godot 集成教程](../tutorials/godot-integration.md)
+4. [Godot 源码生成器说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)

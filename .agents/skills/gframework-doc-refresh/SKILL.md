@@ -175,6 +175,15 @@ Use this exact priority:
 - Do not copy wording from outdated docs just to keep page volume.
 - Public docs must stay reader-facing. Do not write inventory, coverage baseline, recovery-point, batch-metric, review
   backlog, or audit-wave wording into `README.md` or `docs/**`.
+- Use neutral, destination-first section names and link labels. Do not expose raw filenames or paths such as
+  `game/index.md`, `README.md`, or `../core/cqrs.md` as visible reader-facing labels when a semantic label is
+  available.
+- Do not use rhetorical or conversational headings in public docs, such as “你真正会用到的公开入口”、
+  “先理解包关系” or “想看……转到……”. Prefer direct labels such as “公开入口”、
+  “模块与包关系” and “相关主题”.
+- Keep public docs out of internal product-decision tone. Do not publish repository-governance wording such as
+  “当前阶段的结论”、“不建议立即启动” or audience-maintainer tradeoff discussions unless the page itself is a public
+  adoption guide and the wording has been rewritten as reader-facing suitability guidance.
 - If XML or audit evidence is relevant, translate it into reader guidance such as “which types to inspect first” or
   “which entry points define the contract”, instead of exposing counts, dates, or governance status.
 - Escape generics outside code blocks.

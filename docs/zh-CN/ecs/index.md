@@ -12,8 +12,8 @@ GFramework 当前仓库内已经交付并持续维护的 ECS 模块族是 `Ecs.A
 
 | 包 | 适用场景 | 你会得到什么 | 继续阅读 |
 | --- | --- | --- | --- |
-| `GFramework.Ecs.Arch` | 需要默认运行时、`UseArch(...)` 装配入口、`World` 注册和系统适配基类 | `ArchEcsModule`、`ArchSystemAdapter<T>`、`ArchExtensions.UseArch(...)`、示例组件与系统 | [`arch.md`](./arch.md) |
-| `GFramework.Ecs.Arch.Abstractions` | 只想让共享宿主循环、测试替身或扩展模块依赖最小契约，而不引入默认运行时 | `IArchEcsModule`、`IArchSystemAdapter<T>`、`ArchOptions` 契约对象 | [`../abstractions/ecs-arch-abstractions.md`](../abstractions/ecs-arch-abstractions.md) |
+| `GFramework.Ecs.Arch` | 需要默认运行时、`UseArch(...)` 装配入口、`World` 注册和系统适配基类 | `ArchEcsModule`、`ArchSystemAdapter<T>`、`ArchExtensions.UseArch(...)`、示例组件与系统 | [Arch ECS 集成](./arch.md) |
+| `GFramework.Ecs.Arch.Abstractions` | 只想让共享宿主循环、测试替身或扩展模块依赖最小契约，而不引入默认运行时 | `IArchEcsModule`、`IArchSystemAdapter<T>`、`ArchOptions` 契约对象 | [ECS 抽象层说明](../abstractions/ecs-arch-abstractions.md) |
 
 ## 最小采用路径
 
@@ -114,9 +114,9 @@ public sealed class GameLoop
 ## 阅读顺序
 
 1. 先看本页，确认自己要的是运行时包还是契约包
-2. 需要默认实现时继续读 [`arch.md`](./arch.md)
-3. 只想保留共享边界时继续读 [`../abstractions/ecs-arch-abstractions.md`](../abstractions/ecs-arch-abstractions.md)
-4. 统一查阅 README / docs / XML 入口时回到 [`../api-reference/index.md`](../api-reference/index.md)
+2. 需要默认实现时继续读[Arch ECS 集成](./arch.md)
+3. 只想保留共享边界时继续读[ECS 抽象层说明](../abstractions/ecs-arch-abstractions.md)
+4. 统一查阅模块说明、专题页与 XML 入口时回到[API 参考](../api-reference/index.md)
 
 ## 源码阅读入口
 
@@ -129,8 +129,8 @@ public sealed class GameLoop
 | `GFramework.Ecs.Arch` | 示例组件与系统 | `Position`、`Velocity`、`MovementSystem` | 查询写法、组件布局和最小可运行示例 |
 | `GFramework.Ecs.Arch.Abstractions` | 契约与配置对象 | `IArchEcsModule`、`IArchSystemAdapter<T>`、`ArchOptions` | 共享宿主循环、测试替身和跨程序集配置边界 |
 
-## 边界说明
+## 模块边界
 
-- 当前仓库没有交付其他可直接消费的 ECS 运行时包；旧文档把“未来可能支持的其他 ECS 框架”写成现有能力，会误导采用路径。
-- `GFramework.Ecs.Arch.Abstractions` 负责“边界”，`GFramework.Ecs.Arch` 负责“默认实现”。
-- 站内页面只维护可构建的 docs 链路；仓库根 README 和模块 README 继续承担包目录入口职责。
+- 当前仓库面向读者提供的 ECS 采用路径就是 `Ecs.Arch` 模块族；如果你要接入 ECS，可以直接按本页列出的两个包选择。
+- `GFramework.Ecs.Arch.Abstractions` 适合共享宿主循环、测试替身或扩展模块，`GFramework.Ecs.Arch` 提供默认装配与运行时实现。
+- 需要进一步查看包目录、源码结构或安装说明时，可继续阅读[Arch ECS 集成](./arch.md)、[ECS 抽象层说明](../abstractions/ecs-arch-abstractions.md)和对应模块说明页。

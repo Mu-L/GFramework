@@ -192,7 +192,7 @@ public override void _Ready()
 
 ## 推荐阅读
 
-1. [/zh-CN/source-generators/bind-node-signal-generator](./bind-node-signal-generator.md)
-2. [/zh-CN/source-generators/godot-project-generator](./godot-project-generator.md)
-3. [/zh-CN/godot/ui](../godot/ui.md)
-4. [`GFramework.Godot.SourceGenerators README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)
+1. [BindNodeSignal 生成器](./bind-node-signal-generator.md)
+2. [Godot 项目生成器](./godot-project-generator.md)
+3. [Godot UI 系统](../godot/ui.md)
+4. [Godot 源码生成器说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)

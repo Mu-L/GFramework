@@ -323,6 +323,21 @@ bash scripts/validate-csharp-naming.sh
 - Public documentation under `README.md` and `docs/**` MUST stay reader-facing. Do not publish governance-only content
   such as inventory tables, coverage baselines, review queues, batch metrics, recovery points, trace summaries, or
   “this still needs a later audit wave” notes in those user-facing pages.
+- Public documentation MUST use semantic section titles and link labels. Do not surface raw filenames or paths such as
+  `README.md`、`game/index.md`、`../core/cqrs.md` as reader-facing navigation text when a meaningful destination label is
+  available.
+- Public documentation MUST avoid rhetorical, self-referential, or AI-sounding headings and prompts such as
+  “你真正会用到的公开入口”、
+  “先理解包关系”、
+  “这个栏目应该回答什么” or “想看……转到……”. Prefer neutral labels such as
+  “公开入口”、
+  “模块与包关系”、
+  “栏目覆盖范围” and “相关主题”.
+- Public documentation MUST present limitations, suitability, and migration boundaries as adoption guidance for readers.
+  Do not publish internal-governance or product-roadmap wording such as “当前阶段的结论”、
+  “不建议立即启动”、
+  “仓库当前的主要使用者” or similar maintainer-facing decision records in `README.md` or `docs/**`; that material
+  belongs in `ai-plan/**` if it must be tracked.
 - Governance-only material such as XML audit snapshots, documentation remediation baselines, backlog status, and
   recovery metadata belongs in `ai-plan/**` or other contributor-only artifacts, not in public docs.
 - Treat `ai-libs/` as a read-only third-party source reference area.

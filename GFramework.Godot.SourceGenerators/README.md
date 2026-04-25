@@ -190,7 +190,7 @@ public partial class MainMenu : Control
 - `AutoScene`：[AutoScene 生成器](../docs/zh-CN/source-generators/auto-scene-generator.md)
 - `AutoUiPage`：[AutoUiPage 生成器](../docs/zh-CN/source-generators/auto-ui-page-generator.md)
 - `AutoRegisterExportedCollections`：[AutoRegisterExportedCollections 生成器](../docs/zh-CN/source-generators/auto-register-exported-collections-generator.md)
-- Godot 运行时入口：[../GFramework.Godot/README.md](../GFramework.Godot/README.md)
+- Godot 运行时入口：[Godot 运行时说明](../GFramework.Godot/README.md)
 - 集成教程：[Godot 集成教程](../docs/zh-CN/tutorials/godot-integration.md)
 
 ## 什么时候不该先看这个包

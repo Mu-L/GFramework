@@ -147,7 +147,7 @@ Godot 上。
 - 信号系统：[Godot 信号系统](../docs/zh-CN/godot/signal.md)
 - 日志系统：[Godot 日志系统](../docs/zh-CN/godot/logging.md)
 - 集成教程：[Godot 集成教程](../docs/zh-CN/tutorials/godot-integration.md)
-- 生成器入口：[../GFramework.Godot.SourceGenerators/README.md](../GFramework.Godot.SourceGenerators/README.md)
+- 生成器入口：[Godot 源码生成器说明](../GFramework.Godot.SourceGenerators/README.md)
 
 ## 什么时候不该把它当成主入口
 

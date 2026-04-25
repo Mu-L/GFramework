@@ -138,7 +138,7 @@ ecsModule.Update(deltaTime);
 
 ## 相关入口
 
-- ECS 模块总览：[`index.md`](./index.md)
-- 抽象契约页：[`../abstractions/ecs-arch-abstractions.md`](../abstractions/ecs-arch-abstractions.md)
-- 仓库模块 README：[`GFramework.Ecs.Arch README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Ecs.Arch/README.md)
-- 统一 API / XML 导航：[`../api-reference/index.md`](../api-reference/index.md)
+- ECS 模块总览：[ECS 模块总览](./index.md)
+- 抽象契约页：[ECS 抽象层说明](../abstractions/ecs-arch-abstractions.md)
+- 仓库模块说明：[Ecs.Arch 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Ecs.Arch/README.md)
+- 统一 API / XML 导航：[API 参考](../api-reference/index.md)

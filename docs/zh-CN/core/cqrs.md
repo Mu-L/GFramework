@@ -132,7 +132,7 @@ protected override void OnInitialize()
 4. 如果程序集带有 `CqrsReflectionFallbackAttribute`，只补扫剩余 handler
 5. 同一程序集按稳定键去重，避免重复注册
 
-`Cqrs.SourceGenerators` 的专题入口见 [../source-generators/cqrs-handler-registry-generator.md](../source-generators/cqrs-handler-registry-generator.md)。
+`Cqrs.SourceGenerators` 的专题入口见[CQRS Handler Registry 生成器](../source-generators/cqrs-handler-registry-generator.md)。
 
 ## Pipeline Behavior
 
@@ -185,5 +185,5 @@ RegisterCqrsPipelineBehavior<LoggingBehavior<,>>();
 
 - 架构入口：[architecture](./architecture.md)
 - 上下文入口：[context](./context.md)
-- 生成器专题：[../source-generators/cqrs-handler-registry-generator.md](../source-generators/cqrs-handler-registry-generator.md)
-- 模块 README：[`GFramework.Cqrs README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Cqrs/README.md)
+- 生成器专题：[CQRS Handler Registry 生成器](../source-generators/cqrs-handler-registry-generator.md)
+- 模块说明：[CQRS 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Cqrs/README.md)

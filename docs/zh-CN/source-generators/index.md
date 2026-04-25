@@ -59,30 +59,30 @@ GFramework 当前发布的生成器包是：
 
 ### Core 侧通用生成器
 
-- [logging-generator](./logging-generator.md)
-- [context-aware-generator](./context-aware-generator.md)
-- [context-get-generator](./context-get-generator.md)
-- [enum-generator](./enum-generator.md)
-- [priority-generator](./priority-generator.md)
-- [auto-register-module-generator](./auto-register-module-generator.md)
+- [日志生成器](./logging-generator.md)
+- [ContextAware 生成器](./context-aware-generator.md)
+- [ContextGet 生成器](./context-get-generator.md)
+- [枚举生成器](./enum-generator.md)
+- [Priority 生成器](./priority-generator.md)
+- [模块自动注册生成器](./auto-register-module-generator.md)
 
 ### Game / CQRS 相关生成器
 
 - 配置 schema 生成与运行时接法：
-  - [../game/config-system.md](../game/config-system.md)
+  - [配置系统](../game/config-system.md)
 - CQRS handler registry 生成器：
-  - [cqrs-handler-registry-generator](./cqrs-handler-registry-generator.md)
+  - [CQRS Handler Registry 生成器](./cqrs-handler-registry-generator.md)
 - CQRS 模块族采用入口：
-  - [../core/cqrs.md](../core/cqrs.md)
+  - [CQRS 运行时](../core/cqrs.md)
 
 ### Godot 专用生成器
 
-- [godot-project-generator](./godot-project-generator.md)
-- [get-node-generator](./get-node-generator.md)
-- [bind-node-signal-generator](./bind-node-signal-generator.md)
-- [auto-ui-page-generator](./auto-ui-page-generator.md)
-- [auto-scene-generator](./auto-scene-generator.md)
-- [auto-register-exported-collections-generator](./auto-register-exported-collections-generator.md)
+- [Godot 项目生成器](./godot-project-generator.md)
+- [GetNode 生成器](./get-node-generator.md)
+- [BindNodeSignal 生成器](./bind-node-signal-generator.md)
+- [AutoUiPage 生成器](./auto-ui-page-generator.md)
+- [AutoScene 生成器](./auto-scene-generator.md)
+- [AutoRegisterExportedCollections 生成器](./auto-register-exported-collections-generator.md)
 
 ## 推荐接入顺序
 
@@ -101,7 +101,7 @@ GFramework 当前发布的生成器包是：
 
 ## 对应模块入口
 
-- [`GFramework.Core.SourceGenerators README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core.SourceGenerators/README.md)
-- [`GFramework.Game.SourceGenerators README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game.SourceGenerators/README.md)
-- [`GFramework.Cqrs.SourceGenerators README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Cqrs.SourceGenerators/README.md)
-- [`GFramework.Godot.SourceGenerators README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)
+- [Core 源码生成器说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core.SourceGenerators/README.md)
+- [Game 源码生成器说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game.SourceGenerators/README.md)
+- [CQRS 源码生成器说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Cqrs.SourceGenerators/README.md)
+- [Godot 源码生成器说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)

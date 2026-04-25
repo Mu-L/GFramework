@@ -326,8 +326,8 @@ uiRouter.Hide(modalHandle, UiLayer.Modal);
 
 ## 推荐阅读
 
-1. [game/index.md](./index.md)
-2. [scene.md](./scene.md)
-3. [../source-generators/auto-ui-page-generator.md](../source-generators/auto-ui-page-generator.md)
-4. [`GFramework.Game README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game/README.md)
-5. [`GFramework.Game.Abstractions README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game.Abstractions/README.md)
+1. [Game 模块总览](./index.md)
+2. [场景系统](./scene.md)
+3. [AutoUiPage 生成器](../source-generators/auto-ui-page-generator.md)
+4. [Game 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game/README.md)
+5. [Game 抽象层说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game.Abstractions/README.md)

@@ -12,20 +12,25 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-031`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-033`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
   - 继续按 `$gframework-batch-boot 75` 的 `origin/main` 分支 diff 阈值做小批量文档治理；当前 baseline 已回到 `origin/main`，本批只继续处理新的低风险 reader-facing 缺口
-  - 保持 `README.md` 与 `docs/**` 公开页面只承载读者需要的采用信息，不再混入 XML inventory、覆盖基线、恢复点或治理批次说明
-  - 继续优先处理低风险 metadata 缺口、坏链、README 文档入口对齐、Reader-friendly 链接标签与 Markdown 结构问题，避免跨模块语义改写
+  - 保持 `README.md` 与 `docs/**` 公开页面只承载读者需要的采用信息，不再混入 XML inventory、覆盖基线、恢复点或治理批次说明，也不再使用反问式或维护者口吻标题
+  - 继续优先处理低风险 metadata 缺口、坏链、README 文档入口对齐、reader-friendly 链接标签与 Markdown 结构问题，避免跨模块语义改写
   - 保持 `Game` persistence docs surface 与当前 `README`、源码、`PersistenceTests` 使用同一套 owner / adoption path 叙述
   - 保持 `GFramework.Godot.SourceGenerators/README.md` 与 `docs/zh-CN/tutorials/godot-integration.md` 在生命周期接法上的一致性
+  - 将新的 reader-facing 文档约束同步收口到 `AGENTS.md` 与 `.agents/skills/gframework-doc-refresh/`
   - 保持 active tracking / trace 只承载当前恢复入口，把阶段细节留在 `archive/`
+  - 跟进当前 PR `#287` 的 latest-head review，只收口本地复核后仍成立的文档入口标签一致性问题
 
 ## 当前状态摘要
 
 - `Core`、`Ecs.Arch`、`Cqrs`、`Game`、`Godot` 五个模块族当前都已有 README / landing / topic / API 参考层级的已验证入口。
-- `2026-04-24` 当前本地 `docs/sdk-update-documentation` 与 `origin/main` 同步到 `4c2994e`，相对 `$gframework-batch-boot 75` 的 baseline 当前为 `0 / 75` 个 changed files；后续批次可以继续，但仍应保持小 write set。
+- `2026-04-25` 当前本地 `docs/sdk-update-documentation` 与 `origin/main` 的 committed branch diff 仍为 `0 / 75` 个 changed files；本轮待提交批次已触及 `38` 个文件，落地后仍处于 `$gframework-batch-boot 75` 的安全区间。
+- `2026-04-25` 使用 `$gframework-pr-review` 重新抓取当前 PR `#287` 后，确认 latest head commit
+  `8209d7a29f35d969fca6258b9817da9b33a203a3` 仅剩 `1` 条 Greptile open thread；本轮继续收口
+  `docs/zh-CN/api-reference/index.md` 中站内入口列的链接标签风格不一致问题，并顺手把同页仍直接显示路径的站内入口改为语义化标签。
 - `2026-04-24` 使用 `$gframework-pr-review` 抓取当前 PR `#284` 后，确认 latest head commit
   `77540c07f0890cc05b10a849722c87b8bed8f561` 仍有 `3` 条 CodeRabbit 与 `1` 条 Greptile open thread；本轮仅继续收口本地复核后仍成立的 reader-facing 文档入口与 active tracking 精简问题。
 - 本轮 PR follow-up 仅收口仍然成立的 review 项：
@@ -39,6 +44,7 @@
 - 本批次补齐了 `docs/zh-CN/index.md` 的 `description`，以及 `docs/zh-CN/tutorials/basic/01-07.md` 的 `title` / `description`，让首页和基础教程章节页拥有完整 frontmatter metadata。
 - 本批次统一将教程、最佳实践、Core、Godot 页面里缺显式扩展名的站内 Markdown 链接补齐为 `.md` 或 `index.md`，避免目录链接、绝对路径旧写法与 VitePress 构建解析分叉。
 - 本批次把模块 README、仓库根 README、`docs/index.md` 及多组中文落地页里直接暴露文件路径的入口调整为读者友好的可点击标签，同时补齐语言落地页 metadata 与 README 指向。
+- 本批次进一步清理 `Core`、`Game`、`Ecs`、`Getting Started`、`API Reference`、`Source Generators` 与相关模块 README 中的反问式标题、维护者视角边界说明、产品评审口吻和裸文件名链接标签，并把同类约束补入 `AGENTS.md` 与 `gframework-doc-refresh`。
 - `Game` persistence docs surface 当前以 `docs/zh-CN/game/data.md`、`storage.md`、`serialization.md`、`setting.md`
   作为最小巡检集合；若后续 README、runtime public API 或 `PersistenceTests` 变动，应优先复核这一组页面。
 - `Godot` runtime 与 generator 入口当前以 `GFramework.Godot/README.md`、
@@ -54,6 +60,7 @@
   `MSB4276` / `MSB4018`；这是已知环境阻塞，不属于本轮文档回归。
 - 当前 WSL 会话里 `git.exe` 可解析但不能执行，应继续使用显式 `--git-dir` / `--work-tree` 绑定作为默认 Git 策略。
 - PR `#282` 的 `Title check` 仍可能提示标题过泛；这是 GitHub PR 元数据问题，不属于本地文件缺陷。
+- `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN` 当前会报告若干既有“代码块缺少语言标记”警告；本轮未改这些页面，只记录为现存文档质量尾项。
 
 ## 归档指针
 
@@ -90,12 +97,22 @@
   - 结果：通过；经过三轮标题本地化后，仅剩 `CQRS` 与 `GFramework` 两个品牌/缩写型标题。
 - `2026-04-24` `bun run build`（工作目录：`docs/`）
   - 结果：通过；根 `README.md` reader-friendly 链接标签修正与 `docs/zh-CN` 多页标题本地化落地后站点仍可正常构建，仅保留既有大 chunk warning。
+- `2026-04-25` `python3 .agents/skills/gframework-doc-refresh/scripts/scan_module_evidence.py Core`
+  - 结果：通过；技能仍能正常解析 `Core` 模块证据面，说明新增的 reader-facing 输出约束未破坏模块扫描主流程。
+- `2026-04-25` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过；PR `#287` 处于 `OPEN`，latest head commit `8209d7a29f35d969fca6258b9817da9b33a203a3` 仅剩
+    `1` 条 Greptile open thread，无 failed checks，测试汇总为 `2156 passed`。
+- `2026-04-25` `bun run build`（工作目录：`docs/`）
+  - 结果：通过；`docs/zh-CN/api-reference/index.md` 的站内入口标签统一为语义化写法后站点仍可正常构建，仅保留既有大 chunk warning。
+- `2026-04-25` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN`
+  - 结果：通过；本轮触达页面的 frontmatter、链接与代码块校验均通过，脚本仅继续报告仓库中既有页面的“代码块缺少语言标记”警告。
 
 ## 下一步
 
-1. 当前基线已回到 `origin/main`，本轮变更仍是小 write set；后续若继续执行 `$gframework-batch-boot 75`，仍优先选择 `5` 到 `10` 个文件以内的小批次。
-2. 若继续处理 reader-facing 文档问题，优先筛查剩余 README / landing page 中是否还有路径式链接标签或不必要的内部治理措辞；纯英文标题方面仅剩品牌名与缩写，不再是当前高优先级切片。
-3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
+1. 提交并推送当前 PR follow-up 后，优先重新抓取 `$gframework-pr-review` 确认 PR `#287` 的 latest-head review 是否已清空 open thread。
+2. 当前基线已回到 `origin/main`，本轮待提交批次落地后仍会处于 `$gframework-batch-boot 75` 的安全区间；后续若继续治理，优先保持 `5` 到 `10` 个文件以内的小批次。
+3. 若继续处理 reader-facing 文档问题，优先筛查剩余页面里的维护者视角限制说明、模块 README 中仍可能存在的裸路径标签，以及验证脚本提示的代码块语言标记缺口。
+4. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
-4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
+5. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
    `docs/zh-CN/tutorials/godot-integration.md` 与相关专题页是否仍保持一致。

@@ -88,7 +88,7 @@ var options = new ArchOptions
 ## 阅读顺序
 
 1. 先读本页，确认你是否真的只需要契约层
-2. 如果需要默认实现，再看 [`../ecs/arch.md`](../ecs/arch.md)
+2. 如果需要默认实现，再看 [Arch ECS 集成](../ecs/arch.md)
 3. 回到对应模块 README：
-   - [`GFramework.Ecs.Arch.Abstractions README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Ecs.Arch.Abstractions/README.md)
-   - [`GFramework.Ecs.Arch README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Ecs.Arch/README.md)
+   - [ECS 抽象层说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Ecs.Arch.Abstractions/README.md)
+   - [Ecs.Arch 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Ecs.Arch/README.md)
