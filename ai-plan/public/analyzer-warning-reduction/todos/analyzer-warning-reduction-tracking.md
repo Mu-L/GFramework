@@ -6,14 +6,13 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-070`
-- 当前阶段：`Phase 70`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-071`
+- 当前阶段：`Phase 71`
 - 当前焦点：
-  - `2026-04-25` 主线程按 `$gframework-pr-review` 复核当前分支 PR `#291` 的 latest-head AI review threads、nitpick 与 MegaLinter 信号
-  - 当前批次只吸收本地仍成立且修复成本明确的 3 项：`AGENTS.md` 英文标点一致性、`MediatorAdvancedFeaturesTests.cs` 中未使用的 `TestLoggingBehavior`、`VersionedMigrationRunner.cs` 的迁移上下文参数对象化
-  - `dotnet clean` + `dotnet build` 的直接仓库根基线已从 `640 Warning(s)` 降至 `639 Warning(s)`，说明本轮 PR review follow-up 继续有效
-  - `GFramework.Game` 的直接受影响 `Release` build 当前为 `326 Warning(s)`、`0 Error(s)`；`GFramework.Cqrs.Tests` 为 `149 Warning(s)`、`0 Error(s)`
-  - CodeRabbit 提到的 `TestLogger` 重复实现与 `YamlConfigLoaderTests.cs` 常量位置仅属于可选整理，本轮未纳入修复写集
+  - `2026-04-25` 主线程再次按 `$gframework-pr-review` 复核当前分支 PR `#291`，确认 latest-head 仅剩 1 条 open review thread，指向 active todo 中已过时的 `.codex` 风险描述
+  - 当前批次只同步 active todo/trace 到 `chore(git)` 之后的新真值：`.codex` 已被 `.gitignore` 排除，`.gitignore` 也应进入“已提交的低风险批次文件”清单
+  - `dotnet clean` + `dotnet build` 的直接仓库根基线仍为 `639 Warning(s)`、`0 Error(s)`，因此本轮属于文档真值收口，而不是新的 warning 清理批次
+  - CodeRabbit 剩余的 `VersionedMigrationRunner.cs` 上下文一致性建议与 active trace 归档建议仍属 non-blocking nitpick，本轮不扩大写集去吸收可选整理
 
 ## 当前活跃事实
 
@@ -25,6 +24,7 @@
     - 最新结果：成功；`639 Warning(s)`、`0 Error(s)`
 - 已提交的低风险批次文件：
   - `AGENTS.md`
+  - `.gitignore`
   - `GFramework.Core.Tests/Logging/LogContextTests.cs`
   - `GFramework.Core.Tests/Logging/LoggerTests.cs`
   - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs`
@@ -39,6 +39,10 @@
   - `ai-plan/public/analyzer-warning-reduction/todos/analyzer-warning-reduction-tracking.md`
   - `ai-plan/public/analyzer-warning-reduction/traces/analyzer-warning-reduction-trace.md`
 - 当前批次验证结果：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+    - 最新主线程结果：成功；确认 PR `#291` latest-head open review threads 为 `1`，唯一仍成立项为 active todo 中过时的 `.codex` 风险描述
+  - `dotnet build`
+    - 最新主线程结果：成功；`0 Warning(s)`、`0 Error(s)`；该次为增量 Debug 构建，只作为完成校验，warning 权威基线仍以 `dotnet clean` 后的 `639 Warning(s)` 为准
   - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
     - 最新主线程结果：成功；`326 Warning(s)`、`0 Error(s)`
   - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
@@ -48,10 +52,8 @@
 
 ## 当前风险
 
-- active `ai-plan` 之外的历史归档仍保留一部分沙箱内 workaround / 假阻塞记录。
-  - 缓解措施：active todo/trace 已刷新为新真值；历史归档保留为时间线，不再作为默认恢复入口。
-- 当前 worktree 仍存在未跟踪的 `.codex` 目录。
-  - 缓解措施：提交时只暂存 analyzer-warning-reduction 相关源码与 `ai-plan` / `AGENTS.md` 变更。
+- active `ai-plan` 之外的历史归档仍保留一部分沙箱内 workaround / 假阻塞记录，且 active trace 中 RP-062 ~ RP-064 的详细历史尚未进一步归档。
+  - 缓解措施：本轮已把 `.codex` 风险从 active todo 中收口；后续如单独处理 trace 轻量化，可把该 nitpick 作为独立文档提交。
 - `GFramework.Core`、`GFramework.Game`、`GFramework.Core.Tests`、`GFramework.Cqrs.Tests` 仍有较大 warning 基线。
   - 缓解措施：后续批次继续优先挑低风险、少文件、可独立验证的测试与局部逻辑切片。
 
@@ -72,7 +74,7 @@
 - `dotnet clean`
   - 当前结果：成功；在提权后的直接 shell 中可正常完成仓库根 clean
 - `dotnet build`
-  - 当前结果：成功；`639 Warning(s)`、`0 Error(s)`
+  - 当前结果：成功；最近一次增量 Debug 构建为 `0 Warning(s)`、`0 Error(s)`，但 warning 权威基线仍以提权后的 `dotnet clean` + `dotnet build` 结果 `639 Warning(s)`、`0 Error(s)` 为准
 - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
   - 当前结果：成功；`326 Warning(s)`、`0 Error(s)`
 - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
@@ -82,6 +84,6 @@
 
 ## 下一步建议
 
-1. 以当前 `639 Warning(s)` 根基线为新恢复点，继续按 `$gframework-batch-boot 50` 规则重算 branch diff，并挑选下一个 1-3 文件的低风险热点。
-2. 下一轮优先从 `GFramework.Game` 或 `GFramework.Cqrs.Tests` 中继续选择单文件 `MA0051`、`MA0016` 或 review 新暴露的低风险 warning 切片，避免把“可选整理”与 warning 收敛混成大改。
-3. 后续凡是沙箱内 `.NET` 验证再次出现无诊断失败、pipe/socket 权限问题或与普通 shell 不一致的结果，直接申请沙箱外重跑同一命令，不再扩散 workaround 型命令噪音。
+1. 推送包含本轮 active todo/trace 同步的提交后，重新执行 `$gframework-pr-review`，确认 PR `#291` 的最后一条 latest-head open thread 是否已自动收口。
+2. 若 PR `#291` 仍只剩 nitpick，继续以当前 `639 Warning(s)` 根基线为恢复点，按 `$gframework-batch-boot 50` 规则挑选下一个 1-3 文件的低风险热点。
+3. 后续如需处理文档 nitpick，优先把 active trace 中 RP-062 ~ RP-064 的详细历史归档出默认恢复入口，而不是与 warning 收敛批次混做。

@@ -1,5 +1,27 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-25 — RP-071
+
+### 阶段：同步 PR #291 latest-head 对 active todo 的唯一剩余线程
+
+- 触发背景：
+  - 用户再次显式要求执行 `$gframework-pr-review`，当前分支仍对应 PR `#291`
+  - 最新抓取结果显示 latest-head open review thread 只剩 `1` 条，且不再指向源码 warning，而是指向 `ai-plan/public/analyzer-warning-reduction/todos/analyzer-warning-reduction-tracking.md` 中已过时的 `.codex` 风险描述
+  - `.gitignore` 已在当前分支的 `chore(git)` 提交中加入 `.codex`，因此 active todo 若继续保留“当前 worktree 仍存在未跟踪的 `.codex` 目录”会与当前 head 真值冲突
+- 主线程实施：
+  - 重新运行 PR review 抓取脚本，确认 PR `#291` 仍为 `OPEN`，且 latest-head 唯一 open thread 是 CodeRabbit 针对 active todo 的文档同步建议
+  - 更新 active todo 恢复点为 `RP-071`，将 `.gitignore` 纳入“已提交的低风险批次文件”，并移除已过时的 `.codex` 活跃风险描述
+  - 在 active todo 中明确保留当前仍未采纳的两条 non-blocking nitpick：`VersionedMigrationRunner.cs` 的上下文一致性建议，以及 active trace 归档 RP-062 ~ RP-064 的建议
+- 验证里程碑：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+    - 结果：成功；确认 PR `#291` latest-head open review threads 为 `1`，唯一路径为 `ai-plan/public/analyzer-warning-reduction/todos/analyzer-warning-reduction-tracking.md:54`
+  - `dotnet build`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`；该次为增量 Debug 构建，只作为本轮文档同步的完成校验，warning 权威基线仍保持 `RP-070` 记录的 `639 Warning(s)`
+- 当前结论：
+  - 当前 PR `#291` 唯一仍成立的 latest-head thread 已被本地文档同步吸收，后续只需在新 head 推送后复核 GitHub 状态
+  - 剩余 CodeRabbit nitpick 仍是可选整理项，本轮保持 analyzer-warning-reduction 的小写集策略，不把它们混入当前提交
+  - 下一轮默认先推送并重新抓取 PR review；若 open thread 清零，则继续回到 warning 热点选择
+
 ## 2026-04-25 — RP-070
 
 ### 阶段：按 PR #291 latest-head review 收口仍有效的小批次，并刷新新的仓库根基线
