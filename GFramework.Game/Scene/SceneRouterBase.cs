@@ -91,7 +91,7 @@ public abstract class SceneRouterBase
 
             await _pipeline.ExecuteAroundAsync(
                 @event,
-                () => ExecuteReplaceCoreAsync(@event, sceneKey, param)).ConfigureAwait(false);
+                () => ExecuteReplaceCoreAsync(@event, sceneKey, param)).ConfigureAwait(true);
         }
         finally
         {
