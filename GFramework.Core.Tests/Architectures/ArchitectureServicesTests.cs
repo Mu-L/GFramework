@@ -366,7 +366,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <param name="command">要发送的命令。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>命令响应任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask<TResponse> SendCommandAsync<TResponse>(
         GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command,
         CancellationToken cancellationToken = default)
@@ -380,7 +380,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <typeparam name="TResponse">命令响应类型。</typeparam>
     /// <param name="command">要发送的命令。</param>
     /// <returns>命令响应。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public TResponse SendCommand<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
         throw new NotSupportedException();
@@ -393,7 +393,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <param name="query">要发送的查询。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>查询结果任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask<TResponse> SendQueryAsync<TResponse>(
         GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query,
         CancellationToken cancellationToken = default)
@@ -407,7 +407,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <typeparam name="TResponse">查询结果类型。</typeparam>
     /// <param name="query">要发送的查询。</param>
     /// <returns>查询结果。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public TResponse SendQuery<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
         throw new NotSupportedException();

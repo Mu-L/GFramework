@@ -287,7 +287,7 @@ public class TestArchitectureContextWithRegistry : TestArchitectureContext
         _registry = registry;
     }
 
-    public override TUtility GetUtility<TUtility>()
+    public override TUtility? GetUtility<TUtility>() where TUtility : class
     {
         if (typeof(TUtility) == typeof(TestRegistry))
         {

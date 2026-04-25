@@ -1,5 +1,38 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-25 — RP-064
+
+### 阶段：按标准 WSL build 路径复核 PR #288 建议并完成本轮收口
+
+- 触发背景：
+  - 用户指出“在 WSL 里直接执行 `dotnet build` 可以成功”，要求主线程按普通路径重新验证，而不是继续使用带 `MSBuildEnableWorkloadResolver=false`、`--no-restore`、手工 `TargetFramework` 的 workaround 命令
+  - 当前任务仍属于 PR #288 review follow-up，因此本轮重点改为“区分哪些 AI 建议值得采纳”以及“用真实 WSL build 结果验证”
+- 主线程实施：
+  - 重新抓取 PR #288 review，确认 latest-head open threads 为 `CodeRabbit 6 + Greptile 2`
+  - 复核 `outside diff + nitpick` 的 19 条建议，只采纳本地仍成立的建议；拒绝把“评论总数”机械等同于“必须全改”
+  - 完成以下高信号修复：
+    - `ContextAware*` / `AsyncExtensions` / `NumericExtensions` / `StringExtensions` / `StoreBuilder`：回退为 `ArgumentNullException.ThrowIfNull(...)`
+    - `ArchitectureServicesTests` / `GameContextTests`：同步 XML `<exception>` 到 `NotSupportedException`
+    - `RegistryInitializationHookBaseTests`：修复 override 可空签名实现，避免再次引入编译错误
+    - `RollingFileAppenderTests` / `TaskCoroutineExtensionsTests` / `WaitForTaskTests` / `ScopedStorage`：移除无收益噪音代码
+    - `FileStorage`：通过 `leaveOpen: true` 修正 `FileStream` 的双重释放语义
+    - `SceneRouterBase`：统一显式 `ConfigureAwait(true)` 并补齐引擎线程亲和说明
+    - `StoreSelection`：保留 `net9.0+` 的 `System.Threading.Lock`，同时修正条件编译旁的注释写法，避免 `CS1587`
+- 验证里程碑：
+  - `dotnet restore GFramework.sln -p:RestoreFallbackFolders="" -v minimal`
+    - 结果：成功；证明先前 `MSB4018` 来自 stale restore 元数据，而不是当前 WSL 默认 build 路径本身不可用
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：成功；`28 Warning(s)`、`0 Error(s)`
+  - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+    - 结果：成功；`329 Warning(s)`、`0 Error(s)`
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：成功；`137 Warning(s)`、`0 Error(s)`
+- 当前结论：
+  - 用户关于“WSL 里直接 `dotnet build` 可行”的判断正确
+  - 前一轮失败的核心原因不是仓库不可构建，而是主线程附加的 workaround 参数改变了 MSBuild 行为
+  - 本轮已完成 PR #288 中一组仍成立的建议修复，并重新拿到标准 WSL 路径下的 Release build 验证
+  - 剩余 review 线程需要在新 head 上重新抓取后再决定是否逐条 resolve
+
 ## 2026-04-25 — RP-063
 
 ### 阶段：先收口 PR #288 latest-head 编译错误，再暂停在环境阻塞点并准备提交

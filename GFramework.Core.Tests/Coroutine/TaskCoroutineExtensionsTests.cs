@@ -66,8 +66,6 @@ public class TaskCoroutineExtensionsTests
         var task = Task.FromResult(42);
         var instruction = task.AsCoroutineInstruction();
 
-        task.ConfigureAwait(false).GetAwaiter().GetResult();
-
         Assert.That(instruction.Result, Is.EqualTo(42));
     }
 

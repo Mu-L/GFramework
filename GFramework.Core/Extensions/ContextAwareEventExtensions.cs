@@ -16,10 +16,7 @@ public static class ContextAwareEventExtensions
     /// <exception cref="ArgumentNullException">当 contextAware 为 null 时抛出</exception>
     public static void SendEvent<TEvent>(this IContextAware contextAware) where TEvent : new()
     {
-        if (contextAware is null)
-        {
-            throw new ArgumentNullException(nameof(contextAware));
-        }
+        ArgumentNullException.ThrowIfNull(contextAware);
 
         var context = contextAware.GetContext();
         context.SendEvent<TEvent>();
@@ -34,15 +31,8 @@ public static class ContextAwareEventExtensions
     /// <exception cref="ArgumentNullException">当 contextAware 或 e 为 null 时抛出</exception>
     public static void SendEvent<TEvent>(this IContextAware contextAware, TEvent e) where TEvent : class
     {
-        if (contextAware is null)
-        {
-            throw new ArgumentNullException(nameof(contextAware));
-        }
-
-        if (e is null)
-        {
-            throw new ArgumentNullException(nameof(e));
-        }
+        ArgumentNullException.ThrowIfNull(contextAware);
+        ArgumentNullException.ThrowIfNull(e);
 
         var context = contextAware.GetContext();
         context.SendEvent(e);
@@ -57,15 +47,8 @@ public static class ContextAwareEventExtensions
     /// <returns>事件注销接口</returns>
     public static IUnRegister RegisterEvent<TEvent>(this IContextAware contextAware, Action<TEvent> handler)
     {
-        if (contextAware is null)
-        {
-            throw new ArgumentNullException(nameof(contextAware));
-        }
-
-        if (handler is null)
-        {
-            throw new ArgumentNullException(nameof(handler));
-        }
+        ArgumentNullException.ThrowIfNull(contextAware);
+        ArgumentNullException.ThrowIfNull(handler);
 
         var context = contextAware.GetContext();
         return context.RegisterEvent(handler);
@@ -79,15 +62,8 @@ public static class ContextAwareEventExtensions
     /// <param name="onEvent">之前绑定的事件处理器</param>
     public static void UnRegisterEvent<TEvent>(this IContextAware contextAware, Action<TEvent> onEvent)
     {
-        if (contextAware is null)
-        {
-            throw new ArgumentNullException(nameof(contextAware));
-        }
-
-        if (onEvent is null)
-        {
-            throw new ArgumentNullException(nameof(onEvent));
-        }
+        ArgumentNullException.ThrowIfNull(contextAware);
+        ArgumentNullException.ThrowIfNull(onEvent);
 
         var context = contextAware.GetContext();
         context.UnRegisterEvent(onEvent);

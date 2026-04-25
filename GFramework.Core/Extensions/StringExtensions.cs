@@ -38,15 +38,8 @@ public static class StringExtensions
     /// </example>
     public static string Truncate(this string str, int maxLength, string suffix = "...")
     {
-        if (str is null)
-        {
-            throw new ArgumentNullException(nameof(str));
-        }
-
-        if (suffix is null)
-        {
-            throw new ArgumentNullException(nameof(suffix));
-        }
+        ArgumentNullException.ThrowIfNull(str);
+        ArgumentNullException.ThrowIfNull(suffix);
 
         if (maxLength < suffix.Length)
         {
@@ -77,15 +70,8 @@ public static class StringExtensions
     /// </example>
     public static string Join(this IEnumerable<string> values, string separator)
     {
-        if (values is null)
-        {
-            throw new ArgumentNullException(nameof(values));
-        }
-
-        if (separator is null)
-        {
-            throw new ArgumentNullException(nameof(separator));
-        }
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(separator);
 
         return string.Join(separator, values);
     }

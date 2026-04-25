@@ -251,7 +251,7 @@ public sealed class FileStorage : IFileStorage, IDisposable
             useAsync: true);
         await using var configuredFileStream = fs.ConfigureAwait(false);
 
-        using var sr = new StreamReader(fs, Encoding.UTF8);
+        using var sr = new StreamReader(fs, Encoding.UTF8, true, -1, leaveOpen: true);
         var content = await sr.ReadToEndAsync().ConfigureAwait(false);
         return _serializer.Deserialize<T>(content);
     }
@@ -373,7 +373,7 @@ public sealed class FileStorage : IFileStorage, IDisposable
                     useAsync: true);
                 await using var configuredFileStream = fs.ConfigureAwait(false);
 
-                var sw = new StreamWriter(fs, Encoding.UTF8);
+                var sw = new StreamWriter(fs, Encoding.UTF8, leaveOpen: true);
                 await using var configuredStreamWriter = sw.ConfigureAwait(false);
 
                 await sw.WriteAsync(content).ConfigureAwait(false);

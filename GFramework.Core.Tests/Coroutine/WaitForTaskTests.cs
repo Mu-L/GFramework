@@ -291,8 +291,7 @@ public class WaitForTaskTests
         var wait = new WaitForTask<int>(task);
 
         await task.ConfigureAwait(false);
-
-        Task.Delay(100).Wait();
+        await Task.Delay(100).ConfigureAwait(false);
 
         Assert.That(wait.IsDone, Is.True);
         Assert.That(wait.Result, Is.EqualTo(expectedValue));

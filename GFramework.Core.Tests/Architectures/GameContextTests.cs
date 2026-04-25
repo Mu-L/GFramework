@@ -401,7 +401,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <param name="request">要发送的请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求响应任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask<TResponse> SendRequestAsync<TResponse>(IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
@@ -414,7 +414,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <typeparam name="TResponse">响应类型。</typeparam>
     /// <param name="request">要发送的请求。</param>
     /// <returns>请求响应。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public TResponse SendRequest<TResponse>(IRequest<TResponse> request)
     {
         throw new NotSupportedException();
@@ -427,7 +427,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <param name="command">要发送的命令。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>命令响应任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask<TResponse> SendCommandAsync<TResponse>(
         GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command,
         CancellationToken cancellationToken = default)
@@ -441,7 +441,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <typeparam name="TResponse">命令响应类型。</typeparam>
     /// <param name="command">要发送的命令。</param>
     /// <returns>命令响应。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public TResponse SendCommand<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
         throw new NotSupportedException();
@@ -454,7 +454,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <param name="query">要发送的查询。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>查询结果任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask<TResponse> SendQueryAsync<TResponse>(
         GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query,
         CancellationToken cancellationToken = default)
@@ -468,7 +468,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <typeparam name="TResponse">查询结果类型。</typeparam>
     /// <param name="query">要发送的查询。</param>
     /// <returns>查询结果。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public TResponse SendQuery<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
         throw new NotSupportedException();
@@ -481,7 +481,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <param name="notification">要发布的通知。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>通知发布任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask PublishAsync<TNotification>(TNotification notification,
         CancellationToken cancellationToken = default) where TNotification : INotification
     {
@@ -495,7 +495,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <param name="request">流式请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>异步响应流。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
         IStreamRequest<TResponse> request,
         CancellationToken cancellationToken = default)
@@ -510,7 +510,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <param name="command">要发送的命令。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>命令发送任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask SendAsync<TCommand>(TCommand command, CancellationToken cancellationToken = default)
         where TCommand : IRequest<Unit>
     {
@@ -524,7 +524,7 @@ public class TestArchitectureContext : IArchitectureContext
     /// <param name="command">要发送的请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求响应任务。</returns>
-    /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
+    /// <exception cref="NotSupportedException">该测试桩不支持此成员。</exception>
     public ValueTask<TResponse> SendAsync<TResponse>(IRequest<TResponse> command,
         CancellationToken cancellationToken = default)
     {

@@ -68,7 +68,7 @@ public class RollingFileAppenderTests
         }
 
         // 检查是否生成了多个文件
-        var files = Directory.GetFiles(_testDir, "*.log").OrderBy(f => f, System.StringComparer.Ordinal).ToArray();
+        var files = Directory.GetFiles(_testDir, "*.log");
         Assert.That(files.Length, Is.GreaterThan(1));
     }
 
