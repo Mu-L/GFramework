@@ -2,6 +2,49 @@
 
 ## 2026-04-25
 
+### 当前恢复点：RP-038
+
+- 用户明确要求从“低效的单次批次”切到“循环跑到接近阈值”，并允许通过 subagent 避免主线程上下文过长；因此本轮把批处理目标从 PR `#290` 的单点收口扩展为“覆盖整个项目功能的 reader-facing 文档补齐”。
+- 先在主线程确认 critical path 仍是“选定低风险文档切片并控制 branch-size stop condition”，再委派 3 个 explorer 做只读巡检：
+  - source-generator support modules / 文档失真点
+  - CQRS 文档覆盖缺口
+  - repo-root / tooling / meta-package surface
+- 接受的 explorer 结论：
+  - `CQRS` 当前不需要扩独立栏目；最小有用修复是补 `docs/zh-CN/core/cqrs.md` 对 `RequestBase`、stream command/query 与协程入口的说明。
+  - source-generators 当前最有价值的是修正文档失真，并补清楚 `GFramework.SourceGenerators.Common` 与 `*.SourceGenerators.Abstractions` 的共享支撑层语义。
+  - repo-root / tooling 当前最缺的是 meta-package / install surface、VS Code config tool adoption path，以及 repo-visible support module README。
+- 由此收敛出 5 组连续低风险批次：
+  - meta-package / 安装入口
+  - config tool adoption
+  - source-generators 真实契约修正
+  - CQRS `Request` / stream 覆盖补齐
+  - generator support module README
+
+### 当前决策（RP-038）
+
+- 不把 `CQRS` 从 `Core` 导航中抽成新栏目；本轮优先修正 reader-facing 覆盖缺口，而不是引入新的站点结构。
+- 对 repo-visible support modules，不扩成新的 docs 栏目，而是在各目录本地补 `README.md` 说明“为什么存在、跟谁一起走、什么时候需要读这里”。
+- 对 config tool，不新建顶级 `tooling/` 栏目，而是挂到 `Game` 下，保持它与 `config-system` 的采用路径一致。
+- stop condition 仍按 `origin/main` 与 `50` changed files 追踪；本轮提交前工作树已触达 `18` 个文件，仍明显低于阈值。
+
+### 当前验证（RP-038）
+
+- 文档栏目校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/cqrs.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/index.md`
+  - 结果：通过；触达页 frontmatter、链接与代码块校验通过。
+- README / 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh README.md tools/gframework-config-tool/README.md GFramework.SourceGenerators.Common/README.md GFramework.Core.SourceGenerators.Abstractions/README.md GFramework.Godot.SourceGenerators.Abstractions/README.md`
+  - 结果：通过；根 README、config tool README 与新增 support README 的链接目标有效。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；站点可构建，仅保留既有大 chunk warning。
+- 元包编译：
+  - `dotnet build GFramework.csproj -c Release`
+  - 结果：通过；输出 `357` 条既有 analyzer warnings，无新增错误。
+
 ### 当前恢复点：RP-037
 
 - 通过 `$gframework-batch-boot 50` 重新进入后，先按技能要求读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md`、active topic tracking / trace，并确认当前 worktree 仍映射到 `documentation-full-coverage-governance`。

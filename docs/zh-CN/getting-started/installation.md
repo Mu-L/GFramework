@@ -26,6 +26,13 @@ GFramework 采用模块化设计，不同包提供不同的功能：
 
 当前 NuGet 发布按模块拆分 source generator 包，不存在 `GeWuYou.GFramework.SourceGenerators` 聚合包。
 
+`GeWuYou.GFramework` 当前是聚合元包，只聚合：
+
+- `GFramework.Core`
+- `GFramework.Game`
+
+它不会自动带上 `Cqrs`、`Godot` 或任何 `*.SourceGenerators` 包。如果你需要这些能力，请按模块单独安装。
+
 ## 安装方式
 
 ### 1. 使用 .NET CLI（推荐）
@@ -66,7 +73,7 @@ dotnet add package GeWuYou.GFramework.Cqrs.SourceGenerators
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   
   <ItemGroup>
@@ -110,14 +117,14 @@ dotnet add package GeWuYou.GFramework.Cqrs.SourceGenerators
 
 ### 运行时要求
 
-- **.NET 6.0** 或更高版本
-- **Godot 4.5+**（仅 Godot 项目）
+- **.NET 8.0、9.0 或 10.0**
+- **Godot 4.6.2**（仅 Godot 项目）
 
 ### 开发工具
 
 - Visual Studio 2022 或 VS Code
-- .NET 6.0 SDK
-- Godot 4.5+（可选，仅 Godot 项目需要）
+- .NET 8 SDK 或更高版本
+- Godot 4.6.2（可选，仅 Godot 项目需要）
 
 ## 项目配置
 

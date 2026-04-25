@@ -4,7 +4,7 @@
         <PackageId>GeWuYou.GFramework</PackageId>
         <Authors>gewuyou</Authors>
         <Product>GeWuYou.GFramework</Product>
-        <Description>404 not found</Description>
+        <Description>Meta-package that aggregates GFramework.Core and GFramework.Game for a minimal runtime adoption path.</Description>
         <Copyright>Copyright © 2025</Copyright>
         <RepositoryUrl>https://github.com/GeWuYou/GFramework</RepositoryUrl>
         <PackageProjectUrl>https://github.com/GeWuYou/GFramework</PackageProjectUrl>

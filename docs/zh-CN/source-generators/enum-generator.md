@@ -102,31 +102,6 @@ public enum GameState
 | GenerateIsMethods  | bool | true | 是否为每个枚举值生成 IsX 方法 |
 | GenerateIsInMethod | bool | true | 是否生成 IsIn 方法      |
 
-#### 未实现的选项
-
-以下选项在属性定义中存在，但生成器当前版本**未实现**：
-
-- `GenerateHasMethod`：未实现 HasX 方法生成
-- `IncludeToString`：未实现 ToString 扩展方法
-
-```csharp
-// ❌ 以下选项不会生效
-[GenerateEnumExtensions(
-    GenerateIsMethods = true,
-    GenerateIsInMethod = true,
-    GenerateHasMethod = true,      // 未实现，参数会被忽略
-    IncludeToString = true          // 未实现,参数会被忽略
-)]
-public enum GameState
-{
-    Normal,
-    Paused,
-    GameOver
-}
-```
-
-**注意**：这些选项计划在后续版本中实现，届时会更新文档说明。
-
 ### 只生成 IsX 方法
 
 ```csharp
@@ -175,7 +150,16 @@ public static bool IsNormal(this GameState value)
 if (state == GameState.Normal) { }
 ```
 
-### 3. 可读性提升
+### 3. 什么时候值得关闭某个开关
+
+- 只想保留精确单值判断：
+  - 保留 `GenerateIsMethods = true`
+  - 关闭 `GenerateIsInMethod = false`
+- 只想保留多值判断入口：
+  - 保留 `GenerateIsInMethod = true`
+  - 关闭 `GenerateIsMethods = false`
+
+### 4. 可读性提升
 
 ```csharp
 // 使用生成的方法（推荐）
