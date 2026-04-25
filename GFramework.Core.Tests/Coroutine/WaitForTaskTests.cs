@@ -284,13 +284,13 @@ public class WaitForTaskTests
         var expectedValue = 123;
         var task = Task.Run(async () =>
         {
-            await Task.Delay(50);
+            await Task.Delay(50).ConfigureAwait(false);
             return expectedValue;
         });
 
         var wait = new WaitForTask<int>(task);
 
-        await task;
+        await task.ConfigureAwait(false);
 
         Task.Delay(100).Wait();
 

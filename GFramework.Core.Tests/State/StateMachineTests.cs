@@ -525,7 +525,7 @@ public sealed class TestAsyncState : IState, IAsyncState
     /// <param name="from">从哪个状态进入</param>
     public async Task OnEnterAsync(IState? from)
     {
-        await Task.Delay(1);
+        await Task.Delay(1).ConfigureAwait(false);
         EnterCalled = true;
         EnterCallCount++;
         EnterFrom = from;
@@ -537,7 +537,7 @@ public sealed class TestAsyncState : IState, IAsyncState
     /// <param name="to">离开到哪个状态</param>
     public async Task OnExitAsync(IState? to)
     {
-        await Task.Delay(1);
+        await Task.Delay(1).ConfigureAwait(false);
         ExitCalled = true;
         ExitCallCount++;
         ExitTo = to;
@@ -550,7 +550,7 @@ public sealed class TestAsyncState : IState, IAsyncState
     /// <returns>是否允许转换</returns>
     public async Task<bool> CanTransitionToAsync(IState target)
     {
-        await Task.Delay(1);
+        await Task.Delay(1).ConfigureAwait(false);
         CanTransitionToCallCount++;
         return AllowTransition;
     }
