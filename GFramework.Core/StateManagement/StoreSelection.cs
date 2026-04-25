@@ -82,7 +82,9 @@ public sealed class StoreSelection<TState, TSelected> : IReadonlyBindablePropert
     /// <returns>用于取消订阅的句柄。</returns>
     IUnRegister IEvent.Register(Action onEvent)
     {
-        ArgumentNullException.ThrowIfNull(onEvent);
+        if (onEvent is null)
+            throw new ArgumentNullException(nameof(onEvent));
+
         return Register(_ => onEvent());
     }
 
@@ -94,7 +96,8 @@ public sealed class StoreSelection<TState, TSelected> : IReadonlyBindablePropert
     /// <exception cref="ArgumentNullException">当 <paramref name="onValueChanged"/> 为 <see langword="null"/> 时抛出。</exception>
     public IUnRegister Register(Action<TSelected> onValueChanged)
     {
-        ArgumentNullException.ThrowIfNull(onValueChanged);
+        if (onValueChanged is null)
+            throw new ArgumentNullException(nameof(onValueChanged));
 
         var subscription = new SelectionListenerSubscription(onValueChanged);
         var shouldAttach = false;
@@ -126,7 +129,8 @@ public sealed class StoreSelection<TState, TSelected> : IReadonlyBindablePropert
     /// <exception cref="ArgumentNullException">当 <paramref name="action"/> 为 <see langword="null"/> 时抛出。</exception>
     public IUnRegister RegisterWithInitValue(Action<TSelected> action)
     {
-        ArgumentNullException.ThrowIfNull(action);
+        if (action is null)
+            throw new ArgumentNullException(nameof(action));
 
         var subscription = new SelectionListenerSubscription(action)
         {
@@ -189,7 +193,8 @@ public sealed class StoreSelection<TState, TSelected> : IReadonlyBindablePropert
     /// <exception cref="ArgumentNullException">当 <paramref name="onValueChanged"/> 为 <see langword="null"/> 时抛出。</exception>
     public void UnRegister(Action<TSelected> onValueChanged)
     {
-        ArgumentNullException.ThrowIfNull(onValueChanged);
+        if (onValueChanged is null)
+            throw new ArgumentNullException(nameof(onValueChanged));
 
         SelectionListenerSubscription? subscriptionToRemove = null;
 

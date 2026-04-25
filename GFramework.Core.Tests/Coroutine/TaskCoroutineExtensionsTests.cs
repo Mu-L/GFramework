@@ -66,7 +66,7 @@ public class TaskCoroutineExtensionsTests
         var task = Task.FromResult(42);
         var instruction = task.AsCoroutineInstruction();
 
-        task.Wait();
+        task.ConfigureAwait(false).GetAwaiter().GetResult();
 
         Assert.That(instruction.Result, Is.EqualTo(42));
     }
@@ -165,7 +165,7 @@ public class TaskCoroutineExtensionsTests
         Assert.That(completed, Is.False);
 
         tcs.SetResult(null);
-        Task.Delay(50).Wait();
+        Task.Delay(50).ConfigureAwait(false).GetAwaiter().GetResult();
 
         scheduler.Update();
         scheduler.Update();
@@ -189,7 +189,7 @@ public class TaskCoroutineExtensionsTests
         Assert.That(scheduler.ActiveCoroutineCount, Is.EqualTo(1));
 
         tcs.SetResult(42);
-        Task.Delay(50).Wait();
+        Task.Delay(50).ConfigureAwait(false).GetAwaiter().GetResult();
 
         scheduler.Update();
         scheduler.Update();
@@ -265,7 +265,7 @@ public class TaskCoroutineExtensionsTests
         tcs.SetResult(null);
         tcs2.SetResult(42);
 
-        Task.Delay(50).Wait();
+        Task.Delay(50).ConfigureAwait(false).GetAwaiter().GetResult();
         scheduler.Update();
         scheduler.Update();
 

@@ -38,8 +38,11 @@ public static class StringExtensions
     /// </example>
     public static string Truncate(this string str, int maxLength, string suffix = "...")
     {
-        ArgumentNullException.ThrowIfNull(str);
-        ArgumentNullException.ThrowIfNull(suffix);
+        if (str is null)
+            throw new ArgumentNullException(nameof(str));
+
+        if (suffix is null)
+            throw new ArgumentNullException(nameof(suffix));
 
         if (maxLength < suffix.Length)
             throw new ArgumentOutOfRangeException(nameof(maxLength),
@@ -66,8 +69,11 @@ public static class StringExtensions
     /// </example>
     public static string Join(this IEnumerable<string> values, string separator)
     {
-        ArgumentNullException.ThrowIfNull(values);
-        ArgumentNullException.ThrowIfNull(separator);
+        if (values is null)
+            throw new ArgumentNullException(nameof(values));
+
+        if (separator is null)
+            throw new ArgumentNullException(nameof(separator));
 
         return string.Join(separator, values);
     }

@@ -18,8 +18,15 @@ public static class ContextAwareQueryExtensions
     /// <exception cref="ArgumentNullException">当 contextAware 或 query 为 null 时抛出</exception>
     public static TResult SendQuery<TResult>(this IContextAware contextAware, IQuery<TResult> query)
     {
-        ArgumentNullException.ThrowIfNull(contextAware);
-        ArgumentNullException.ThrowIfNull(query);
+        if (contextAware is null)
+        {
+            throw new ArgumentNullException(nameof(contextAware));
+        }
+
+        if (query is null)
+        {
+            throw new ArgumentNullException(nameof(query));
+        }
 
         var context = contextAware.GetContext();
         return context.SendQuery(query);
@@ -37,8 +44,15 @@ public static class ContextAwareQueryExtensions
     public static async Task<TResult> SendQueryAsync<TResult>(this IContextAware contextAware,
         IAsyncQuery<TResult> query)
     {
-        ArgumentNullException.ThrowIfNull(contextAware);
-        ArgumentNullException.ThrowIfNull(query);
+        if (contextAware is null)
+        {
+            throw new ArgumentNullException(nameof(contextAware));
+        }
+
+        if (query is null)
+        {
+            throw new ArgumentNullException(nameof(query));
+        }
 
         var context = contextAware.GetContext();
         return await context.SendQueryAsync(query).ConfigureAwait(false);

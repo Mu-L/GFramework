@@ -28,7 +28,10 @@ public static class AsyncExtensions
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(taskFactory);
+        if (taskFactory is null)
+        {
+            throw new ArgumentNullException(nameof(taskFactory));
+        }
 
         // linkedCts 同时响应：超时 + 外部取消
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -71,7 +74,10 @@ public static class AsyncExtensions
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(taskFactory);
+        if (taskFactory is null)
+        {
+            throw new ArgumentNullException(nameof(taskFactory));
+        }
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         linkedCts.CancelAfter(timeout);
@@ -113,8 +119,15 @@ public static class AsyncExtensions
     /// </example>
     public static async Task<T> WithFallbackAsync<T>(this Task<T> task, Func<Exception, T> fallback)
     {
-        ArgumentNullException.ThrowIfNull(task);
-        ArgumentNullException.ThrowIfNull(fallback);
+        if (task is null)
+        {
+            throw new ArgumentNullException(nameof(task));
+        }
+
+        if (fallback is null)
+        {
+            throw new ArgumentNullException(nameof(fallback));
+        }
 
         try
         {

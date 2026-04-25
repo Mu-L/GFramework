@@ -19,8 +19,15 @@ public static class ContextAwareCommandExtensions
     public static TResult SendCommand<TResult>(this IContextAware contextAware,
         ICommand<TResult> command)
     {
-        ArgumentNullException.ThrowIfNull(contextAware);
-        ArgumentNullException.ThrowIfNull(command);
+        if (contextAware is null)
+        {
+            throw new ArgumentNullException(nameof(contextAware));
+        }
+
+        if (command is null)
+        {
+            throw new ArgumentNullException(nameof(command));
+        }
 
         var context = contextAware.GetContext();
         return context.SendCommand(command);
@@ -34,8 +41,15 @@ public static class ContextAwareCommandExtensions
     /// <exception cref="ArgumentNullException">当 contextAware 或 command 为 null 时抛出</exception>
     public static void SendCommand(this IContextAware contextAware, ICommand command)
     {
-        ArgumentNullException.ThrowIfNull(contextAware);
-        ArgumentNullException.ThrowIfNull(command);
+        if (contextAware is null)
+        {
+            throw new ArgumentNullException(nameof(contextAware));
+        }
+
+        if (command is null)
+        {
+            throw new ArgumentNullException(nameof(command));
+        }
 
         var context = contextAware.GetContext();
         context.SendCommand(command);
@@ -50,8 +64,15 @@ public static class ContextAwareCommandExtensions
     /// <exception cref="ArgumentNullException">当 contextAware 或 command 为 null 时抛出</exception>
     public static async Task SendCommandAsync(this IContextAware contextAware, IAsyncCommand command)
     {
-        ArgumentNullException.ThrowIfNull(contextAware);
-        ArgumentNullException.ThrowIfNull(command);
+        if (contextAware is null)
+        {
+            throw new ArgumentNullException(nameof(contextAware));
+        }
+
+        if (command is null)
+        {
+            throw new ArgumentNullException(nameof(command));
+        }
 
         var context = contextAware.GetContext();
         await context.SendCommandAsync(command).ConfigureAwait(false);
@@ -68,8 +89,15 @@ public static class ContextAwareCommandExtensions
     public static async Task<TResult> SendCommandAsync<TResult>(this IContextAware contextAware,
         IAsyncCommand<TResult> command)
     {
-        ArgumentNullException.ThrowIfNull(contextAware);
-        ArgumentNullException.ThrowIfNull(command);
+        if (contextAware is null)
+        {
+            throw new ArgumentNullException(nameof(contextAware));
+        }
+
+        if (command is null)
+        {
+            throw new ArgumentNullException(nameof(command));
+        }
 
         var context = contextAware.GetContext();
         return await context.SendCommandAsync(command).ConfigureAwait(false);
