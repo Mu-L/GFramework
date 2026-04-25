@@ -26,7 +26,7 @@ next:
 
 添加以下节点结构：
 
-```
+```text
 App (Control)
 ├── CenterContainer (CenterContainer)
 │   └── VBoxContainer (VBoxContainer)
@@ -226,7 +226,7 @@ SubButton.Pressed += () =>
 
 ### 执行流程
 
-```
+```text
 用户点击按钮
     ↓
 Pressed 事件触发

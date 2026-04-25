@@ -83,7 +83,7 @@ AddButton.Pressed += async () =>
 
 **Command（命令）** 是一种设计模式，它将"请求"封装成对象：
 
-```
+```text
 用户操作 → Command → Model
 ```
 
@@ -496,7 +496,7 @@ AddButton.Pressed += () =>
 
 现在我们的架构已经很清晰了：
 
-```
+```text
 View → Controller → Command → Model → Event → View
 ```
 

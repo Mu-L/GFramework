@@ -486,7 +486,7 @@ protected override void OnInit()
 
 现在我们的架构已经完整：
 
-```
+```text
 ┌─────────────┐
 │    View     │  Godot UI 节点
 └──────┬──────┘
@@ -520,7 +520,7 @@ protected override void OnInit()
 
 ### 数据流
 
-```
+```text
 用户点击按钮
     ↓
 Controller: SendCommand(IncreaseCommand)
@@ -551,7 +551,7 @@ Model: SendEvent(ChangedCountEvent) → 发送事件
 
 ### 单向数据流
 
-```
+```text
 Action → Command → Model → Event → View/System
 ```
 
@@ -561,7 +561,7 @@ Action → Command → Model → Event → View/System
 
 ### 关注点分离
 
-```
+```text
 Controller → "做什么"
 Command   → "怎么做"
 Model     → "状态是什么"
@@ -571,7 +571,7 @@ Utility   → "规则是什么"
 
 ### 依赖倒置
 
-```
+```text
 都依赖接口，不依赖具体实现
 
 ICounterModel ← CounterModel
@@ -635,7 +635,7 @@ UpdateAchievement();
 
 ### 项目结构
 
-```
+```text
 MyGFrameworkGame/
 ├── scripts/
 │   ├── architecture/
@@ -666,7 +666,7 @@ MyGFrameworkGame/
 
 ### 架构层次
 
-```
+```text
 GameEntryPoint (入口)
     ↓
 GameArchitecture (架构)
