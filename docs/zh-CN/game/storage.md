@@ -161,8 +161,8 @@ var cacheStorage = new ScopedStorage(rootStorage, "runtime-cache");
 
 也就是说：
 
-- 业务层如果想保存一份独立数据，优先看 [`data.md`](./data.md)
-- 业务层如果想保存设置，优先看 [`setting.md`](./setting.md)
+- 业务层如果想保存一份独立数据，优先看 [数据与存档系统](./data.md)
+- 业务层如果想保存设置，优先看 [设置系统](./setting.md)
 - 业务层如果只是需要底层存储实现，才直接依赖 `IStorage`
 
 ## 当前边界

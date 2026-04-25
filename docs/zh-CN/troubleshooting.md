@@ -22,7 +22,7 @@ description: 提供 GFramework 常见安装、架构、事件与运行时问题�
 
 **错误信息**：
 
-```
+```text
 NU1101: Unable to find package GFramework.Core
 ```
 
@@ -56,7 +56,7 @@ dotnet add package GFramework.Core --version 1.0.0
 
 **错误信息**：
 
-```
+```text
 NU1107: Version conflict detected for Microsoft.Extensions.DependencyInjection
 ```
 
@@ -93,7 +93,7 @@ NU1107: Version conflict detected for Microsoft.Extensions.DependencyInjection
 
 **错误信息**：
 
-```
+```text
 error NETSDK1045: The current .NET SDK does not support targeting .NET 8.0
 ```
 
@@ -126,7 +126,7 @@ dotnet --version
 
 **错误信息**：
 
-```
+```text
 InvalidOperationException: Architecture is already initialized
 ```
 
@@ -166,7 +166,7 @@ var arch = GameArchitecture.Interface;
 
 **错误信息**：
 
-```
+```text
 InvalidOperationException: No service for type 'IPlayerService' has been registered
 ```
 
@@ -208,7 +208,7 @@ protected override void ConfigureServices(IServiceCollection services)
 
 **错误信息**：
 
-```
+```text
 NullReferenceException: Object reference not set to an instance of an object
 ```
 
@@ -254,7 +254,7 @@ public class SystemB : AbstractSystem
 
 **错误信息**：
 
-```
+```text
 InvalidOperationException: Architecture not fully initialized
 ```
 
@@ -799,7 +799,7 @@ private IEnumerator CoroutineWithCleanup()
 
 **错误信息**：
 
-```
+```text
 FileNotFoundException: Could not find file 'res://assets/player.png'
 ```
 
@@ -965,7 +965,7 @@ private async void PreloadResources()
 
 **错误信息**：
 
-```
+```text
 NullReferenceException: Object reference not set to an instance of an object
 ```
 
@@ -1011,7 +1011,7 @@ await sceneRouter.NavigateToAsync("Game");
 
 **错误信息**：
 
-```
+```text
 NullReferenceException: Object reference not set to an instance of an object
 ```
 
@@ -1108,7 +1108,7 @@ public partial class GameController : Node
 
 **错误信息**：
 
-```
+```text
 InvalidOperationException: Architecture context not found
 ```
 
@@ -1635,7 +1635,7 @@ public void DebugPlayerDamage()
 
 **完整错误信息**：
 
-```
+```text
 NU1101: Unable to find package GFramework.Core. No packages exist with this id in source(s): nuget.org
 ```
 
@@ -1667,7 +1667,7 @@ dotnet restore
 
 **完整错误信息**：
 
-```
+```text
 System.Collections.Generic.KeyNotFoundException: 未找到类型为 'PlayerModel' 的组件
 ```
 
@@ -1694,7 +1694,7 @@ public class GameArchitecture : Architecture
 
 **完整错误信息**：
 
-```
+```text
 System.InvalidOperationException: Architecture is already initialized
 ```
 
@@ -1769,7 +1769,7 @@ AddChild(anchor);
 
 **完整错误信息**：
 
-```
+```text
 System.InvalidCastException: Unable to cast object of type 'Node' to type 'Player'
 ```
 
@@ -1804,7 +1804,7 @@ if (GetNode("Player") is Player player)
 
 **完整错误信息**：
 
-```
+```text
 System.ArgumentException: An item with the same key has already been added. Key: PlayerModel
 ```
 
@@ -1920,7 +1920,7 @@ public class SystemA : AbstractSystem
 
 **完整错误信息**：
 
-```
+```text
 System.ObjectDisposedException: Cannot access a disposed object. Object name: 'Architecture'
 ```
 
@@ -1960,7 +1960,7 @@ public void UseArchitecture()
 
 **完整错误信息**：
 
-```
+```text
 System.IO.FileNotFoundException: Could not find file 'res://assets/player.png'
 ```
 
@@ -1997,7 +1997,7 @@ var texture = ResourceLoader.Load&lt;Texture2D&gt;("res://assets/player.png");
 
 **完整错误信息**：
 
-```
+```text
 System.NotImplementedException: The method or operation is not implemented
 ```
 

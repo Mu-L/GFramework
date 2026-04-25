@@ -15,9 +15,9 @@ description: GFramework 各抽象层模块的阅读入口与使用边界。
 
 ## 阅读顺序
 
-- Core 抽象层：[`core-abstractions.md`](./core-abstractions.md)
-- Game 抽象层：[`game-abstractions.md`](./game-abstractions.md)
-- Ecs.Arch 抽象层：[`ecs-arch-abstractions.md`](./ecs-arch-abstractions.md)
+- Core 抽象层：[Core 抽象层说明](./core-abstractions.md)
+- Game 抽象层：[Game 抽象层说明](./game-abstractions.md)
+- Ecs.Arch 抽象层：[Ecs.Arch 抽象层说明](./ecs-arch-abstractions.md)
 
 ## 使用建议
 

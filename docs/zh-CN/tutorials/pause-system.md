@@ -822,7 +822,7 @@ namespace MyGame.Controllers
 
 ### 项目结构
 
-```
+```text
 MyGame/
 ├── GameArchitecture.cs
 ├── Systems/
@@ -911,7 +911,7 @@ class Program
 
 运行程序后，你将看到类似以下的输出：
 
-```
+```text
 === 暂停系统教程 ===
 
 暂停系统和处理器初始化完成
@@ -1130,4 +1130,3 @@ class Program
 - [Utility 层](/zh-CN/core/utility.md) - Utility 详细说明
 - [生命周期管理](/zh-CN/core/lifecycle.md) - 组件生命周期
 - [扩展方法](/zh-CN/core/extensions.md) - 便捷的扩展方法
-

@@ -169,18 +169,17 @@
 
 这两部分一般被上层子系统消费，不是多数项目的第一接入点。
 
-## XML 覆盖基线
+## XML 阅读入口
 
-下面这份 inventory 记录的是 `2026-04-23` 对 `GFramework.Game` 做的一轮轻量 XML 盘点结果：只统计公开 /
-内部类型声明是否带 XML 注释，用来建立运行时阅读入口；成员级参数、返回值、异常和生命周期说明仍需要在后续 API 波次继续细化。
+下面这份目录视图汇总了 `GFramework.Game` 的类型级 XML 文档入口，用来帮助你确定运行时阅读顺序；更细的参数、返回值、异常和生命周期说明，建议继续回到具体类型与成员确认。
 
-| 子系统 | 基线状态 | 代表类型 | 阅读重点 |
-| --- | --- | --- | --- |
-| `Config/` | `26/26` 个类型声明已带 XML 注释 | `YamlConfigLoader`、`ConfigRegistry`、`GameConfigBootstrap`、`YamlConfigSchemaValidator` | 看 YAML 加载、schema 校验、模块接入与热重载边界 |
-| `Data/` `Storage/` `Serializer/` | `8/8` 个类型声明已带 XML 注释 | `DataRepository`、`SaveRepository<TSaveData>`、`UnifiedSettingsDataRepository`、`FileStorage`、`JsonSerializer` | 看持久化布局、槽位存档、统一设置文件和底层序列化 / 存储实现 |
-| `Setting/` | `9/9` 个类型声明已带 XML 注释 | `SettingsModel<TRepository>`、`SettingsSystem`、`SettingsAppliedEvent<T>` | 看初始化、应用、保存、重置等设置生命周期编排 |
-| `Scene/` `UI/` `Routing/` | `10/10` 个类型声明已带 XML 注释 | `SceneRouterBase`、`UiRouterBase`、`SceneTransitionPipeline`、`UiTransitionPipeline`、`RouterBase<TRoute, TContext>` | 看路由基类、转换处理器和项目层需要自己提供的 factory / root 边界 |
-| `Extensions/` `Internal/` `State/` | `3/3` 个类型声明已带 XML 注释 | `DataLocationExtensions`、`VersionedMigrationRunner`、`GameStateMachineSystem` | 看辅助扩展、内部迁移执行逻辑和游戏态状态机封装 |
+| 子系统 | 代表类型 | 阅读重点 |
+| --- | --- | --- |
+| `Config/` | `YamlConfigLoader`、`ConfigRegistry`、`GameConfigBootstrap`、`YamlConfigSchemaValidator` | 看 YAML 加载、schema 校验、模块接入与热重载边界 |
+| `Data/` `Storage/` `Serializer/` | `DataRepository`、`SaveRepository<TSaveData>`、`UnifiedSettingsDataRepository`、`FileStorage`、`JsonSerializer` | 看持久化布局、槽位存档、统一设置文件和底层序列化 / 存储实现 |
+| `Setting/` | `SettingsModel<TRepository>`、`SettingsSystem`、`SettingsAppliedEvent<T>` | 看初始化、应用、保存、重置等设置生命周期编排 |
+| `Scene/` `UI/` `Routing/` | `SceneRouterBase`、`UiRouterBase`、`SceneTransitionPipeline`、`UiTransitionPipeline`、`RouterBase<TRoute, TContext>` | 看路由基类、转换处理器和项目层需要自己提供的 factory / root 边界 |
+| `Extensions/` `Internal/` `State/` | `DataLocationExtensions`、`VersionedMigrationRunner`、`GameStateMachineSystem` | 看辅助扩展、内部迁移执行逻辑和游戏态状态机封装 |
 
 ## 最小接入路径
 

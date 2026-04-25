@@ -44,9 +44,9 @@ GameProject/
 
 默认情况下，打包产物会通过 `targets` 把 `schemas/**/*.schema.json` 纳入 `AdditionalFiles`。
 
-## XML 覆盖基线
+## XML 阅读入口
 
-下面这份 inventory 记录的是 `2026-04-23` 对 `GFramework.Game.SourceGenerators` 做的一轮轻量 XML 盘点结果：只统计公开类型声明是否带 XML 注释，用来建立生成器入口；具体诊断消息、生成输出和兼容性语义仍需要回到源码与测试继续核对。
+下面这份目录视图汇总了 `2026-04-23` 可直接对照的 `GFramework.Game.SourceGenerators` 类型级 XML 文档入口：只统计公开类型声明是否带 XML 注释，用来帮助你定位生成器入口；具体诊断消息、生成输出和兼容性语义仍建议回到源码与测试继续核对。
 
 | 类型族 | 基线状态 | 代表类型 | 阅读重点 |
 | --- | --- | --- | --- |

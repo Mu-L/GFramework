@@ -71,7 +71,7 @@ description: 从零开始使用 GFramework 构建一个完整的 Godot 游戏项
 
 ### 1.3 创建项目结构
 
-```
+```text
 MyShooterGame/
 ├── Scripts/
 │   ├── Architecture/

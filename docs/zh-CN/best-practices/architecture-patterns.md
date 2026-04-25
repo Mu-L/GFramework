@@ -3043,7 +3043,7 @@ public class AchievementSystem : AbstractSystem
 
 ### 模式选择决策树
 
-```
+```text
 需要管理游戏状态？
 ├─ 是 → 使用状态模式
 └─ 否 → 继续

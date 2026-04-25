@@ -29,7 +29,7 @@ description: 学习如何使用 GFramework 组织和管理大型游戏项目
 
 ### 1.1 推荐的目录结构
 
-```
+```text
 MyLargeGame/
 ├── src/
 │   ├── MyGame.Core/                    # 核心层
@@ -1529,7 +1529,7 @@ namespace MyGame
 
 运行程序后,你将看到类似以下的输出:
 
-```
+```text
 === 大型游戏项目示例 ===
 
 === 初始化游戏架构 ===

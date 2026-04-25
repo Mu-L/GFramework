@@ -117,9 +117,9 @@ export default defineConfig({
             items: [
               { text: 'ECS', link: '/zh-CN/ecs/' },
               { text: '抽象接口', link: '/zh-CN/abstractions/' },
-              { text: '源码生成器', link: '/zh-CN/source-generators' },
+              { text: '源码生成器', link: '/zh-CN/source-generators/' },
               { text: '最佳实践', link: '/zh-CN/best-practices/' },
-              { text: 'API 参考', link: '/zh-CN/api-reference' },
+              { text: 'API 参考', link: '/zh-CN/api-reference/' },
               { text: '常见问题', link: '/zh-CN/faq' },
               { text: '故障排查', link: '/zh-CN/troubleshooting' },
               { text: '贡献指南', link: '/zh-CN/contributing' },
@@ -248,14 +248,18 @@ export default defineConfig({
               items: [
                 { text: '概览', link: '/zh-CN/source-generators/' },
                 { text: '日志生成器', link: '/zh-CN/source-generators/logging-generator' },
-                { text: '枚举扩展', link: '/zh-CN/source-generators/enum-generator' },
+                { text: '枚举扩展生成器', link: '/zh-CN/source-generators/enum-generator' },
                 { text: 'ContextAware 生成器', link: '/zh-CN/source-generators/context-aware-generator' },
                 { text: 'Priority 生成器', link: '/zh-CN/source-generators/priority-generator' },
-                { text: 'Context Get 注入', link: '/zh-CN/source-generators/context-get-generator' },
-                { text: 'CQRS Handler Registry', link: '/zh-CN/source-generators/cqrs-handler-registry-generator' },
-                { text: 'Godot 项目元数据', link: '/zh-CN/source-generators/godot-project-generator' },
+                { text: 'Context Get 注入生成器', link: '/zh-CN/source-generators/context-get-generator' },
+                { text: '模块自动注册生成器', link: '/zh-CN/source-generators/auto-register-module-generator' },
+                { text: 'CQRS Handler Registry 生成器', link: '/zh-CN/source-generators/cqrs-handler-registry-generator' },
+                { text: 'Godot 项目元数据生成器', link: '/zh-CN/source-generators/godot-project-generator' },
                 { text: 'GetNode 生成器 (Godot)', link: '/zh-CN/source-generators/get-node-generator' },
-                { text: 'BindNodeSignal 生成器 (Godot)', link: '/zh-CN/source-generators/bind-node-signal-generator' }
+                { text: 'BindNodeSignal 生成器 (Godot)', link: '/zh-CN/source-generators/bind-node-signal-generator' },
+                { text: 'AutoUiPage 生成器', link: '/zh-CN/source-generators/auto-ui-page-generator' },
+                { text: 'AutoScene 生成器', link: '/zh-CN/source-generators/auto-scene-generator' },
+                { text: 'AutoRegisterExportedCollections 生成器', link: '/zh-CN/source-generators/auto-register-exported-collections-generator' }
               ]
             }
           ],
@@ -264,9 +268,10 @@ export default defineConfig({
             {
               text: '抽象接口',
               items: [
-                { text: 'Core Abstractions', link: '/zh-CN/abstractions/core-abstractions' },
-                { text: 'Game Abstractions', link: '/zh-CN/abstractions/game-abstractions' },
-                { text: 'Ecs.Arch Abstractions', link: '/zh-CN/abstractions/ecs-arch-abstractions' }
+                { text: '概览', link: '/zh-CN/abstractions/' },
+                { text: 'Core 抽象层说明', link: '/zh-CN/abstractions/core-abstractions' },
+                { text: 'Game 抽象层说明', link: '/zh-CN/abstractions/game-abstractions' },
+                { text: 'Ecs.Arch 抽象层说明', link: '/zh-CN/abstractions/ecs-arch-abstractions' }
               ]
             }
           ],

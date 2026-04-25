@@ -2,36 +2,32 @@
 
 ## 2026-04-25
 
-### 当前恢复点：RP-034
+### 当前恢复点：RP-036
 
-- 本轮按 `$gframework-batch-boot 50` 执行，baseline 固定为 `origin/main`（`984fb21`，`2026-04-25 11:11:56 +08:00`）；开始时 committed branch diff 为 `5 / 50` 个 changed files。
-- 已接受 worker A 的 README 切片结果：5 个模块 README 的 reader-facing 链接标签修正已落在提交 `bd5cdb5`（`docs(readme): 优化链接标签`）。
-- 主线程补齐了 `docs/zh-CN/core` 下 7 个热点页面与 `docs/zh-CN/tutorials/basic` 下 7 个教程页面的裸 fenced code block opening 语言标记，按内容分别落为 `csharp` 或 `text`。
-- 当前批次已提交为 `9dfee75`（`docs(documentation): 补齐文档代码块标记`）；提交后实际 branch diff 为 `21 / 50` 个 changed files，仍有后续小批次空间。
+- 本轮从 `$gframework-pr-review` 重新进入，目标不再是扩批，而是核对 PR `#290` latest-head review 仍未关闭的 reader-facing 文档问题。
+- 使用 `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json` 抓取后确认：PR `#290` 最新 reviewed commit 为 `54b8e5770af9ab3c8a86a396ffa4794fe4bb5181`，CodeRabbit 与 Greptile 各有 `1` 条 open thread，失败检查为 `0`，测试汇总仍为 `2156 passed`。
+- 本轮把远端 review 与本地工作树逐项比对后，只接受仍然成立的 5 个 reader-facing 问题：`source-generators` 侧栏 3 个标签与目标标题不一致、`api-reference` 侧栏重复暴露跨栏目入口、`Core` / `Ecs.Arch` / `Game` README 仍保留 XML 覆盖基线字段。
+- 当前未提交批次限定在 `docs/.vitepress/config.mts`、3 个模块 README，以及 active tracking / trace；没有继续扩展到其他未被 review 指向的文档文件。
 
-### 当前决策（RP-034）
+### 当前决策（RP-036）
 
-- README 批次只改 reader-facing 可见标签，不改链接目标；复核结果通过后直接接受 worker A 的独立提交，避免主线程重复改写同一组文件。
-- 代码块语言标记批次以 opening fence 为唯一修正点，不重写示例内容；目录树、流程图、控制台输出统一标 `text`，可执行或 API 示例标 `csharp`。
-- 教程 `01` 到 `07` 当前未发现额外裸 opening fence 之外的高风险文案问题，因此本轮不扩展到结构性重写，保持在低语义风险范围内。
+- 对 PR review 的处理改成“只修当前 latest-head review 仍成立的问题”，不再延续前一轮的批量普查节奏。
+- `api-reference` 侧栏不再承载跨栏目目录跳转；跨模块导航继续保留在 `docs/zh-CN/api-reference/index.md` 的正文里，避免侧栏在跳出栏目后发生上下文切换。
+- `source-generators` 侧栏项统一与目标文档的 H1 / frontmatter `title` 对齐，避免同一页面在导航、标题与搜索索引里出现多套命名。
+- 模块 README 的 XML 阅读表只保留读者有用的“代表类型 / 阅读重点”，把覆盖计数、日期和 `已覆盖` 之类治理痕迹全部留在 `ai-plan/**`。
 
-### 当前验证（RP-034）
+### 当前验证（RP-036）
 
-- README 链接校验：
-  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh` 逐个验证 5 个目标 README
-  - 结果：通过；目标链接有效。
-- README 标签复扫：
-  - `rg -n '\\[[^\\]]*(README\\.md|\\.md|\\.md/|/zh-CN/[^\\]]*)\\]\\([^)]*\\)' GFramework.Core/README.md GFramework.Core.SourceGenerators/README.md GFramework.Cqrs.SourceGenerators/README.md GFramework.Ecs.Arch/README.md GFramework.Game.SourceGenerators/README.md`
-  - 结果：无命中；本轮目标 README 已无可见路径式 / 文件名式标签残留。
-- `Core` 校验：
-  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core`
-  - 结果：通过；`Core` 栏目 frontmatter、链接与代码块校验通过。
-- 教程校验：
-  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/basic`
-  - 结果：通过；基础教程栏目 frontmatter、链接与代码块校验通过。
+- PR review 抓取：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
+  - 结果：通过；PR `#290` 处于 `OPEN`，latest head review 还有 `2` 条 open thread，测试汇总为 `2156 passed`。
+
+- README / 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Core/README.md GFramework.Ecs.Arch/README.md GFramework.Game/README.md`
+  - 结果：通过；本轮 3 个 README 调整后链接目标仍然有效。
 - 站点构建：
   - `bun run build`（工作目录：`docs/`）
-  - 结果：通过；仅保留既有大 chunk warning。
+  - 结果：通过；`docs/.vitepress/config.mts` 的侧栏调整后站点仍可构建，仅保留既有大 chunk warning。
 
 ### 归档指针
 
@@ -43,5 +39,6 @@
 
 ### 下一步
 
-1. 若继续下一轮 `$gframework-batch-boot 50`，优先重新抓取 `$gframework-pr-review`，再选择新的低风险 reader-facing 文档切片。
-2. 当前 branch diff 为 `21 / 50`，后续单批次仍应控制在剩余 `29` 个 changed files 的 headroom 内。
+1. 完成 `bun run build` 与 README 链接校验后，提交当前 PR `#290` review 收口批次。
+2. 提交后再次运行 `$gframework-pr-review`，确认 CodeRabbit / Greptile 的 open thread 是否已关闭。
+3. 若仍有 review 残留，再按 latest-head review 精确收口，不恢复到前一轮的广覆盖批处理模式。

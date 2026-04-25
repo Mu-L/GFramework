@@ -195,7 +195,7 @@ await settingsModel.SaveAllAsync();
 
 - `SettingsModel<TRepository>` 负责数据生命周期，`SettingsSystem` 负责系统级调用入口；两者不要混成一个巨型服务
 - applicator 决定“怎么把数据应用到宿主”，repository 决定“怎么保存数据”，两层职责不要互相侵入
-- 设置迁移和存档迁移是两条不同管线；后者看 [`data.md`](./data.md) 里的 `SaveRepository<TSaveData>`
+- 设置迁移和存档迁移是两条不同管线；后者看 [数据与存档系统](./data.md) 里的 `SaveRepository<TSaveData>`
 
 ## 继续阅读
 
