@@ -216,7 +216,7 @@ public class StateMachineTests
     [Test]
     public void ChangeToAsync_ToUnregisteredState_Should_ThrowInvalidOperationException()
     {
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await _stateMachine.ChangeToAsync<TestStateV2>());
+        Assert.ThrowsAsync<InvalidOperationException>(() => _stateMachine.ChangeToAsync<TestStateV2>());
     }
 
     /// <summary>
