@@ -146,7 +146,7 @@ var restored = serializer.Deserialize(json, data.GetType());
 - `Game.SourceGenerators + YamlConfigLoader`
   - 负责 schema 驱动的配置表生成与 YAML 读取
 
-如果你的目标是静态内容配置表，而不是运行时持久化对象，请改看 [`config-system.md`](./config-system.md)。
+如果你的目标是静态内容配置表，而不是运行时持久化对象，请改看 [配置系统](./config-system.md)。
 
 ## 当前边界
 
