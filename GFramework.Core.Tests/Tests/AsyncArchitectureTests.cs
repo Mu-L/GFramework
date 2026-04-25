@@ -93,7 +93,7 @@ public class AsyncArchitectureTests : ArchitectureTestsBase<AsyncTestArchitectur
     {
         Architecture!.AddPostRegistrationHook(a => { a.RegisterModel(new FailingModel()); });
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await Architecture.InitializeAsync());
+        Assert.ThrowsAsync<InvalidOperationException>(() => Architecture.InitializeAsync());
 
         Assert.That(
             Architecture.CurrentPhase,
@@ -140,7 +140,7 @@ public class AsyncArchitectureTests : ArchitectureTestsBase<AsyncTestArchitectur
             a.RegisterModel(new FailingModel())
         );
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await Architecture.InitializeAsync());
+        Assert.ThrowsAsync<InvalidOperationException>(() => Architecture.InitializeAsync());
 
         AssertInitializationFailed();
     }

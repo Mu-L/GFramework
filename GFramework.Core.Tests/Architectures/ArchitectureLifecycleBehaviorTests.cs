@@ -99,10 +99,10 @@ public class ArchitectureLifecycleBehaviorTests
     {
         var architecture = new PhaseTrackingArchitecture(() => throw new InvalidOperationException("boom"));
 
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await architecture.InitializeAsync());
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(() => architecture.InitializeAsync());
         Assert.That(exception, Is.Not.Null);
         Assert.That(architecture.CurrentPhase, Is.EqualTo(ArchitecturePhase.FailedInitialization));
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await architecture.WaitUntilReadyAsync());
+        Assert.ThrowsAsync<InvalidOperationException>(() => architecture.WaitUntilReadyAsync());
     }
 
     /// <summary>
@@ -139,7 +139,7 @@ public class ArchitectureLifecycleBehaviorTests
         var destroyOrder = new List<string>();
         var architecture = new FailingInitializationArchitecture(destroyOrder);
 
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () => await architecture.InitializeAsync());
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(() => architecture.InitializeAsync());
         Assert.That(exception, Is.Not.Null);
         Assert.That(architecture.CurrentPhase, Is.EqualTo(ArchitecturePhase.FailedInitialization));
 

@@ -123,7 +123,7 @@ public sealed class AsyncKeyLockManagerTests
         }
 
         // Assert
-        Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
+        Assert.DoesNotThrowAsync(() => Task.WhenAll(tasks));
     }
 
     [Test]
@@ -243,7 +243,7 @@ public sealed class AsyncKeyLockManagerTests
         manager.Dispose();
 
         // Act & Assert
-        Assert.ThrowsAsync<ObjectDisposedException>(async () => await manager.AcquireLockAsync("test-key"));
+        Assert.ThrowsAsync<ObjectDisposedException>(() => manager.AcquireLockAsync("test-key").AsTask());
     }
 
     [Test]
@@ -302,7 +302,7 @@ public sealed class AsyncKeyLockManagerTests
         }
 
         // Assert
-        Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
+        Assert.DoesNotThrowAsync(() => Task.WhenAll(tasks));
     }
 
     [Test]
