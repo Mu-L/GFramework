@@ -236,11 +236,11 @@ public class AsyncExtensionsTests
         };
 
         // Act & Assert
-        Assert.ThrowsAsync<AggregateException>(async () =>
-            await taskFactory.WithRetryAsync(3, TimeSpan.FromMilliseconds(10),
+        Assert.ThrowsAsync<AggregateException>(() =>
+            taskFactory.WithRetryAsync(3, TimeSpan.FromMilliseconds(10),
                 ex => ex is not ArgumentException));
 
-        await Task.Delay(50); // 等待任务完成
+        await Task.Delay(50).ConfigureAwait(false); // 等待任务完成
         Assert.That(attemptCount, Is.EqualTo(1)); // 不应该重试
     }
 
