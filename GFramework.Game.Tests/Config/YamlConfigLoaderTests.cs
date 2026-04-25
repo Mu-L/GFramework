@@ -1635,57 +1635,7 @@ public class YamlConfigLoaderTests
     [Test]
     public async Task LoadAsync_Should_Accept_Object_Array_When_Contains_Matches_Declared_Subset_Properties()
     {
-        CreateConfigFile(
-            "monster/slime.yaml",
-            """
-            id: 1
-            name: Slime
-            entries:
-              -
-                id: 1
-                weight: 2
-              -
-                id: 2
-                weight: 3
-            """);
-        CreateSchemaFile(
-            "schemas/monster.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "name", "entries"],
-              "properties": {
-                "id": { "type": "integer" },
-                "name": { "type": "string" },
-                "entries": {
-                  "type": "array",
-                  "minContains": 1,
-                  "contains": {
-                    "type": "object",
-                    "required": ["id"],
-                    "properties": {
-                      "id": {
-                        "type": "integer",
-                        "const": 1
-                      }
-                    }
-                  },
-                  "items": {
-                    "type": "object",
-                    "required": ["id", "weight"],
-                    "properties": {
-                      "id": { "type": "integer" },
-                      "weight": { "type": "integer" }
-                    }
-                  }
-                }
-              }
-            }
-            """);
-
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<int, MonsterWeightedEntryArrayConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
+        var loader = CreateLoaderForContainsSubsetObjectArrayScenario();
         var registry = new ConfigRegistry();
 
         await loader.LoadAsync(registry);
@@ -2553,14 +2503,7 @@ public class YamlConfigLoaderTests
     [Test]
     public void LoadAsync_Should_Throw_When_Nested_Object_Array_Reference_Target_Is_Missing()
     {
-        CreateConfigFile(
-            "item/potion.yaml",
-            """
-            id: potion
-            name: Potion
-            """);
-        CreateConfigFile(
-            "monster/slime.yaml",
+        var loader = CreateItemBackedMonsterLoader<MonsterPhaseDropConfigStub>(
             """
             id: 1
             name: Slime
@@ -2571,21 +2514,7 @@ public class YamlConfigLoaderTests
               -
                 wave: 2
                 dropItemId: bomb
-            """);
-        CreateSchemaFile(
-            "schemas/item.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "name"],
-              "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" }
-              }
-            }
-            """);
-        CreateSchemaFile(
-            "schemas/monster.schema.json",
+            """,
             """
             {
               "type": "object",
@@ -2609,13 +2538,9 @@ public class YamlConfigLoaderTests
                 }
               }
             }
-            """);
-
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
-                static config => config.Id)
-            .RegisterTable<int, MonsterPhaseDropConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
+            """,
+            static config => config.Id,
+            ("item/potion.yaml", "potion", "Potion"));
         var registry = new ConfigRegistry();
 
         var exception = Assert.ThrowsAsync<ConfigLoadException>(() => loader.LoadAsync(registry));
@@ -2766,41 +2691,14 @@ public class YamlConfigLoaderTests
     [Test]
     public void LoadAsync_Should_Throw_When_Array_Reference_Item_Is_Missing()
     {
-        CreateConfigFile(
-            "item/potion.yaml",
-            """
-            id: potion
-            name: Potion
-            """);
-        CreateConfigFile(
-            "item/slime-gel.yaml",
-            """
-            id: slime_gel
-            name: Slime Gel
-            """);
-        CreateConfigFile(
-            "monster/slime.yaml",
+        var loader = CreateItemBackedMonsterLoader<MonsterDropArrayConfigStub>(
             """
             id: 1
             name: Slime
             dropItemIds:
               - potion
               - missing_item
-            """);
-        CreateSchemaFile(
-            "schemas/item.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "name"],
-              "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" }
-              }
-            }
-            """);
-        CreateSchemaFile(
-            "schemas/monster.schema.json",
+            """,
             """
             {
               "type": "object",
@@ -2815,13 +2713,10 @@ public class YamlConfigLoaderTests
                 }
               }
             }
-            """);
-
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
-                static config => config.Id)
-            .RegisterTable<int, MonsterDropArrayConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
+            """,
+            static config => config.Id,
+            ("item/potion.yaml", "potion", "Potion"),
+            ("item/slime-gel.yaml", "slime_gel", "Slime Gel"));
         var registry = new ConfigRegistry();
 
         var exception = Assert.ThrowsAsync<ConfigLoadException>(() => loader.LoadAsync(registry));
@@ -2841,35 +2736,14 @@ public class YamlConfigLoaderTests
     [Test]
     public void LoadAsync_Should_Throw_When_Contains_Matched_Reference_Target_Is_Missing()
     {
-        CreateConfigFile(
-            "item/potion.yaml",
-            """
-            id: potion
-            name: Potion
-            """);
-        CreateConfigFile(
-            "monster/slime.yaml",
+        var loader = CreateItemBackedMonsterLoader<MonsterDropArrayConfigStub>(
             """
             id: 1
             name: Slime
             dropItemIds:
               - potion
               - missing_item
-            """);
-        CreateSchemaFile(
-            "schemas/item.schema.json",
-            """
-            {
-              "type": "object",
-              "required": ["id", "name"],
-              "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" }
-              }
-            }
-            """);
-        CreateSchemaFile(
-            "schemas/monster.schema.json",
+            """,
             """
             {
               "type": "object",
@@ -2890,13 +2764,9 @@ public class YamlConfigLoaderTests
                 }
               }
             }
-            """);
-
-        var loader = new YamlConfigLoader(_rootPath)
-            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
-                static config => config.Id)
-            .RegisterTable<int, MonsterDropArrayConfigStub>("monster", "monster", "schemas/monster.schema.json",
-                static config => config.Id);
+            """,
+            static config => config.Id,
+            ("item/potion.yaml", "potion", "Potion"));
         var registry = new ConfigRegistry();
 
         var exception = Assert.ThrowsAsync<ConfigLoadException>(() => loader.LoadAsync(registry));
@@ -3351,6 +3221,111 @@ public class YamlConfigLoaderTests
         {
             hotReload.UnRegister();
         }
+    }
+
+    /// <summary>
+    ///     为对象数组 <c>contains</c> 子集匹配场景创建加载器，避免测试方法体被大段固定 schema 稀释。
+    /// </summary>
+    /// <returns>已注册目标表的加载器。</returns>
+    private YamlConfigLoader CreateLoaderForContainsSubsetObjectArrayScenario()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            entries:
+              -
+                id: 1
+                weight: 2
+              -
+                id: 2
+                weight: 3
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name", "entries"],
+              "properties": {
+                "id": { "type": "integer" },
+                "name": { "type": "string" },
+                "entries": {
+                  "type": "array",
+                  "minContains": 1,
+                  "contains": {
+                    "type": "object",
+                    "required": ["id"],
+                    "properties": {
+                      "id": {
+                        "type": "integer",
+                        "const": 1
+                      }
+                    }
+                  },
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "weight"],
+                    "properties": {
+                      "id": { "type": "integer" },
+                      "weight": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        return new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterWeightedEntryArrayConfigStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+    }
+
+    /// <summary>
+    ///     为跨表引用加载测试创建标准 item 表夹具，并按既有顺序注册 <c>item</c> 与 <c>monster</c>。
+    /// </summary>
+    /// <typeparam name="TMonsterConfig">monster 表的配置类型。</typeparam>
+    /// <param name="monsterConfigContent">monster 配置文件内容。</param>
+    /// <param name="monsterSchemaContent">monster schema 内容。</param>
+    /// <param name="keySelector">monster 表主键选择器。</param>
+    /// <param name="items">要写入的 item 配置文件集合。</param>
+    /// <returns>已完成 schema 与表注册的加载器。</returns>
+    private YamlConfigLoader CreateItemBackedMonsterLoader<TMonsterConfig>(
+        string monsterConfigContent,
+        string monsterSchemaContent,
+        Func<TMonsterConfig, int> keySelector,
+        params (string RelativePath, string ItemId, string Name)[] items)
+    {
+        foreach (var (relativePath, itemId, name) in items)
+        {
+            CreateConfigFile(
+                relativePath,
+                $"""
+                id: {itemId}
+                name: {name}
+                """);
+        }
+
+        CreateConfigFile("monster/slime.yaml", monsterConfigContent);
+        CreateSchemaFile(
+            "schemas/item.schema.json",
+            """
+            {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            }
+            """);
+        CreateSchemaFile("schemas/monster.schema.json", monsterSchemaContent);
+
+        return new YamlConfigLoader(_rootPath)
+            .RegisterTable<string, ItemConfigStub>("item", "item", "schemas/item.schema.json",
+                static config => config.Id)
+            .RegisterTable<int, TMonsterConfig>("monster", "monster", "schemas/monster.schema.json", keySelector);
     }
 
     /// <summary>
