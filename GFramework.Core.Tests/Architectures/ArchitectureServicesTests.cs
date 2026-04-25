@@ -351,12 +351,12 @@ public class TestArchitectureContextV3 : IArchitectureContext
     public ValueTask<TResponse> SendRequestAsync<TResponse>(IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     public TResponse SendRequest<TResponse>(IRequest<TResponse> request)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     /// <summary>
@@ -371,7 +371,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
         GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     /// <summary>
@@ -383,7 +383,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public TResponse SendCommand<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     /// <summary>
@@ -398,7 +398,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
         GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     /// <summary>
@@ -410,32 +410,32 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <exception cref="NotImplementedException">该测试桩未实现此成员。</exception>
     public TResponse SendQuery<TResponse>(GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     public ValueTask PublishAsync<TNotification>(TNotification notification,
         CancellationToken cancellationToken = default) where TNotification : INotification
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
         IStreamRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     public ValueTask SendAsync<TCommand>(TCommand command, CancellationToken cancellationToken = default)
         where TCommand : IRequest<Unit>
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     public ValueTask<TResponse> SendAsync<TResponse>(IRequest<TResponse> command,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        throw new NotSupportedException();
     }
 
     public void SendCommand(ICommand command)
