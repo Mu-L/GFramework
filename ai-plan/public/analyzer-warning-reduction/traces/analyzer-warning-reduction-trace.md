@@ -2,6 +2,44 @@
 
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-25 — RP-061
+
+### 阶段：扩展到 `28 files / 903 lines` 并切回新文件优先策略
+
+- 触发背景：
+  - `RP-060` 之后分支已连续落地多笔 runtime / test 小批次，但 active tracking 仍停在 `b27bcb5` 与 `9 files / 480 lines`
+  - 用户明确允许继续委派 subagent，因此主线程可以把新的低风险机械型测试清理继续拆成互不重叠的写集
+  - 当前主停止条件仍是相对 `origin/main` 的累计 branch diff 接近 `75 changed files`
+- 主线程实施：
+  - 接受并保留以下提交进入当前分支：
+    - `64c8589` `fix(game): 清理 SettingsSystem 与 ScopedStorage 的 MA0004`
+    - `4bb8f4f` `fix(game): 清理 SceneRouterBase 低风险异步包装`
+    - `bad6c1b` `fix(game): 清理 FileStorage 异步存储路径的 MA0004`
+    - `e8eda81` `fix(routing): 清理 RouterBase 守卫异步等待的 MA0004`
+    - `3be299e` `fix(game): 清理 UiRouterBase 的低风险异步包装`
+    - `09cbd16` `test(game-tests): 简化 YAML 配置加载异常断言包装`
+    - `9b20a07` `refactor(game-tests): 简化异步异常断言包装`
+    - `67c9359` `test(core-tests): 简化异步断言包装`
+  - 主线程复核 `Core.Tests` 工作树改动后，将 7 个文件的机械型 `async () => await ...` 包装收口为单笔提交，避免并发批次长期悬空
+  - 用 `rg -n "async \\(\\) => await"` 重新定位下一轮候选，并把新的 3 个 disjoint 写集派发给 subagent：
+    - `ResultExtensionsTests.cs` + `AsyncOperationTests.cs`
+    - `StateMachineSystemTests.cs` + `StateMachineTests.cs`
+    - `ArchitectureConfigIntegrationTests.cs`
+- 验证里程碑：
+  - `dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --no-incremental`
+    - 结果：成功；`145 Warning(s)`、`0 Error(s)`
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-incremental`
+    - 并行首次复验：失败；`GenerateDepsFile` 命中共享输出文件锁，不作为代码回归结论
+    - 串行复验：成功；`298 Warning(s)`、`0 Error(s)`
+  - `git diff --name-only origin/main...HEAD | wc -l`
+    - 结果：`28`
+  - `git diff --numstat origin/main...HEAD`
+    - 结果：累计 `498` added、`405` deleted，即 `903` changed lines
+- 当前结论：
+  - 分支已从 `RP-060` 的 `9 files / 480 lines` 推进到 `28 files / 903 lines`
+  - 当前最有效的继续路径仍然是新的低风险测试文件，而不是回到 `YamlConfigLoaderTests.cs` 深挖高上下文 `MA0051`
+  - 下一恢复点应直接接收 3 个新 subagent 批次的结果，并在必要时继续扩展到剩余 `Core.Tests` / `Game.Tests` 机械型异步断言热点
+
 ## 2026-04-25 — RP-060
 
 ### 阶段：并行子批次推进到 `9 files / 480 lines`
