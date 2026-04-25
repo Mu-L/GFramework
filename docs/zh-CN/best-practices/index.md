@@ -121,7 +121,7 @@ public class GetPlayerPositionQuery : AbstractQuery<Vector2>
 
 ### 1. 项目结构
 
-```
+```text
 GameProject/
 ├── Models/
 │   ├── PlayerModel.cs

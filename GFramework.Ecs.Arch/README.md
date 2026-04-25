@@ -119,9 +119,9 @@ ecsModule.Update(deltaTime);
 | `ArchOptions.cs` | 承载 `WorldCapacity`、`EnableStatistics`、`Priority` 这组运行时配置 |
 | `Components/*.cs`、`Systems/*.cs` | 提供最小组件与系统示例，帮助对照查询写法和更新模式 |
 
-## XML 阅读基线
+## XML 阅读入口
 
-下表记录当前模块 README 与源码可对照的类型声明级 XML 基线。
+下表汇总当前模块 README 与源码可对照的类型级 XML 文档入口，方便先抓住 Arch ECS 集成的关键类型。
 
 | 类型族 | 代表类型 | XML 状态 | 阅读重点 |
 | --- | --- | --- | --- |

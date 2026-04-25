@@ -946,7 +946,7 @@ public class BindablePropertyTests
 
 以下是一个完整的测试项目结构示例：
 
-```
+```text
 MyGame.Tests/
 ├── GlobalUsings.cs
 ├── MyGame.Tests.csproj
@@ -997,7 +997,7 @@ dotnet test --collect:"XPlat Code Coverage"
 
 ## 测试输出示例
 
-```
+```text
 正在启动测试执行，请稍候...
 总共 1 个测试文件与指定模式匹配。
 

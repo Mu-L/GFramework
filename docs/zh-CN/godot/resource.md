@@ -542,7 +542,7 @@ public partial class MyResource : Resource, IHasKey<string>
 **解答**：
 推荐按类型和功能组织：
 
-```
+```text
 res://data/
 ├── items/          # 物品资源
 │   ├── weapons/

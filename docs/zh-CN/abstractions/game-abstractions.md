@@ -109,10 +109,10 @@ public sealed class ContinueGameCommandHandler
 ## 阅读顺序
 
 1. 先读本页，确认你是否真的只需要契约层
-2. 再看 [`../game/index.md`](../game/index.md) 了解默认运行时怎么组织这些契约
+2. 再看 [Game 模块总览](../game/index.md) 了解默认运行时怎么组织这些契约
 3. 继续读具体专题页：
-   - [`../game/config-system.md`](../game/config-system.md)
-   - [`../game/data.md`](../game/data.md)
+   - [配置系统](../game/config-system.md)
+   - [数据系统](../game/data.md)
    - [设置系统](../game/setting.md)
    - [场景系统](../game/scene.md)
    - [UI 系统](../game/ui.md)

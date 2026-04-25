@@ -33,9 +33,9 @@
 | `IArchSystemAdapter.cs` | 让 ECS 系统适配到 GFramework `ISystem` 生命周期的接口 |
 | `ArchOptions.cs` | `WorldCapacity`、`EnableStatistics`、`Priority` 等配置对象 |
 
-## XML 阅读基线
+## XML 阅读入口
 
-下表记录当前契约包的类型声明级 XML 基线，方便把 README、站内抽象页与源码阅读顺序对齐。
+下表汇总当前契约包的类型级 XML 文档入口，方便把 README、站内抽象页与源码阅读顺序对齐。
 
 | 类型族 | 代表类型 | XML 状态 | 阅读重点 |
 | --- | --- | --- | --- |

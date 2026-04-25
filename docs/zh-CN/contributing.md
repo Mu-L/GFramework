@@ -318,7 +318,7 @@ public TModel RegisterModel&lt;TModel&gt;(TModel model) where TModel : IModel
 
 使用 Conventional Commits 规范：
 
-```
+```text
 <type>(<scope>): <subject>
 
 <body>
