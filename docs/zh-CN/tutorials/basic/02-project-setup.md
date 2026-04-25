@@ -40,7 +40,7 @@ next:
 
 在项目根目录创建以下文件夹：
 
-```
+```text
 MyGFrameworkGame/
 ├── scripts/          # C# 脚本代码
 │   ├── architecture/ # 架构相关
@@ -368,7 +368,7 @@ public partial class GameEntryPoint : Node
 
 运行游戏（F5），在输出面板应该看到：
 
-```
+```text
 ✅ GFramework 架构初始化完成！
 ```
 
@@ -378,7 +378,7 @@ public partial class GameEntryPoint : Node
 
 此时，你的项目结构应该如下：
 
-```
+```text
 MyGFrameworkGame/
 ├── scripts/
 │   ├── architecture/
@@ -400,7 +400,7 @@ MyGFrameworkGame/
 
 让我们回顾一下刚才搭建的架构：
 
-```
+```text
 GameEntryPoint (入口)
     ↓
 GameArchitecture (架构核心)

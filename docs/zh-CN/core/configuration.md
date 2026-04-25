@@ -706,7 +706,7 @@ if (volume == 0) volume = 1.0f;  // 需要额外的检查
 
 将配置文件按环境和用途分类：
 
-```
+```text
 config/
 ├── default.json          # 默认配置
 ├── dev.json             # 开发环境配置

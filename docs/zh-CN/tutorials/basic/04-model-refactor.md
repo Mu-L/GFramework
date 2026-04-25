@@ -337,7 +337,7 @@ this.RegisterEvent<CounterModel.ChangedCountEvent>(e =>
 
 ### 数据流向
 
-```
+```text
 用户点击按钮
     ↓
 Controller: _counterModel.Increment()

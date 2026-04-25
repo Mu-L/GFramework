@@ -274,7 +274,7 @@ var sortedSystems = container.GetAllSorted<ISystem>((a, b) =>
 
 ## IoC 容器架构
 
-```
+```text
 Architecture (架构层)
 ├── IocContainer (IoC容器)
 │   ├── Register<T>()          // 泛型注册
@@ -341,7 +341,7 @@ public abstract class Architecture : IArchitecture
 
 ### 注册组件到容器
 
-```
+```csharp
 public class GameArchitecture : Architecture
 {
     protected override void Init()
@@ -365,7 +365,7 @@ public class GameArchitecture : Architecture
 
 ### 从容器获取组件
 
-```
+```csharp
 // 通过扩展方法间接使用 IoC 容器
 public class PlayerController : IController
 {
@@ -385,7 +385,7 @@ public class PlayerController : IController
 
 ### 内部实现
 
-```
+```csharp
 public class IocContainer
 {
     // 使用字典存储类型到实例集合的映射
@@ -450,7 +450,7 @@ public class IocContainer
 
 ### 注册流程
 
-```
+```text
 用户代码
    ↓
 RegisterSystem<T>(system)
@@ -462,7 +462,7 @@ IocContainer.Register<T>(system)
 
 ### 获取流程
 
-```
+```text
 用户代码
    ↓
 this.GetSystem<T>()
@@ -480,7 +480,7 @@ IocContainer.Get<T>()
 
 ### 基础使用
 
-```
+```csharp
 // 1. 创建容器
 var container = new IocContainer();
 
@@ -495,7 +495,7 @@ service.DoSomething();
 
 ### 接口和实现分离
 
-```
+```csharp
 // 定义接口
 public interface IDataService
 {
@@ -532,7 +532,7 @@ dataService.SaveData("game data");
 
 ### 注册多个实现
 
-```
+```csharp
 var container = new IocContainer();
 
 // 注册多个相同接口的不同实现
@@ -552,7 +552,7 @@ var allServices = container.GetAll<IDataService>();  // 返回两个实例的列
 
 检查容器中是否包含指定类型的实例。
 
-```
+```csharp
 public bool Contains<T>() where T : class
 ```
 
@@ -566,7 +566,7 @@ public bool Contains<T>() where T : class
 
 **使用示例：**
 
-```
+```csharp
 var container = new IocContainer();
 
 // 检查服务是否已注册
@@ -592,7 +592,7 @@ if (!container.Contains<ISettingsService>())
 
 判断容器中是否包含某个具体的实例对象。
 
-```
+```csharp
 public bool ContainsInstance(object instance)
 ```
 
@@ -606,7 +606,7 @@ public bool ContainsInstance(object instance)
 
 **使用示例：**
 
-```
+```csharp
 var container = new IocContainer();
 
 var service = new MyService();
@@ -636,13 +636,13 @@ if (!container.ContainsInstance(anotherService))
 
 清空容器中的所有实例。
 
-```
+```csharp
 public void Clear()
 ```
 
 **使用示例：**
 
-```
+```csharp
 var container = new IocContainer();
 
 // 注册多个服务
@@ -711,7 +711,7 @@ Console.WriteLine($"Contains IService2: {container.Contains<IService2>()}");  //
 
 ### 本框架的 IocContainer
 
-```
+```csharp
 // 简单直接
 var container = new IocContainer();
 container.Register(new MyService());
@@ -730,7 +730,7 @@ var service = container.Get<MyService>();
 
 ### 完整的 IoC 框架（如 Autofac、Zenject）
 
-```
+```csharp
 // 复杂但功能强大
 var builder = new ContainerBuilder();
 builder.RegisterType<MyService>().As<IMyService>().SingleInstance();
@@ -753,7 +753,7 @@ var controller = container.Resolve<MyController>();
 
 ### 1. 在架构初始化时注册
 
-```
+```csharp
 public class GameArchitecture : Architecture
 {
     protected override void Init()
@@ -776,7 +776,7 @@ public class GameArchitecture : Architecture
 
 ### 2. 使用接口类型注册
 
-```
+```csharp
 // ❌ 不推荐：直接使用实现类
 RegisterSystem(new ConcreteSystem());
 var system = GetSystem<ConcreteSystem>();
@@ -788,7 +788,7 @@ var system = GetSystem<IGameSystem>();
 
 ### 3. 避免运行时频繁注册
 
-```
+```csharp
 // ❌ 不好：游戏运行时频繁注册
 void Update()
 {
@@ -804,7 +804,7 @@ protected override void Init()
 
 ### 4. 检查 null 返回值
 
-```
+```csharp
 // 获取可能不存在的服务
 var service = container.Get<IOptionalService>();
 if (service != null)
@@ -819,7 +819,7 @@ else
 
 ### 5. 合理使用容器冻结
 
-```
+```csharp
 // 在架构初始化完成后冻结容器，防止意外修改
 protected override void OnInit()
 {

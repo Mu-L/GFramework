@@ -287,7 +287,7 @@ await architecture.InitializeAsync();
 
 ### 1. 事件驱动的 System
 
-```
+```csharp
 public class InventorySystem : AbstractSystem
 {
     protected override void OnInit()
@@ -353,7 +353,7 @@ public class InventorySystem : AbstractSystem
 
 ### 2. 定时更新的 System
 
-```
+```csharp
 public class BuffSystem : AbstractSystem
 {
     private List<BuffData> _activeBuffs = new();
@@ -405,7 +405,7 @@ public class BuffSystem : AbstractSystem
 
 ### 3. 跨 System 协作
 
-```
+```csharp
 public class QuestSystem : AbstractSystem
 {
     protected override void OnInit()
@@ -490,7 +490,7 @@ public class RewardSystem : AbstractSystem
 
 ### 4. 管理复杂状态机
 
-```
+```csharp
 public class GameStateSystem : AbstractSystem
 {
     private GameState _currentState = GameState.MainMenu;
@@ -569,7 +569,7 @@ public class GameStateSystem : AbstractSystem
 - **特点**：主动，响应事件
 - **示例**：CombatSystem、QuestSystem
 
-```
+```csharp
 // ✅ 正确的职责划分
 
 // Model: 存储数据
@@ -617,7 +617,7 @@ public class CombatSystem : AbstractSystem
 
 ### 1. 避免频繁的 GetModel/GetSystem
 
-```
+```csharp
 // ❌ 不好：每次都获取
 private void OnUpdate(GameUpdateEvent e)
 {
@@ -642,7 +642,7 @@ private void OnUpdate(GameUpdateEvent e)
 
 ### 2. 批量处理
 
-```
+```csharp
 public class ParticleSystem : AbstractSystem
 {
     private List<Particle> _particles = new();

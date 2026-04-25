@@ -91,7 +91,7 @@ dotnet --version
 
 你应该看到类似以下输出：
 
-```
+```text
 6.0.428
 ```
 
@@ -271,7 +271,7 @@ public partial class TestScript : Node
 
 如果在输出面板看到：
 
-```
+```text
 ✅ Godot + .NET 环境配置成功！
 ✅ .NET 版本: 6.0.x
 ✅ 准备开始使用 GFramework！

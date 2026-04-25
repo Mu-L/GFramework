@@ -45,7 +45,7 @@ public interface IPoolableObject
 
 **生命周期：**
 
-```
+```text
 创建 → Acquire（从池取出）→ 使用 → Release（放回池）→ 可再次 Acquire
                                           ↓
                                     Pool Destroy → OnPoolDestroy → 销毁

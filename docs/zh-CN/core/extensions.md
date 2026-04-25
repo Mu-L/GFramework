@@ -86,7 +86,7 @@ public class GameModel : AbstractModel, IContextAware
 
 #### SendCommand 扩展方法
 
-```
+```csharp
 // 发送无返回值的命令
 public static void SendCommand(this IContextAware contextAware, ICommand command)
 
@@ -96,7 +96,7 @@ public static TResult SendCommand<TResult>(this IContextAware contextAware, ICom
 
 **使用示例：**
 
-```
+```csharp
 public class GameController : IController
 {
     public void OnStartButtonClicked()
@@ -112,13 +112,13 @@ public class GameController : IController
 
 #### SendQuery 扩展方法
 
-```
+```csharp
 public static TResult SendQuery<TResult>(this IContextAware contextAware, IQuery<TResult> query)
 ```
 
 **使用示例：**
 
-```
+```csharp
 public class InventoryController : IController
 {
     public void ShowInventory()
@@ -134,7 +134,7 @@ public class InventoryController : IController
 
 #### SendEvent 扩展方法
 
-```
+```csharp
 // 发送无参事件
 public static void SendEvent<T>(this IContextAware contextAware) where T : new()
 
@@ -144,7 +144,7 @@ public static void SendEvent<T>(this IContextAware contextAware, T e) where T : 
 
 **使用示例：**
 
-```
+```csharp
 public class PlayerModel : AbstractModel, IContextAware
 {
     public void TakeDamage(int damage)
@@ -169,13 +169,13 @@ public class PlayerModel : AbstractModel, IContextAware
 
 #### RegisterEvent 扩展方法
 
-```
+```csharp
 public static IUnRegister RegisterEvent<TEvent>(this IContextAware contextAware, Action<TEvent> handler)
 ```
 
 **使用示例：**
 
-```
+```csharp
 public class GameController : IController
 {
     private IUnRegisterList _unregisterList = new UnRegisterList();
@@ -197,13 +197,13 @@ public class GameController : IController
 
 #### UnRegisterEvent 扩展方法
 
-```
+```csharp
 public static void UnRegisterEvent<TEvent>(this IContextAware contextAware, Action<TEvent> onEvent)
 ```
 
 ### GetEnvironment 扩展方法
 
-```
+```csharp
 public static T? GetEnvironment<T>(this IContextAware contextAware) where T : class
 public static IEnvironment GetEnvironment(this IContextAware contextAware)
 ```
@@ -214,7 +214,7 @@ public static IEnvironment GetEnvironment(this IContextAware contextAware)
 
 #### IfType 扩展方法
 
-```
+```csharp
 // 最简单的类型判断
 public static bool IfType<T>(this object obj, Action<T> action)
 
@@ -235,7 +235,7 @@ public static void IfType<T>(
 
 **使用示例：**
 
-```
+```csharp
 object obj = new MyRule();
 
 // 简单类型判断
@@ -259,7 +259,7 @@ obj.IfType<IRule>(
 
 #### IfType`<T, TResult>` 扩展方法
 
-```
+```csharp
 public static TResult? IfType<T, TResult>(
     this object obj,
     Func<T, TResult> func
@@ -268,7 +268,7 @@ public static TResult? IfType<T, TResult>(
 
 **使用示例：**
 
-```
+```csharp
 object obj = new MyRule { Name = "TestRule" };
 
 string? name = obj.IfType<MyRule, string>(r => r.Name);
@@ -276,7 +276,7 @@ string? name = obj.IfType<MyRule, string>(r => r.Name);
 
 #### As 和 Do 扩展方法
 
-```
+```csharp
 // 安全类型转换
 public static T? As<T>(this object obj) where T : class
 
@@ -286,7 +286,7 @@ public static T Do<T>(this T obj, Action<T> action)
 
 **使用示例：**
 
-```
+```csharp
 // 安全类型转换
 obj.As<MyRule>()
    ?.Execute();
@@ -307,7 +307,7 @@ obj.As<MyRule>()
 
 #### SwitchType 扩展方法
 
-```
+```csharp
 public static void SwitchType(
     this object obj,
     params (Type type, Action<object> action)[] handlers
@@ -316,7 +316,7 @@ public static void SwitchType(
 
 **使用示例：**
 
-```
+```csharp
 obj.SwitchType(
     (typeof(IRule), o => HandleRule((IRule)o)),
     (typeof(ISystem), o => HandleSystem((ISystem)o)),
@@ -330,13 +330,13 @@ obj.SwitchType(
 
 #### OrEventExtensions
 
-```
+```csharp
 public static OrEvent Or(this IEvent self, IEvent e)
 ```
 
 **使用示例：**
 
-```
+```csharp
 // 组合多个事件：当任意一个触发时执行
 var onAnyInput = onKeyPressed.Or(onMouseClicked).Or(onTouchDetected);
 
@@ -357,7 +357,7 @@ var onAnyDamage = onPhysicalDamage
 
 #### UnRegisterListExtension
 
-```
+```csharp
 // 添加到注销列表
 public static void AddToUnregisterList(this IUnRegister self, 
     IUnRegisterList unRegisterList)
@@ -368,7 +368,7 @@ public static void UnRegisterAll(this IUnRegisterList self)
 
 **使用示例：**
 
-```
+```csharp
 public class ComplexController : IController
 {
     private IUnRegisterList _unregisterList = new UnRegisterList();
@@ -401,7 +401,7 @@ public class ComplexController : IController
 
 ### Controller 示例
 
-```
+```csharp
 public partial class GameplayController : IController
 {
     private IUnRegisterList _unregisterList = new UnRegisterList();
@@ -453,7 +453,7 @@ public partial class GameplayController : IController
 
 ### Command 示例
 
-```
+```csharp
 public class ComplexGameCommand : AbstractCommand
 {
     protected override void OnExecute()
@@ -478,7 +478,7 @@ public class ComplexGameCommand : AbstractCommand
 
 ### System 示例
 
-```
+```csharp
 public class AchievementSystem : AbstractSystem
 {
     protected override void OnInit()

@@ -119,7 +119,7 @@ bool ValidateOnLoad { get; set; }         // 是否在加载时验证，默认 t
 
 ### 目录结构
 
-```
+```text
 res://localization/
 ├── eng/                    # 英文
 │   ├── common.json        # 通用文本

@@ -113,7 +113,7 @@ this.RegisterEvent<ChangedCountEvent>(e =>
 
 ## 完整架构图
 
-```
+```text
 ┌──────────────────────────────────────────────┐
 │                   View (UI)                  │
 │  Godot Nodes (Label, Button)                │
@@ -224,7 +224,7 @@ _view.UpdateView();
 
 数据总是单向流动：
 
-```
+```text
 Action → Command → Model → Event → View/System
 ```
 
@@ -519,7 +519,7 @@ public void ExecuteCommand_ShouldIncrementModel()
 
 **按功能模块划分**：
 
-```
+```text
 scripts/
 ├── counter/
 │   ├── model/
@@ -537,7 +537,7 @@ scripts/
 
 **按层级划分**：
 
-```
+```text
 scripts/
 ├── model/
 │   ├── CounterModel.cs
