@@ -1,5 +1,41 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-25 — RP-068
+
+### 阶段：吸收并行 subagent 小批次，并继续压低仓库根 warning 基线
+
+- 触发背景：
+  - `RP-067` 收尾后，当前分支的仓库根基线已降到 `649 Warning(s)`，branch diff 仅 `9 files`
+  - 用户明确允许主线程与 subagent 在不冲突的写集上并行推进，因此本轮继续按 `$gframework-batch-boot 50` 规则拆成 3 个单文件切片
+- 接受的委派范围：
+  - worker `Averroes`
+    - 文件：`GFramework.Core.Tests/Logging/LogContextTests.cs`
+    - 目标：收敛 `Push_InAsyncContext_ShouldIsolateAcrossThreads()` 内的 `MA0004`
+    - 结果：提交 `a7fa70e` `fix(core-tests): 清理 LogContextTests 异步等待 warning`
+  - worker `Laplace`
+    - 文件：`GFramework.Core.Tests/Logging/LoggerTests.cs`
+    - 目标：把 `TestLogger.Logs` 从 `List<LogEntry>` 收口为集合抽象以修复 `MA0016`
+    - 结果：提交 `9f6204d` `fix(core-tests): 收口 LoggerTests 日志集合抽象`
+- 主线程实施：
+  - 本地重构 `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs`
+  - 将 `RegisterHandlers_Should_Cache_Assembly_Metadata_Across_Containers()` 中的 mock 装配、handler 类型读取、预期集合断言与 metadata lookup verify 拆分为具名 helper
+  - 在吸收两个 worker 提交后，主线程重新执行直接受影响模块与仓库根验证，确保并行切片合并后的真值一致
+- 验证里程碑：
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：成功；`155 Warning(s)`、`0 Error(s)`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsHandlerRegistrarTests.RegisterHandlers_Should_Cache_Assembly_Metadata_Across_Containers"`
+    - 结果：成功；`Passed 1/1`
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet clean`
+    - 结果：成功
+  - `dotnet build`
+    - 结果：成功；`645 Warning(s)`、`0 Error(s)`，相较 `RP-067` 的 `649` 再下降 `4`
+- 当前结论：
+  - 并行 3 文件批次已确认有效，且主线程已把 subagent 的负责范围和验证结果收口进 active trace
+  - 当前分支距离 `$gframework-batch-boot 50` 的停止阈值仍有充足空间，可以继续用“主线程验证 + subagent 并行单文件切片”的节奏推进
+  - 下一轮可优先回到 `GFramework.Cqrs.Tests` 或 `GFramework.Game` 的单文件 `MA0051` / `MA0016` 热点
+
 ## 2026-04-25 — RP-067
 
 ### 阶段：收口 Game runtime 单文件长方法切片，并继续压低根构建 warning 基线

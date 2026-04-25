@@ -6,14 +6,14 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-067`
-- 当前阶段：`Phase 67`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-068`
+- 当前阶段：`Phase 68`
 - 当前焦点：
-  - `2026-04-25` 已连续提交 `6a704f3` `fix(analyzer): 固化沙箱外验证并清理测试噪音` 与 `be26640` `test(game-tests): 收敛热重载长方法 warning`
-  - 当前单文件批次聚焦 `GFramework.Game/Internal/VersionedMigrationRunner.cs`，通过拆分迁移主循环中的职责收敛根构建直接确认的 `MA0051`
-  - 提权后的直接仓库根基线已从 `652 Warning(s)` 降至 `649 Warning(s)`，说明本轮 runtime 单文件批次继续有效
-  - `GFramework.Game` 的直接受影响 `Release` build 当前为 `0 Warning(s)`、`0 Error(s)`
-  - 本轮只新增 1 个源码唯一文件，branch diff 仍显著低于 `$gframework-batch-boot 50` 阈值
+  - `2026-04-25` 主线程已提交 `1b85b53` `refactor(game): 收敛版本化迁移运行器长方法 warning`
+  - 并行 subagent 批次已提交 `a7fa70e` `fix(core-tests): 清理 LogContextTests 异步等待 warning` 与 `9f6204d` `fix(core-tests): 收口 LoggerTests 日志集合抽象`
+  - 当前主线程单文件批次聚焦 `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs`，通过拆分缓存元数据测试的装配、断言与 verify helper 收敛根构建直接确认的 `MA0051`
+  - 提权后的直接仓库根基线已从 `649 Warning(s)` 降至 `645 Warning(s)`，说明本轮 3 文件并行批次继续有效
+  - `GFramework.Cqrs.Tests` 与 `GFramework.Core.Tests` 的直接受影响 `Release` build 当前均已通过，branch diff 仍显著低于 `$gframework-batch-boot 50` 阈值
 
 ## 当前活跃事实
 
@@ -22,9 +22,12 @@
   - `dotnet clean`
     - 结果：成功；此前沙箱内 “Build FAILED but 0 errors” 的 clean 结果不是仓库真值
   - `dotnet build`
-    - 最新结果：成功；`649 Warning(s)`、`0 Error(s)`
+    - 最新结果：成功；`645 Warning(s)`、`0 Error(s)`
 - 已提交的低风险批次文件：
   - `AGENTS.md`
+  - `GFramework.Core.Tests/Logging/LogContextTests.cs`
+  - `GFramework.Core.Tests/Logging/LoggerTests.cs`
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs`
   - `GFramework.Ecs.Arch.Tests/Ecs/EcsAdvancedTests.cs`
   - `GFramework.Game.Tests/Config/GameConfigBootstrapTests.cs`
   - `GFramework.Game.Tests/Config/GeneratedConfigConsumerIntegrationTests.cs`
@@ -34,7 +37,11 @@
   - `ai-plan/public/analyzer-warning-reduction/todos/analyzer-warning-reduction-tracking.md`
   - `ai-plan/public/analyzer-warning-reduction/traces/analyzer-warning-reduction-trace.md`
 - 当前批次验证结果：
-  - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 最新主线程结果：成功；`155 Warning(s)`、`0 Error(s)`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsHandlerRegistrarTests.RegisterHandlers_Should_Cache_Assembly_Metadata_Across_Containers"`
+    - 最新主线程结果：成功；`Passed 1/1`
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
     - 最新主线程结果：成功；`0 Warning(s)`、`0 Error(s)`
 
 ## 当前风险
@@ -63,12 +70,16 @@
 - `dotnet clean`
   - 当前结果：成功；在提权后的直接 shell 中可正常完成仓库根 clean
 - `dotnet build`
-  - 当前结果：成功；`649 Warning(s)`、`0 Error(s)`
-- `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+  - 当前结果：成功；`645 Warning(s)`、`0 Error(s)`
+- `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 当前结果：成功；`155 Warning(s)`、`0 Error(s)`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsHandlerRegistrarTests.RegisterHandlers_Should_Cache_Assembly_Metadata_Across_Containers"`
+  - 当前结果：成功；`Passed 1/1`
+- `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
   - 当前结果：成功；`0 Warning(s)`、`0 Error(s)`
 
 ## 下一步建议
 
-1. 以当前 `649 Warning(s)` 根基线为新恢复点，继续按 `$gframework-batch-boot 50` 规则重算 branch diff，并挑选下一个 1-3 文件的低风险热点。
-2. 下一轮优先从 `GFramework.Cqrs.Tests` 或 `GFramework.Game` 中继续选择单文件 `MA0051`、`MA0016` 或测试噪音切片，避免过早推高 review 范围。
+1. 以当前 `645 Warning(s)` 根基线为新恢复点，继续按 `$gframework-batch-boot 50` 规则重算 branch diff，并挑选下一个 1-3 文件的低风险热点。
+2. 下一轮优先从 `GFramework.Cqrs.Tests`、`GFramework.Core.Tests` 或 `GFramework.Game` 中继续选择单文件 `MA0051`、`MA0016` 或测试噪音切片，避免过早推高 review 范围。
 3. 后续凡是沙箱内 `.NET` 验证再次出现无诊断失败、pipe/socket 权限问题或与普通 shell 不一致的结果，直接申请沙箱外重跑同一命令，不再扩散 workaround 型命令噪音。

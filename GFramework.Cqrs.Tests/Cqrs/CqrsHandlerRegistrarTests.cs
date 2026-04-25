@@ -327,27 +327,7 @@ internal sealed class CqrsHandlerRegistrarTests
     [Test]
     public void RegisterHandlers_Should_Cache_Assembly_Metadata_Across_Containers()
     {
-        var generatedAssembly = new Mock<Assembly>();
-        generatedAssembly
-            .SetupGet(static assembly => assembly.FullName)
-            .Returns("GFramework.Core.Tests.Cqrs.CachedMetadataAssembly, Version=1.0.0.0");
-        generatedAssembly
-            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
-            .Returns([new CqrsHandlerRegistryAttribute(typeof(PartialGeneratedNotificationHandlerRegistry))]);
-        generatedAssembly
-            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false))
-            .Returns(
-            [
-                new CqrsReflectionFallbackAttribute(
-                    ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!)
-            ]);
-        generatedAssembly
-            .Setup(static assembly => assembly.GetType(
-                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!,
-                false,
-                false))
-            .Returns(ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType);
-
+        var generatedAssembly = CreateCachedMetadataAssembly();
         var firstContainer = new MicrosoftDiContainer();
         var secondContainer = new MicrosoftDiContainer();
 
@@ -356,43 +336,8 @@ internal sealed class CqrsHandlerRegistrarTests
         firstContainer.Freeze();
         secondContainer.Freeze();
 
-        var firstRegistrations = firstContainer.GetAll<INotificationHandler<GeneratedRegistryNotification>>()
-            .Select(static handler => handler.GetType())
-            .ToArray();
-        var secondRegistrations = secondContainer.GetAll<INotificationHandler<GeneratedRegistryNotification>>()
-            .Select(static handler => handler.GetType())
-            .ToArray();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(
-                firstRegistrations,
-                Is.EqualTo(
-                [
-                    typeof(GeneratedRegistryNotificationHandler),
-                    ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType
-                ]));
-            Assert.That(
-                secondRegistrations,
-                Is.EqualTo(
-                [
-                    typeof(GeneratedRegistryNotificationHandler),
-                    ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType
-                ]));
-        });
-
-        generatedAssembly.Verify(
-            static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false),
-            Times.Once);
-        generatedAssembly.Verify(
-            static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false),
-            Times.Once);
-        generatedAssembly.Verify(
-            static assembly => assembly.GetType(
-                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!,
-                false,
-                false),
-            Times.Once);
+        AssertGeneratedRegistryNotificationHandlers(firstContainer, secondContainer);
+        VerifyCachedMetadataAssemblyLookups(generatedAssembly);
     }
 
     /// <summary>
@@ -524,6 +469,93 @@ internal sealed class CqrsHandlerRegistrarTests
         ClearCache(GetRegistrarCacheField("RegistryActivationMetadataCache"));
         ClearCache(GetRegistrarCacheField("LoadableTypesCache"));
         ClearCache(GetRegistrarCacheField("SupportedHandlerInterfacesCache"));
+    }
+
+    /// <summary>
+    ///     创建一个携带 generated registry 与 reflection fallback 元数据的程序集替身，
+    ///     用于验证 registrar 是否会跨容器复用程序集级元数据。
+    /// </summary>
+    private static Mock<Assembly> CreateCachedMetadataAssembly()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Cqrs.CachedMetadataAssembly, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(PartialGeneratedNotificationHandlerRegistry))]);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false))
+            .Returns(
+            [
+                new CqrsReflectionFallbackAttribute(
+                    ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!)
+            ]);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetType(
+                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!,
+                false,
+                false))
+            .Returns(ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType);
+        return generatedAssembly;
+    }
+
+    /// <summary>
+    ///     断言两个容器都获得了相同的 generated-registry 与 reflection-fallback 处理器集合。
+    /// </summary>
+    private static void AssertGeneratedRegistryNotificationHandlers(
+        MicrosoftDiContainer firstContainer,
+        MicrosoftDiContainer secondContainer)
+    {
+        var firstRegistrations = GetGeneratedRegistryNotificationHandlerTypes(firstContainer);
+        var secondRegistrations = GetGeneratedRegistryNotificationHandlerTypes(secondContainer);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstRegistrations, Is.EqualTo(GetExpectedGeneratedRegistryNotificationHandlerTypes()));
+            Assert.That(secondRegistrations, Is.EqualTo(GetExpectedGeneratedRegistryNotificationHandlerTypes()));
+        });
+    }
+
+    /// <summary>
+    ///     读取容器中针对 generated notification 的 handler 运行时类型列表。
+    /// </summary>
+    private static Type[] GetGeneratedRegistryNotificationHandlerTypes(MicrosoftDiContainer container)
+    {
+        return container.GetAll<INotificationHandler<GeneratedRegistryNotification>>()
+            .Select(static handler => handler.GetType())
+            .ToArray();
+    }
+
+    /// <summary>
+    ///     获取 generated registry 与 reflection fallback 共同组成的预期 handler 顺序。
+    /// </summary>
+    private static Type[] GetExpectedGeneratedRegistryNotificationHandlerTypes()
+    {
+        return
+        [
+            typeof(GeneratedRegistryNotificationHandler),
+            ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType
+        ];
+    }
+
+    /// <summary>
+    ///     断言程序集级 generated registry / fallback 元数据只会被读取一次。
+    /// </summary>
+    private static void VerifyCachedMetadataAssemblyLookups(Mock<Assembly> generatedAssembly)
+    {
+        generatedAssembly.Verify(
+            static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false),
+            Times.Once);
+        generatedAssembly.Verify(
+            static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false),
+            Times.Once);
+        generatedAssembly.Verify(
+            static assembly => assembly.GetType(
+                ReflectionFallbackNotificationContainer.ReflectionOnlyHandlerType.FullName!,
+                false,
+                false),
+            Times.Once);
     }
 
     /// <summary>
