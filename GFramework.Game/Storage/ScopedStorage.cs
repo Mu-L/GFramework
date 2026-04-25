@@ -102,7 +102,7 @@ public sealed class ScopedStorage(IStorage inner, string prefix) : IScopedStorag
     /// <returns>异步操作任务</returns>
     public async Task DeleteAsync(string key)
     {
-        await inner.DeleteAsync(Key(key));
+        await inner.DeleteAsync(Key(key)).ConfigureAwait(false);
     }
 
     /// <summary>
