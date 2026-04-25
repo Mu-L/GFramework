@@ -33,7 +33,7 @@ All AI agents and contributors must follow these rules when writing, reviewing, 
   baseline from a non-incremental repository-root build by running `dotnet clean` and then `dotnet build`.
 - Contributors MUST NOT treat a repeated incremental `dotnet build` result as authoritative for warning inspection when
   a clean baseline has not been captured in the same round.
-- If a direct `dotnet clean`、`dotnet build`、or `dotnet test` command fails inside the agent sandbox with missing
+- If a direct `dotnet clean`, `dotnet build`, or `dotnet test` command fails inside the agent sandbox with missing
   diagnostics, `Permission denied`, MSBuild pipe/socket errors, or other environment-only noise that does not match a
   normal shell invocation, contributors MUST request permission and rerun the same direct command outside the sandbox
   before concluding that the repository or toolchain is broken.

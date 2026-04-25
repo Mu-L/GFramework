@@ -24,6 +24,19 @@ namespace GFramework.Game.Internal;
 internal static class VersionedMigrationRunner
 {
     /// <summary>
+    ///     复用一次迁移链执行期间不会变化的上下文，避免多个 helper 重复传递同一组委托和消息元数据。
+    /// </summary>
+    /// <typeparam name="TData">迁移数据类型。</typeparam>
+    /// <typeparam name="TMigration">迁移描述类型。</typeparam>
+    private readonly record struct MigrationExecutionContext<TData, TMigration>(
+        Func<TData, int> GetVersion,
+        Func<TMigration, int> GetToVersion,
+        Func<TMigration, TData, TData> ApplyMigration,
+        string SubjectName,
+        string MigrationKind)
+        where TData : class;
+
+    /// <summary>
     ///     校验迁移注册是否表示一次有效的前向升级。
     /// </summary>
     /// <param name="subjectName">迁移所作用的主体名称，例如设置类型或存档类型。</param>
@@ -99,21 +112,24 @@ internal static class VersionedMigrationRunner
             return data;
         }
 
+        var context = new MigrationExecutionContext<TData, TMigration>(
+            getVersion,
+            getToVersion,
+            applyMigration,
+            subjectName,
+            migrationKind);
+
         var current = data;
 
         while (currentVersion < targetVersion)
         {
-            var migration = GetRequiredMigration(resolveMigration, currentVersion, subjectName, migrationKind);
+            var migration = GetRequiredMigration(resolveMigration, currentVersion, in context);
             var result = ApplyMigrationStep(
                 migration,
                 current,
                 currentVersion,
                 targetVersion,
-                getVersion,
-                getToVersion,
-                applyMigration,
-                subjectName,
-                migrationKind);
+                in context);
             current = result.Data;
             currentVersion = result.Version;
         }
@@ -140,24 +156,24 @@ internal static class VersionedMigrationRunner
     /// <summary>
     ///     解析当前版本必须存在的下一步迁移器，避免在调用循环中重复拼接相同错误。
     /// </summary>
+    /// <typeparam name="TData">迁移数据类型。</typeparam>
     /// <typeparam name="TMigration">迁移描述类型。</typeparam>
     /// <param name="resolveMigration">迁移解析委托。</param>
     /// <param name="currentVersion">当前版本。</param>
-    /// <param name="subjectName">迁移主体名称。</param>
-    /// <param name="migrationKind">迁移类别名称。</param>
+    /// <param name="context">本轮迁移链共享的执行上下文。</param>
     /// <returns>已解析的迁移器。</returns>
     /// <exception cref="InvalidOperationException">缺少迁移器时抛出。</exception>
-    private static TMigration GetRequiredMigration<TMigration>(
+    private static TMigration GetRequiredMigration<TData, TMigration>(
         Func<int, TMigration?> resolveMigration,
         int currentVersion,
-        string subjectName,
-        string migrationKind)
+        in MigrationExecutionContext<TData, TMigration> context)
+        where TData : class
     {
         var migration = resolveMigration(currentVersion);
         if (migration is null)
         {
             throw new InvalidOperationException(
-                $"No {migrationKind} is registered for {subjectName} from version {currentVersion}.");
+                $"No {context.MigrationKind} is registered for {context.SubjectName} from version {currentVersion}.");
         }
 
         return migration;
@@ -172,11 +188,7 @@ internal static class VersionedMigrationRunner
     /// <param name="current">迁移前数据。</param>
     /// <param name="currentVersion">迁移前版本。</param>
     /// <param name="targetVersion">运行时目标版本。</param>
-    /// <param name="getVersion">数据版本读取委托。</param>
-    /// <param name="getToVersion">迁移器目标版本读取委托。</param>
-    /// <param name="applyMigration">迁移执行委托。</param>
-    /// <param name="subjectName">迁移主体名称。</param>
-    /// <param name="migrationKind">迁移类别名称。</param>
+    /// <param name="context">本轮迁移链共享的执行上下文。</param>
     /// <returns>迁移后的数据与新版本号。</returns>
     /// <exception cref="InvalidOperationException">
     ///     迁移结果为空、声明目标版本不匹配、版本未前进或超出运行时版本时抛出。
@@ -186,64 +198,60 @@ internal static class VersionedMigrationRunner
         TData current,
         int currentVersion,
         int targetVersion,
-        Func<TData, int> getVersion,
-        Func<TMigration, int> getToVersion,
-        Func<TMigration, TData, TData> applyMigration,
-        string subjectName,
-        string migrationKind)
+        in MigrationExecutionContext<TData, TMigration> context)
         where TData : class
     {
-        var migratedData = applyMigration(migration, current)
+        var migratedData = context.ApplyMigration(migration, current)
             ?? throw new InvalidOperationException(
-                $"{migrationKind} for {subjectName} from version {currentVersion} returned null.");
-        var migratedVersion = getVersion(migratedData);
+                $"{context.MigrationKind} for {context.SubjectName} from version {currentVersion} returned null.");
+        var migratedVersion = context.GetVersion(migratedData);
         ValidateMigrationResult(
             currentVersion,
             targetVersion,
             migratedVersion,
-            getToVersion(migration),
-            subjectName,
-            migrationKind);
+            context.GetToVersion(migration),
+            in context);
         return (migratedData, migratedVersion);
     }
 
     /// <summary>
     ///     校验单步迁移结果与声明目标版本一致，并确保版本严格单调递增且不越过运行时版本。
     /// </summary>
+    /// <typeparam name="TData">迁移数据类型。</typeparam>
+    /// <typeparam name="TMigration">迁移描述类型。</typeparam>
     /// <param name="currentVersion">迁移前版本。</param>
     /// <param name="targetVersion">运行时目标版本。</param>
     /// <param name="migratedVersion">迁移后实际版本。</param>
     /// <param name="declaredTargetVersion">迁移器声明的目标版本。</param>
-    /// <param name="subjectName">迁移主体名称。</param>
-    /// <param name="migrationKind">迁移类别名称。</param>
+    /// <param name="context">本轮迁移链共享的执行上下文。</param>
     /// <exception cref="InvalidOperationException">
     ///     声明目标版本不匹配、版本未前进或超出运行时版本时抛出。
     /// </exception>
-    private static void ValidateMigrationResult(
+    private static void ValidateMigrationResult<TData, TMigration>(
         int currentVersion,
         int targetVersion,
         int migratedVersion,
         int declaredTargetVersion,
-        string subjectName,
-        string migrationKind)
+        in MigrationExecutionContext<TData, TMigration> context)
+        where TData : class
     {
         if (declaredTargetVersion != migratedVersion)
         {
             throw new InvalidOperationException(
-                $"{migrationKind} for {subjectName} declared target version {declaredTargetVersion} " +
+                $"{context.MigrationKind} for {context.SubjectName} declared target version {declaredTargetVersion} " +
                 $"but returned version {migratedVersion}.");
         }
 
         if (migratedVersion <= currentVersion)
         {
             throw new InvalidOperationException(
-                $"{migrationKind} for {subjectName} must advance beyond version {currentVersion}.");
+                $"{context.MigrationKind} for {context.SubjectName} must advance beyond version {currentVersion}.");
         }
 
         if (migratedVersion > targetVersion)
         {
             throw new InvalidOperationException(
-                $"{migrationKind} for {subjectName} produced version {migratedVersion}, " +
+                $"{context.MigrationKind} for {context.SubjectName} produced version {migratedVersion}, " +
                 $"which exceeds the current runtime version {targetVersion}.");
         }
     }

@@ -1,5 +1,34 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-25 — RP-070
+
+### 阶段：按 PR #291 latest-head review 收口仍有效的小批次，并刷新新的仓库根基线
+
+- 触发背景：
+  - 用户显式要求执行 `$gframework-pr-review`，当前分支对应 PR `#291`
+  - 抓取结果显示 latest-head 只有 1 条未解决 review thread 指向 `AGENTS.md` 英文标点不一致；同时最新 CodeRabbit review body 还包含 `VersionedMigrationRunner.cs` 参数过多与 `MediatorAdvancedFeaturesTests.cs` 未使用测试基础设施这两条本地仍成立的建议
+  - MegaLinter 仅报出 `dotnet-format` restore 失败，test report 为 `2156 passed / 0 failed`，因此本轮重点改为“只吸收仍有效且低风险的 review 建议”
+- 主线程实施：
+  - 将 `AGENTS.md` 中英文规则段的 `dotnet clean` / `dotnet build` / `dotnet test` 列表标点改为英文逗号，直接消化 latest-head open thread
+  - 删除 `GFramework.Cqrs.Tests/Mediator/MediatorAdvancedFeaturesTests.cs` 中未被任何测试引用的 `TestLoggingBehavior` 静态类型，移除无收益的可变测试基础设施
+  - 在 `GFramework.Game/Internal/VersionedMigrationRunner.cs` 内引入私有 `MigrationExecutionContext<TData, TMigration>`，把多处 helper 共享的不变迁移上下文收口为参数对象，并同步补齐新增泛型 helper 的 XML 文档
+  - 明确拒绝把 `TestLogger` 重复实现与 `YamlConfigLoaderTests.cs` 常量位置这类“可选整理”混入本轮 warning 收敛批次
+- 验证里程碑：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+    - 结果：成功；确认 PR `#291` latest-head open review threads 为 `1`，MegaLinter 仅有 `dotnet-format` restore 失败，tests 为 `2156 passed`
+  - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+    - 结果：成功；`326 Warning(s)`、`0 Error(s)`
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：成功；`149 Warning(s)`、`0 Error(s)`
+  - `dotnet clean`
+    - 结果：成功
+  - `dotnet build`
+    - 结果：成功；`639 Warning(s)`、`0 Error(s)`，相较 `RP-069` 的 `640` 再下降 `1`
+- 当前结论：
+  - PR #291 当前最有价值的 review follow-up 已被主线程吸收，且没有把“可选整理”误当成必须修复项
+  - 当前仓库根 warning 基线继续下降到 `639`，说明这轮 review 驱动的小批次仍符合 analyzer warning reduction 主题
+  - 下一轮可继续围绕 `GFramework.Game` 或 `GFramework.Cqrs.Tests` 选择新的单文件低风险热点，或在新 head 推送后重新抓取 PR review 判断是否还有剩余有效线程
+
 ## 2026-04-25 — RP-069
 
 ### 阶段：继续收口 Cqrs.Tests 双文件集合抽象 warning，并刷新新的仓库根基线

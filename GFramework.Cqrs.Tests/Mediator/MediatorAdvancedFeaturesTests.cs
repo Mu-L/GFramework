@@ -366,14 +366,6 @@ public sealed class TestBehaviorRequestHandler : IRequestHandler<TestBehaviorReq
     }
 }
 
-public static class TestLoggingBehavior
-{
-    /// <summary>
-    /// 记录测试行为写入的日志消息，同时避免向调用方暴露具体集合实现。
-    /// </summary>
-    public static IList<string> LoggedMessages { get; set; } = new List<string>();
-}
-
 public sealed record TestValidatedRequest : IRequest<string>
 {
     public int Value { get; init; }
