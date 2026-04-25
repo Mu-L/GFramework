@@ -425,6 +425,8 @@ public class LoggerTests
 /// </summary>
 public sealed class TestLogger : AbstractLogger
 {
+    private readonly List<LogEntry> _logs = new();
+
     /// <summary>
     ///     初始化TestLogger的新实例
     /// </summary>
@@ -435,9 +437,9 @@ public sealed class TestLogger : AbstractLogger
     }
 
     /// <summary>
-    ///     获取记录的日志条目列表
+    ///     获取按写入顺序保存的日志条目只读视图
     /// </summary>
-    public List<LogEntry> Logs { get; } = new();
+    public IReadOnlyList<LogEntry> Logs => _logs;
 
     /// <summary>
     ///     将日志信息写入内部存储
@@ -447,7 +449,7 @@ public sealed class TestLogger : AbstractLogger
     /// <param name="exception">相关异常（可选）</param>
     protected override void Write(LogLevel level, string message, Exception? exception)
     {
-        Logs.Add(new LogEntry(level, message, exception));
+        _logs.Add(new LogEntry(level, message, exception));
     }
 
     /// <summary>
