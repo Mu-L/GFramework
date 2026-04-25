@@ -13,7 +13,7 @@ description: 说明 GFramework.Core 的 Architecture 入口、生命周期职责
 
 当前版本的 `Architecture` 已经是协调器外观。对外仍保留稳定的注册与生命周期 API，但内部职责已经拆给专门协作者处理。
 
-## 你真正会用到的公开入口
+## 常用公开入口
 
 最常见的成员只有这些：
 
@@ -158,9 +158,9 @@ public sealed class MetricsHook : IArchitectureLifecycleHook
 }
 ```
 
-## 什么时候看别的页面
+## 相关主题
 
-- 想看上下文 API：转到 [context](./context.md)
-- 想看阶段和销毁语义：转到 [lifecycle](./lifecycle.md)
-- 想看旧命令 / 查询兼容层：转到 [command](./command.md) 和 [query](./query.md)
-- 想看推荐的新请求模型：转到 [cqrs](./cqrs.md)
+- 上下文访问与 `ArchitectureContext`：阅读[上下文](./context.md)
+- 初始化阶段、事件与销毁流程：阅读[生命周期](./lifecycle.md)
+- 旧版命令 / 查询执行器兼容入口：阅读[命令执行](./command.md)与[查询执行](./query.md)
+- 新项目的请求 / 通知模型：阅读[CQRS 运行时](./cqrs.md)

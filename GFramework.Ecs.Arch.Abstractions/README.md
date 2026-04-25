@@ -88,7 +88,7 @@ var options = new ArchOptions
 - Arch `World` 的创建、注册和查询能力
 - 与 `GFramework` 架构生命周期绑定的默认模块实现
 
-## 边界说明
+## 适用边界
 
 - 本包不提供 Arch `World` 的默认构造与注册逻辑。
 - 本包不提供系统基类、扩展方法或默认服务实现。
@@ -96,8 +96,8 @@ var options = new ArchOptions
 
 ## 对应文档入口
 
-- 抽象接口总览：[`../docs/zh-CN/abstractions/index.md`](../docs/zh-CN/abstractions/index.md)
-- Ecs.Arch 抽象层说明：[`../docs/zh-CN/abstractions/ecs-arch-abstractions.md`](../docs/zh-CN/abstractions/ecs-arch-abstractions.md)
-- ECS 模块入口：[`../docs/zh-CN/ecs/index.md`](../docs/zh-CN/ecs/index.md)
-- Arch ECS 集成：[`../docs/zh-CN/ecs/arch.md`](../docs/zh-CN/ecs/arch.md)
-- 运行时实现入口：[`../GFramework.Ecs.Arch/README.md`](../GFramework.Ecs.Arch/README.md)
+- 抽象接口总览：[抽象接口总览](../docs/zh-CN/abstractions/index.md)
+- Ecs.Arch 抽象层说明：[ECS 抽象层说明](../docs/zh-CN/abstractions/ecs-arch-abstractions.md)
+- ECS 模块入口：[ECS 模块总览](../docs/zh-CN/ecs/index.md)
+- Arch ECS 集成：[Arch ECS 集成](../docs/zh-CN/ecs/arch.md)
+- 运行时实现入口：[Ecs.Arch 运行时说明](../GFramework.Ecs.Arch/README.md)

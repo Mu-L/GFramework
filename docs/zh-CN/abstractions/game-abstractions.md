@@ -113,9 +113,9 @@ public sealed class ContinueGameCommandHandler
 3. 继续读具体专题页：
    - [`../game/config-system.md`](../game/config-system.md)
    - [`../game/data.md`](../game/data.md)
-   - [`../game/setting.md`](../game/setting.md)
-   - [`../game/scene.md`](../game/scene.md)
-   - [`../game/ui.md`](../game/ui.md)
+   - [设置系统](../game/setting.md)
+   - [场景系统](../game/scene.md)
+   - [UI 系统](../game/ui.md)
 4. 需要仓库侧入口时，回到：
-   - [`GFramework.Game.Abstractions README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game.Abstractions/README.md)
-   - [`GFramework.Game README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game/README.md)
+   - [Game 抽象层说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game.Abstractions/README.md)
+   - [Game 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Game/README.md)

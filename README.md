@@ -13,25 +13,25 @@
 
 - 第一次接触框架：[入门指南](docs/zh-CN/getting-started/index.md)
 - 想先跑一个最小例子：[快速开始](docs/zh-CN/getting-started/quick-start.md)
-- 已经知道要用哪个模块：直接进入对应模块目录下的 `README.md`
+- 已经知道要用哪个模块：直接进入对应模块的说明页
 
 ## 模块地图
 
 | 模块 | 作用 | 入口 |
 | --- | --- | --- |
-| `GFramework.Core` | 架构、命令、查询、事件、状态、日志、资源、协程等基础运行时 | [README](GFramework.Core/README.md) |
-| `GFramework.Core.Abstractions` | `Core` 对应的契约层，适合面向接口开发或做模块拆分 | [README](GFramework.Core.Abstractions/README.md) |
-| `GFramework.Cqrs` | 新版 CQRS runtime，提供 request dispatcher、notification publish 与 handler 注册 | [README](GFramework.Cqrs/README.md) |
-| `GFramework.Cqrs.Abstractions` | CQRS 消息、处理器、pipeline 行为等契约 | [README](GFramework.Cqrs.Abstractions/README.md) |
-| `GFramework.Game` | 面向游戏项目的配置、数据、路由、场景、UI、设置和存储运行时 | [README](GFramework.Game/README.md) |
-| `GFramework.Game.Abstractions` | `Game` 对应的契约层 | [README](GFramework.Game.Abstractions/README.md) |
-| `GFramework.Godot` | Godot 集成层，负责把框架能力接入节点、场景、UI、设置与存储 | [README](GFramework.Godot/README.md) |
-| `GFramework.Ecs.Arch` | Arch ECS 集成 | [README](GFramework.Ecs.Arch/README.md) |
-| `GFramework.Ecs.Arch.Abstractions` | Arch ECS 集成对应的契约层，适合共享宿主循环与 ECS 模块边界 | [README](GFramework.Ecs.Arch.Abstractions/README.md) |
-| `GFramework.Core.SourceGenerators` | Core 侧通用源码生成器与分析器 | [README](GFramework.Core.SourceGenerators/README.md) |
-| `GFramework.Game.SourceGenerators` | 游戏内容配置 schema 生成器 | [README](GFramework.Game.SourceGenerators/README.md) |
-| `GFramework.Cqrs.SourceGenerators` | CQRS handler registry 生成器 | [README](GFramework.Cqrs.SourceGenerators/README.md) |
-| `GFramework.Godot.SourceGenerators` | Godot 项目元数据、节点注入、信号绑定与 Scene/UI 辅助生成器 | [README](GFramework.Godot.SourceGenerators/README.md) |
+| `GFramework.Core` | 架构、命令、查询、事件、状态、日志、资源、协程等基础运行时 | [模块说明](GFramework.Core/README.md) |
+| `GFramework.Core.Abstractions` | `Core` 对应的契约层，适合面向接口开发或做模块拆分 | [模块说明](GFramework.Core.Abstractions/README.md) |
+| `GFramework.Cqrs` | 新版 CQRS runtime，提供 request dispatcher、notification publish 与 handler 注册 | [模块说明](GFramework.Cqrs/README.md) |
+| `GFramework.Cqrs.Abstractions` | CQRS 消息、处理器、pipeline 行为等契约 | [模块说明](GFramework.Cqrs.Abstractions/README.md) |
+| `GFramework.Game` | 面向游戏项目的配置、数据、路由、场景、UI、设置和存储运行时 | [模块说明](GFramework.Game/README.md) |
+| `GFramework.Game.Abstractions` | `Game` 对应的契约层 | [模块说明](GFramework.Game.Abstractions/README.md) |
+| `GFramework.Godot` | Godot 集成层，负责把框架能力接入节点、场景、UI、设置与存储 | [模块说明](GFramework.Godot/README.md) |
+| `GFramework.Ecs.Arch` | Arch ECS 集成 | [模块说明](GFramework.Ecs.Arch/README.md) |
+| `GFramework.Ecs.Arch.Abstractions` | Arch ECS 集成对应的契约层，适合共享宿主循环与 ECS 模块边界 | [模块说明](GFramework.Ecs.Arch.Abstractions/README.md) |
+| `GFramework.Core.SourceGenerators` | Core 侧通用源码生成器与分析器 | [模块说明](GFramework.Core.SourceGenerators/README.md) |
+| `GFramework.Game.SourceGenerators` | 游戏内容配置 schema 生成器 | [模块说明](GFramework.Game.SourceGenerators/README.md) |
+| `GFramework.Cqrs.SourceGenerators` | CQRS handler registry 生成器 | [模块说明](GFramework.Cqrs.SourceGenerators/README.md) |
+| `GFramework.Godot.SourceGenerators` | Godot 项目元数据、节点注入、信号绑定与 Scene/UI 辅助生成器 | [模块说明](GFramework.Godot.SourceGenerators/README.md) |
 
 ## 内部支撑模块
 
@@ -145,7 +145,7 @@ GFramework.sln
 
 提交功能或行为变更时，请把代码、测试和文档一起更新：
 
-1. 先阅读对应模块目录下的 `README.md`
+1. 先阅读对应模块的说明页
 2. 如果改动影响采用路径、安装方式、公共 API 或目录结构，同时更新受影响的中文文档页面，必要时同步调整 [中文文档入口](docs/zh-CN/index.md)
 3. 对跨模块或多阶段任务，维护 `ai-plan/public/README.md` 与对应主题目录下的 tracking / trace
 

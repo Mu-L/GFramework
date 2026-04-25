@@ -21,7 +21,7 @@ description: {{MODULE_DESCRIPTION}}
 
 {{KEY_ENTRY_POINTS}}
 
-## 当前边界
+## 适用范围与边界
 
 {{CURRENT_BOUNDARIES}}
 

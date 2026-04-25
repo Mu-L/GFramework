@@ -217,7 +217,7 @@ public List<IntConfig>? Values { get; } = new();
 
 ## 推荐阅读
 
-1. [/zh-CN/source-generators/index](./index.md)
-2. [/zh-CN/game/config-system](../game/config-system.md)
-3. [/zh-CN/source-generators/godot-project-generator](./godot-project-generator.md)
-4. [`GFramework.Godot.SourceGenerators README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)
+1. [源码生成器总览](./index.md)
+2. [配置系统](../game/config-system.md)
+3. [Godot 项目生成器](./godot-project-generator.md)
+4. [Godot 源码生成器说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Godot.SourceGenerators/README.md)

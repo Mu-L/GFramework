@@ -10,7 +10,7 @@ description: GFramework.Core 与 GFramework.Core.Abstractions 的运行时入口
 
 如果你第一次接入框架，建议先把这里当作“运行时底座说明”，再按需进入 `Game`、`Godot` 或 Source Generators 栏目。
 
-## 先理解包关系
+## 模块与包关系
 
 - `GeWuYou.GFramework.Core`
   - 基础运行时实现，包含 `Architecture`、上下文、生命周期、事件、属性、状态、资源、日志、协程、IoC 等能力。
@@ -30,48 +30,48 @@ dotnet add package GeWuYou.GFramework.Core
 dotnet add package GeWuYou.GFramework.Core.Abstractions
 ```
 
-## 这个栏目应该回答什么
+## 栏目覆盖范围
 
 `Core` 栏目不是旧版“完整框架教程”的镜像，而是当前实现的入口导航。这里的页面按能力域组织：
 
 - 架构与生命周期
-  - [architecture](./architecture.md)
-  - [context](./context.md)
-  - [lifecycle](./lifecycle.md)
-  - [async-initialization](./async-initialization.md)
+  - [架构](./architecture.md)
+  - [上下文](./context.md)
+  - [生命周期](./lifecycle.md)
+  - [异步初始化](./async-initialization.md)
 - 组件角色与运行时接入
-  - [model](./model.md)
-  - [system](./system.md)
-  - [utility](./utility.md)
-  - [environment](./environment.md)
-  - [extensions](./extensions.md)
+  - [模型](./model.md)
+  - [系统](./system.md)
+  - [工具](./utility.md)
+  - [环境](./environment.md)
+  - [扩展方法](./extensions.md)
 - 旧版命令 / 查询执行器与迁移入口
-  - [command](./command.md)
-  - [query](./query.md)
-  - [cqrs](./cqrs.md)
+  - [命令执行](./command.md)
+  - [查询执行](./query.md)
+  - [CQRS 运行时](./cqrs.md)
 - 状态、事件与规则
-  - [events](./events.md)
-  - [property](./property.md)
-  - [rule](./rule.md)
-  - [logging](./logging.md)
-  - [state-machine](./state-machine.md)
-  - [state-management](./state-management.md)
+  - [事件系统](./events.md)
+  - [可绑定属性](./property.md)
+  - [规则系统](./rule.md)
+  - [日志系统](./logging.md)
+  - [状态机](./state-machine.md)
+  - [状态管理](./state-management.md)
 - 运行时支撑能力
-  - [resource](./resource.md)
-  - [pool](./pool.md)
-  - [coroutine](./coroutine.md)
-  - [pause](./pause.md)
-  - [localization](./localization.md)
-  - [configuration](./configuration.md)
-  - [ioc](./ioc.md)
+  - [资源管理](./resource.md)
+  - [对象池](./pool.md)
+  - [协程系统](./coroutine.md)
+  - [暂停系统](./pause.md)
+  - [本地化](./localization.md)
+  - [配置管理](./configuration.md)
+  - [IoC 容器](./ioc.md)
 - 通用辅助能力
-  - [functional](./functional.md)
+  - [函数式辅助](./functional.md)
 
 ## XML 与 API 阅读入口
 
 如果你已经知道模块归属，但想确认公开类型的契约边界，建议按下面顺序阅读：
 
-1. 先看模块 README [`GFramework.Core`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core/README.md)，确认包关系和目录边界
+1. 先看[Core 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core/README.md)，确认包关系和目录边界
 2. 再看本栏目对应专题页，确认采用顺序、生命周期与推荐接线方式
 3. 最后回到源码中的 XML 文档，重点核对这些类型族：
    - `Architecture` / `IArchitectureContext`
@@ -80,7 +80,7 @@ dotnet add package GeWuYou.GFramework.Core.Abstractions
    - `IResourceManager` / `IConfigurationManager`
    - `IAsyncKeyLockManager` / `ITimeProvider`
 
-统一入口见 [`../api-reference/index.md`](../api-reference/index.md)。
+统一入口见[API 参考](../api-reference/index.md)。
 
 ## 源码阅读入口
 
@@ -130,25 +130,25 @@ public sealed class CounterArchitecture : Architecture
 - 只需要基础架构、事件、日志、资源、协程：
   - 先停留在 `Core`
 - 要写新的请求/通知处理流：
-  - 优先阅读 [cqrs](./cqrs.md)
+  - 优先阅读[CQRS 运行时](./cqrs.md)
 - 要接入游戏内容配置、设置、数据仓库、Scene 或 UI：
-  - 转到 [Game](../game/index.md)
+  - 转到[Game 模块](../game/index.md)
 - 要接入 Godot 节点、场景和项目元数据生成：
-  - 转到 [Godot](../godot/index.md) 与 [Source Generators](../source-generators/index.md) 栏目
+  - 转到[Godot 模块](../godot/index.md)与[源码生成器](../source-generators/index.md)栏目
 
-## 推荐阅读顺序
+## 阅读顺序
 
 1. [快速开始](../getting-started/quick-start.md)
-2. [architecture](./architecture.md)
-3. [context](./context.md)
-4. [lifecycle](./lifecycle.md)
-5. [cqrs](./cqrs.md)
+2. [架构](./architecture.md)
+3. [上下文](./context.md)
+4. [生命周期](./lifecycle.md)
+5. [CQRS 运行时](./cqrs.md)
 
 之后再按实际需要进入具体专题页，而不是把 `Core` 当成一次性读完的大杂烩。
 
 ## 对应模块入口
 
-- [`GFramework.Core README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core/README.md)
-- [`GFramework.Core.Abstractions README`](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core.Abstractions/README.md)
+- [Core 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core/README.md)
+- [Core 抽象层说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Core.Abstractions/README.md)
 - [API 参考入口](../api-reference/index.md)
-- 仓库根 [`README.md`](https://github.com/GeWuYou/GFramework/blob/main/README.md)
+- [仓库总览](https://github.com/GeWuYou/GFramework/blob/main/README.md)
