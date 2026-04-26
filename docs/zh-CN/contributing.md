@@ -622,15 +622,15 @@ await architecture.SendCommandAsync(new AttackCommand
 
 使用 Mermaid 或 ASCII 图表说明复杂概念：
 
-```markdown
-```mermaid
+````markdown
+\`\`\`mermaid
 graph TD
     A[Controller] --&gt; B[Command]
     B --&gt; C[System]
     C --&gt; D[Model]
-```
+\`\`\`
 
-```
+````
 
 ## PR 流程
 

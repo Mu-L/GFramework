@@ -20,6 +20,23 @@ GFramework 当前发布的生成器包是：
 
 不存在 `GeWuYou.GFramework.SourceGenerators` 或 `*.SourceGenerators.Attributes` 这类聚合包。
 
+## 共享支撑模块
+
+除了上面的可直接安装包，仓库里还有三类跟随这些生成器共同演化的支撑目录：
+
+- `GFramework.SourceGenerators.Common`
+  - 承载跨生成器共享的基类、通用 diagnostics 和生成冲突规则。
+- `GFramework.Core.SourceGenerators.Abstractions`
+  - 承载 `Core` 侧生成器特性定义，例如 `[Log]`、`[ContextAware]`、`[GetModel]`、`[GenerateEnumExtensions]`。
+- `GFramework.Godot.SourceGenerators.Abstractions`
+  - 承载 Godot 侧生成器特性定义，例如 `[GetNode]`、`[BindNodeSignal]`、`[AutoScene]`、`[AutoUiPage]`。
+
+这些目录当前不是新的安装入口。对读者更重要的是先判断：
+
+- 应该安装哪个 `*.SourceGenerators` 包
+- 当前看到的 attribute 和 diagnostics 属于哪条生成链
+- 继续阅读时应该回到哪个运行时或专题页
+
 ## 先按场景选包
 
 - 想减少日志、上下文注入、模块自动注册等 Core 侧样板代码：
@@ -54,6 +71,12 @@ GFramework 当前发布的生成器包是：
 ```
 
 其他生成器包的安装模式相同。
+
+`GFramework.SourceGenerators.Common` 和两个 `*.SourceGenerators.Abstractions` 目录当前都跟随对应生成器模块维护：
+
+- 不是额外安装的独立包选择题
+- 主要用于承载 attribute、共享基类和跨生成器共用 diagnostics
+- 读者只需要在排查 attribute 语义、冲突规则或生成失败原因时回到这些源码目录确认契约
 
 ## 这个栏目怎么读
 

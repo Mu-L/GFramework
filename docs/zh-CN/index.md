@@ -2,11 +2,11 @@
 # https://vitepress.dev/reference/default-theme-home-page
 layout: home
 title: GFramework
-description: 概览 GFramework 的模块能力、入门路径与主要中文文档入口。
+description: 概览 GFramework 的模块能力、安装选包路径，以及 Core、CQRS、Game、Godot 与配置工具入口。
 hero:
   name: "GFramework"
   text: 面向游戏开发的模块化 C# 架构体系
-  tagline: 基于清洁架构与 CQRS 思想构建，支持可扩展设计与多引擎集成
+  tagline: 基于清洁架构与 CQRS 思想构建，覆盖运行时、源码生成器、Godot 集成与 AI-First 配置工作流
   image:
     src: /logo.png
     alt: GFramework Logo
@@ -15,25 +15,31 @@ hero:
       text: 快速开始
       link: /zh-CN/getting-started/quick-start
     - theme: alt
-      text: 架构概览
-      link: /zh-CN/getting-started
+      text: 安装与选包
+      link: /zh-CN/getting-started/installation
+    - theme: alt
+      text: CQRS
+      link: /zh-CN/core/cqrs
+    - theme: alt
+      text: 配置工具
+      link: /zh-CN/game/config-tool
 
 features:
   - title: 🏗 清洁架构分层
-    details: 基于 Model–Controller–System–Utility 五层结构设计，实现职责清晰、可测试、可维护的代码组织方式。
+    details: 基于 Model–Controller–System–Utility 五层结构组织运行时能力，适合先从 Core 起步，再逐层叠加 Game、CQRS 和引擎集成。
 
-  - title: 🔧 CQRS 命令查询分离
-    details: 通过类型安全的命令与查询系统构建业务流程，支持可扩展操作链与可撤销机制。
+  - title: 🔧 CQRS 请求模型
+    details: 提供 request、notification、pipeline、handler registry 与 source generator 协作路径，适合把新业务统一收敛到 CQRS runtime。
 
-  - title: 📡 类型安全事件系统
-    details: 提供高性能事件总线，实现模块间松耦合通信与可扩展的业务触发机制。
+  - title: 🧭 模块化选包路径
+    details: 支持按运行时、抽象层、源码生成器和引擎集成拆分安装，而不是先引入一个难以裁剪的大而全包。
 
-  - title: 🎮 引擎集成层
-    details: 核心层与引擎层解耦设计，当前提供 Godot 集成实现，支持节点扩展、协程桥接与对象池能力。
+  - title: 🎮 Godot 集成
+    details: 在保持 Core / Game 运行时边界的前提下，补齐节点扩展、场景与 UI 接线、协程桥接和生成器辅助。
 
-  - title: 🔄 响应式属性系统
-    details: 可绑定属性模型驱动 UI 更新与状态变化，构建声明式的数据响应流程。
+  - title: 🧩 AI-First 配置工作流
+    details: 通过 YAML + JSON Schema + Source Generator + VS Code 工具，把静态内容配置、校验、表单预览和批量编辑串成一条链路。
 
   - title: ⚡ Roslyn 源码生成器
-    details: 自动生成日志、枚举扩展与规则代码，减少样板代码并提升开发效率。
+    details: 自动生成日志、上下文注入、配置类型、CQRS registry 和 Godot 辅助代码，并复用共享 diagnostics 约束生成行为。
 ---

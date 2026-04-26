@@ -83,7 +83,26 @@ private Label _scoreLabel = null!;
 对文档来说，最关键的结论是：
 
 - `Auto` 在未给路径时默认走唯一名推断
-- 显式路径会结合 `Lookup` 决定最终生成的字符串
+- 一旦显式给了 `Path`，生成结果直接使用这个字符串，`Lookup` 不再改写它
+
+可以直接按下面这张表理解当前行为：
+
+| `Path` | `Lookup` | 生成路径 |
+| --- | --- | --- |
+| 未设置 | `Auto` | `%FieldName` |
+| 未设置 | `UniqueName` | `%FieldName` |
+| 未设置 | `RelativePath` | `FieldName` |
+| 未设置 | `AbsolutePath` | `/FieldName` |
+| 已显式设置 | 任意值 | 原样使用显式路径 |
+
+例如：
+
+```csharp
+[GetNode("HUD/ScoreLabel", Lookup = NodeLookupMode.AbsolutePath)]
+private Label _scoreLabel = null!;
+```
+
+当前生成结果仍然会直接使用 `"HUD/ScoreLabel"`，不会因为 `Lookup = AbsolutePath` 被改写成 `"/HUD/ScoreLabel"`。
 
 ### `Required`
 
@@ -189,6 +208,7 @@ public override void _Ready()
 - 只有缺少 `_Ready()` 时才会自动补 override
 - `OnGetNodeReadyGenerated()` 只存在于自动补 `_Ready()` 的路径
 - `Required = false` 会真实切换到 `GetNodeOrNull<T>()`
+- `Lookup` 只影响“未显式给路径时”的推断前缀；显式 `Path` 不会被二次改写
 
 ## 推荐阅读
 

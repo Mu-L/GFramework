@@ -93,6 +93,9 @@ var playerId = await architecture.Context.SendRequestAsync(
 - `PublishAsync(...)`
 - `CreateStream(...)`
 
+如果你在协程驱动的调用链里工作，`GFramework.Core` 还提供了 `CqrsCoroutineExtensions.SendCommandCoroutine(...)`
+这类桥接入口，用来把 CQRS 调度接回协程系统。
+
 ## 统一请求模型
 
 这套 runtime 不只处理 command，也统一处理：
@@ -105,6 +108,30 @@ var playerId = await architecture.Context.SendRequestAsync(
   - 返回 `IAsyncEnumerable<T>`
 
 新代码通常不需要再分别设计“命令总线”“查询总线”和另一套通知分发语义。
+
+## Request 与流式变体
+
+除了最常见的 `Command` / `Query` / `Notification`，当前公开面还覆盖两类容易被忽略的入口：
+
+### 普通 Request
+
+如果你的请求不想再被读者预设成“命令”或“查询”，可以直接使用：
+
+- `RequestBase<TInput, TResponse>`
+- `AbstractRequestHandler<TRequest, TResponse>`
+
+它们仍然走统一的 `SendRequestAsync(...)` 调度入口，只是把语义保持在更中性的 `Request` 层。
+
+### 流式 Command / Query
+
+如果你需要返回 `IAsyncEnumerable<T>`，除了通用的 `IStreamRequest<TResponse>`，当前也提供更明确的专用契约：
+
+- `IStreamCommand<TResponse>`
+- `IStreamQuery<TResponse>`
+- `AbstractStreamCommandHandler<TCommand, TResponse>`
+- `AbstractStreamQueryHandler<TQuery, TResponse>`
+
+这几类处理器最终仍然通过 `CreateStream(...)` 进入统一的 CQRS runtime，而不是另一套独立流式总线。
 
 ## 处理器注册与生成器协作
 
@@ -176,14 +203,15 @@ RegisterCqrsPipelineBehavior<LoggingBehavior<,>>();
 | 类型族 | 代表类型 | 建议先确认什么 |
 | --- | --- | --- |
 | `GFramework.Cqrs.Abstractions/Cqrs/` | `ICqrsRuntime`、`ICqrsHandlerRegistrar`、`IPipelineBehavior<,>`、`IRequestHandler<,>`、`Unit` | 请求、处理器和 runtime seam 的最小契约 |
-| `GFramework.Cqrs/Command` `Query` `Notification` `Request` `Extensions` | `CommandBase<TInput, TResponse>`、`QueryBase<TInput, TResponse>`、`NotificationBase<TInput>`、`ContextAwareCqrsExtensions` | 业务侧常用基类和上下文发送入口 |
-| `GFramework.Cqrs/Cqrs/` | `AbstractCommandHandler<,>`、`AbstractQueryHandler<,>`、`AbstractNotificationHandler<>`、`LoggingBehavior<,>` | 默认处理器基类、上下文注入与行为管道 |
+| `GFramework.Cqrs/Command` `Query` `Notification` `Request` `Extensions` | `CommandBase<TInput, TResponse>`、`QueryBase<TInput, TResponse>`、`NotificationBase<TInput>`、`RequestBase<TInput, TResponse>`、`ContextAwareCqrsExtensions` | 业务侧常用基类和上下文发送入口 |
+| `GFramework.Cqrs/Cqrs/` | `AbstractCommandHandler<,>`、`AbstractQueryHandler<,>`、`AbstractRequestHandler<,>`、`AbstractStreamCommandHandler<,>`、`AbstractStreamQueryHandler<,>`、`LoggingBehavior<,>` | 默认处理器基类、上下文注入、流式处理与行为管道 |
 | `GFramework.Cqrs` 根入口与 `Internal/` | `CqrsRuntimeFactory`、`ICqrsHandlerRegistry`、`CqrsHandlerRegistryAttribute`、`CqrsReflectionFallbackAttribute`、`DefaultCqrsRegistrationService` | runtime 创建入口、registry 协议、fallback 语义和程序集去重规则 |
 | `GFramework.Cqrs.SourceGenerators/Cqrs/` | `CqrsHandlerRegistryGenerator`、`RuntimeTypeReferenceSpec`、`OrderedRegistrationKind` | 生成注册器、精确 type lookup 和 fallback 诊断边界 |
 
 ## 继续阅读
 
-- 架构入口：[architecture](./architecture.md)
-- 上下文入口：[context](./context.md)
+- 架构入口：[架构与上下文](./architecture.md)
+- 上下文入口：[Context 上下文](./context.md)
 - 生成器专题：[CQRS Handler Registry 生成器](../source-generators/cqrs-handler-registry-generator.md)
+- 协程接法：[协程系统](./coroutine.md)
 - 模块说明：[CQRS 运行时说明](https://github.com/GeWuYou/GFramework/blob/main/GFramework.Cqrs/README.md)

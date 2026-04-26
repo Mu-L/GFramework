@@ -13,6 +13,8 @@
 
 - 第一次接触框架：[入门指南](docs/zh-CN/getting-started/index.md)
 - 想先跑一个最小例子：[快速开始](docs/zh-CN/getting-started/quick-start.md)
+- 想先确认该装哪些包：[安装配置](docs/zh-CN/getting-started/installation.md)
+- 想接入 AI-First 配置工作流：[配置系统](docs/zh-CN/game/config-system.md) / [VS Code 配置工具](docs/zh-CN/game/config-tool.md)
 - 已经知道要用哪个模块：直接进入对应模块的说明页
 
 ## 模块地图
@@ -39,9 +41,9 @@
 
 | 目录 | 定位 | 跟随入口 |
 | --- | --- | --- |
-| `GFramework.Core.SourceGenerators.Abstractions` | `Core.SourceGenerators` 的内部契约层 | [Core.SourceGenerators 模块说明](GFramework.Core.SourceGenerators/README.md) |
-| `GFramework.Godot.SourceGenerators.Abstractions` | `Godot.SourceGenerators` 的内部契约层 | [Godot.SourceGenerators 模块说明](GFramework.Godot.SourceGenerators/README.md) |
-| `GFramework.SourceGenerators.Common` | 生成器家族共享的公共支撑代码 | [源码生成器总览](docs/zh-CN/source-generators/index.md) |
+| `GFramework.Core.SourceGenerators.Abstractions` | `Core.SourceGenerators` 的内部契约层 | [目录说明](GFramework.Core.SourceGenerators.Abstractions/README.md) |
+| `GFramework.Godot.SourceGenerators.Abstractions` | `Godot.SourceGenerators` 的内部契约层 | [目录说明](GFramework.Godot.SourceGenerators.Abstractions/README.md) |
+| `GFramework.SourceGenerators.Common` | 生成器家族共享的公共支撑代码 | [目录说明](GFramework.SourceGenerators.Common/README.md) |
 
 ## 文档导航
 
@@ -64,7 +66,7 @@
 ## 包选择
 
 - `GeWuYou.GFramework`
-  当前是聚合元包，只聚合 `GFramework.Core` 与 `GFramework.Game` 这两层运行时，适合快速试用。
+  当前是聚合元包，只聚合 `GFramework.Core` 与 `GFramework.Game` 这两层运行时；不会自动带上 `Cqrs`、`Godot` 或任何 Source Generator，适合快速试用或先起一个最小运行时骨架。
 - `GeWuYou.GFramework.Core`
   推荐的最小起步包。先从核心运行时开始，再按需叠加 `Cqrs`、`Game`、`Godot` 和 Source Generators。
 - `GeWuYou.GFramework.*.Abstractions`
