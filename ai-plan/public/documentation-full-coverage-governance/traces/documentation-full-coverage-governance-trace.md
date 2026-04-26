@@ -1,5 +1,37 @@
 # Documentation Full Coverage Governance Trace
 
+## 2026-04-27
+
+### 当前恢复点：RP-041
+
+- 通过 `$gframework-batch-boot 50` 重新进入后，先按仓库规则读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md` 与 active topic tracking / trace，并继续使用显式 `--git-dir` / `--work-tree` 绑定确认当前分支仍为 `docs/sdk-update-documentation`。
+- 使用显式 Git 绑定确认最新 baseline 为 `origin/main` `617e0bf`（`2026-04-26 12:17:15 +08:00`），当前 committed branch diff vs baseline 为 `0` files，因此本轮继续选择低风险、reader-facing 文档切片。
+- 本轮收敛出的 3 组切片分别是：`installation.md` 的选包矩阵与旧版 Godot 提示、公开 README 的 XML 阅读入口去治理化，以及 `config-system` / 基础教程入口中的维护者口吻改写。
+
+### 当前决策（RP-041）
+
+- 不扩展到导航结构或新专题页，只在现有入口上修正 reader-facing 采用路径与表述一致性。
+- 对公开 README 中的 XML 阅读入口，统一改成“代表类型 + 阅读重点”，不再暴露覆盖计数、日期或 `已覆盖` 这类治理字段。
+- stop condition 继续沿用 `origin/main` + `50` changed files；本轮工作树相对 baseline 的 tracked diff 为 `9` files / `191` changed lines，仍明显低于阈值。
+
+### 当前验证（RP-041）
+
+- README 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Core.Abstractions/README.md GFramework.Game.Abstractions/README.md GFramework.Game.SourceGenerators/README.md GFramework.Ecs.Arch.Abstractions/README.md`
+  - 结果：通过；本轮 4 个 README 的 reader-facing 改写后链接目标有效。
+- 入门栏目校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/getting-started`
+  - 结果：通过；`installation.md` 更新后 `getting-started` 栏目 frontmatter、链接与代码块校验通过。
+- 配置系统页校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/config-system.md`
+  - 结果：通过；工具形态建议改写后页面校验通过。
+- 基础教程栏目校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/basic`
+  - 结果：通过；入口页阅读路径改写后栏目校验通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮文档批次后站点仍可构建，仅保留既有大 chunk warning。
+
 ## 2026-04-26
 
 ### 当前恢复点：RP-040

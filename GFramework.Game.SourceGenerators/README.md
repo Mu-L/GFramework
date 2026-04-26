@@ -46,12 +46,12 @@ GameProject/
 
 ## XML 阅读入口
 
-下面这份目录视图汇总了 `2026-04-23` 可直接对照的 `GFramework.Game.SourceGenerators` 类型级 XML 文档入口：只统计公开类型声明是否带 XML 注释，用来帮助你定位生成器入口；具体诊断消息、生成输出和兼容性语义仍建议回到源码与测试继续核对。
+下面这份目录视图用于帮助你定位 `GFramework.Game.SourceGenerators` 的生成器入口；具体诊断消息、生成输出和兼容性语义仍建议回到源码与测试继续核对。
 
-| 类型族 | 基线状态 | 代表类型 | 阅读重点 |
-| --- | --- | --- | --- |
-| `Config/` | `1/1` 个类型声明已带 XML 注释 | `SchemaConfigGenerator` | 看 schema 到配置类型 / 表包装 / 注册辅助代码的生成入口 |
-| `Diagnostics/` | `1/1` 个类型声明已带 XML 注释 | `ConfigSchemaDiagnostics` | 看生成器会抛出的诊断类别与失败边界 |
+| 类型族 | 代表类型 | 阅读重点 |
+| --- | --- | --- |
+| `Config/` | `SchemaConfigGenerator` | 看 schema 到配置类型 / 表包装 / 注册辅助代码的生成入口 |
+| `Diagnostics/` | `ConfigSchemaDiagnostics` | 看生成器会抛出的诊断类别与失败边界 |
 
 ## 最小接入路径
 

@@ -133,17 +133,16 @@ Scene 与 UI 路由共享这套基础约定。
 
 ## XML 阅读入口
 
-下面这份目录视图汇总了 `2026-04-23` 可直接对照的 `GFramework.Game.Abstractions` 类型级 XML 文档入口：只统计公开 /
-内部类型声明是否带 XML 注释，用来帮助你建立契约层阅读顺序；更细的参数、返回值、异常和生命周期说明，建议继续回到具体类型与成员确认。
+下面这份目录视图用于帮助你建立 `GFramework.Game.Abstractions` 的契约层阅读顺序；更细的参数、返回值、异常和生命周期说明，建议继续回到具体类型与成员确认。
 
-| 契约族 | 基线状态 | 代表类型 | 阅读重点 |
-| --- | --- | --- | --- |
-| `Config/` | `7/7` 个类型声明已带 XML 注释 | `IConfigLoader`、`IConfigRegistry`、`IConfigTable<TKey, TValue>`、`ConfigLoadException` | 看配置表注册、读取约定和失败诊断模型 |
-| `Data/` | `14/14` 个类型声明已带 XML 注释 | `IDataRepository`、`ISettingsDataRepository`、`ISaveRepository<TSaveData>`、`DataRepositoryOptions` | 看业务数据、设置持久化、槽位存档和版本迁移契约 |
-| `Setting/` | `12/12` 个类型声明已带 XML 注释 | `ISettingsData`、`ISettingsModel`、`ISettingsSystem`、`LocalizationSettings` | 看设置数据、应用语义、迁移接口和内置设置对象 |
-| `Scene/` | `14/14` 个类型声明已带 XML 注释 | `IScene`、`ISceneRouter`、`ISceneFactory`、`SceneTransitionEvent` | 看场景行为、路由、工厂 / root 边界与转场事件模型 |
-| `UI/` | `19/19` 个类型声明已带 XML 注释 | `IUiPage`、`IUiRouter`、`IUiFactory`、`UiInteractionProfile`、`UiTransitionHandlerOptions` | 看页面栈、层级 UI、输入动作与 UI 转场契约 |
-| `Routing/` `Storage/` `Asset/` `Enums/` | `13/13` 个类型声明已带 XML 注释 | `IRoute`、`IRouteContext`、`IFileStorage`、`IAssetRegistry<T>`、`UiLayer`、`SceneTransitionType` | 看公共路由上下文、存储角色、资源注册表与跨层共享枚举 |
+| 契约族 | 代表类型 | 阅读重点 |
+| --- | --- | --- |
+| `Config/` | `IConfigLoader`、`IConfigRegistry`、`IConfigTable<TKey, TValue>`、`ConfigLoadException` | 看配置表注册、读取约定和失败诊断模型 |
+| `Data/` | `IDataRepository`、`ISettingsDataRepository`、`ISaveRepository<TSaveData>`、`DataRepositoryOptions` | 看业务数据、设置持久化、槽位存档和版本迁移契约 |
+| `Setting/` | `ISettingsData`、`ISettingsModel`、`ISettingsSystem`、`LocalizationSettings` | 看设置数据、应用语义、迁移接口和内置设置对象 |
+| `Scene/` | `IScene`、`ISceneRouter`、`ISceneFactory`、`SceneTransitionEvent` | 看场景行为、路由、工厂 / root 边界与转场事件模型 |
+| `UI/` | `IUiPage`、`IUiRouter`、`IUiFactory`、`UiInteractionProfile`、`UiTransitionHandlerOptions` | 看页面栈、层级 UI、输入动作与 UI 转场契约 |
+| `Routing/` `Storage/` `Asset/` `Enums/` | `IRoute`、`IRouteContext`、`IFileStorage`、`IAssetRegistry<T>`、`UiLayer`、`SceneTransitionType` | 看公共路由上下文、存储角色、资源注册表与跨层共享枚举 |
 
 ## 最小接入路径
 

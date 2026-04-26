@@ -1021,11 +1021,11 @@ var hotReload = loader.EnableHotReload(
 
 ## 工具形态建议
 
-当前优先采用 `VS Code Extension` 形态即可覆盖仓库中已落地的主要工作流，包括 schema 校验、轻量表单、批量编辑和 raw YAML 回退。
+对当前仓库已经落地的工作流而言，`VS Code Extension` 形态已经可以覆盖 schema 校验、轻量表单、批量编辑和 raw YAML 回退这条采用路径。
 
 如果你的团队出现以下需求，再评估独立 `Config Studio` 会更合适：
 
-- 主要使用者变成非开发人员，且 VS Code 的安装与使用成本持续阻碍日常维护
+- 配置维护主要由非开发角色承担，希望进一步降低 VS Code 的安装和使用门槛
 - 需要更重的表格视图、跨表可视化关系编辑、复杂审批流或离线发布流程
 - 插件形态已经明显受限于 VS Code Webview / Extension API，而不是 schema 与工作流本身
 - 已经沉淀出稳定的 schema 元数据约定，足以支撑单独工具的长期维护
