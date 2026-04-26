@@ -366,11 +366,6 @@ public sealed class TestBehaviorRequestHandler : IRequestHandler<TestBehaviorReq
     }
 }
 
-public static class TestLoggingBehavior
-{
-    public static List<string> LoggedMessages { get; set; } = new();
-}
-
 public sealed record TestValidatedRequest : IRequest<string>
 {
     public int Value { get; init; }
@@ -467,8 +462,19 @@ public sealed record TestCircuitBreakerRequest : IRequest<string>
 // 复杂场景相关类
 public class SagaData
 {
-    public List<int> CompletedSteps { get; } = new();
-    public List<int> CompensatedSteps { get; } = new();
+    /// <summary>
+    /// 获取 Saga 已成功执行的步骤集合。
+    /// </summary>
+    public IList<int> CompletedSteps { get; } = new List<int>();
+
+    /// <summary>
+    /// 获取 Saga 失败后已执行补偿的步骤集合。
+    /// </summary>
+    public IList<int> CompensatedSteps { get; } = new List<int>();
+
+    /// <summary>
+    /// 获取或设置 Saga 是否已经完整结束。
+    /// </summary>
     public bool IsCompleted { get; set; }
 }
 
@@ -489,7 +495,11 @@ public sealed record TestExternalServiceRequest : IRequest<string>
 public sealed record TestDatabaseRequest : IRequest<string>
 {
     public string Data { get; init; } = string.Empty;
-    public List<string> Storage { get; init; } = new();
+
+    /// <summary>
+    /// 获取或初始化用于模拟数据库写入的可变存储集合，同时避免泄漏具体集合实现。
+    /// </summary>
+    public IList<string> Storage { get; init; } = new List<string>();
 }
 
 #endregion
