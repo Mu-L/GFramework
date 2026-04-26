@@ -27,7 +27,9 @@
 - 按用户反馈继续调整发版入口：
   - 删除基于 `workflow_run` 的自动发版路径
   - 统一改为 `workflow_dispatch` 手动触发
-  - 通过 `release_mode=preview|release` 区分“查看下个版本”和“真实打 tag”
+  - 先在同一次 run 中执行 `preview`
+  - 再通过 `release-approval` environment 做人工确认
+  - 审批通过后继续同一 SHA 的真实 `release`
 - 复验最小构建命令：
   - `dotnet build GFramework.Core.Abstractions/GFramework.Core.Abstractions.csproj -c Release -p:RestoreFallbackFolders=`
   - 结果：通过，`0 warning / 0 error`

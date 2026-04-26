@@ -17,7 +17,7 @@
 - 当前阶段：`Phase 1`
 - 当前焦点：
   - 增加 `.releaserc.json`，仅启用版本分析与 release notes 生成，不启用 GitHub Release 发布插件
-  - 将 `auto-tag.yml` 改成纯 `workflow_dispatch` 双模式入口，由维护者手动选择 `preview` 或 `release`
+  - 将 `auto-tag.yml` 改成同一次 `workflow_dispatch` 里先 `preview`，再等待 environment 审批后继续 `release`
   - 明确 `PAT_TOKEN` 与 `GITHUB_TOKEN` 的职责边界，确保 tag 继续触发 `publish.yml`
 
 ### 已知风险
@@ -35,12 +35,14 @@
 - 已新增 `.releaserc.json`，仅保留 `@semantic-release/commit-analyzer` 与
   `@semantic-release/release-notes-generator`，避免 `semantic-release` 直接创建 GitHub Release
 - 已将 `.github/workflows/auto-tag.yml` 重写为：
-  - `workflow_dispatch` 由维护者手动选择 `preview` 或 `release`
+  - `workflow_dispatch` 启动后总是先跑 `preview`
   - `preview` 只执行 dry-run，输出 `last_tag`、`next_version` 与 `next_tag`
-  - `release` 由维护者手动触发真实打 tag，并把结果写入 job summary
+  - `release` job 依赖 `preview` 输出，并通过 `release-approval` environment 暂停等待人工确认
+  - 人工批准后，`release` 在同一 SHA 上执行真实打 tag，并把 preview / release 结果都写入 job summary
 - 已明确真实打 tag 仍使用 `PAT_TOKEN`，因为 `GITHUB_TOKEN` 推送的 tag 不会继续触发 `publish.yml`
 - 已更新 `AGENTS.md` 的 Conventional Commit 规则，显式禁止把纯文档变更写成 `feat(...)` 或 `feat(docs)`
 - 已移除基于 `workflow_run` 和 `[release ci]` 的自动发版门闸，后续版本预览与真实发版都由维护者手动触发
+- 已将 release 流程从“两次独立 workflow_dispatch”收敛为“同一次 run 里 preview + 审批 + release”的链路
 
 ## 验证
 
@@ -68,6 +70,6 @@
 
 ## 下一步
 
-1. 复核 `workflow_dispatch` 的 `preview` / `release` 两种模式命名是否还要进一步收紧
-2. 评估是否要在 release 模式中补充额外输入，例如预期 tag 确认或二次确认文本
-3. 若本轮验证通过，按仓库要求创建补充提交并等待你审阅手动发版流程细节
+1. 在仓库 Settings -> Environments 中为 `release-approval` 配置 required reviewers，确保 workflow 会在 preview 后真正暂停
+2. 复核 Actions summary 呈现方式是否还需要更醒目的版本展示
+3. 若本轮验证通过，按仓库要求创建补充提交并等待你审阅同次 run 的手动发版流程细节

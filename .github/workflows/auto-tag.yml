@@ -2,33 +2,30 @@ name: Semantic Release Version and Tag
 
 on:
   workflow_dispatch:
-    inputs:
-      release_mode:
-        description: Choose preview to inspect the next version, or release to create and push the next tag.
-        required: true
-        default: preview
-        type: choice
-        options:
-          - preview
-          - release
 
 concurrency:
   group: semantic-release-main
   cancel-in-progress: false
 
 jobs:
-  semantic-release:
+  preview:
     if: >
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      published: ${{ steps.semantic_release.outputs.new_release_published }}
+      last_tag: ${{ steps.semantic_release.outputs.last_release_git_tag }}
+      next_version: ${{ steps.semantic_release.outputs.new_release_version }}
+      next_tag: ${{ steps.semantic_release.outputs.new_release_git_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.sha }}
 
       - name: Validate release branch
         run: |
@@ -37,19 +34,8 @@ jobs:
             exit 1
           fi
 
-      - name: Validate PAT token
-        if: inputs.release_mode == 'release'
-        run: |
-          if [ -z "${PAT_TOKEN}" ]; then
-            echo "::error::PAT_TOKEN is required because a tag created with GITHUB_TOKEN will not trigger publish.yml."
-            exit 1
-          fi
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-
-      # preview 模式只输出版本推导结果，不会真正推送 tag。
+      # preview 始终先运行，用于给当前 SHA 生成待发布版本预览。
       - name: Semantic release preview
-        if: inputs.release_mode == 'preview'
         id: semantic_release
         uses: cycjimmy/semantic-release-action@v6
         with:
@@ -58,28 +44,80 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      # release 模式由维护者手动触发，直接创建并推送下一个 tag。
-      - name: Semantic release
-        if: inputs.release_mode == 'release'
-        id: semantic_release
-        uses: cycjimmy/semantic-release-action@v6
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-
-      - name: Show result
+      - name: Show preview result
         run: |
-          echo "mode=${{ inputs.release_mode }}"
           echo "published=${{ steps.semantic_release.outputs.new_release_published }}"
           echo "last_tag=${{ steps.semantic_release.outputs.last_release_git_tag }}"
           echo "next_version=${{ steps.semantic_release.outputs.new_release_version }}"
           echo "next_tag=${{ steps.semantic_release.outputs.new_release_git_tag }}"
 
-      - name: Write summary
+      - name: Write preview summary
         run: |
           {
-            echo "## Semantic Release"
+            echo "## Semantic Release Preview"
             echo
-            echo "- Mode: \`${{ inputs.release_mode }}\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Release needed: \`${{ steps.semantic_release.outputs.new_release_published }}\`"
+            echo "- Last tag: \`${{ steps.semantic_release.outputs.last_release_git_tag }}\`"
+            echo "- Next version: \`${{ steps.semantic_release.outputs.new_release_version }}\`"
+            echo "- Next tag: \`${{ steps.semantic_release.outputs.new_release_git_tag }}\`"
+            echo
+            echo "If the version looks correct, approve the \`release-approval\` environment to continue."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  release:
+    if: >
+      github.ref == 'refs/heads/main' &&
+      needs.preview.outputs.published == 'true'
+    needs:
+      - preview
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    environment:
+      name: release-approval
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Validate PAT token
+        run: |
+          if [ -z "${PAT_TOKEN}" ]; then
+            echo "::error::PAT_TOKEN is required because a tag created with GITHUB_TOKEN will not trigger publish.yml."
+            exit 1
+          fi
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Semantic release
+        id: semantic_release
+        uses: cycjimmy/semantic-release-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Show release result
+        run: |
+          echo "published=${{ steps.semantic_release.outputs.new_release_published }}"
+          echo "preview_last_tag=${{ needs.preview.outputs.last_tag }}"
+          echo "preview_next_version=${{ needs.preview.outputs.next_version }}"
+          echo "preview_next_tag=${{ needs.preview.outputs.next_tag }}"
+          echo "last_tag=${{ steps.semantic_release.outputs.last_release_git_tag }}"
+          echo "next_version=${{ steps.semantic_release.outputs.new_release_version }}"
+          echo "next_tag=${{ steps.semantic_release.outputs.new_release_git_tag }}"
+
+      - name: Write release summary
+        run: |
+          {
+            echo "## Semantic Release Publish"
+            echo
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Preview last tag: \`${{ needs.preview.outputs.last_tag }}\`"
+            echo "- Preview next version: \`${{ needs.preview.outputs.next_version }}\`"
+            echo "- Preview next tag: \`${{ needs.preview.outputs.next_tag }}\`"
             echo "- Published: \`${{ steps.semantic_release.outputs.new_release_published }}\`"
             echo "- Last tag: \`${{ steps.semantic_release.outputs.last_release_git_tag }}\`"
             echo "- Next version: \`${{ steps.semantic_release.outputs.new_release_version }}\`"
