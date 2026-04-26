@@ -169,7 +169,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
 
         try
         {
-            allData = await DataRepository.LoadAllAsync();
+            allData = await DataRepository.LoadAllAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -213,7 +213,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
             try
             {
                 var location = LocationProvider.GetLocation(data.GetType());
-                await DataRepository.SaveAsync(location, data);
+                await DataRepository.SaveAsync(location, data).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -231,7 +231,7 @@ public class SettingsModel<TRepository>(IDataLocationProvider? locationProvider,
         foreach (var applicator in _applicators)
             try
             {
-                await applicator.Value.ApplyAsync();
+                await applicator.Value.ApplyAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
