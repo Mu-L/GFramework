@@ -12,9 +12,15 @@ namespace GFramework.Core.Property;
 public class BindableProperty<T>(T defaultValue = default!) : IBindableProperty<T>
 {
     /// <summary>
-    ///     用于保护委托链和值访问的锁对象
+    ///     用于保护委托链和值访问的同步原语
     /// </summary>
+#if NET9_0_OR_GREATER
+    // net9.0 及以上目标使用专用 Lock，以满足分析器对专用同步原语的建议。
+    private readonly System.Threading.Lock _lock = new();
+#else
+    // net8.0 目标仍回退到 object 锁，以保持多目标编译兼容性。
     private readonly object _lock = new();
+#endif
 
     /// <summary>
     ///     属性值变化事件回调委托，当属性值发生变化时被调用
