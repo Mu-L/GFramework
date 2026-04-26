@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Extensions;
 using GFramework.Core.Logging;
@@ -111,7 +112,7 @@ public abstract class SceneRouterBase
     /// <returns>如果场景在栈中返回true，否则返回false。</returns>
     public new bool Contains(string sceneKey)
     {
-        return Stack.Any(s => s.Key == sceneKey);
+        return Stack.Any(s => string.Equals(s.Key, sceneKey, StringComparison.Ordinal));
     }
 
     #endregion

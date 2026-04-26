@@ -18,7 +18,13 @@ public class ResourceManager : IResourceManager
 
     private readonly ResourceCache _cache = new();
     private readonly ConcurrentDictionary<Type, object> _loaders = new();
+#if NET9_0_OR_GREATER
+    // net9.0 及以上目标使用专用 Lock，以满足分析器对专用同步原语的建议。
+    private readonly System.Threading.Lock _loadLock = new();
+#else
+    // net8.0 目标仍回退到 object 锁，以保持多目标编译兼容性。
     private readonly object _loadLock = new();
+#endif
     private readonly ILogger _logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(ResourceManager));
     private IResourceReleaseStrategy _releaseStrategy;
 

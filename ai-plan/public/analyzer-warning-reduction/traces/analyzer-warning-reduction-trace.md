@@ -1,5 +1,70 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-27 — RP-075
+
+### 阶段：完成 `$gframework-batch-boot 50` 第一轮并行 warning 清理集成
+
+- 触发背景：
+  - 用户要求先以权威构建输出建立 warning 基线，再把低风险 warning family 按文件边界拆给不同 subagent 并行清理
+  - 当前批次已完成首轮 worker 集成，但第二组锁迁移、主线程补修与 `ai-plan` 同步仍在工作树，需先收口提交再进入下一轮
+- 已接受的 delegated scope 与结果：
+  - worker-1：`GFramework.Core` 事件 / 状态 / 属性 / 协程统计中的 `MA0158`
+    - 结果：已提交 `8f2d959`，采用 `#if NET9_0_OR_GREATER` + `System.Threading.Lock` / `object` 双分支兼容模式
+  - worker-2：`GFramework.Core` / `GFramework.Cqrs` 资源、日志、配置缓存中的 `MA0158`
+    - 结果：改动已集成到工作树，待主线程与本轮 `ai-plan` 一并提交
+  - worker-3：`GFramework.Game/Data` 与 `SceneRouterBase.cs`
+    - 结果：已提交 `e3eec54`，主线程随后补修 `SceneRouterBase.Contains` 与 `SaveRepository._migrationsLock` 的 touched-file 残留 warning
+  - worker-4：`GFramework.Game/UI/UiRouterBase.cs`
+    - 结果：已提交 `7e13752`
+- 主线程验证里程碑：
+  - 提权 `dotnet clean`
+    - 结果：成功
+  - 提权 `dotnet build`
+    - 结果：成功；warning 从本轮批次建立时的 `639` 降到 `430`
+  - 提权 `dotnet build GFramework.sln -c Release`
+    - 结果：成功；`147 Warning(s)`、`0 Error(s)`
+  - `git diff --name-only refs/remotes/origin/main...HEAD | wc -l`
+    - 结果：`12`
+  - `git diff --numstat refs/remotes/origin/main...HEAD`
+    - 结果：`192` changed lines
+- 当前结论：
+  - 第一轮并行 warning 清理已经完成验证，且 warning 总量出现明显下降，可以继续按 batch 模式推进
+  - 当前 stop-condition 仍远低于 `$gframework-batch-boot 50`；但在派发下一轮之前，应该先提交当前工作树里的第二组锁迁移与恢复文档同步
+  - 下一轮优先目标保持“低风险、单文件、避免高耦合热点”，候选包括 `SettingsModel.cs`、`RouterBase.cs`、`UiInteractionProfiles.cs`
+
+## 2026-04-27 — RP-074
+
+### 阶段：按 `$gframework-batch-boot 50` 建立并行 warning 清理批次
+
+- 触发背景：
+  - 用户明确要求在拿到构建 warning 后分批指派给不同 subagent，以控制主线程上下文长度并提高 warning 清理效率
+  - 当前 worktree 映射到 `analyzer-warning-reduction` 主题，且该任务符合 batch candidate 条件：重复、可切片、可按文件边界独立验证
+- 基线与停止条件：
+  - 当前基线采用 `refs/remotes/origin/main`
+  - `origin/main` 与 `HEAD` 当前同为 `617e0bf`（`2026-04-26T12:17:15+08:00`）
+  - 主 stop condition 为 branch diff files 接近 `50`；当前为 `0 / 50`
+- 主线程实施：
+  - 先读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md` 以及当前 topic 的 active todo/trace，确认批处理流程与 topic 上下文
+  - 先在沙箱内执行仓库根 `dotnet clean` / `dotnet build`；其中 `dotnet clean` 因缺失 Windows fallback package folder 失败，判定为环境噪音
+  - 按仓库规则提权重跑直接命令，确认权威基线为 `dotnet clean` 成功、`dotnet build` 成功且 `639 Warning(s)`、`0 Error(s)`
+  - 基于当前 warning 输出，预划分以下互不重叠的 subagent ownership：
+    - `GFramework.Core` / `GFramework.Cqrs` 的 `MA0158` 专用锁迁移
+    - `GFramework.Game/Data` 的 `MA0004` 与局部 `MA0002`
+    - `GFramework.Game/Scene/SceneRouterBase.cs`、`GFramework.Game/UI/UiRouterBase.cs` 的显式上下文 / 参数名 / 比较器修正
+- 验证里程碑：
+  - `dotnet clean`
+    - 结果：提权后成功；作为本轮 clean 真值
+  - `dotnet build`
+    - 结果：提权后成功；`639 Warning(s)`、`0 Error(s)`
+  - `git diff --name-only refs/remotes/origin/main...HEAD | wc -l`
+    - 结果：`0`
+  - `git diff --numstat refs/remotes/origin/main...HEAD`
+    - 结果：空输出
+- 当前结论：
+  - 本轮已经完成 batch boot 所需的权威警告基线建立，可以安全进入并行 worker 阶段
+  - 当前优先级应继续保持在低风险、少文件、可独立验证的 warning family 上，不直接扩展到 `YamlConfigSchemaValidator` 这类高耦合热点
+  - 下一步默认由主线程下发 disjoint worker 任务并在集成后重新计算 branch diff 与 warning 结果
+
 ## 2026-04-26 — RP-073
 
 ### 阶段：脱敏 analyzer-warning-reduction 文档中的绝对路径记录
