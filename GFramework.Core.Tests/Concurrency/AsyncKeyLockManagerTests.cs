@@ -47,9 +47,11 @@ public sealed class AsyncKeyLockManagerTests
             var index = i;
             tasks.Add(Task.Run(async () =>
             {
-                await using var handle = await manager.AcquireLockAsync("same-key").ConfigureAwait(false);
-                executionOrder.Add(index);
-                await Task.Delay(10).ConfigureAwait(false);
+                await using ((await manager.AcquireLockAsync("same-key").ConfigureAwait(false)).ConfigureAwait(false))
+                {
+                    executionOrder.Add(index);
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
             }));
         }
 
@@ -75,11 +77,13 @@ public sealed class AsyncKeyLockManagerTests
             var key = $"key-{i}";
             tasks.Add(Task.Run(async () =>
             {
-                await using var handle = await manager.AcquireLockAsync(key).ConfigureAwait(false);
-                var current = Interlocked.Increment(ref concurrentCount);
-                maxConcurrent = Math.Max(maxConcurrent, current);
-                await Task.Delay(50).ConfigureAwait(false);
-                Interlocked.Decrement(ref concurrentCount);
+                await using ((await manager.AcquireLockAsync(key).ConfigureAwait(false)).ConfigureAwait(false))
+                {
+                    var current = Interlocked.Increment(ref concurrentCount);
+                    maxConcurrent = Math.Max(maxConcurrent, current);
+                    await Task.Delay(50).ConfigureAwait(false);
+                    Interlocked.Decrement(ref concurrentCount);
+                }
             }));
         }
 
@@ -117,8 +121,10 @@ public sealed class AsyncKeyLockManagerTests
             var key = $"key-{i % 10}";
             tasks.Add(Task.Run(async () =>
             {
-                await using var handle = await manager.AcquireLockAsync(key).ConfigureAwait(false);
-                await Task.Delay(1).ConfigureAwait(false);
+                await using ((await manager.AcquireLockAsync(key).ConfigureAwait(false)).ConfigureAwait(false))
+                {
+                    await Task.Delay(1).ConfigureAwait(false);
+                }
             }));
         }
 
@@ -139,10 +145,12 @@ public sealed class AsyncKeyLockManagerTests
         {
             tasks.Add(Task.Run(async () =>
             {
-                await using var handle = await manager.AcquireLockAsync("same-key").ConfigureAwait(false);
-                var temp = counter;
-                await Task.Delay(1).ConfigureAwait(false);
-                counter = temp + 1;
+                await using ((await manager.AcquireLockAsync("same-key").ConfigureAwait(false)).ConfigureAwait(false))
+                {
+                    var temp = counter;
+                    await Task.Delay(1).ConfigureAwait(false);
+                    counter = temp + 1;
+                }
             }));
         }
 
@@ -295,8 +303,10 @@ public sealed class AsyncKeyLockManagerTests
             {
                 for (var j = 0; j < 10; j++)
                 {
-                    await using var handle = await manager.AcquireLockAsync($"key-{j % 5}").ConfigureAwait(false);
-                    await Task.Delay(10).ConfigureAwait(false);
+                    await using ((await manager.AcquireLockAsync($"key-{j % 5}").ConfigureAwait(false)).ConfigureAwait(false))
+                    {
+                        await Task.Delay(10).ConfigureAwait(false);
+                    }
                 }
             }));
         }

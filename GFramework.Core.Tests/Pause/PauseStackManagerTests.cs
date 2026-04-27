@@ -431,7 +431,11 @@ public class PauseStackManagerTests
     {
         var tasks = new List<Task>();
         var tokens = new List<PauseToken>();
+#if NET9_0_OR_GREATER
+        var lockObj = new System.Threading.Lock();
+#else
         var lockObj = new object();
+#endif
 
         for (int i = 0; i < 100; i++)
         {
