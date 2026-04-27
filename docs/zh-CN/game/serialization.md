@@ -46,7 +46,7 @@ IRuntimeTypeSerializer runtimeSerializer = new JsonSerializer();
 
 ## 配置生命周期
 
-这部分是当前实现最容易被旧文档说错的地方。
+这里最需要先确认的是序列化器的配置生命周期。
 
 `JsonSerializer` 不会复制你传入的 `JsonSerializerSettings`。它会直接持有并复用这份实例，以及里面的 `Converters` 集合。
 

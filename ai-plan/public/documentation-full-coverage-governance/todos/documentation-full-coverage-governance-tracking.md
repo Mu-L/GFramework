@@ -12,14 +12,13 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-040`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-044`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
-  - 继续以最新 `origin/main`（`79934f7`，`2026-04-25 16:15:55 +08:00`）作为 baseline，当前批处理 stop condition 仍是 branch diff vs baseline 接近 `50` changed files
-- 当前批次已从“单点 review 收口”切到“覆盖整个项目功能的 reader-facing 文档补齐”，重点处理 4 组低风险切片：meta-package / 安装入口、config tool adoption、source-generators 真实契约修正、内部支撑模块 README
-- 当前未提交工作树已触达 `18` 个文件，其中 `14` 个更新、`4` 个新增；当前 committed branch diff vs `origin/main` 仍为 `3` files，提交本批次后仍明显低于 `50` 文件阈值
-- 已接受 subagent 结论：`Cqrs` 当前不是栏目缺失，而是 `docs/zh-CN/core/cqrs.md` 需要补 `Request` / stream 变体与协程入口；source-generators 侧当前优先修正文档失真与共享支撑层说明，而不是扩新导航
-- `2026-04-26` 重新抓取 PR `#292` 后确认 latest reviewed commit 已推进到 `d3d62cf4541063c46458f88eea0f5acd1b4503f9`；当前 open thread 仍集中在 `tools/gframework-config-tool/README.md`，其中“缺少中文文档入口链接”已在本地工作树验证为过期评论，仍需收口的是补最小接入路径以及统一 `current schema subset` 术语
+  - 继续以最新 `origin/main`（`617e0bf`，`2026-04-26 12:17:15 +08:00`）作为 baseline，当前批处理 stop condition 仍是 branch diff vs baseline 接近 `50` changed files
+- 本轮从 `$gframework-pr-review` 重新抓取当前 PR `#296`，确认 latest reviewed commit 为 `5778782df05e22dd24dc95189dd768458afb8537`，剩余 open thread 都落在 reader-facing 文案与 README 导航收口上
+- 当前工作树相对 `origin/main` 的 tracked diff 仍接近 `50` files；因此本轮只接受 latest-head review 中仍成立的 4 条低风险修正，不再扩新栏目或新专题页
+- 已确认 `Title check` 的 inconclusive 仅是 GitHub PR 标题元数据提示，不属于仓库文件内可修复范围；本轮只处理本地仍成立的文档线程
 
 ## 当前状态摘要
 
@@ -32,6 +31,14 @@
 - `2026-04-25` `docs/zh-CN/source-generators/index.md` 已按 PR `#292` review 调整“共享支撑模块”段落句式，避免“对读者更重要的判断是”这类拗口表达。
 - `2026-04-25` `tools/gframework-config-tool/README.md` 已新增 `Documentation` 章节，直接链接到 `docs/zh-CN/game/config-tool.md` 与 `config-system.md`，让工具 README 能回到完整中文接入文档。
 - `2026-04-26` `tools/gframework-config-tool/README.md` 已补 `Quick Start`，把安装扩展、配置 `configPath` / `schemasPath`、打开 Explorer、先跑校验、再进入表单 / 批量编辑的最小接入路径串起来，并把 `Validation Coverage` 的 `stable config-schema subset` 统一为 `current schema subset`。
+- `2026-04-27` `docs/zh-CN/getting-started/installation.md` 已补齐当前公开选包矩阵，新增 `Core.Abstractions`、`Game.Abstractions`、`Ecs.Arch`、`Ecs.Arch.Abstractions` 的 reader-facing 安装说明，并把 `Godot` 常见问题里的旧版 `>= 4.5` 提示收敛到当前 `4.6.2` 基线。
+- `2026-04-27` `GFramework.Core.Abstractions/README.md`、`GFramework.Game.Abstractions/README.md`、`GFramework.Game.SourceGenerators/README.md`、`GFramework.Ecs.Arch.Abstractions/README.md` 当前都已把 XML 阅读入口改写为“代表类型 + 阅读重点”，不再暴露覆盖计数、日期或 `已覆盖` 这类治理字段。
+- `2026-04-27` `docs/zh-CN/game/config-system.md` 与 `docs/zh-CN/tutorials/basic/index.md` 已把维护者 / 指挥式措辞改成中性的采用建议与阅读入口，避免公开页面继续暴露内部决策口吻。
+- `2026-04-27` `docs/zh-CN/getting-started/index.md`、`core/index.md`、`game/index.md`、`api-reference/index.md`、`source-generators/index.md` 已统一收敛为“适用场景 / 起步路线 / 继续阅读”式 reader-facing 入口，不再把 GitHub blob README 或治理说明当作主导航。
+- `2026-04-27` `GFramework.Game/README.md`、`GFramework.Game.Abstractions/README.md`、`GFramework.Godot/README.md`、`GFramework.Cqrs.Abstractions/README.md`、`GFramework.Ecs.Arch/README.md` 已收口 `ai-libs`、`family`、`seam`、`ReadMe.md` 等内部化或文件名式表述。
+- `2026-04-27` `docs/zh-CN` 当前已清空所有指向 `github.com/GeWuYou/GFramework/blob/main/.../README.md` 的公开外链，相关入口统一回到站内栏目页、专题页或 API 导航。
+- `2026-04-27` `docs/zh-CN/tutorials/godot-integration.md`、`game/setting.md`、`game/serialization.md`、`godot/index.md`、`godot/architecture.md`、`godot/storage.md`、`godot/logging.md`、`godot/setting.md`、`godot/extensions.md`、`core/architecture.md` 已把 `旧文档` / `ai-libs` / `.Wait()` / `family` 这类维护与内部语气改写成当前采用说明。
+- `2026-04-27` 已重新抓取 PR `#296` 并逐条复核 latest-head review：`GFramework.Game.SourceGenerators/README.md` 的 XML 阅读表已改成语义标签，`GFramework.Game/README.md` 已删除重复的 `storage.md` 入口，`docs/zh-CN/tutorials/godot-integration.md` 与 `docs/zh-CN/godot/extensions.md` 已收口仍成立的 reader-facing 措辞问题。
 - `2026-04-25` 当前批次已补齐 meta-package / 安装面：`GFramework.csproj` 不再保留占位描述，`README.md`、`docs/zh-CN/index.md`、`docs/zh-CN/getting-started/installation.md` 当前明确说明聚合元包只聚合 `Core` + `Game`，并把安装入口更新到当前 `net8.0/net9.0/net10.0` 与 Godot `4.6.2` 基线。
 - `2026-04-25` `docs/zh-CN/game/config-tool.md` 已新增为 reader-facing 工具页，`docs/zh-CN/game/index.md`、`config-system.md`、`docs/.vitepress/config.mts` 与 `tools/gframework-config-tool/README.md` 当前把 VS Code 配置工具纳入 `Game` 配置工作流入口。
 - `2026-04-25` source-generators 栏目已修正 4 处真实契约问题：`GetNode` 显式路径 / `Lookup` 语义、枚举生成器实际开关、`Context Get` 集合注入边界，以及 `GFramework.SourceGenerators.Common` / `*.SourceGenerators.Abstractions` 的共享支撑层说明。
@@ -51,7 +58,7 @@
   `MSB4276` / `MSB4018`；这是已知环境阻塞，不属于本轮文档回归。
 - 当前 WSL 会话里 `git.exe` 可解析但不能执行，应继续使用显式 `--git-dir` / `--work-tree` 绑定作为默认 Git 策略。
 - `dotnet build GFramework.csproj -c Release` 当前仍会输出仓库既有 analyzer warnings（如 `MA0158`、`MA0051`、`MA0004`）；本轮仅修改文档与 package metadata，不扩展到 warning 清理。
-- PR `#292` 当前 review 线程仍主要来自 CodeRabbit，对 reader-facing 文案和文档入口连通性要求较细；本轮提交后仍需重新抓取 latest-head review，确认 open thread 是否已自动关闭。
+- PR `#296` 当前 review 线程仍主要来自 CodeRabbit 与 Greptile，对 reader-facing 文案和文档入口连通性要求较细；本轮提交后仍需重新抓取 latest-head review，确认 open thread 是否已自动关闭。
 
 ## 归档指针
 
@@ -68,12 +75,82 @@
 
 ## 最新验证
 
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Game.SourceGenerators/README.md GFramework.Game/README.md`
+  - 结果：通过；本轮 2 个 README 的 reader-facing 表格与导航去重调整后链接目标有效。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+  - 结果：通过；Godot 集成教程的措辞收口后页面 frontmatter、链接与代码块校验均通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+  - 结果：通过；Godot 扩展页去自我指涉表述后页面 frontmatter、链接与代码块校验均通过。
+- `2026-04-27` `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 PR `#296` review 收口后的站点仍可构建，仅保留既有大 chunk warning。
+- `2026-04-27` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过；PR `#296` 处于 `OPEN`，latest head review 共有 `4` 条 open thread，其中 `3` 条文档问题与 `1` 条措辞 nitpick 在本地复核后仍成立；测试汇总为 `2156 passed`，仅剩 `Title check` inconclusive。
 - `2026-04-25` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
   - 结果：通过；PR `#290` 处于 `OPEN`，latest head commit `54b8e5770af9ab3c8a86a396ffa4794fe4bb5181` 有 `2` 条 open thread（CodeRabbit `1`、Greptile `1`），测试汇总为 `2156 passed`，无 failed checks。
 - `2026-04-25` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
   - 结果：通过；PR `#292` 处于 `OPEN`，latest head commit `b96565ffa367bade30f44c2d4e8955143fbff85e` 有 `2` 条 CodeRabbit open thread，测试汇总为 `2156 passed`，无 failed tests；另有 `Title check` inconclusive，属于 PR 标题元数据问题，不是仓库文件阻塞。
 - `2026-04-25` `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Core/README.md GFramework.Ecs.Arch/README.md GFramework.Game/README.md`
   - 结果：通过；本轮 3 个模块 README 调整后链接目标仍然有效。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Core.Abstractions/README.md GFramework.Game.Abstractions/README.md GFramework.Game.SourceGenerators/README.md GFramework.Ecs.Arch.Abstractions/README.md`
+  - 结果：通过；4 个公开模块 README 的 reader-facing 改写后链接目标仍然有效。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/getting-started`
+  - 结果：通过；`installation.md` 更新后 `getting-started` 栏目的 frontmatter、链接与代码块校验均通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/config-system.md`
+  - 结果：通过；`config-system.md` 的工具形态建议改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/basic`
+  - 结果：通过；基础教程入口的阅读路径改写后栏目校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Game/README.md GFramework.Game.Abstractions/README.md GFramework.Godot/README.md GFramework.Cqrs.Abstractions/README.md GFramework.Ecs.Arch/README.md`
+  - 结果：通过；本轮 5 个模块 README 的 reader-facing 术语与入口改写后链接目标有效。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/index.md`
+  - 结果：通过；教程页受众表述改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`
+  - 结果：通过；Godot UI 页的接法示例与 reader-facing 术语改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md`
+  - 结果：通过；Godot 场景页的接法示例与 reader-facing 术语改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md`
+  - 结果：通过；信号页切回站内生成器入口后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions`
+  - 结果：通过；3 个抽象层页改回站内入口后栏目校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators`
+  - 结果：通过；生成器栏目及受影响专题页改回站内入口后栏目校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/index.md`
+  - 结果：通过；Core 入口页 reader-facing 改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/index.md`
+  - 结果：通过；Game 入口页 reader-facing 改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/api-reference/index.md`
+  - 结果：通过；API 入口页导航改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/getting-started/quick-start.md`
+  - 结果：通过；快速开始页切回站内安装入口后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/cqrs.md`
+  - 结果：通过；CQRS 页继续阅读入口改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/scene.md`
+  - 结果：通过；Game 场景页相关推荐改回站内入口后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/ui.md`
+  - 结果：通过；Game UI 页相关推荐改回站内入口后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/arch.md`
+  - 结果：通过；ECS Arch 页入口改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+  - 结果：通过；Godot 集成教程的接线口吻改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/setting.md`
+  - 结果：通过；设置系统页初始化语义改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/serialization.md`
+  - 结果：通过；序列化页生命周期说明改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`
+  - 结果：通过；Godot landing page 的采用说明改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
+  - 结果：通过；Godot 架构页异步初始化口吻改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/storage.md`
+  - 结果：通过；Godot 存储页示例口吻改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/logging.md`
+  - 结果：通过；Godot 日志页 provider 接线说明改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/setting.md`
+  - 结果：通过；Godot 设置页 applicator 接线口吻改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+  - 结果：通过；Godot 扩展页边界说明改写后页面校验通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/architecture.md`
+  - 结果：通过；Core 架构页旧初始化入口改写后页面校验通过。
+- `2026-04-27` `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 README、安装页与公开文案改写后站点仍可构建，仅保留既有大 chunk warning。
 - `2026-04-25` `bun run build`（工作目录：`docs/`）
   - 结果：通过；移除 `api-reference` 侧栏重复项并统一 `source-generators` 标签后站点仍可正常构建，仅保留既有大 chunk warning。
 - `2026-04-25` `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh README.md GFramework.Core/README.md GFramework.Core.Abstractions/README.md GFramework.Game/README.md GFramework.Game.Abstractions/README.md GFramework.Game.SourceGenerators/README.md GFramework.Ecs.Arch/README.md GFramework.Ecs.Arch.Abstractions/README.md`
@@ -160,11 +237,9 @@
 
 ## 下一步
 
-1. 运行 `bun run test`（工作目录：`tools/gframework-config-tool/`），完成本轮 README 收口改动的最小模块验证。
-2. 验证通过后重新抓取 `$gframework-pr-review`，确认 PR `#292` 的 latest-head review 是否只剩过期线程或已自动清空。
-3. 若本轮提交后 branch diff vs `origin/main` 仍明显低于 `50` 文件阈值，再决定是否继续追加低风险 reader-facing 文档切片。
-4. 若后续继续扩批，优先在已识别但尚未扩写的低风险 reader-facing 方向里选择下一组：config tool 更深的 adoption 示例、首页 / 安装页的进一步选包引导，或其它 repo-visible support surface 的本地说明补齐。
-5. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
+1. 提交当前接近阈值的稳定批次后，优先重新抓取 `$gframework-pr-review` 或在新一轮里按 `46 / 50` 的 branch diff 重新评估是否还适合继续扩批。
+2. 若后续还要继续文档治理，优先复核尚未触达的 `Game` persistence、Godot runtime 细页与少量残余 `ai-libs` 口吻，而不是继续扩大同一轮 review 面。
+3. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、
    `storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
-6. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
+4. 若后续分支继续调整 `Godot` generator 接法，优先复核 `GFramework.Godot.SourceGenerators/README.md`、
    `docs/zh-CN/tutorials/godot-integration.md` 与相关专题页是否仍保持一致。

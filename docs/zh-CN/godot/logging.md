@@ -67,8 +67,8 @@ public sealed class GodotLoggerFactoryProvider : ILoggerFactoryProvider
 
 ### 1. 在 `ArchitectureConfiguration` 中挂上 Godot provider
 
-当前仓库里更稳的接法，不是到处直接改全局 `LoggerFactoryResolver.Provider`，而是在架构配置里显式提供
-`LoggerProperties.LoggerFactoryProvider`。`ai-libs/CoreGrid/global/GameEntryPoint.cs` 现在就是这样接的。
+当前更稳的接法，不是到处直接改全局 `LoggerFactoryResolver.Provider`，而是在架构配置里显式提供
+`LoggerProperties.LoggerFactoryProvider`。
 
 ```csharp
 using GFramework.Core.Abstractions.Environment;

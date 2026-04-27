@@ -36,18 +36,17 @@
 
 ## XML 阅读入口
 
-截至 `2026-04-22`，下面这份目录视图可以帮助你快速定位 `GFramework.Core.Abstractions` 的类型级 XML 文档入口；当前契约目录族的类型声明都已带
-XML 注释。更细的契约约束与交互语义，适合在阅读具体接口和成员时继续结合源码确认。
+下面这份目录视图可以帮助你快速定位 `GFramework.Core.Abstractions` 的代表类型。更细的契约约束与交互语义，适合在阅读具体接口和成员时继续结合源码确认。
 
-| 类型族 | 基线状态 | 代表类型 |
+| 类型族 | 代表类型 | 阅读重点 |
 | --- | --- | --- |
-| `Architectures/` `Lifecycle/` `Registries/` | `20/20` 个类型声明已带 XML 注释 | `IArchitecture`、`IArchitectureContext`、`IServiceModule`、`KeyValueRegistryBase<TKey, TValue>` |
-| `Command/` `Query/` `Cqrs/` | `10/10` 个类型声明已带 XML 注释 | `ICommandExecutor`、`IAsyncQueryExecutor`、`ICqrsRuntime` |
-| `Events/` `Property/` `State/` `StateManagement/` | `25/25` 个类型声明已带 XML 注释 | `IEventBus`、`IBindableProperty<T>`、`IStateMachine`、`IStore<TState>` |
-| `Coroutine/` `Time/` `Pause/` `Concurrency/` | `17/17` 个类型声明已带 XML 注释 | `IYieldInstruction`、`ITimeProvider`、`IPauseStackManager`、`IAsyncKeyLockManager` |
-| `Resource/` `Pool/` `Logging/` `Localization/` | `27/27` 个类型声明已带 XML 注释 | `IResourceManager`、`IObjectPoolSystem`、`ILogger`、`ILocalizationManager` |
-| `Configuration/` `Environment/` `Data/` `Serializer/` `Storage/` `Versioning/` | `7/7` 个类型声明已带 XML 注释 | `IConfigurationManager`、`IEnvironment`、`ILoadableFrom<T>`、`ISerializer`、`IStorage` |
-| `Bases/` `Controller/` `Model/` `Systems/` `Utility/` `Rule/` `Enums/` `Properties/` | `19/19` 个类型声明已带 XML 注释 | `IPrioritized`、`IController`、`IModel`、`ISystem`、`IContextUtility`、`ArchitecturePhase` |
+| `Architectures/` `Lifecycle/` `Registries/` | `IArchitecture`、`IArchitectureContext`、`IServiceModule`、`KeyValueRegistryBase<TKey, TValue>` | 看架构、上下文、模块装配与注册表基类边界 |
+| `Command/` `Query/` `Cqrs/` | `ICommandExecutor`、`IAsyncQueryExecutor`、`ICqrsRuntime` | 看命令、查询与新请求模型的调用入口 |
+| `Events/` `Property/` `State/` `StateManagement/` | `IEventBus`、`IBindableProperty<T>`、`IStateMachine`、`IStore<TState>` | 看事件分发、可绑定状态与 store 契约 |
+| `Coroutine/` `Time/` `Pause/` `Concurrency/` | `IYieldInstruction`、`ITimeProvider`、`IPauseStackManager`、`IAsyncKeyLockManager` | 看协程、时间源、暂停栈与并发协调能力 |
+| `Resource/` `Pool/` `Logging/` `Localization/` | `IResourceManager`、`IObjectPoolSystem`、`ILogger`、`ILocalizationManager` | 看资源、对象池、日志与本地化服务角色 |
+| `Configuration/` `Environment/` `Data/` `Serializer/` `Storage/` `Versioning/` | `IConfigurationManager`、`IEnvironment`、`ILoadableFrom<T>`、`ISerializer`、`IStorage` | 看配置、环境、数据装载、序列化与存储边界 |
+| `Bases/` `Controller/` `Model/` `Systems/` `Utility/` `Rule/` `Enums/` `Properties/` | `IPrioritized`、`IController`、`IModel`、`ISystem`、`IContextUtility`、`ArchitecturePhase` | 看组件角色、优先级和值对象约定 |
 
 完整接入说明与阅读顺序见 [Core 抽象层说明](../docs/zh-CN/abstractions/core-abstractions.md)。
 

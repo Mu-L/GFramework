@@ -1,6 +1,6 @@
 ---
 title: Godot 架构集成
-description: 说明 AbstractArchitecture、ArchitectureAnchor 和 Godot 模块挂接的当前生命周期语义，避免继续沿用旧版 `.Wait()` 接法。
+description: 说明 AbstractArchitecture、ArchitectureAnchor 和 Godot 模块挂接的当前生命周期语义，以及推荐的初始化路径。
 ---
 
 # Godot 架构集成
@@ -33,7 +33,7 @@ Godot 场景树销毁”，而不是改变注册方式。
 
 ### 常规模块仍然用 `InstallModule(...)`
 
-当前消费者 `ai-libs/CoreGrid` 的默认做法，是保持普通模块注册方式：
+当前更稳的默认做法，是保持普通模块注册方式：
 
 ```csharp
 using GFramework.Core.Abstractions.Architectures;
@@ -95,8 +95,7 @@ public sealed class HudModule : AbstractGodotModule
 ```
 
 这类模块的关键点不是“注册更多框架能力”，而是“让模块节点跟着架构锚点进出场景树”。
-真正调用 `InstallGodotModule(...)` 时，也应该把它放在能够接受异步挂接流程的初始化路径里，而不是继续沿用旧文档里的
-`.Wait()` 叙述。
+真正调用 `InstallGodotModule(...)` 时，也应该把它放在能够接受异步挂接流程的初始化路径里。
 
 ## 当前生命周期
 
@@ -148,7 +147,7 @@ public sealed class HudModule : AbstractGodotModule
 - 当锚点尚未初始化时，`InstallGodotModule(...)` 会直接抛 `InvalidOperationException("Anchor not initialized")`
 - 失败发生在 `module.Install(...)` 之前，因此不会留下半安装副作用
 
-这也是为什么文档不应该再把 `InstallGodotModule(...).Wait()` 写成一种随处可用的默认初始化方式。
+这也是为什么 `InstallGodotModule(...)` 更适合放在异步初始化路径里，而不是同步阻塞地等待挂接结果。
 
 ### `AbstractGodotModule` 只是便捷基类，不代表自动阶段广播
 

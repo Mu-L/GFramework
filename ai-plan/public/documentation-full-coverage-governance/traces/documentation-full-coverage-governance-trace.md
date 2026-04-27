@@ -1,5 +1,138 @@
 # Documentation Full Coverage Governance Trace
 
+## 2026-04-27
+
+### 当前恢复点：RP-044
+
+- 本轮从 `$gframework-pr-review` 重新进入，继续沿用显式 `--git-dir` / `--work-tree` 绑定确认当前分支仍为 `docs/sdk-update-documentation`，并通过 `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json` 抓取当前 PR `#296`。
+- 抓取结果显示 latest reviewed commit 为 `5778782df05e22dd24dc95189dd768458afb8537`，共有 `4` 条 open thread：`GFramework.Game.SourceGenerators/README.md` 的表头仍带路径视角、`GFramework.Game/README.md` 有重复 `storage.md` 链接、`docs/zh-CN/tutorials/godot-integration.md` 与 `docs/zh-CN/godot/extensions.md` 还有 reader-facing 措辞收口空间。
+- 本地逐条复核后确认这 `4` 条都仍成立，但都属于低风险文档收口；唯一 failed check `Title check` 只是 PR 标题元数据提示，不属于仓库文件内修复范围。
+
+### 当前决策（RP-044）
+
+- 接受 latest-head review 中仍成立的 `4` 条文档修正，不扩展到 review 未指向的其它页面，避免在当前接近 branch-size stop condition 的阶段继续增大 review 面。
+- 对 README 表格和导航问题，只做 reader-facing 命名与去重；对教程与 Godot 页面，只做措辞收口，不改变现有采用路径与示例结构。
+- 在同一轮里同步更新 active topic tracking / trace，并在提交前运行最小页面校验、README 链接校验与站点构建。
+
+### 当前验证（RP-044）
+
+- PR review 抓取：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过；PR `#296` 处于 `OPEN`，latest head review 共有 `4` 条 open thread，测试汇总为 `2156 passed`，仅剩 `Title check` inconclusive。
+- README 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Game.SourceGenerators/README.md GFramework.Game/README.md`
+  - 结果：通过；本轮 2 个 README 的 reader-facing 表格与导航去重调整后链接目标有效。
+- 页面校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+  - 结果：通过；两页 frontmatter、链接与代码块校验均通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 PR `#296` review 收口后的站点仍可构建，仅保留既有大 chunk warning。
+
+### 当前恢复点：RP-043
+
+- 在提交 `docs(reader-facing): 统一站内入口与公开术语` 后重新计算 branch diff，确认当前工作树继续补一批新文件后已到 `46` changed files，已经接近 `$gframework-batch-boot 50` 的停止线。
+- 因此本轮最后只接受 10 个还没进入 branch diff 的文件：`tutorials/godot-integration.md`、`game/setting.md`、`game/serialization.md`、`godot/index.md`、`godot/architecture.md`、`godot/storage.md`、`godot/logging.md`、`godot/setting.md`、`godot/extensions.md`、`core/architecture.md`。
+- 这批文件统一收口的是同一类问题：把 `旧文档`、`ai-libs`、`.Wait()`、`family` 之类维护 / 内部口吻改成当前采用指导，不扩新结构、不重写示例体系。
+
+### 当前决策（RP-043）
+
+- 当前 stop condition 已接近阈值，因此这批验证通过后立即停止继续扩批，避免 branch diff 超过 `50` files 或让 review 面退化。
+- 提交后本轮默认结束；后续若继续，应从 PR review 或剩余未触达的细页重新开一轮，而不是在同一轮里继续堆文件数。
+
+### 当前验证（RP-043）
+
+- 单页校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/setting.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/serialization.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/storage.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/logging.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/setting.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/architecture.md`
+  - 结果：通过；本轮 10 个新文件的 frontmatter、链接与代码块校验全部通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；接近阈值前的最后一批文案收口后站点仍可构建，仅保留既有大 chunk warning。
+
+### 当前恢复点：RP-042
+
+- 用户明确要求在当前阈值内循环推进，并允许使用 subagent 降低主线程上下文压力；因此本轮在主线程保留实现与验证，把热点识别委派给 3 个 explorer。
+- 接受的 subagent 结论主要有三类：
+  - 入口页最划算的改法是统一 reader-facing 骨架，而不是继续保留治理说明或负向 framing。
+  - 若站内已有栏目页与专题页，GitHub blob README 不应继续作为公开文档主导航。
+  - `GFramework.Game` / `Game.Abstractions` / `Godot` 等 README 仍有 `ai-libs`、`family`、`seam`、`ReadMe.md` 等对外不友好的措辞，适合在同一轮里收口。
+- 基于这些结论，本轮连续落地 3 组低风险切片：入口页 reader-facing 改写、README / Godot 页去内部口吻、剩余 GitHub blob README 外链改回站内入口。
+
+### 当前决策（RP-042）
+
+- 继续保持 critical path 本地执行，不让 subagent 直接改文件；subagent 只负责热点排序与问题归类。
+- stop condition 继续沿用 `origin/main` + `50` changed files；当前工作树相对 baseline 的 tracked diff 已到 `36` files / `500` changed lines，意味着还能再做一小批，但应先提交当前稳定批次。
+- 当前批次不扩展到新栏目、新导航层或大段内容重写，只做 reader-facing 入口、术语和站内导航连通性收口。
+
+### 当前验证（RP-042）
+
+- README 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Game/README.md GFramework.Game.Abstractions/README.md GFramework.Godot/README.md GFramework.Cqrs.Abstractions/README.md GFramework.Ecs.Arch/README.md`
+  - 结果：通过；本轮 5 个 README 的 reader-facing 改写后链接目标有效。
+- 教程 / Godot 页面校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/ui.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/scene.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md`
+  - 结果：通过；受影响页面的 frontmatter、链接与代码块校验通过。
+- 入口与专题页校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/api-reference/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/getting-started/quick-start.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/cqrs.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/scene.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/ui.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/arch.md`
+  - 结果：通过；入口页和相关推荐入口改写后页面校验通过。
+- 栏目级校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators`
+  - 结果：通过；抽象层与生成器栏目改回站内入口后栏目校验通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 3 组 reader-facing 文档批次后站点仍可构建，仅保留既有大 chunk warning。
+
+### 当前恢复点：RP-041
+
+- 通过 `$gframework-batch-boot 50` 重新进入后，先按仓库规则读取 `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md` 与 active topic tracking / trace，并继续使用显式 `--git-dir` / `--work-tree` 绑定确认当前分支仍为 `docs/sdk-update-documentation`。
+- 使用显式 Git 绑定确认最新 baseline 为 `origin/main` `617e0bf`（`2026-04-26 12:17:15 +08:00`），当前 committed branch diff vs baseline 为 `0` files，因此本轮继续选择低风险、reader-facing 文档切片。
+- 本轮收敛出的 3 组切片分别是：`installation.md` 的选包矩阵与旧版 Godot 提示、公开 README 的 XML 阅读入口去治理化，以及 `config-system` / 基础教程入口中的维护者口吻改写。
+
+### 当前决策（RP-041）
+
+- 不扩展到导航结构或新专题页，只在现有入口上修正 reader-facing 采用路径与表述一致性。
+- 对公开 README 中的 XML 阅读入口，统一改成“代表类型 + 阅读重点”，不再暴露覆盖计数、日期或 `已覆盖` 这类治理字段。
+- stop condition 继续沿用 `origin/main` + `50` changed files；本轮工作树相对 baseline 的 tracked diff 为 `9` files / `191` changed lines，仍明显低于阈值。
+
+### 当前验证（RP-041）
+
+- README 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Core.Abstractions/README.md GFramework.Game.Abstractions/README.md GFramework.Game.SourceGenerators/README.md GFramework.Ecs.Arch.Abstractions/README.md`
+  - 结果：通过；本轮 4 个 README 的 reader-facing 改写后链接目标有效。
+- 入门栏目校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/getting-started`
+  - 结果：通过；`installation.md` 更新后 `getting-started` 栏目 frontmatter、链接与代码块校验通过。
+- 配置系统页校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/config-system.md`
+  - 结果：通过；工具形态建议改写后页面校验通过。
+- 基础教程栏目校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/basic`
+  - 结果：通过；入口页阅读路径改写后栏目校验通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮文档批次后站点仍可构建，仅保留既有大 chunk warning。
+
 ## 2026-04-26
 
 ### 当前恢复点：RP-040

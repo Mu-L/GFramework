@@ -60,7 +60,7 @@ dotnet add package GeWuYou.GFramework.Godot.SourceGenerators
 
 ### 2. 让架构继续负责注册，让 Godot 节点负责场景接线
 
-`ai-libs/CoreGrid` 当前的真实做法，是让架构继承 `AbstractArchitecture`，但模块注册依然使用普通的
+当前更稳的接法，是让架构继承 `AbstractArchitecture`，但模块注册依然使用普通的
 `InstallModule(...)`：
 
 ```csharp
@@ -150,7 +150,7 @@ public partial class SettingsPanel : Control
 - `AbstractArchitecture` 会在 `SceneTree.Root` 下创建 `ArchitectureAnchor`，并在锚点退出场景树时触发架构销毁观察流程
 - `InstallGodotModule(...)` 会先检查锚点是否存在；测试覆盖了“锚点缺失时直接抛 `InvalidOperationException`，且不会执行
   `module.Install(...)`”这一路径
-- `Signal(...)` 是当前 fluent API 入口，不是旧文档里的 `CreateSignalBuilder(...)`
+- `Signal(...)` 是当前的 fluent API 入口
 - `NodeExtensions` 目前保留的是 `FindChildX<T>()`、`GetParentX<T>()`、`GetOrCreateNode<T>()`、`QueueFreeX()`、
   `FreeX()`、`WaitUntilReadyAsync()` 这一类运行时辅助；不要再把它描述成一个“默认覆盖所有 Godot 节点操作”的大而全层
 - Scene / UI 工厂依赖显式 registry 与 `PackedScene` 资源，不存在“运行时自动扫描所有场景并完成统一注册”的当前契约
