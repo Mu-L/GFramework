@@ -176,6 +176,6 @@ public sealed class TrackingPipelineBehavior<TRequest, TResponse> : IPipelineBeh
         CancellationToken cancellationToken)
     {
         InvocationCount++;
-        return await next(message, cancellationToken);
+        return await next(message, cancellationToken).ConfigureAwait(false);
     }
 }

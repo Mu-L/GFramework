@@ -227,12 +227,17 @@ public class AsyncExtensionsTests
     [Test]
     public async Task WithRetry_Should_Respect_ShouldRetry_Predicate()
     {
+        static Task<int> ThrowShouldNotRetry(string parameterName)
+        {
+            throw new ArgumentException("Should not retry", nameof(parameterName));
+        }
+
         // Arrange
         var attemptCount = 0;
         Func<Task<int>> taskFactory = () =>
         {
             attemptCount++;
-            throw new ArgumentException("Should not retry");
+            return ThrowShouldNotRetry(nameof(taskFactory));
         };
 
         // Act & Assert
