@@ -1,5 +1,63 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-27 — RP-077
+
+### 阶段：完成第二轮 Game 侧低风险 slice 验证并转向测试项目候选
+
+- 触发背景：
+  - 第二轮 worker 已分别完成 `SettingsModel.cs`、`RouterBase.cs`+`UiInteractionProfiles.cs`、`GameConfigBootstrap.cs`
+  - 主线程在复验时发现 `SettingsModel.cs` 与 `GameConfigBootstrap.cs` 又各暴露一个 touched-file `MA0158`，已在主线程补齐
+- 已接受的 delegated scope 与结果：
+  - worker-A：`GFramework.Game/Setting/SettingsModel.cs`
+    - 结果：提交 `c106e53`，修复 `MA0004`；主线程随后补齐同文件 `MA0158`
+  - worker-B：`GFramework.Game/Routing/RouterBase.cs`、`GFramework.Game/UI/UiInteractionProfiles.cs`
+    - 结果：提交 `9deafac`，修复 `MA0006` / `MA0099`
+  - worker-C：`GFramework.Game/Config/GameConfigBootstrap.cs`
+    - 结果：提交 `9ce634e`，拆分热重载启动流程以修复 `MA0051`；主线程随后补齐同文件 `MA0158`
+  - explorer：重新审视 `GFramework.Game` 排除热点后的剩余候选
+    - 结果：确认 `Game` 侧低风险单文件 warning 基本耗尽，继续推进应转向其他项目
+- 主线程验证里程碑：
+  - 提权 `dotnet clean`
+    - 结果：成功
+  - 提权 `dotnet build`
+    - 结果：成功；warning 从上一轮的 `430` 继续降到 `405`
+  - 提权 `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+    - 结果：成功；warning 从上一轮的 `147` 降到 `122`
+  - `git diff --name-only refs/remotes/origin/main...HEAD | wc -l`
+    - 结果：`26`
+  - `git diff --numstat refs/remotes/origin/main...HEAD`
+    - 结果：`483` changed lines
+- 当前结论：
+  - 第二轮 Game 侧 warning 清理已完成验证，且 warning 数继续实质下降
+  - 当前分支距离 `$gframework-batch-boot 50` 仍有空间，但继续推进不应再硬碰 `YamlConfigSchemaValidator*` / `YamlConfigLoader.cs`
+  - 若继续下一轮，优先切向 `Core.Tests` 等测试项目里的单文件 `MA0004` / `MA0015` / `MA0158`
+
+## 2026-04-27 — RP-076
+
+### 阶段：首轮收口提交后进入第二轮低风险 Game warning slice
+
+- 触发背景：
+  - 首轮并行清理已经以 `fb0a55f` 收口，当前分支相对 `origin/main` 的累计改动文件数来到 `22 / 50`
+  - 用户要求继续采用“先拿构建 warning，再分批交给 subagent”模式，因此当前仍有继续推进的 branch 预算
+- 主线程当前真值：
+  - 当前基线：`refs/remotes/origin/main` = `617e0bf`
+  - 当前 `HEAD` stop metric：
+    - files：`22`
+    - changed lines：`378`
+  - 最近权威验证仍为：
+    - `dotnet build`：`430 Warning(s)`、`0 Error(s)`
+    - `dotnet build GFramework.sln -c Release`：`147 Warning(s)`、`0 Error(s)`
+- 本轮拟下发的 delegated scope：
+  - worker-A：`GFramework.Game/Setting/SettingsModel.cs`
+    - 目标：修复 `MA0004`，仅在不改变设置模型生命周期语义的前提下补全 `ConfigureAwait(false)`
+  - worker-B：`GFramework.Game/Routing/RouterBase.cs` 与 `GFramework.Game/UI/UiInteractionProfiles.cs`
+    - 目标：修复 `MA0006` / `MA0099`，保持现有路由比较语义与 UI 动作位掩码语义不变
+  - worker-C：`GFramework.Game/Config/GameConfigBootstrap.cs`
+    - 目标：评估并尽量修复 `MA0051`；若单文件安全提取不可低风险完成，应明确放弃并说明阻塞点
+- 当前结论：
+  - 第二轮继续严格限制在低风险单文件 slice，避免直接进入 `YamlConfigSchemaValidator*` 与 `YamlConfigLoader.cs` 这种高耦合热点
+  - 本轮完成后应重新评估 branch diff 是否仍适合继续在同一分支上批量推进
+
 ## 2026-04-27 — RP-075
 
 ### 阶段：完成 `$gframework-batch-boot 50` 第一轮并行 warning 清理集成

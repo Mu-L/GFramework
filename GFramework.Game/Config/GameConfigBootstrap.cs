@@ -20,7 +20,11 @@ public sealed class GameConfigBootstrap : IDisposable
 
     // All lifecycle transitions share one gate so initialization, hot-reload startup,
     // stop, and disposal never publish half-finished state to concurrent callers.
+#if NET9_0_OR_GREATER
+    private readonly Lock _stateGate = new();
+#else
     private readonly object _stateGate = new();
+#endif
     private readonly GameConfigBootstrapOptions _options;
     private IUnRegister? _hotReload;
     private YamlConfigLoader? _loader;
