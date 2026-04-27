@@ -1,0 +1,32 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using GFramework.Cqrs.Abstractions.Cqrs;
+
+namespace GFramework.Cqrs.Tests.Cqrs;
+
+/// <summary>
+///     用于验证“生成注册器 + reflection fallback”组合路径的私有嵌套处理器容器。
+/// </summary>
+internal sealed class ReflectionFallbackNotificationContainer
+{
+    /// <summary>
+    ///     获取仅能通过反射补扫接入的私有嵌套处理器类型。
+    /// </summary>
+    public static Type ReflectionOnlyHandlerType => typeof(ReflectionOnlyGeneratedRegistryNotificationHandler);
+
+    private sealed class ReflectionOnlyGeneratedRegistryNotificationHandler
+        : INotificationHandler<GeneratedRegistryNotification>
+    {
+        /// <summary>
+        ///     处理测试通知。
+        /// </summary>
+        /// <param name="notification">通知实例。</param>
+        /// <param name="cancellationToken">取消令牌。</param>
+        /// <returns>已完成任务。</returns>
+        public ValueTask Handle(GeneratedRegistryNotification notification, CancellationToken cancellationToken)
+        {
+            return ValueTask.CompletedTask;
+        }
+    }
+}
