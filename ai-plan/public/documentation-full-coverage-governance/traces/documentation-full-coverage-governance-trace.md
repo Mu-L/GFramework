@@ -2,6 +2,31 @@
 
 ## 2026-04-27
 
+### 当前恢复点：RP-045
+
+- 本轮通过 `$gframework-batch-boot 50` 重新进入，继续沿用显式 `--git-dir` / `--work-tree` 绑定确认当前分支仍为 `docs/sdk-update-documentation`，并按技能要求把 baseline 固定到最新本地 `origin/main` `7cfdd2c`（`2026-04-27 16:59:57 +08:00`）。
+- 重新计算 branch diff 后确认当前已提交范围相对 `origin/main` 为 `0` files / `0` lines；原因是本分支先前工作已经并入 `origin/main`，因此这一轮 batch boot 需要从零 diff 状态重新累计 stop condition。
+- 结合公开文档搜索结果，本轮先挑一组最稳的 reader-facing 入口页收口：`docs/zh-CN/source-generators/index.md`、`game/index.md`、`api-reference/index.md`、`godot/setting.md`、`abstractions/index.md`。
+
+### 当前决策（RP-045）
+
+- 第 1 批次只处理标题、描述和导航措辞，不改示例代码、不扩栏目结构，确保本轮重新起步时的风险保持最低。
+- 由于 branch-size stop condition 只统计已提交 diff，本轮应在每个稳定批次校验通过后尽快提交，再决定是否继续下一批。
+- 当前下一候选批次是清理公开文档里残留的 `ai-libs/CoreGrid` / `旧文档` 指向式表述，继续保持单页文案级修正边界。
+
+### 当前验证（RP-045）
+
+- 页面校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/api-reference/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/setting.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/index.md`
+  - 结果：通过；本轮 5 个 reader-facing 入口页的 frontmatter、链接与代码块校验均通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 batch boot 第 1 批次的 5 个入口页 reader-facing 收口后站点仍可构建，仅保留既有大 chunk warning。
+
 ### 当前恢复点：RP-044
 
 - 本轮从 `$gframework-pr-review` 重新进入，继续沿用显式 `--git-dir` / `--work-tree` 绑定确认当前分支仍为 `docs/sdk-update-documentation`，并通过 `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json` 抓取当前 PR `#296`。
