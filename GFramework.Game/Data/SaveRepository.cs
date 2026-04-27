@@ -33,7 +33,13 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
 {
     private readonly SaveConfiguration _config;
     private readonly Dictionary<int, ISaveMigration<TSaveData>> _migrations = new();
+#if NET9_0_OR_GREATER
+    // net9.0 及以上目标使用专用 Lock，以满足分析器对专用同步原语的建议。
+    private readonly System.Threading.Lock _migrationsLock = new();
+#else
+    // net8.0 目标仍回退到 object 锁，以保持多目标编译兼容性。
     private readonly object _migrationsLock = new();
+#endif
     private readonly IStorage _rootStorage;
 
     /// <summary>
@@ -99,7 +105,7 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
     public async Task<bool> ExistsAsync(int slot)
     {
         var storage = GetSlotStorage(slot);
-        return await storage.ExistsAsync(_config.SaveFileName);
+        return await storage.ExistsAsync(_config.SaveFileName).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -111,10 +117,10 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
     {
         var storage = GetSlotStorage(slot);
 
-        if (await storage.ExistsAsync(_config.SaveFileName))
+        if (await storage.ExistsAsync(_config.SaveFileName).ConfigureAwait(false))
         {
-            var loaded = await storage.ReadAsync<TSaveData>(_config.SaveFileName);
-            return await MigrateIfNeededAsync(slot, storage, loaded);
+            var loaded = await storage.ReadAsync<TSaveData>(_config.SaveFileName).ConfigureAwait(false);
+            return await MigrateIfNeededAsync(slot, storage, loaded).ConfigureAwait(false);
         }
 
         return new TSaveData();
@@ -130,11 +136,11 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
         var slotPath = $"{_config.SaveSlotPrefix}{slot}";
 
         // 确保槽位目录存在
-        if (!await _rootStorage.DirectoryExistsAsync(slotPath))
-            await _rootStorage.CreateDirectoryAsync(slotPath);
+        if (!await _rootStorage.DirectoryExistsAsync(slotPath).ConfigureAwait(false))
+            await _rootStorage.CreateDirectoryAsync(slotPath).ConfigureAwait(false);
 
         var storage = GetSlotStorage(slot);
-        await storage.WriteAsync(_config.SaveFileName, data);
+        await storage.WriteAsync(_config.SaveFileName, data).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -144,7 +150,7 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
     public async Task DeleteAsync(int slot)
     {
         var storage = GetSlotStorage(slot);
-        await storage.DeleteAsync(_config.SaveFileName);
+        await storage.DeleteAsync(_config.SaveFileName).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -154,7 +160,7 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
     public async Task<IReadOnlyList<int>> ListSlotsAsync()
     {
         // 列举所有槽位目录
-        var directories = await _rootStorage.ListDirectoriesAsync();
+        var directories = await _rootStorage.ListDirectoriesAsync().ConfigureAwait(false);
 
         var slots = new List<int>();
 
@@ -171,7 +177,7 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
 
             // 直接检查存档文件是否存在，避免重复创建 ScopedStorage
             var saveFilePath = $"{dirName}/{_config.SaveFileName}";
-            if (await _rootStorage.ExistsAsync(saveFilePath))
+            if (await _rootStorage.ExistsAsync(saveFilePath).ConfigureAwait(false))
                 slots.Add(slot);
         }
 
@@ -246,7 +252,7 @@ public class SaveRepository<TSaveData> : AbstractContextUtility, ISaveRepository
             $"{typeof(TSaveData).Name} in slot {slot}",
             "save migration");
 
-        await storage.WriteAsync(_config.SaveFileName, migrated);
+        await storage.WriteAsync(_config.SaveFileName, migrated).ConfigureAwait(false);
         return migrated;
     }
 

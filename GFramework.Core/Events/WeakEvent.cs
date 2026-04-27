@@ -10,7 +10,13 @@ namespace GFramework.Core.Events;
 /// <typeparam name="T">事件数据类型</typeparam>
 public sealed class WeakEvent<T>
 {
+#if NET9_0_OR_GREATER
+    // net9.0 及以上目标使用专用 Lock，以满足分析器对专用同步原语的建议。
+    private readonly System.Threading.Lock _lock = new();
+#else
+    // net8.0 目标仍回退到 object 锁，以保持多目标编译兼容性。
     private readonly object _lock = new();
+#endif
     private readonly EventStatistics? _statistics;
     private readonly List<WeakReference<Action<T>>> _weakHandlers = new();
 

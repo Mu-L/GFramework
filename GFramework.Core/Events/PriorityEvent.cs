@@ -21,7 +21,13 @@ public class PriorityEvent<T> : IEvent
     /// <summary>
     ///     保护处理器集合的并发访问
     /// </summary>
+#if NET9_0_OR_GREATER
+    // net9.0 及以上目标使用专用 Lock，以满足分析器对专用同步原语的建议。
+    private readonly System.Threading.Lock _syncRoot = new();
+#else
+    // net8.0 目标仍回退到 object 锁，以保持多目标编译兼容性。
     private readonly object _syncRoot = new();
+#endif
 
     /// <summary>
     ///     标记事件是否已被处理（用于 UntilHandled 传播模式）

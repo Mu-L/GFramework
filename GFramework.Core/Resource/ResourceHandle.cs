@@ -11,7 +11,13 @@ namespace GFramework.Core.Resource;
 /// <typeparam name="T">资源类型</typeparam>
 internal sealed class ResourceHandle<T> : IResourceHandle<T> where T : class
 {
+#if NET9_0_OR_GREATER
+    // net9.0 及以上目标使用专用 Lock，以满足分析器对专用同步原语的建议。
+    private readonly System.Threading.Lock _lock = new();
+#else
+    // net8.0 目标仍回退到 object 锁，以保持多目标编译兼容性。
     private readonly object _lock = new();
+#endif
     private readonly ILogger _logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(ResourceHandle<T>));
     private readonly Action<string> _onDispose;
     private bool _disposed;

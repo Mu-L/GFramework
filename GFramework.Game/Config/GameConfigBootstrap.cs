@@ -20,7 +20,11 @@ public sealed class GameConfigBootstrap : IDisposable
 
     // All lifecycle transitions share one gate so initialization, hot-reload startup,
     // stop, and disposal never publish half-finished state to concurrent callers.
+#if NET9_0_OR_GREATER
+    private readonly Lock _stateGate = new();
+#else
     private readonly object _stateGate = new();
+#endif
     private readonly GameConfigBootstrapOptions _options;
     private IUnRegister? _hotReload;
     private YamlConfigLoader? _loader;
@@ -210,67 +214,16 @@ public sealed class GameConfigBootstrap : IDisposable
     /// </exception>
     public void StartHotReload(YamlConfigHotReloadOptions? options = null)
     {
-        YamlConfigLoader loader;
-        lock (_stateGate)
-        {
-            ThrowIfDisposedCore();
-
-            loader = _loader ?? throw new InvalidOperationException(
-                "Hot reload can only be started after the initial config load succeeds.");
-
-            if (_isStartingHotReload || _hotReload != null)
-            {
-                throw new InvalidOperationException("Hot reload is already enabled.");
-            }
-
-            _isStartingHotReload = true;
-            _stopHotReloadAfterStart = false;
-        }
-
+        var loader = BeginHotReloadStart();
         IUnRegister? hotReload = null;
         try
         {
             hotReload = loader.EnableHotReload(Registry, options);
-
-            var shouldStop = false;
-            lock (_stateGate)
-            {
-                try
-                {
-                    ThrowIfDisposedCore();
-
-                    // Stop/Dispose may arrive while the watcher is being created. In that
-                    // case, release the new handle immediately instead of publishing it.
-                    if (_stopHotReloadAfterStart)
-                    {
-                        shouldStop = true;
-                        _stopHotReloadAfterStart = false;
-                    }
-                    else
-                    {
-                        _hotReload = hotReload;
-                        hotReload = null;
-                    }
-                }
-                finally
-                {
-                    _isStartingHotReload = false;
-                }
-            }
-
-            if (shouldStop)
-            {
-                hotReload?.UnRegister();
-            }
+            hotReload = CompleteHotReloadStart(hotReload);
         }
         catch
         {
-            lock (_stateGate)
-            {
-                _isStartingHotReload = false;
-                _stopHotReloadAfterStart = false;
-            }
-
+            ResetHotReloadStartAfterFailure();
             hotReload?.UnRegister();
             throw;
         }
@@ -330,6 +283,72 @@ public sealed class GameConfigBootstrap : IDisposable
         if (_disposed)
         {
             throw new ObjectDisposedException(nameof(GameConfigBootstrap));
+        }
+    }
+
+    private YamlConfigLoader BeginHotReloadStart()
+    {
+        lock (_stateGate)
+        {
+            ThrowIfDisposedCore();
+
+            var loader = _loader ?? throw new InvalidOperationException(
+                "Hot reload can only be started after the initial config load succeeds.");
+
+            if (_isStartingHotReload || _hotReload != null)
+            {
+                throw new InvalidOperationException("Hot reload is already enabled.");
+            }
+
+            _isStartingHotReload = true;
+            _stopHotReloadAfterStart = false;
+            return loader;
+        }
+    }
+
+    private IUnRegister? CompleteHotReloadStart(IUnRegister? hotReload)
+    {
+        var shouldStop = false;
+        lock (_stateGate)
+        {
+            try
+            {
+                ThrowIfDisposedCore();
+
+                // Stop/Dispose may arrive while the watcher is being created. In that
+                // case, release the new handle immediately instead of publishing it.
+                if (_stopHotReloadAfterStart)
+                {
+                    shouldStop = true;
+                    _stopHotReloadAfterStart = false;
+                }
+                else
+                {
+                    _hotReload = hotReload;
+                    hotReload = null;
+                }
+            }
+            finally
+            {
+                _isStartingHotReload = false;
+            }
+        }
+
+        if (shouldStop)
+        {
+            hotReload?.UnRegister();
+            return null;
+        }
+
+        return hotReload;
+    }
+
+    private void ResetHotReloadStartAfterFailure()
+    {
+        lock (_stateGate)
+        {
+            _isStartingHotReload = false;
+            _stopHotReloadAfterStart = false;
         }
     }
 }
