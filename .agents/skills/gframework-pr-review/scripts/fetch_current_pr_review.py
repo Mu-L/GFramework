@@ -635,7 +635,15 @@ def parse_failed_test_details(block: str) -> list[dict[str, str]]:
     if table_section is None:
         return details
 
-    for name_cell, message_cell in re.findall(r"<tr>\s*<td>(.*?)</td>\s*<td>(.*?)</td>\s*</tr>", table_section.group("body"), re.S):
+    row_pattern = re.compile(
+        r"<tr>\s*<td>(?P<name>.*?)</td>\s*<td>(?P<message>.*?)</td>(?:\s*<td>.*?</td>)*\s*</tr>",
+        re.S,
+    )
+
+    # Test Reporter tables may grow extra columns over time; only the first two are required here.
+    for row_match in row_pattern.finditer(table_section.group("body")):
+        name_cell = row_match.group("name")
+        message_cell = row_match.group("message")
         name = collapse_whitespace(strip_tags(html.unescape(name_cell))).lstrip("❌").strip()
         failure_message = normalize_failure_message(message_cell)
         if name:

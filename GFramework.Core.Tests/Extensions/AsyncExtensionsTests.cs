@@ -225,7 +225,7 @@ public class AsyncExtensionsTests
     ///     测试WithRetry方法遵守ShouldRetry谓词
     /// </summary>
     [Test]
-    public async Task WithRetry_Should_Respect_ShouldRetry_Predicate()
+    public void WithRetry_Should_Respect_ShouldRetry_Predicate()
     {
         static Task<int> ThrowShouldNotRetry(string parameterName)
         {
@@ -245,7 +245,6 @@ public class AsyncExtensionsTests
             taskFactory.WithRetryAsync(3, TimeSpan.FromMilliseconds(10),
                 ex => ex is not ArgumentException));
 
-        await Task.Delay(50).ConfigureAwait(false); // 等待任务完成
         Assert.That(attemptCount, Is.EqualTo(1)); // 不应该重试
         Assert.That(exception, Is.Not.Null);
         Assert.That(exception!.InnerExceptions, Has.Count.EqualTo(1));
