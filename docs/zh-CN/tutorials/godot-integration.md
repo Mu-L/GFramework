@@ -65,7 +65,7 @@ dotnet add package GeWuYou.GFramework.Godot.SourceGenerators
 
 ## 第二步：把架构和 Godot 节点分开看
 
-当前更稳的默认接入方式，是：
+当前更稳妥的默认接入方式，是：
 
 - 架构层继续用常规 `InstallModule(new SomeModule())`
 - Godot 节点脚本通过运行时扩展和源码生成器接入场景

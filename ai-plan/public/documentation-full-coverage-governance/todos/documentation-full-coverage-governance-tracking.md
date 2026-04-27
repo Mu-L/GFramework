@@ -12,13 +12,13 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-043`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-044`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
   - 继续以最新 `origin/main`（`617e0bf`，`2026-04-26 12:17:15 +08:00`）作为 baseline，当前批处理 stop condition 仍是 branch diff vs baseline 接近 `50` changed files
-- 本轮已扩成 4 个连续低风险切片：入口页 reader-facing 改写、公开 README / Godot 页面去内部口吻、剩余 GitHub blob README 外链改回站内导航，以及最后一批 `旧文档` / `ai-libs` 口吻改写
-- 当前工作树相对 `origin/main` 的 tracked diff 已到 `46` files；已接近 `50` 文件阈值，当前建议停止继续扩批并提交收口，避免 review 面继续发散
-- 已接受 subagent 结论：当前最划算的修正不是扩新栏目，而是统一入口页骨架、清掉公开页面中的治理口吻、以及把站外 README 入口降回站内专题页；最后一批只应挑新的 reader-facing 文案文件补齐到接近阈值
+- 本轮从 `$gframework-pr-review` 重新抓取当前 PR `#296`，确认 latest reviewed commit 为 `5778782df05e22dd24dc95189dd768458afb8537`，剩余 open thread 都落在 reader-facing 文案与 README 导航收口上
+- 当前工作树相对 `origin/main` 的 tracked diff 仍接近 `50` files；因此本轮只接受 latest-head review 中仍成立的 4 条低风险修正，不再扩新栏目或新专题页
+- 已确认 `Title check` 的 inconclusive 仅是 GitHub PR 标题元数据提示，不属于仓库文件内可修复范围；本轮只处理本地仍成立的文档线程
 
 ## 当前状态摘要
 
@@ -38,6 +38,7 @@
 - `2026-04-27` `GFramework.Game/README.md`、`GFramework.Game.Abstractions/README.md`、`GFramework.Godot/README.md`、`GFramework.Cqrs.Abstractions/README.md`、`GFramework.Ecs.Arch/README.md` 已收口 `ai-libs`、`family`、`seam`、`ReadMe.md` 等内部化或文件名式表述。
 - `2026-04-27` `docs/zh-CN` 当前已清空所有指向 `github.com/GeWuYou/GFramework/blob/main/.../README.md` 的公开外链，相关入口统一回到站内栏目页、专题页或 API 导航。
 - `2026-04-27` `docs/zh-CN/tutorials/godot-integration.md`、`game/setting.md`、`game/serialization.md`、`godot/index.md`、`godot/architecture.md`、`godot/storage.md`、`godot/logging.md`、`godot/setting.md`、`godot/extensions.md`、`core/architecture.md` 已把 `旧文档` / `ai-libs` / `.Wait()` / `family` 这类维护与内部语气改写成当前采用说明。
+- `2026-04-27` 已重新抓取 PR `#296` 并逐条复核 latest-head review：`GFramework.Game.SourceGenerators/README.md` 的 XML 阅读表已改成语义标签，`GFramework.Game/README.md` 已删除重复的 `storage.md` 入口，`docs/zh-CN/tutorials/godot-integration.md` 与 `docs/zh-CN/godot/extensions.md` 已收口仍成立的 reader-facing 措辞问题。
 - `2026-04-25` 当前批次已补齐 meta-package / 安装面：`GFramework.csproj` 不再保留占位描述，`README.md`、`docs/zh-CN/index.md`、`docs/zh-CN/getting-started/installation.md` 当前明确说明聚合元包只聚合 `Core` + `Game`，并把安装入口更新到当前 `net8.0/net9.0/net10.0` 与 Godot `4.6.2` 基线。
 - `2026-04-25` `docs/zh-CN/game/config-tool.md` 已新增为 reader-facing 工具页，`docs/zh-CN/game/index.md`、`config-system.md`、`docs/.vitepress/config.mts` 与 `tools/gframework-config-tool/README.md` 当前把 VS Code 配置工具纳入 `Game` 配置工作流入口。
 - `2026-04-25` source-generators 栏目已修正 4 处真实契约问题：`GetNode` 显式路径 / `Lookup` 语义、枚举生成器实际开关、`Context Get` 集合注入边界，以及 `GFramework.SourceGenerators.Common` / `*.SourceGenerators.Abstractions` 的共享支撑层说明。
@@ -57,7 +58,7 @@
   `MSB4276` / `MSB4018`；这是已知环境阻塞，不属于本轮文档回归。
 - 当前 WSL 会话里 `git.exe` 可解析但不能执行，应继续使用显式 `--git-dir` / `--work-tree` 绑定作为默认 Git 策略。
 - `dotnet build GFramework.csproj -c Release` 当前仍会输出仓库既有 analyzer warnings（如 `MA0158`、`MA0051`、`MA0004`）；本轮仅修改文档与 package metadata，不扩展到 warning 清理。
-- PR `#292` 当前 review 线程仍主要来自 CodeRabbit，对 reader-facing 文案和文档入口连通性要求较细；本轮提交后仍需重新抓取 latest-head review，确认 open thread 是否已自动关闭。
+- PR `#296` 当前 review 线程仍主要来自 CodeRabbit 与 Greptile，对 reader-facing 文案和文档入口连通性要求较细；本轮提交后仍需重新抓取 latest-head review，确认 open thread 是否已自动关闭。
 
 ## 归档指针
 
@@ -74,6 +75,16 @@
 
 ## 最新验证
 
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Game.SourceGenerators/README.md GFramework.Game/README.md`
+  - 结果：通过；本轮 2 个 README 的 reader-facing 表格与导航去重调整后链接目标有效。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+  - 结果：通过；Godot 集成教程的措辞收口后页面 frontmatter、链接与代码块校验均通过。
+- `2026-04-27` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+  - 结果：通过；Godot 扩展页去自我指涉表述后页面 frontmatter、链接与代码块校验均通过。
+- `2026-04-27` `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 PR `#296` review 收口后的站点仍可构建，仅保留既有大 chunk warning。
+- `2026-04-27` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过；PR `#296` 处于 `OPEN`，latest head review 共有 `4` 条 open thread，其中 `3` 条文档问题与 `1` 条措辞 nitpick 在本地复核后仍成立；测试汇总为 `2156 passed`，仅剩 `Title check` inconclusive。
 - `2026-04-25` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
   - 结果：通过；PR `#290` 处于 `OPEN`，latest head commit `54b8e5770af9ab3c8a86a396ffa4794fe4bb5181` 有 `2` 条 open thread（CodeRabbit `1`、Greptile `1`），测试汇总为 `2156 passed`，无 failed checks。
 - `2026-04-25` `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`

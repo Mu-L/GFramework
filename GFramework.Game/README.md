@@ -121,7 +121,6 @@
 对应文档：
 
 - [存储系统](../docs/zh-CN/game/storage.md)
-- [存储系统专题](../docs/zh-CN/game/storage.md)
 
 ### `Serializer/`
 

@@ -48,10 +48,10 @@ GameProject/
 
 下面这份目录视图用于帮助你定位 `GFramework.Game.SourceGenerators` 的生成器入口；具体诊断消息、生成输出和兼容性语义仍建议回到源码与测试继续核对。
 
-| 类型族 | 代表类型 | 阅读重点 |
+| 阅读主题 | 代表类型 | 阅读重点 |
 | --- | --- | --- |
-| `Config/` | `SchemaConfigGenerator` | 看 schema 到配置类型 / 表包装 / 注册辅助代码的生成入口 |
-| `Diagnostics/` | `ConfigSchemaDiagnostics` | 看生成器会抛出的诊断类别与失败边界 |
+| 配置生成入口 | `SchemaConfigGenerator` | 看 schema 到配置类型 / 表包装 / 注册辅助代码的生成入口 |
+| 诊断与失败边界 | `ConfigSchemaDiagnostics` | 看生成器会抛出的诊断类别与失败边界 |
 
 ## 最小接入路径
 

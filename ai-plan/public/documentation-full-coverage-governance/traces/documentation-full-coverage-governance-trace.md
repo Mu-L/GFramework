@@ -2,6 +2,34 @@
 
 ## 2026-04-27
 
+### 当前恢复点：RP-044
+
+- 本轮从 `$gframework-pr-review` 重新进入，继续沿用显式 `--git-dir` / `--work-tree` 绑定确认当前分支仍为 `docs/sdk-update-documentation`，并通过 `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json` 抓取当前 PR `#296`。
+- 抓取结果显示 latest reviewed commit 为 `5778782df05e22dd24dc95189dd768458afb8537`，共有 `4` 条 open thread：`GFramework.Game.SourceGenerators/README.md` 的表头仍带路径视角、`GFramework.Game/README.md` 有重复 `storage.md` 链接、`docs/zh-CN/tutorials/godot-integration.md` 与 `docs/zh-CN/godot/extensions.md` 还有 reader-facing 措辞收口空间。
+- 本地逐条复核后确认这 `4` 条都仍成立，但都属于低风险文档收口；唯一 failed check `Title check` 只是 PR 标题元数据提示，不属于仓库文件内修复范围。
+
+### 当前决策（RP-044）
+
+- 接受 latest-head review 中仍成立的 `4` 条文档修正，不扩展到 review 未指向的其它页面，避免在当前接近 branch-size stop condition 的阶段继续增大 review 面。
+- 对 README 表格和导航问题，只做 reader-facing 命名与去重；对教程与 Godot 页面，只做措辞收口，不改变现有采用路径与示例结构。
+- 在同一轮里同步更新 active topic tracking / trace，并在提交前运行最小页面校验、README 链接校验与站点构建。
+
+### 当前验证（RP-044）
+
+- PR review 抓取：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过；PR `#296` 处于 `OPEN`，latest head review 共有 `4` 条 open thread，测试汇总为 `2156 passed`，仅剩 `Title check` inconclusive。
+- README 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Game.SourceGenerators/README.md GFramework.Game/README.md`
+  - 结果：通过；本轮 2 个 README 的 reader-facing 表格与导航去重调整后链接目标有效。
+- 页面校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+  - 结果：通过；两页 frontmatter、链接与代码块校验均通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 PR `#296` review 收口后的站点仍可构建，仅保留既有大 chunk warning。
+
 ### 当前恢复点：RP-043
 
 - 在提交 `docs(reader-facing): 统一站内入口与公开术语` 后重新计算 branch diff，确认当前工作树继续补一批新文件后已到 `46` changed files，已经接近 `$gframework-batch-boot 50` 的停止线。
