@@ -2,6 +2,35 @@
 
 ## 2026-04-27
 
+### 当前恢复点：RP-043
+
+- 在提交 `docs(reader-facing): 统一站内入口与公开术语` 后重新计算 branch diff，确认当前工作树继续补一批新文件后已到 `46` changed files，已经接近 `$gframework-batch-boot 50` 的停止线。
+- 因此本轮最后只接受 10 个还没进入 branch diff 的文件：`tutorials/godot-integration.md`、`game/setting.md`、`game/serialization.md`、`godot/index.md`、`godot/architecture.md`、`godot/storage.md`、`godot/logging.md`、`godot/setting.md`、`godot/extensions.md`、`core/architecture.md`。
+- 这批文件统一收口的是同一类问题：把 `旧文档`、`ai-libs`、`.Wait()`、`family` 之类维护 / 内部口吻改成当前采用指导，不扩新结构、不重写示例体系。
+
+### 当前决策（RP-043）
+
+- 当前 stop condition 已接近阈值，因此这批验证通过后立即停止继续扩批，避免 branch diff 超过 `50` files 或让 review 面退化。
+- 提交后本轮默认结束；后续若继续，应从 PR review 或剩余未触达的细页重新开一轮，而不是在同一轮里继续堆文件数。
+
+### 当前验证（RP-043）
+
+- 单页校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/godot-integration.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/setting.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/serialization.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/architecture.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/storage.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/logging.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/setting.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/extensions.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/architecture.md`
+  - 结果：通过；本轮 10 个新文件的 frontmatter、链接与代码块校验全部通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；接近阈值前的最后一批文案收口后站点仍可构建，仅保留既有大 chunk warning。
+
 ### 当前恢复点：RP-042
 
 - 用户明确要求在当前阈值内循环推进，并允许使用 subagent 降低主线程上下文压力；因此本轮在主线程保留实现与验证，把热点识别委派给 3 个 explorer。

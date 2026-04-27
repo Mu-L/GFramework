@@ -72,8 +72,7 @@ description: 以当前 GFramework.Godot 源码、测试与 CoreGrid 接线为准
 
 ## 最小接入路径
 
-当前消费者 `ai-libs/CoreGrid` 的接法，是先注册 `SettingsModel<ISettingsDataRepository>`，再把 Godot applicator
-挂进去：
+当前更常见的接法，是先注册 `SettingsModel<ISettingsDataRepository>`，再把 Godot applicator 挂进去：
 
 ```csharp
 using GFramework.Game.Abstractions.Data;
@@ -101,7 +100,7 @@ architecture.RegisterModel(
 - 设置数据和生命周期由 `SettingsModel` 管
 - `GodotAudioSettings` / `GodotGraphicsSettings` / `GodotLocalizationSettings` 只是 applicator
 - 保存、加载和迁移仍然走 `ISettingsDataRepository`、`SettingsModel.InitializeAsync()`、`SaveAllAsync()` 等 `Game`
-  family 入口
+  模块入口
 
 ## 运行时使用方式
 

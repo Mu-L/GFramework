@@ -61,7 +61,7 @@ await architecture.WaitUntilReadyAsync();
 
 ## 初始化时机
 
-当前版本不再使用旧文档里的 `Init()` 入口。注册逻辑必须写在：
+当前 `Architecture` 的注册逻辑必须写在：
 
 ```csharp
 protected override void OnInitialize()
@@ -77,7 +77,7 @@ protected override void OnInitialize()
 4. 按阶段初始化 `Utility -> Model -> System`
 5. 进入 `Ready`
 
-如果你还看到旧示例里写 `protected override void Init()`，那就是过时内容。
+如果项目里仍保留 `protected override void Init()` 风格的旧代码，应迁移到 `OnInitialize()`。
 
 ## 组件注册顺序
 

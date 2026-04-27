@@ -65,7 +65,7 @@ dotnet add package GeWuYou.GFramework.Godot.SourceGenerators
 
 ## 第二步：把架构和 Godot 节点分开看
 
-当前真实消费者 `ai-libs/CoreGrid` 的默认接入方式，是：
+当前更稳的默认接入方式，是：
 
 - 架构层继续用常规 `InstallModule(new SomeModule())`
 - Godot 节点脚本通过运行时扩展和源码生成器接入场景
@@ -195,7 +195,7 @@ public override void _Ready()
 }
 ```
 
-这也是 `ai-libs/CoreGrid` 里项目侧节点类的真实顺序。
+这也是项目侧节点类更稳妥的顺序。
 
 ## 第五步：只在运行时处理真正需要运行时决定的东西
 
@@ -226,7 +226,7 @@ public partial class SettingsPanel : Control, IController
 }
 ```
 
-手动信号接线时，当前 API 叫 `Signal(...)`，不是旧文档里的 `CreateSignalBuilder(...)`：
+手动信号接线时，当前入口是 `Signal(...)`：
 
 ```csharp
 using GFramework.Godot.Extensions.Signal;

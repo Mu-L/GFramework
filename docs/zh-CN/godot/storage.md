@@ -60,7 +60,7 @@ description: 以当前 GFramework.Godot 源码与 CoreGrid 接线为准，说明
 
 ## 最小接入路径
 
-当前消费者 `ai-libs/CoreGrid` 的接法是先注册同一个序列化器和存储实例，再让设置仓库、存档仓库等上层组件复用它：
+当前更常见的接法，是先注册同一个序列化器和存储实例，再让设置仓库、存档仓库等上层组件复用它：
 
 ```csharp
 using GFramework.Core.Abstractions.Serializer;
