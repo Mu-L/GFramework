@@ -1,5 +1,49 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-27 — RP-085
+
+### 阶段：按 `$gframework-batch-boot 100` 并行消化 `GFramework.Core.Tests` 低风险 `MA0048`
+
+- 触发背景：
+  - 用户要求以仓库根 non-incremental 构建 warning 为准，并在上下文可控前提下把小切片分派给多个 subagent 并行处理
+  - 本轮开始时，当前分支与 `origin/main@7cfdd2c` 无提交差异，适合从纯 `MA0048` 单文件切片起步
+- 主线程实施：
+  - 执行权威基线：`dotnet clean` + 仓库根 `dotnet build`
+    - 初始结果：`353 Warning(s)`、唯一位点 `279`
+  - 分四波次并行下发 `GFramework.Core.Tests` 小切片，累计完成 `20+` 个文件的测试辅助类型拆分
+  - 主线程持续复核共享工作树、处理并发编译阻断，并在每一轮后复跑 `GFramework.Core.Tests` Release 构建
+  - 在工作树达到 `61` 个变更条目时主动停止扩批，保留对 `100` 文件停止线的充分余量
+- 代表性已落地切片：
+  - `ArchitectureContextTests.cs`
+  - `AsyncQueryExecutorTests.cs`
+  - `CommandExecutorTests.cs`
+  - `StateTests.cs`
+  - `StateMachineTests.cs`
+  - `StateMachineSystemTests.cs`
+  - `ArchitectureModulesBehaviorTests.cs`
+  - `ArchitectureAdditionalCqrsHandlersTests.cs`
+  - `QueryCoroutineExtensionsTests.cs`
+  - `ObjectPoolTests.cs`
+  - `AbstractContextUtilityTests.cs`
+  - `EnvironmentTests.cs`
+  - `EventBusTests.cs`
+  - `ContextAwareTests.cs`
+- 验证里程碑：
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet clean`
+    - 结果：成功
+  - `dotnet build`
+    - 结果：成功；`288 Warning(s)`、`0 Error(s)`，唯一位点 `214`
+- 当前结论：
+  - 本轮主要收益来自 `GFramework.Core.Tests` 内的纯 `MA0048` 大范围收敛
+  - 仓库根权威 warning 已从 `353` 降到 `288`，唯一位点从 `279` 降到 `214`
+  - 下一波不再适合继续盲目平铺纯拆分，因为剩余 `GFramework.Core.Tests` 热点已开始混入 `CS8766` / `MA0016`
+- 下一步：
+  1. 提交本轮 warning reduction 与 `ai-plan` 同步。
+  2. 下一波优先由主线程处理 `GameContextTests.cs` / `ArchitectureServicesTests.cs` 的混合 warning。
+  3. 保持 `YamlConfigSchemaValidator*` 与 `GFramework.Cqrs.Tests/Mediator/*` 为独立高风险波次。
+
 ## 2026-04-27 — RP-084
 
 ### 阶段：收敛 PR #297 的 CodeRabbit follow-up
