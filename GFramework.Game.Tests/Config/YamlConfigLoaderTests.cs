@@ -4,6 +4,7 @@ using System.Threading;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Game.Abstractions.Config;
 using GFramework.Game.Config;
+using YamlDotNet.Serialization;
 
 namespace GFramework.Game.Tests.Config;
 
@@ -2826,6 +2827,88 @@ public class YamlConfigLoaderTests
         Assert.That(
             async () => await readTask.ConfigureAwait(false),
             Throws.InstanceOf<OperationCanceledException>());
+    }
+
+    /// <summary>
+    ///     验证同步反序列化阶段遇到已取消 token 时会直接透传 <see cref="OperationCanceledException" />，
+    ///     避免把停止加载误报为 YAML 解析失败。
+    /// </summary>
+    [Test]
+    public void DeserializeValue_Should_Preserve_OperationCanceledException_When_Cancellation_Is_Requested()
+    {
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigStub>("monster", "monster", static config => config.Id);
+        var registration = GetSingleYamlTableRegistration(loader);
+        var deserializeValueMethod = registration.GetType()
+            .GetMethod("DeserializeValue", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.That(deserializeValueMethod, Is.Not.Null);
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        var deserializer = new DeserializerBuilder().Build();
+        var exception = Assert.Throws<TargetInvocationException>(() =>
+            deserializeValueMethod!.Invoke(
+                registration,
+                new object?[]
+                {
+                    deserializer,
+                    Path.Combine(_rootPath, "monster"),
+                    Path.Combine(_rootPath, "monster", "slime.yaml"),
+                    null,
+                    """
+                    id: 1
+                    name: Slime
+                    hp: 10
+                    """,
+                    cancellationTokenSource.Token
+                }));
+
+        // 反射调用同步私有方法时会把原始异常包装为 TargetInvocationException。
+        Assert.That(exception!.InnerException, Is.InstanceOf<OperationCanceledException>());
+    }
+
+    /// <summary>
+    ///     验证构建最终配置表阶段遇到已取消 token 时会继续透传 <see cref="OperationCanceledException" />，
+    ///     避免热重载把提交前取消记录成构表失败。
+    /// </summary>
+    [Test]
+    public void BuildLoadResult_Should_Preserve_OperationCanceledException_When_Cancellation_Is_Requested()
+    {
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigStub>("monster", "monster", static config => config.Id);
+        var registration = GetSingleYamlTableRegistration(loader);
+        var buildLoadResultMethod = registration.GetType()
+            .GetMethod("BuildLoadResult", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.That(buildLoadResultMethod, Is.Not.Null);
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        var exception = Assert.Throws<TargetInvocationException>(() =>
+            buildLoadResultMethod!.Invoke(
+                registration,
+                new object?[]
+                {
+                    Path.Combine(_rootPath, "monster"),
+                    null,
+                    new List<MonsterConfigStub>
+                    {
+                        new()
+                        {
+                            Id = 1,
+                            Name = "Slime",
+                            Hp = 10
+                        }
+                    },
+                    new List<YamlConfigReferenceUsage>(),
+                    cancellationTokenSource.Token
+                }));
+
+        // 反射调用同步私有方法时会把原始异常包装为 TargetInvocationException。
+        Assert.That(exception!.InnerException, Is.InstanceOf<OperationCanceledException>());
     }
 
     /// <summary>

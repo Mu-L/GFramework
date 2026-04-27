@@ -484,7 +484,7 @@ public sealed class YamlConfigLoader : IConfigLoader
                     referenceUsages,
                     cancellationToken)
                 .ConfigureAwait(false);
-            return BuildLoadResult(directoryPath, schema, values, referenceUsages);
+            return BuildLoadResult(directoryPath, schema, values, referenceUsages, cancellationToken);
         }
 
         private string GetValidatedDirectoryPath(string rootPath)
@@ -526,7 +526,7 @@ public sealed class YamlConfigLoader : IConfigLoader
                 cancellationToken.ThrowIfCancellationRequested();
                 var yaml = await ReadYamlAsync(directoryPath, file, schema, cancellationToken).ConfigureAwait(false);
                 CollectReferenceUsages(referenceUsages, schema, file, yaml);
-                values.Add(DeserializeValue(deserializer, directoryPath, file, schema, yaml));
+                values.Add(DeserializeValue(deserializer, directoryPath, file, schema, yaml, cancellationToken));
             }
 
             return values;
@@ -592,10 +592,12 @@ public sealed class YamlConfigLoader : IConfigLoader
             string directoryPath,
             string file,
             YamlConfigSchema? schema,
-            string yaml)
+            string yaml,
+            CancellationToken cancellationToken)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var value = deserializer.Deserialize<TValue>(yaml);
                 if (value != null)
                 {
@@ -603,6 +605,11 @@ public sealed class YamlConfigLoader : IConfigLoader
                 }
 
                 throw new InvalidOperationException("YAML content was deserialized to null.");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 同步反序列化阶段也要透传会话级取消，避免把停止加载误报为 YAML 解析失败。
+                throw;
             }
             catch (Exception exception)
             {
@@ -622,16 +629,23 @@ public sealed class YamlConfigLoader : IConfigLoader
             string directoryPath,
             YamlConfigSchema? schema,
             List<TValue> values,
-            List<YamlConfigReferenceUsage> referenceUsages)
+            List<YamlConfigReferenceUsage> referenceUsages,
+            CancellationToken cancellationToken)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var table = new InMemoryConfigTable<TKey, TValue>(values, _keySelector, _comparer);
                 return new YamlTableLoadResult(
                     Name,
                     table,
                     schema?.ReferencedTableNames ?? Array.Empty<string>(),
                     referenceUsages);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 构建最终配置表时继续保留原始取消语义，避免热重载把提交前取消记录成构表失败。
+                throw;
             }
             catch (Exception exception)
             {
