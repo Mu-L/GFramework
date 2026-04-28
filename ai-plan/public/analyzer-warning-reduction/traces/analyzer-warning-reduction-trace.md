@@ -1,5 +1,55 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-28 — RP-087
+
+### 阶段：按 `$gframework-batch-boot 50` 并行收敛 `Core.Tests` / `Cqrs.Tests` 低风险切片
+
+- 触发背景：
+  - 用户再次要求先拿仓库根构建 warning，再把可切分的 warning 批次分派给多个 subagent，以降低主线程上下文压力
+  - 当前分支与 `origin/main@6cc87a9` 无提交差异，适合从单文件和小型混合 warning 切片重新起步
+- 主线程实施：
+  - 先执行仓库规则要求的 non-incremental 基线：`dotnet restore GFramework.sln -p:RestoreFallbackFolders=` 以修复当前 WSL 环境里的旧 fallback 资产，再执行仓库根 `dotnet clean` + `dotnet build`
+    - 基线结果：`288 Warning(s)`、唯一位点 `214`
+  - 并行下发四个 disjoint worker：
+    - `GameContextTests.cs`
+    - `ArchitectureServicesTests.cs`
+    - `RegistryInitializationHookBaseTests.cs`
+    - `CqrsDispatcherCacheTests.cs`
+  - 主线程补齐不与 worker 重叠的零散切片：
+    - `ResourceManagerTests.cs`
+    - `TestEvent.cs`
+    - `EventListenerScopeTests.cs`
+    - `TestArchitectureBase.cs`
+    - `ContextProviderTests.cs`
+    - `LoggerTests.cs`
+    - `LoggingConfigurationTests.cs`
+    - `WaitForMultipleEventsTests.cs`
+    - `CommandCoroutineExtensionsTests.cs`
+  - 集成 `GameContextTests`、`CqrsDispatcherCacheTests` 与 `CqrsHandlerRegistrarTests` worker 产出的 commit `a7be413` / `9098490` / `98afcbf`，并接受已直接落到共享工作树的 `ArchitectureServicesTests` / `RegistryInitializationHookBaseTests` 切片
+  - 重新执行仓库根 `dotnet clean` + `dotnet build`
+    - final 结果：`236 Warning(s)`、唯一位点 `162`
+- 验证里程碑：
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet clean`
+    - 结果：成功
+  - `dotnet build`
+    - 结果：成功；`236 Warning(s)`、`0 Error(s)`，唯一位点 `162`
+  - `git diff --name-only refs/remotes/origin/main...HEAD | wc -l`
+    - 结果：`21`
+  - 已提交 diff 与当前工作树变更并集文件数
+    - 结果：`45 / 50`
+- 当前结论：
+  - 本轮已经把剩余 `Core.Tests` warning 全部清空，并把 `CqrsDispatcherCacheTests.cs` 与 `CqrsHandlerRegistrarTests.cs` 这两处 `Cqrs.Tests` 单文件 `MA0048` 热点从仓库根中移除
+  - 仓库根权威 warning 从 `288` 下降到 `236`，唯一位点从 `214` 下降到 `162`
+  - 在 `45 / 50` footprint 下，继续扩批将明显压缩 review 余量；剩余切片也只剩 `Mediator*` 与 `YamlConfigSchemaValidator*` 这两组高风险热点，因此本轮应在这里收口
+- 下一步：
+  1. 提交本轮已验证的 warning reduction 与 `ai-plan` 同步。
+  2. 下一轮在新提交基础上单独规划 `Mediator*` 波次。
+  3. 将 `YamlConfigSchemaValidator*` 保持为独立高耦合波次，再决定是否需要新的并行切法。
+
 ## 2026-04-27 — RP-086
 
 ### 阶段：收敛 PR #298 的 CodeRabbit nitpick follow-up

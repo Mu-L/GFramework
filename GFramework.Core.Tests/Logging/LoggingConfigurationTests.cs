@@ -307,8 +307,9 @@ public class LoggingConfigurationTests
             }}";
 
             var config = LoggingConfigurationLoader.LoadFromJsonString(json);
-            Assert.That(config.Appenders[0].Filter, Is.Not.Null);
-            Assert.That(config.Appenders[0].Filter.Type, Is.EqualTo("Namespace"));
+            var filter = config.Appenders[0].Filter;
+            Assert.That(filter, Is.Not.Null);
+            Assert.That(filter!.Type, Is.EqualTo("Namespace"));
         }
         finally
         {

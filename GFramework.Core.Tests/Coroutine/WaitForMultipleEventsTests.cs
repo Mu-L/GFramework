@@ -20,7 +20,7 @@ namespace GFramework.Core.Tests.Coroutine
             (eventBus as IDisposable)?.Dispose();
         }
 
-        private IEventBus eventBus;
+        private IEventBus eventBus = null!;
 
         [Test]
         public void Constructor_RegistersBothEventTypes()

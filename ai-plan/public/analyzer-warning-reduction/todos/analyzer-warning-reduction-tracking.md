@@ -6,53 +6,41 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-086`
-- 当前阶段：`Phase 86`
+- 恢复点编号：`ANALYZER-WARNING-REDUCTION-RP-087`
+- 当前阶段：`Phase 87`
 - 当前焦点：
-  - `2026-04-27` 已按 `$gframework-batch-boot 100` 连续执行多波 `MA0048` 小切片，当前以 `GFramework.Core.Tests` 的测试辅助类型拆分为主
-  - `2026-04-27` 已按 `$gframework-pr-review` 收敛 `PR #298` 的有效 nitpick，修复测试辅助类型的只读暴露、线程安全、空安全与文档一致性问题
-  - 本轮已完成 `ArchitectureContextTests`、`AsyncQueryExecutorTests`、`CommandExecutorTests`、`StateTests`、`StateMachineTests`、`StateMachineSystemTests`、`ArchitectureModulesBehaviorTests`、`ArchitectureAdditionalCqrsHandlersTests`、`QueryCoroutineExtensionsTests`、`ObjectPoolTests`、`AbstractContextUtilityTests` 等低风险单文件切片
-  - 当前仓库根权威基线已从 `353 Warning(s)` / `279` 个唯一位点下降到 `288 Warning(s)` / `214` 个唯一位点
-  - 当前分支下一波更适合转向 `GameContextTests.cs`、`ArchitectureServicesTests.cs`、`RegistryInitializationHookBaseTests.cs` 这类仍在 `GFramework.Core.Tests` 内、但已混入 `CS8766` / `MA0016` 的小型混合切片
+  - `2026-04-28` 已按 `$gframework-batch-boot 50` 先执行仓库根 `dotnet clean` + `dotnet build`，建立本轮权威基线 `288 Warning(s)` / `214` 个唯一位点
+  - 本轮已并行收敛 `GameContextTests.cs`、`ArchitectureServicesTests.cs`、`RegistryInitializationHookBaseTests.cs`、`CqrsDispatcherCacheTests.cs` 与 `CqrsHandlerRegistrarTests.cs`
+  - 主线程已补齐 `ResourceManagerTests.cs`、`TestEvent.cs`、`LoggerTests.cs`、`ContextProviderTests.cs`、`TestArchitectureBase.cs`、`CommandCoroutineExtensionsTests.cs` 等 `Core.Tests` 零散 warning
+  - 当前 `GFramework.Core.Tests` 与 `GFramework.Cqrs.Tests` 的受影响项目 Release 构建都已恢复到 `0 Warning(s)` / `0 Error(s)`
+  - 当前仓库根权威基线已从本轮开始时的 `288 Warning(s)` / `214` 个唯一位点下降到 `236 Warning(s)` / `162` 个唯一位点；剩余 warning 只集中在 `Mediator/*` 与 `YamlConfigSchemaValidator*`
 
 ## 当前活跃事实
 
-- 当前 `origin/main` 基线提交为 `7cfdd2c`（`2026-04-27T16:59:57+08:00`）。
+- 当前 `origin/main` 基线提交为 `6cc87a9`（`2026-04-27T20:28:50+08:00`）。
 - 当前直接验证结果：
-  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
-    - 最新结果：成功；`28 Warning(s)`、`0 Error(s)`；当前 warning 来自 `GameContextTests.cs`、`ArchitectureServicesTests.cs`、`RegistryInitializationHookBaseTests.cs` 等既有热点
-  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build`
-    - 最新结果：成功；`1610` 通过、`0` 失败
   - `dotnet clean`
-    - 最新结果：成功；已刷新仓库根 non-incremental 基线
+    - 最新结果：成功；已刷新本轮 final non-incremental 仓库根基线
   - `dotnet build`
-    - 最新结果：成功；`288 Warning(s)`、`0 Error(s)`，唯一位点 `214`
-  - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+    - 最新结果：成功；`236 Warning(s)`、`0 Error(s)`，唯一位点 `162`
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
     - 最新结果：成功；`0 Warning(s)`、`0 Error(s)`
-  - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~YamlConfigLoaderTests.ReadYamlAsync_Should_Preserve_OperationCanceledException_When_Cancellation_Is_Requested"`
-    - 最新结果：成功；`1` 通过、`0` 失败
-  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests.GetAllByPriority_Should_Sort_By_Priority_Ascending"`
-    - 最新结果：成功；`1` 通过、`0` 失败
-  - `dotnet format GFramework.sln --verify-no-changes --include GFramework.Game/Config/YamlConfigLoader.cs GFramework.Game.Tests/Config/YamlConfigLoaderTests.cs GFramework.Core.Tests/Ioc/IMixedService.cs GFramework.Core.Tests/Ioc/IPrioritizedService.cs GFramework.Core.Tests/Ioc/PrioritizedService.cs GFramework.Core.Tests/Query/TestAsyncQueryWithExceptionV4.cs`
-    - 最新结果：成功；本次 PR follow-up 改动文件无需额外格式化
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 最新结果：成功；`0 Warning(s)`、`0 Error(s)`
 - 当前批次摘要：
-  - 本轮通过多批并行 worker 共完成 `20+` 个 `GFramework.Core.Tests` 文件的测试辅助类型拆分，集中消化纯 `MA0048` warning 热点
-  - 本轮停止时共享工作树共有 `61` 个变更条目，仍低于 `$gframework-batch-boot 100` 的文件停止线
-  - 本轮仓库根权威 warning 已从开始时的 `353` 下降到 `288`，且 `GFramework.Core.Tests` 受影响项目的 Release 构建已恢复到 `0 Warning(s)` / `0 Error(s)`
+  - 本轮接受并集成 `GameContextTests.cs`、`ArchitectureServicesTests.cs`、`RegistryInitializationHookBaseTests.cs`、`CqrsDispatcherCacheTests.cs`、`CqrsHandlerRegistrarTests.cs` 五个并行 worker 切片
+  - 主线程补齐 `Core.Tests` 内剩余零散 warning，使 `GFramework.Core.Tests` 项目级 Release 构建回到 `0 Warning(s)` / `0 Error(s)`
+  - 当前 `origin/main...HEAD` 已提交 branch diff 仍为 `21` 个文件；计入当前待提交工作树后的并集 footprint 为 `45 / 50` 个文件，已接近本轮停止线
 - 当前建议保留到下一波次的候选：
-  - `GFramework.Core.Tests/Architectures/GameContextTests.cs` 的 `4` 个 `CS8766` 与 `2` 个 `MA0048`
-  - `GFramework.Core.Tests/Architectures/ArchitectureServicesTests.cs` 的 `4` 个 `CS8766` 与 `1` 个 `MA0048`
-  - `GFramework.Core.Tests/Architectures/RegistryInitializationHookBaseTests.cs` 的 `1` 个 `MA0016` 与 `5` 个 `MA0048`
+  - `GFramework.Cqrs.Tests/Mediator/MediatorArchitectureIntegrationTests.cs`、`MediatorComprehensiveTests.cs`、`MediatorAdvancedFeaturesTests.cs` 的高密度 `MA0048` / `MA0004`
   - `GFramework.Game/Config/YamlConfigSchemaValidator.cs` 与 `YamlConfigSchemaValidator.ObjectKeywords.cs` 的高耦合 warning 热点
 
 ## 当前风险
 
-- `GFramework.Cqrs.Tests/Mediator/*` 仍有 `47` / `44` / `34` 个唯一 warning 位点，属于高 changed-file 风险的 `MA0048` 大波次。
-  - 缓解措施：优先继续处理 `6-7` 个 warning 的小文件切片，避免一次性推高文件数。
-- `GameContextTests.cs`、`ArchitectureServicesTests.cs` 这类混合 `CS8766` / `MA0048` 文件不再适合继续用“纯拆分”模式批量下发。
-  - 缓解措施：下一波由主线程先局部修正可空签名，再决定是否继续并行拆分。
-- `YamlConfigSchemaValidator*` 仍然聚集多类高耦合 warning。
-  - 缓解措施：继续把它们留在独立波次，不与测试项目的低风险拆分混提。
+- `GFramework.Cqrs.Tests/Mediator/*` 仍有 `94` / `88` / `68` 条输出 warning，属于高 changed-file 风险的 `MA0048` 大波次。
+  - 缓解措施：当前 footprint 已到 `45 / 50`，下一轮应在新提交基础上单独规划 `Mediator*` 波次，而不是继续叠在本轮工作树上。
+- `YamlConfigSchemaValidator*` 仍然聚集 `222` 条输出 warning，且同时混有 `MA0048`、`MA0009`、`MA0051`、`MA0006`。
+  - 缓解措施：保持为独立高耦合波次，不与测试项目拆分混提。
 
 ## 活跃文档
 
@@ -72,11 +60,11 @@
 ## 验证说明
 
 - 权威验证结果统一维护在“当前活跃事实”。
-- `GFramework.Core.Tests` 项目级 Release 构建已在本轮清零，但仓库根 non-incremental 构建仍保留大量既有 warning。
+- `GFramework.Core.Tests` 与 `GFramework.Cqrs.Tests` 的当前受影响项目 Release 构建都已在本轮清零，但仓库根 non-incremental 构建仍保留 `Mediator/*` 与 `YamlConfigSchemaValidator*` 既有 warning。
 - warning reduction 的仓库级真值只以同轮 `dotnet clean` 后的 `dotnet build` 为准。
 
 ## 下一步建议
 
-1. 提交本轮多批 `MA0048` warning reduction 与 `ai-plan` 同步。
-2. 下一波由主线程先处理 `GameContextTests.cs` / `ArchitectureServicesTests.cs` 的 `CS8766`，再决定是否继续拆分剩余 `MA0048`。
-3. 继续将 `YamlConfigSchemaValidator*` 与 `GFramework.Cqrs.Tests/Mediator/*` 作为独立高风险波次处理。
+1. 提交本轮 `Core.Tests` / `Cqrs.Tests` warning reduction 与 `ai-plan` 同步。
+2. 下一轮在新提交基础上单独规划 `Mediator/*` 波次，避免在 `45 / 50` footprint 状态继续扩批。
+3. 将 `YamlConfigSchemaValidator*` 保持为独立高耦合波次，必要时先由主线程局部切分再决定是否并行。

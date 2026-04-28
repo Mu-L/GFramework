@@ -1,57 +1,7 @@
-using System.IO;
-using GFramework.Core.Abstractions.Resource;
 using GFramework.Core.Resource;
 using NUnit.Framework;
 
 namespace GFramework.Core.Tests.Resource;
-
-/// <summary>
-///     测试用的简单资源类
-/// </summary>
-public class TestResource
-{
-    public string Content { get; set; } = string.Empty;
-    public bool IsDisposed { get; set; }
-}
-
-/// <summary>
-///     测试用的资源加载器
-/// </summary>
-public class TestResourceLoader : IResourceLoader<TestResource>
-{
-    private readonly Dictionary<string, string> _resourceData = new();
-
-    public TestResource Load(string path)
-    {
-        if (_resourceData.TryGetValue(path, out var content))
-        {
-            return new TestResource { Content = content };
-        }
-
-        throw new FileNotFoundException($"Resource not found: {path}");
-    }
-
-    public async Task<TestResource> LoadAsync(string path)
-    {
-        await Task.Delay(10).ConfigureAwait(false); // 模拟异步加载
-        return Load(path);
-    }
-
-    public void Unload(TestResource resource)
-    {
-        resource.IsDisposed = true;
-    }
-
-    public bool CanLoad(string path)
-    {
-        return _resourceData.ContainsKey(path);
-    }
-
-    public void AddTestData(string path, string content)
-    {
-        _resourceData[path] = content;
-    }
-}
 
 /// <summary>
 ///     ResourceManager 功能测试类
