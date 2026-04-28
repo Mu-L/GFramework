@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Command;
@@ -13,6 +14,16 @@ namespace GFramework.Core.Tests.Architectures;
 [TestFixture]
 public class TestArchitectureContextBehaviorTests
 {
+    private static IEnumerable<TestCaseData> EventContextFactories()
+    {
+        yield return new TestCaseData(
+                new Func<IArchitectureContext>(() => new TestArchitectureContext()))
+            .SetArgDisplayNames(nameof(TestArchitectureContext));
+        yield return new TestCaseData(
+                new Func<IArchitectureContext>(() => new TestArchitectureContextV3()))
+            .SetArgDisplayNames(nameof(TestArchitectureContextV3));
+    }
+
     /// <summary>
     ///     验证测试上下文会把事件注册与发送委托到同一个事件总线实例。
     /// </summary>
@@ -41,6 +52,42 @@ public class TestArchitectureContextBehaviorTests
         context.SendEvent<TestEventV2>();
 
         Assert.That(eventReceived, Is.True);
+    }
+
+    /// <summary>
+    ///     验证两类架构测试替身都会对事件 API 的空参数执行显式校验。
+    /// </summary>
+    /// <param name="createContext">创建待验证测试上下文的工厂。</param>
+    [TestCaseSource(nameof(EventContextFactories))]
+    public void Event_APIs_Should_Validate_Null_Arguments(Func<IArchitectureContext> createContext)
+    {
+        var context = createContext();
+
+        Assert.That(() => context.SendEvent<TestEventV2>(null!), Throws.TypeOf<ArgumentNullException>());
+        Assert.That(() => context.RegisterEvent<TestEventV2>(null!), Throws.TypeOf<ArgumentNullException>());
+        Assert.That(() => context.UnRegisterEvent<TestEventV2>(null!), Throws.TypeOf<ArgumentNullException>());
+    }
+
+    /// <summary>
+    ///     验证两类架构测试替身在注销事件处理器后都不会继续分发同一回调。
+    /// </summary>
+    /// <param name="createContext">创建待验证测试上下文的工厂。</param>
+    [TestCaseSource(nameof(EventContextFactories))]
+    public void UnRegisterEvent_Should_Stop_Dispatch(Func<IArchitectureContext> createContext)
+    {
+        var context = createContext();
+        var eventReceived = false;
+
+        void Handler(TestEventV2 _)
+        {
+            eventReceived = true;
+        }
+
+        context.RegisterEvent<TestEventV2>(Handler);
+        context.UnRegisterEvent<TestEventV2>(Handler);
+        context.SendEvent<TestEventV2>();
+
+        Assert.That(eventReceived, Is.False);
     }
 
     /// <summary>

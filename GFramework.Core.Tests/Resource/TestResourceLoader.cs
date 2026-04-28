@@ -6,9 +6,9 @@ using GFramework.Core.Abstractions.Resource;
 
 namespace GFramework.Core.Tests.Resource;
 
-    /// <summary>
-    ///     为 ResourceManager 测试提供可控数据源的资源加载器。
-    /// </summary>
+/// <summary>
+///     为 ResourceManager 测试提供可控数据源的资源加载器。
+/// </summary>
 public class TestResourceLoader : IResourceLoader<TestResource>
 {
     private readonly Dictionary<string, string> _resourceData = new(StringComparer.Ordinal);
