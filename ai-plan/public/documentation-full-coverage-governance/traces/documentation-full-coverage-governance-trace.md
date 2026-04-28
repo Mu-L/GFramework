@@ -1,5 +1,38 @@
 # Documentation Full Coverage Governance Trace
 
+## 2026-04-28
+
+### 当前恢复点：RP-048
+
+- 本轮按 `$gframework-pr-review` 抓取当前 PR `#299`，并确认 latest head review 仍有 `3` 条 `CodeRabbit` open thread；`Greptile` 与 `Gemini Code Assist` 当前无 open thread，测试汇总为 `2159 passed`，仅剩 `Title check` inconclusive。
+- 本地复核源码后确认：`GFramework.Core/Architectures/Architecture.cs` 只暴露架构级 `OnInitialize()`；`GFramework.Godot/Architectures/AbstractArchitecture.cs` 通过 `InstallModules()` 暴露模块注册入口；组件级 `OnInit()` 仍是 `Model` / `System` 的正确生命周期。
+- 仍成立的文件内问题只有三类：`docs/zh-CN/abstractions/index.md` 的原始文件名式导航、`docs/zh-CN/core/lifecycle.md` 与 `tutorials` / `troubleshooting` 里的架构级旧 `Init()` 示例、以及 active tracking 中过长的逐命令验证历史。
+
+### 当前决策（RP-048）
+
+- 在同一轮里收口所有仍然适用于仓库文件的 open thread；不把 `Title check` 当成仓库文件修复项。
+- 普通 `Architecture` 示例统一改回 `OnInitialize()`，`AbstractArchitecture` 示例改成 `InstallModules()`，组件级 `OnInit()` 示例保持不变。
+- 将 active tracking 的“最新验证”压缩为摘要，把详细命令历史迁入新的 `archive/todos` 文件，避免默认恢复入口继续膨胀。
+
+### 当前验证（RP-048）
+
+- PR review 抓取：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
+  - 结果：通过；PR `#299` 处于 `OPEN`，latest head review 有 `3` 条 `CodeRabbit` open thread，`Greptile` / `Gemini Code Assist` 当前无 open thread，测试汇总为 `2159 passed`，仅剩 `Title check` inconclusive。
+- 页面校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/abstractions/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/lifecycle.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/state-machine-tutorial.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/resource-management.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/save-system.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/pause-system.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/tutorials/large-project-organization.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/troubleshooting.md`
+  - 结果：通过；本轮触达页面的 frontmatter、链接与代码块校验均通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；PR `#299` review follow-up 的文档修正与 active tracking 归档瘦身后站点仍可构建，仅保留既有大 chunk warning。
+
 ## 2026-04-27
 
 ### 当前恢复点：RP-047
