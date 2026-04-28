@@ -31,6 +31,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
 {
     private readonly MicrosoftDiContainer _container = new();
     private readonly DefaultEnvironment _environment = new();
+    private readonly EventBus _eventBus = new();
 
     /// <summary>
     ///     获取或初始化用于区分测试上下文实例的标识。
@@ -167,6 +168,7 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <typeparam name="TEvent">事件类型。</typeparam>
     public void SendEvent<TEvent>() where TEvent : new()
     {
+        _eventBus.Send<TEvent>();
     }
 
     /// <summary>
@@ -174,8 +176,11 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// </summary>
     /// <typeparam name="TEvent">事件类型。</typeparam>
     /// <param name="e">事件实例。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="e" /> 为 <see langword="null" />。</exception>
     public void SendEvent<TEvent>(TEvent e) where TEvent : class
     {
+        ArgumentNullException.ThrowIfNull(e);
+        _eventBus.Send(e);
     }
 
     /// <summary>
@@ -184,9 +189,11 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// <typeparam name="TEvent">事件类型。</typeparam>
     /// <param name="handler">事件处理回调。</param>
     /// <returns>用于注销回调的句柄。</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="handler" /> 为 <see langword="null" />。</exception>
     public IUnRegister RegisterEvent<TEvent>(Action<TEvent> handler)
     {
-        return new DefaultUnRegister(() => { });
+        ArgumentNullException.ThrowIfNull(handler);
+        return _eventBus.Register(handler);
     }
 
     /// <summary>
@@ -194,8 +201,11 @@ public class TestArchitectureContextV3 : IArchitectureContext
     /// </summary>
     /// <typeparam name="TEvent">事件类型。</typeparam>
     /// <param name="onEvent">要取消的事件回调。</param>
+    /// <exception cref="ArgumentNullException"><paramref name="onEvent" /> 为 <see langword="null" />。</exception>
     public void UnRegisterEvent<TEvent>(Action<TEvent> onEvent)
     {
+        ArgumentNullException.ThrowIfNull(onEvent);
+        _eventBus.UnRegister(onEvent);
     }
 
     /// <summary>

@@ -217,6 +217,27 @@ internal sealed class CqrsHandlerRegistrarTests
     }
 
     /// <summary>
+    ///     验证捕获型日志工厂在更新最小日志级别后，会将新值应用到后续创建的日志器。
+    /// </summary>
+    [Test]
+    public void CapturingLoggerFactoryProvider_Should_Apply_Updated_MinLevel_To_Subsequent_Loggers()
+    {
+        var provider = new CapturingLoggerFactoryProvider(LogLevel.Warning);
+        var warningLogger = (TestLogger)provider.CreateLogger("warning");
+
+        provider.MinLevel = LogLevel.Debug;
+
+        var debugLogger = (TestLogger)provider.CreateLogger("debug");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(warningLogger.IsDebugEnabled(), Is.False);
+            Assert.That(debugLogger.IsDebugEnabled(), Is.True);
+            Assert.That(provider.Loggers, Has.Count.EqualTo(2));
+        });
+    }
+
+    /// <summary>
     ///     验证当生成注册器提供精确 fallback 类型名时，运行时会定向补扫剩余 handlers，
     ///     而不是重新枚举整个程序集的类型列表。
     /// </summary>

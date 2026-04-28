@@ -17,6 +17,7 @@ namespace GFramework.Cqrs.Tests.Cqrs;
 internal sealed class CapturingLoggerFactoryProvider : ILoggerFactoryProvider
 {
     private readonly List<TestLogger> _loggers = [];
+    private LogLevel _minLevel;
     private readonly Lock _sync = new();
 
     /// <summary>
@@ -25,7 +26,7 @@ internal sealed class CapturingLoggerFactoryProvider : ILoggerFactoryProvider
     /// <param name="minLevel">要应用到新建测试日志器的最小日志级别。</param>
     public CapturingLoggerFactoryProvider(LogLevel minLevel = LogLevel.Info)
     {
-        MinLevel = minLevel;
+        _minLevel = minLevel;
     }
 
     /// <summary>
@@ -45,7 +46,24 @@ internal sealed class CapturingLoggerFactoryProvider : ILoggerFactoryProvider
     /// <summary>
     ///     获取或设置新建测试日志器的最小日志级别。
     /// </summary>
-    public LogLevel MinLevel { get; set; }
+    public LogLevel MinLevel
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _minLevel;
+            }
+        }
+
+        set
+        {
+            lock (_sync)
+            {
+                _minLevel = value;
+            }
+        }
+    }
 
     /// <summary>
     ///     创建一个测试日志器并将其纳入捕获集合。
@@ -54,13 +72,11 @@ internal sealed class CapturingLoggerFactoryProvider : ILoggerFactoryProvider
     /// <returns>用于后续断言的测试日志器。</returns>
     public ILogger CreateLogger(string name)
     {
-        var logger = new TestLogger(name, MinLevel);
-
         lock (_sync)
         {
+            var logger = new TestLogger(name, _minLevel);
             _loggers.Add(logger);
+            return logger;
         }
-
-        return logger;
     }
 }

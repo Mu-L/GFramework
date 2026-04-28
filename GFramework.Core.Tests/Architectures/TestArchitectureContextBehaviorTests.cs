@@ -29,6 +29,21 @@ public class TestArchitectureContextBehaviorTests
     }
 
     /// <summary>
+    ///     验证用于 ArchitectureServices 的上下文替身也会把事件注册与发送委托到同一个事件总线实例。
+    /// </summary>
+    [Test]
+    public void RegisterEvent_And_SendEvent_On_TestArchitectureContextV3_Should_Use_Shared_EventBus()
+    {
+        var context = new TestArchitectureContextV3();
+        var eventReceived = false;
+
+        context.RegisterEvent<TestEventV2>(_ => eventReceived = true);
+        context.SendEvent<TestEventV2>();
+
+        Assert.That(eventReceived, Is.True);
+    }
+
+    /// <summary>
     ///     验证测试上下文的旧版命令与查询入口会显式抛出未支持异常。
     /// </summary>
     [Test]

@@ -34,6 +34,7 @@ public abstract class RegistryInitializationHookBase<TRegistry, TConfig> : IArch
     /// </summary>
     /// <param name="phase">当前的架构阶段</param>
     /// <param name="architecture">相关的架构实例</param>
+    /// <exception cref="ArgumentNullException"><paramref name="architecture" /> 为 <see langword="null" />。</exception>
     /// <remarks>
     /// 当目标注册表未被装入当前架构上下文时，该钩子会保持 no-op，
     /// 以便同一组配置可以安全复用于不包含该注册表的测试或裁剪场景。
