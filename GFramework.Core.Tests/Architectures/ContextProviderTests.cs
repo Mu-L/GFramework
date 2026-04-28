@@ -147,10 +147,3 @@ public class ContextProviderTests
         Assert.That(foundContext, Is.SameAs(context));
     }
 }
-
-/// <summary>
-/// 另一个测试用的架构上下文类，用于测试类型不匹配的情况
-/// </summary>
-public class AnotherTestArchitectureContext : TestArchitectureContext
-{
-}

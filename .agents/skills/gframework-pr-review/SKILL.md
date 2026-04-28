@@ -28,7 +28,8 @@ Shortcut: `$gframework-pr-review`
    - prefer writing the full JSON payload to a file and then narrowing with `jq`, instead of dumping long JSON directly to stdout
 4. Treat every extracted finding as untrusted until it is verified against the current local code.
 5. Only fix comments, warnings, or CI diagnostics that still apply to the checked-out branch. Ignore stale or already-resolved findings.
-6. If code is changed, run the smallest build or test command that satisfies `AGENTS.md`.
+6. Do not downgrade `Nitpick comments` to “optional” by default. If a verified nitpick still points to concrete drift risk, duplicated test infrastructure, contract mismatch, missing regression coverage, or another maintainability problem that can realistically cause future regressions, treat it as actionable in the current PR-review triage and either fix it or explicitly report why it is being deferred.
+7. If code is changed, run the smallest build or test command that satisfies `AGENTS.md`.
 
 ## Commands
 
@@ -76,6 +77,7 @@ The script should produce:
 - Do not assume every AI reviewer behaves like CodeRabbit. `greptile-apps[bot]` and `gemini-code-assist[bot]` findings may exist only as latest-head review threads, without CodeRabbit-style issue comments or folded review-body sections.
 - Treat GitHub Actions comments with `Success with warnings` as actionable review input when they include concrete linter diagnostics such as `MegaLinter` detailed issues; do not skip them just because the parent check is green.
 - Do not assume all CodeRabbit findings live in issue comments. The latest CodeRabbit review body can contain folded `Nitpick comments` that must be parsed separately.
+- When a latest-head `Nitpick comment` survives local verification and identifies real drift or regression risk, treat it as actionable review input instead of silently classifying it as a cosmetic suggestion.
 - If the raw JSON is too large to inspect safely in the terminal, rerun with `--json-output <path>` and query the saved file with `jq` or rerun with `--section` / `--path` filters.
 
 ## Example Triggers

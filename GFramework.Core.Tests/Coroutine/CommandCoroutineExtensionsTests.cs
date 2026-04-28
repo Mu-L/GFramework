@@ -405,7 +405,7 @@ public class CommandCoroutineExtensionsTests
             CommandCoroutineExtensions.SendCommandAndWaitEventCoroutine<TestCommand, TestEvent>(
                 contextAware,
                 command,
-                null,
+                _ => { },
                 -1.0f));
     }
 
@@ -421,7 +421,7 @@ public class CommandCoroutineExtensionsTests
         // 设置上下文服务以返回null事件总线
         contextAware._mockContext
             .Setup(ctx => ctx.GetService<IEventBus>())
-            .Returns((IEventBus?)null);
+            .Returns((IEventBus)null!);
 
         // 创建协程
         var coroutine = CommandCoroutineExtensions.SendCommandAndWaitEventCoroutine<TestCommand, TestEvent>(

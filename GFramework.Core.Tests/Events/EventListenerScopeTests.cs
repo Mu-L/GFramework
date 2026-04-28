@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using GFramework.Core.Abstractions.Events;
 using GFramework.Core.Events;
 using Moq;
@@ -303,6 +304,7 @@ public class EventListenerScopeTests
     /// <summary>
     ///     测试用的结构体事件
     /// </summary>
+    [StructLayout(LayoutKind.Auto)]
     private struct StructEvent
     {
         public int Id { get; set; }

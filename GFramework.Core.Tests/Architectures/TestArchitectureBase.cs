@@ -9,6 +9,7 @@ namespace GFramework.Core.Tests.Architectures;
 public abstract class TestArchitectureBase : Architecture
 {
     private Action<TestArchitectureBase>? _postRegistrationHook;
+    private readonly List<ArchitecturePhase> _phaseHistory = [];
 
     /// <summary>
     ///     获取就绪事件是否已触发的状态
@@ -23,7 +24,7 @@ public abstract class TestArchitectureBase : Architecture
     /// <summary>
     ///     获取架构阶段历史记录列表
     /// </summary>
-    public List<ArchitecturePhase> PhaseHistory { get; } = [];
+    public IReadOnlyList<ArchitecturePhase> PhaseHistory => _phaseHistory;
 
     /// <summary>
     ///     添加注册后钩子函数
@@ -43,6 +44,6 @@ public abstract class TestArchitectureBase : Architecture
         _postRegistrationHook?.Invoke(this);
 
         // 订阅阶段变更事件以记录历史
-        PhaseChanged += (_, eventArgs) => PhaseHistory.Add(eventArgs.Phase);
+        PhaseChanged += (_, eventArgs) => _phaseHistory.Add(eventArgs.Phase);
     }
 }
