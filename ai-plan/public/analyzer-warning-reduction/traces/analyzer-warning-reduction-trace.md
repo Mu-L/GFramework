@@ -1,23 +1,21 @@
 # Analyzer Warning Reduction 追踪
 
-## 2026-04-28 — RP-090
+## 2026-04-28 — RP-091
 
-### 阶段：复核 `PR #300` 最新 review 真值并补齐事件 API 回归覆盖
+### 阶段：收口 `PR #300` 的共享测试基础设施 nitpick，并升级 PR-review triage 规则
 
 - 触发背景：
-  - 用户再次执行 `$gframework-pr-review`
-  - `fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json` 返回 `PR #300`，latest head 仍显示 `6` 条 CodeRabbit open threads；本地复核后，`Task.CompletedTask` 强转、`RegisterLifecycleHook` 语义、`TestResourceLoader` 文档与 `PartialGeneratedNotificationHandlerRegistry` XML 契约都已在当前 head 上成立，唯一仍未锁住的是事件 API 回归覆盖
+  - 用户追问 `TestArchitectureContext` / `TestArchitectureContextV3` 的共享基础设施 nitpick 是否已经处理完成
+  - 同时要求把“本地验证后仍然成立的 nitpick 不能默认降级为可选项”写入 `AGENTS.md` 或 `$gframework-pr-review`
 - 主线程实施：
-  - 为 `TestArchitectureContext` 与 `TestArchitectureContextV3` 新增共享测试数据源，补齐 `SendEvent` / `RegisterEvent` / `UnRegisterEvent` 的空参数异常契约
-  - 新增 `UnRegisterEvent_Should_Stop_Dispatch` 回归测试，防止后续把注销路径退化成 `no-op`
-  - 整理 `TestResourceLoader.cs` 的命名空间缩进，避免当前修改继续叠加局部格式噪音
+  - 新增 `TestArchitectureContextBase`，把容器解析、共享 `EventBus` 行为，以及 legacy / CQRS 失败契约统一收敛到一处
+  - 将 `TestArchitectureContext` 与 `TestArchitectureContextV3` 收窄为薄包装类型，只保留各自的命名入口与 `Id` 差异
+  - 更新 `.agents/skills/gframework-pr-review/SKILL.md`，明确要求：latest-head `Nitpick comment` 一旦本地验证仍成立且指向真实漂移/回归风险，就必须作为 actionable review input 处理，而不是默认视作可选
 - 验证里程碑：
   - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
     - 结果：成功；`0 Warning(s)`、`0 Error(s)`
-  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~TestArchitectureContextBehaviorTests"`
-    - 结果：成功；`9` 通过、`0` 失败
-  - `dotnet format GFramework.Core.Tests/GFramework.Core.Tests.csproj --verify-no-changes --no-restore`
-    - 结果：失败；输出落在 `ObjectExtensionsTests.cs`、多处 `FINALNEWLINE` 与若干 `CHARSET` 基线文件，均不属于本轮写集
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ArchitectureServicesTests|FullyQualifiedName~ContextAwareServiceExtensionsTests|FullyQualifiedName~TestArchitectureContextBehaviorTests|FullyQualifiedName~RegistryInitializationHookBaseTests|FullyQualifiedName~ArchitectureContextTests"`
+    - 结果：成功；`67` 通过、`0` 失败
   - `git diff --check`
     - 结果：成功；无新增 whitespace / conflict-marker 问题
 
@@ -30,8 +28,8 @@
 
 ## 下一步
 
-1. 提交本轮 `PR #300` follow-up 与 `ai-plan` 同步。
-2. 若继续收口 PR 线程，单独评估是否接受 `TestArchitectureContext` / `TestArchitectureContextV3` 的共享 helper nitpick。
+1. 提交本轮共享基类重构、技能规则更新与 `ai-plan` 同步。
+2. 推送后重新执行 `$gframework-pr-review`，确认剩余 PR 线程是否已经下降。
 
 ## 历史归档指针
 
