@@ -1,5 +1,47 @@
 # Documentation Full Coverage Governance Trace
 
+## 2026-04-29
+
+### 当前恢复点：RP-049
+
+- 本轮按 `$gframework-batch-boot 50` 恢复，继续沿用显式 `--git-dir` / `--work-tree` 绑定确认当前分支仍为 `docs/sdk-update-documentation`；当前 upstream `origin/docs/sdk-update-documentation` 已 gone，因此改用 `origin/main` `4557dde6`（`2026-04-29 11:14:56 +08:00`）作为新的 branch-size baseline。
+- 恢复时 committed branch diff vs baseline 为 `0` files / `0` lines，因此可以安全开启新一轮低风险 reader-facing 文档批次。
+- 当前工作树在本批次与恢复文档更新后相对 `origin/main` 为 `13` files / `132` lines，离 `$gframework-batch-boot 50` 的主 stop condition 仍有充足余量。
+- 本轮接受了 2 个 explorer 的只读热点排序：一个巡检 `docs/zh-CN/game` 与 `docs/zh-CN/godot` 细页，一个巡检模块 README 的 reader-facing 标签；主线程只接受低风险措辞问题，不扩展到 README 子系统地图或结构重写。
+- 实际落地的收口集中在 11 个文件：`docs/zh-CN/godot/storage.md`、`godot/setting.md`、`godot/signal.md`、`godot/logging.md`、`godot/index.md`、`game/scene.md`、`core/index.md`、`game/config-system.md`、`ecs/arch.md`、`GFramework.Godot/README.md`、`tools/gframework-config-tool/README.md`。
+
+### 当前决策（RP-049）
+
+- 由于 upstream / 旧 PR 恢复路径已经失效，本轮不再以旧的 PR `#299` review 线程作为批处理驱动条件，而是以 `origin/main` + `50` changed files 作为唯一 stop condition。
+- 这批修改只处理 reader-facing 措辞、交叉链接语气和 README 标签，不改导航结构、不补新章节、不重写示例。
+- explorer 给出的 `GFramework.Cqrs` / `GFramework.Cqrs.Abstractions` README 源文件列表问题先不纳入本轮，因为那已经超出“低风险文案收口”边界。
+
+### 当前验证（RP-049）
+
+- 页面校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/storage.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/setting.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/signal.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/logging.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/godot/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/scene.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/config-system.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/ecs/arch.md`
+  - 结果：通过；本轮 9 个页面的 frontmatter、链接与代码块校验全部通过。
+- README 链接校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-links.sh GFramework.Godot/README.md tools/gframework-config-tool/README.md`
+  - 结果：通过；本轮 2 个 README 的 reader-facing 链接标签调整后目标有效。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；本轮 reader-facing 收口后站点仍可构建，仅保留既有大 chunk warning。
+
+### 下一步（RP-049）
+
+1. 提交本轮 reader-facing 文案批次，并更新 branch diff vs `origin/main` 的精确计量。
+2. 若继续下一批，优先复核 `docs/zh-CN/game/data.md`、`game/storage.md`、`godot/ui.md` 与少量 README 标签问题，不直接展开大段 README 子系统地图重写。
+3. 只有在 remote branch / 新 PR 重新建立后，再恢复 `$gframework-pr-review` 作为默认恢复入口。
+
 ## 2026-04-28
 
 ### 当前恢复点：RP-048
