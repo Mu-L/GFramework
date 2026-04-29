@@ -60,7 +60,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
         string? ReflectionAssemblyName,
         RuntimeTypeReferenceSpec? ArrayElementTypeReference,
         int ArrayRank,
-        RuntimeTypeReferenceSpec? PointerElementTypeReference,
         RuntimeTypeReferenceSpec? GenericTypeDefinitionReference,
         ImmutableArray<RuntimeTypeReferenceSpec> GenericTypeArguments)
     {
@@ -76,7 +75,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 null,
                 0,
                 null,
-                null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
 
@@ -91,7 +89,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 null,
                 null,
                 0,
-                null,
                 null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
@@ -110,7 +107,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 null,
                 0,
                 null,
-                null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
 
@@ -125,7 +121,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 null,
                 elementTypeReference,
                 arrayRank,
-                null,
                 null,
                 ImmutableArray<RuntimeTypeReferenceSpec>.Empty);
         }
@@ -143,7 +138,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 null,
                 null,
                 0,
-                null,
                 genericTypeDefinitionReference,
                 genericTypeArguments);
         }

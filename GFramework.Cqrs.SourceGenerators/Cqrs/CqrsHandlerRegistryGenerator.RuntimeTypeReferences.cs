@@ -304,12 +304,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
             return true;
         }
 
-        if (runtimeTypeReference.PointerElementTypeReference is not null &&
-            ContainsExternalAssemblyTypeLookup(runtimeTypeReference.PointerElementTypeReference))
-        {
-            return true;
-        }
-
         if (runtimeTypeReference.GenericTypeDefinitionReference is not null &&
             ContainsExternalAssemblyTypeLookup(runtimeTypeReference.GenericTypeDefinitionReference))
         {

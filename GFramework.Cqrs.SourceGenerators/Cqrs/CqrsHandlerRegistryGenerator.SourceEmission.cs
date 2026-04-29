@@ -662,14 +662,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 reflectedArgumentNames,
                 indent);
 
-        if (runtimeTypeReference.PointerElementTypeReference is not null)
-            return AppendPointerRuntimeTypeReferenceResolution(
-                builder,
-                runtimeTypeReference,
-                variableBaseName,
-                reflectedArgumentNames,
-                indent);
-
         if (runtimeTypeReference.GenericTypeDefinitionReference is not null)
             return AppendConstructedGenericRuntimeTypeReferenceResolution(
                 builder,
@@ -712,32 +704,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
         return runtimeTypeReference.ArrayRank == 1
             ? $"{elementExpression}.MakeArrayType()"
             : $"{elementExpression}.MakeArrayType({runtimeTypeReference.ArrayRank})";
-    }
-
-    /// <summary>
-    ///     发射指针类型引用的运行时重建表达式。
-    /// </summary>
-    /// <param name="builder">生成源码构造器。</param>
-    /// <param name="runtimeTypeReference">指针类型引用描述。</param>
-    /// <param name="variableBaseName">用于递归生成变量名的稳定前缀。</param>
-    /// <param name="reflectedArgumentNames">需要空值检查的反射解析变量集合。</param>
-    /// <param name="indent">当前生成语句的缩进。</param>
-    /// <returns>指针类型表达式。</returns>
-    private static string AppendPointerRuntimeTypeReferenceResolution(
-        StringBuilder builder,
-        RuntimeTypeReferenceSpec runtimeTypeReference,
-        string variableBaseName,
-        ICollection<string> reflectedArgumentNames,
-        string indent)
-    {
-        var pointedAtExpression = AppendRuntimeTypeReferenceResolution(
-            builder,
-            runtimeTypeReference.PointerElementTypeReference!,
-            $"{variableBaseName}PointedAt",
-            reflectedArgumentNames,
-            indent);
-
-        return $"{pointedAtExpression}.MakePointerType()";
     }
 
     /// <summary>

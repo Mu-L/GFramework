@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-054`
+- 恢复点编号：`CQRS-REWRITE-RP-056`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
@@ -23,6 +23,7 @@ CQRS 迁移与收敛。
   - 已补充非法 CQRS 泛型合同的输入诊断断言，明确 `CS0306` 与 fallback / diagnostic 路径的组合语义
   - 已为 registrar 的 reflection 注册路径补充 handler-interface 元数据缓存，减少跨容器重复注册时的 `GetInterfaces()` 反射
   - 已将 registrar 的重复映射判定从线性扫描 `IServiceCollection` 收敛为本地映射索引，减少 fallback 注册路径的重复查找
+  - 已完成一轮 `static lambda + state` 微收敛：`CqrsDispatcher` 与 `CqrsHandlerRegistrar` 现会在弱缓存 / 并发缓存入口优先使用无捕获工厂，继续压低热路径上的额外闭包分配
   - 中期上继续 `Phase 8` 主线：参考 `ai-libs/Mediator`，继续扩大 generator 覆盖，并选择下一个收益明确的 dispatch / invoker 反射收敛点
 
 ## 当前状态摘要
@@ -81,13 +82,21 @@ CQRS 迁移与收敛。
   - `GFramework.SourceGenerators.Tests` 已新增“外部程序集隐藏泛型定义 + 可见类型实参”的 precise registration 回归
   - 当前生成器会继续为这类 handler 合同发射 `ResolveReferencedAssemblyType(...) + MakeGenericType(...)` 组合，而不是退回字符串 fallback 元数据
   - 本轮定向测试未暴露新的实现缺口，因此未改动 direct / named / mixed fallback 选择逻辑，也未调整 generator runtime type 建模实现
+- `2026-04-29` 已完成一轮缓存工厂闭包收敛：
+  - `CqrsDispatcher` 现会在 notification / stream / request binding 与 pipeline executor 缓存入口优先使用无捕获工厂
+  - `CqrsHandlerRegistrar` 现会在程序集元数据缓存与可加载类型缓存入口复用 `static` 工厂 + 显式状态参数
+  - 本轮未改动公开语义，也未修改 fallback 合同与 handler / behavior 生命周期边界
 - `2026-04-29` 已完成一轮 request pipeline executor 形状缓存：
   - `CqrsDispatcher` 现会继续按 `requestType + responseType` 缓存 request dispatch binding，并在 binding 内按 `behaviorCount` 缓存强类型 pipeline executor
   - 每次分发只绑定当前 handler / behaviors 实例，不缓存容器解析结果，因此不改变 transient 生命周期与上下文注入语义
   - `GFramework.Cqrs.Tests` 已补充 executor 首次创建 / 后续复用与双行为顺序回归
 - `2026-04-29` 已完成一轮 CQRS 入口文档对齐：
   - `GFramework.Cqrs/README.md`、`docs/zh-CN/core/cqrs.md` 与 `docs/zh-CN/api-reference/index.md` 现已明确 generated registry 优先、targeted fallback 补齐剩余 handler 的当前语义
-  - 当前工作区相对 `origin/main` 的累计 diff 已达到 `13 files / 709 lines`，仍低于本轮 `gframework-batch-boot 50` 的主要 stop condition
+- `2026-04-29` 已完成一轮 generator pointer runtime-reconstruction 残留清理：
+  - `CqrsHandlerRegistryGenerator` 的运行时类型引用模型已移除不可达的 pointer 子结构
+  - `SourceEmission` 不再保留 `MakePointerType()` 源码发射分支，`RuntimeTypeReferences` 也已删掉对应的外部程序集递归扫描死代码
+  - pointer / function pointer 的拒绝语义保持不变，direct / named / mixed fallback 逻辑未改动
+  - 当前工作区相对 `origin/main` 的累计 diff 已达到 `14 files`，仍低于本轮 `gframework-batch-boot 50` 的主要 stop condition
 - 当前主线优先级：
   - generator 覆盖面继续扩大
   - dispatch/invoker 反射占比继续下降
@@ -162,9 +171,21 @@ CQRS 迁移与收敛。
 - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；本轮确认 dispatcher request pipeline 形状缓存未破坏 `net8.0` / `net9.0` / `net10.0` 目标构建
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~RegisterHandlers_Should_Cache_Assembly_Metadata_Across_Containers|FullyQualifiedName~RegisterHandlers_Should_Cache_Loadable_Types_Across_Containers|FullyQualifiedName~Dispatcher_Should_Cache_Request_Pipeline_Executors_Per_Behavior_Count"`
+  - 结果：通过
+  - 备注：`3/3` 测试通过；本轮确认无捕获缓存工厂没有破坏 registrar / dispatcher 现有缓存行为
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - 结果：通过
+  - 备注：`22/22` 测试通过；本轮新增外部程序集隐藏泛型定义的 precise registration 回归
+- `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`；本轮确认删除 pointer runtime-reconstruction 残留后生成器项目仍可正常构建
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - 结果：通过
+  - 备注：`22/22` 测试通过；本轮确认 pointer / function pointer 拒绝语义保持不变，且未回归既有 precise runtime type lookup 场景
 
 ## 下一步
 
-1. 继续 `Phase 8` 主线，优先再找一个收益明确且写集独立的 generator 或 dispatch 热点；当前累计 diff 为 `13 files / 709 lines`，距离 `50 files` stop condition 仍有余量
+1. 继续 `Phase 8` 主线，优先再找一个收益明确且写集独立的 generator 或 registrar/dispatcher 热点；在下一次提交后重新计算相对 `origin/main` 的累计 diff，并继续朝 `50 files` stop condition 推进
 2. 若继续文档主线，优先再扫教程入口页与 API 参考中的 CQRS 采用说明，确认是否还有旧 Command / Query 迁移口径残留
 3. 若后续再出现新的 PR review 或 review thread 变化，再重新执行 `$gframework-pr-review` 作为独立验证步骤

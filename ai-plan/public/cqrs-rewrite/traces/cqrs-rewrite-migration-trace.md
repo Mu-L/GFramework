@@ -2,6 +2,46 @@
 
 ## 2026-04-29
 
+### 阶段：pointer runtime-reconstruction 残留清理（CQRS-REWRITE-RP-056）
+
+- 延续 `gframework-batch-boot 50` 的 `Phase 8` 主线，本轮只处理一个写集很窄的 generator 清理切片：删除 `CqrsHandlerRegistryGenerator` 里已经不可达的 pointer runtime-reconstruction 残留
+- 先复核当前实现后确认：
+  - `TryCreateRuntimeTypeReference` 已在入口直接拒绝 `IPointerTypeSymbol` 与 `IFunctionPointerTypeSymbol`
+  - `CanReferenceFromGeneratedRegistry` 也已统一把 pointer / function pointer 判定为不可直接引用
+  - 但 `RuntimeTypeReferenceSpec`、`AppendRuntimeTypeReferenceResolution(...)` 和 `ContainsExternalAssemblyTypeLookup(...)` 仍残留 pointer 子结构与 `MakePointerType()` 分支，属于已失效的死代码
+- 已完成的清理：
+  - `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.Models.cs` 已移除 `PointerElementTypeReference`
+  - `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.SourceEmission.cs` 已移除 pointer 运行时重建分支与 `AppendPointerRuntimeTypeReferenceResolution(...)`
+  - `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.RuntimeTypeReferences.cs` 已移除 pointer 外部程序集查找递归
+  - direct / named / mixed fallback 逻辑未改动，pointer / function pointer 拒绝语义保持不变
+- 定向验证已通过：
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - `0 warning / 0 error`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - `22/22` passed
+
+### 阶段：缓存工厂闭包收敛（CQRS-REWRITE-RP-055）
+
+- 延续 `gframework-batch-boot 50` 的 `Phase 8` 主线，本轮在不扩大语义面的前提下继续做一个更窄的 runtime 微切片：把弱缓存 / 并发缓存入口剩余的捕获型工厂收敛为 `static lambda + state`
+- 先复核当前 runtime 热点后确认：
+  - `CqrsDispatcher` 的 notification / stream / request binding 与 pipeline executor 缓存仍存在少量可消除的捕获型工厂
+  - `CqrsHandlerRegistrar` 的程序集元数据缓存与可加载类型缓存也仍通过捕获 `logger` 的 lambda 建值
+  - 这些入口都只影响内部缓存建值，不触碰 handler / behavior 生命周期和 fallback 合同
+- 已完成的收敛：
+  - `CqrsDispatcher` 现为 notification / stream / request binding 命中路径改用无捕获工厂；pipeline executor 缓存改为显式状态对象承载 `requestType`
+  - `CqrsHandlerRegistrar` 现为 `AssemblyMetadataCache` 与 `LoadableTypesCache` 改用 `static` 工厂 + `logger` 显式状态参数
+  - 该批次没有改动 `RequestPipelineInvocation` 的 `next` 语义，也没有缓存 handler / behavior 实例
+- 同轮继续补了一个独立 generator 覆盖缺口：
+  - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 新增“外部程序集隐藏泛型定义 + 可见类型实参”的 precise registration 回归
+  - 该回归锁定生成器会输出 `ResolveReferencedAssemblyType("...ProtectedEnvelope\`1")` 与 `MakeGenericType(typeof(string))` 的组合，而不是退回程序集级字符串 fallback
+- 定向验证已通过：
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~RegisterHandlers_Should_Cache_Assembly_Metadata_Across_Containers|FullyQualifiedName~RegisterHandlers_Should_Cache_Loadable_Types_Across_Containers|FullyQualifiedName~Dispatcher_Should_Cache_Request_Pipeline_Executors_Per_Behavior_Count"`
+  - `3/3` passed
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - `22/22` passed
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - `0 warning / 0 error`
+
 ### 阶段：低风险并行批次收口（CQRS-REWRITE-RP-054）
 
 - 继续按 `gframework-batch-boot 50` 推进 `Phase 8`，本轮先完成批次评估后再并行拆分写集，避免把 generator、runtime 与 docs 改动揉进同一片上下文
@@ -197,6 +237,6 @@
 
 ### 当前下一步
 
-1. 回到 `Phase 8` 主线，优先再找一个 generator 覆盖缺口，继续减少仍需程序集级字符串 fallback 元数据的 handler 场景
+1. 回到 `Phase 8` 主线，优先再找一个写集独立的 generator 或 runtime 热点；pointer runtime-reconstruction 残留已清空，后续不要恢复任何 `MakePointerType()` 发射路径
 2. 若继续文档主线，优先补齐 `docs/zh-CN/api-reference` 与教程入口页中仍过时的 CQRS API / 命名空间表述
 3. 若后续 review thread 或 PR 状态再次变化，再重新执行 `$gframework-pr-review` 复核远端信号
