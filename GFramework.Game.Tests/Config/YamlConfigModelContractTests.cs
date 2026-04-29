@@ -20,12 +20,34 @@ public sealed class YamlConfigModelContractTests
     }
 
     /// <summary>
+    ///     验证枚举允许值模型会保留空对象等合法结构产生的空比较键。
+    /// </summary>
+    [Test]
+    public void AllowedValue_Should_Accept_Empty_Comparable_Value()
+    {
+        var allowedValue = new YamlConfigAllowedValue(string.Empty, "{}");
+
+        Assert.That(allowedValue.ComparableValue, Is.Empty);
+    }
+
+    /// <summary>
     ///     验证常量约束模型会拒绝空白比较键。
     /// </summary>
     [Test]
     public void ConstantValue_Should_Reject_Whitespace_Comparable_Value()
     {
         Assert.Throws<ArgumentException>(() => new YamlConfigConstantValue(" ", "\"visible\""));
+    }
+
+    /// <summary>
+    ///     验证常量约束模型会保留空对象等合法结构产生的空比较键。
+    /// </summary>
+    [Test]
+    public void ConstantValue_Should_Accept_Empty_Comparable_Value()
+    {
+        var constantValue = new YamlConfigConstantValue(string.Empty, "{}");
+
+        Assert.That(constantValue.ComparableValue, Is.Empty);
     }
 
     /// <summary>

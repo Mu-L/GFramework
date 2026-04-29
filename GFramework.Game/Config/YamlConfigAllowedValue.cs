@@ -12,11 +12,16 @@ internal sealed class YamlConfigAllowedValue
     /// <param name="comparableValue">用于与 YAML 节点比较的稳定键。</param>
     /// <param name="displayValue">用于诊断输出的原始 JSON 文本。</param>
     /// <exception cref="ArgumentNullException">当 <paramref name="comparableValue"/> 或 <paramref name="displayValue"/> 为 <see langword="null" /> 时抛出。</exception>
-    /// <exception cref="ArgumentException">当 <paramref name="comparableValue"/> 或 <paramref name="displayValue"/> 为空或仅包含空白字符时抛出。</exception>
+    /// <exception cref="ArgumentException">当 <paramref name="comparableValue"/> 虽然非空但仅包含空白字符，或 <paramref name="displayValue"/> 为空或仅包含空白字符时抛出。</exception>
     public YamlConfigAllowedValue(string comparableValue, string displayValue)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(comparableValue);
+        ArgumentNullException.ThrowIfNull(comparableValue);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayValue);
+        if (comparableValue.Length > 0 &&
+            string.IsNullOrWhiteSpace(comparableValue))
+        {
+            throw new ArgumentException("The value cannot be composed entirely of whitespace.", nameof(comparableValue));
+        }
 
         ComparableValue = comparableValue;
         DisplayValue = displayValue;

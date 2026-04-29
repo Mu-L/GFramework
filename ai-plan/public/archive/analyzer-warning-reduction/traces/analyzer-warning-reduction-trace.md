@@ -1,5 +1,34 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-29 — RP-096
+
+### 阶段：完成 `PR #301` 最终收尾并归档长期 warning-reduction 主题
+
+- 触发背景：
+  - 用户要求先用 `$gframework-pr-review` 解决当前 PR review 的剩余问题，然后把整个长期分支主题归档
+- 本轮 triage 结论：
+  - `MediatorArchitectureIntegrationTests` 并发更新、`YamlConfigConditionalSchemas` / `YamlConfigStringFormatConstraint` 的 `<exception>` 文档，以及两个枚举的 `[GenerateEnumExtensions]` 在当前工作树上均已存在，对应 open threads 判定为 stale
+  - `YamlConfigReferenceUsage.DisplayPath` 删除建议继续判定为不成立，因为 loader 诊断、引用索引和测试断言仍把它作为稳定语义标签使用
+  - `LoadAsync_Should_Accept_Empty_Object_Schema_Const` 失败仍然成立：上轮把 `YamlConfigAllowedValue` / `YamlConfigConstantValue` 的 `comparableValue` 收紧成 `ThrowIfNullOrWhiteSpace(...)` 后，误伤了空对象常量的合法空比较键
+- 主线程实施：
+  - 将 `YamlConfigAllowedValue` 与 `YamlConfigConstantValue` 的比较键契约调整为：
+    - 允许 `string.Empty`
+    - 继续拒绝非空纯空白字符串
+    - 保留 `displayValue` 的非空白要求
+  - 扩充 `YamlConfigModelContractTests`，新增空比较键的正向覆盖，同时保留纯空白比较键的回归保护
+- 验证里程碑：
+  - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~LoadAsync_Should_Accept_Empty_Object_Schema_Const|FullyQualifiedName~YamlConfigModelContractTests"`
+    - 结果：成功；`10` 通过、`0` 失败
+  - `dotnet format GFramework.sln --verify-no-changes --include GFramework.Game/Config/YamlConfigAllowedValue.cs GFramework.Game/Config/YamlConfigConstantValue.cs GFramework.Game.Tests/Config/YamlConfigModelContractTests.cs`
+    - 结果：成功
+  - `git diff --check`
+    - 结果：成功；无新增 whitespace / conflict-marker 问题
+- 归档结论：
+  - `analyzer-warning-reduction` 当前 topic 已满足归档条件：长期 warning-reduction 主线已收尾，PR #301 的本地 follow-up 闭环完成
+  - 整个 topic 目录已迁入 `ai-plan/public/archive/analyzer-warning-reduction/`，不再作为 active 默认入口
+
 ## 2026-04-29 — RP-095
 
 ### 阶段：复核 `PR #301` latest-head review threads，并只修复当前工作树上仍然成立的问题
