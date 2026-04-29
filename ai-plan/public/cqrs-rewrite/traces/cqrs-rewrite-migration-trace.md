@@ -2,6 +2,21 @@
 
 ## 2026-04-29
 
+### 阶段：registrar fallback 失败分支回归（CQRS-REWRITE-RP-061）
+
+- 本轮继续按 `gframework-batch-boot 50` 的并行约束，把一个与主线程写集独立的新测试文件交给 worker：
+  - delegated scope：`GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarFallbackFailureTests.cs`
+  - delegated objective：锁定 registrar 在 fallback 元数据失效时的 warning 语义，而不扩张到 runtime 实现修改
+- 主线程接受结果前的复核结论：
+  - 该文件只复用现有 generated-registry 测试替身与捕获型日志工厂，不修改 `CqrsHandlerRegistrarTests.cs` 与生产代码
+  - 三个用例分别覆盖 named fallback 无法解析、named fallback 解析抛异常、direct fallback 类型跨程序集三条失败分支
+- 主线程已复核并重新执行定向验证：
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarFallbackFailureTests"`
+  - `3/3` passed
+- 结果：
+  - 当前 registrar 仍保持“跳过无效 fallback 条目 + 记录 warning”的既有语义
+  - 若连同当前工作区一起计算，当前分支相对 `origin/main` 的累计 diff 将达到 `32 files`
+
 ### 阶段：dispatcher 上下文前置条件失败语义回归（CQRS-REWRITE-RP-060）
 
 - 延续 `gframework-batch-boot 50` 的 `Phase 8` 主线，本轮选择一个新的单文件测试切片：锁定默认 dispatcher 对“仅实现 `ICqrsContext`、但未实现 `IArchitectureContext` 的上下文”会如何失败

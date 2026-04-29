@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-060`
+- 恢复点编号：`CQRS-REWRITE-RP-061`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
@@ -20,6 +20,7 @@ CQRS 迁移与收敛。
   - 已补充 cached request pipeline executor 的上下文刷新回归，锁定 executor 复用时仍会为当次 handler / singleton behavior 重新注入当前 `ArchitectureContext`
   - 已补充 cached notification / stream dispatch binding 的上下文刷新回归，锁定 binding 复用时仍会为当次 handler 重新注入当前 `ArchitectureContext`
   - 已补充非 `IArchitectureContext` 的 dispatcher 失败语义回归，锁定 context-aware request / notification / stream handler 在注入前置条件不满足时会显式抛出异常
+  - 已补充 registrar fallback 失败分支回归，锁定 named fallback 无法解析、named fallback 解析抛异常、direct fallback 跨程序集三类 warning 语义
   - 已完成 generated registry 激活路径收敛：`CqrsHandlerRegistrar` 现优先复用缓存工厂委托，避免重复 `ConstructorInfo.Invoke`
   - 已补充私有无参构造 generated registry 的回归测试，确保兼容现有生成器产物
   - 已修正 pointer / function pointer 泛型合同的错误覆盖：生成器不再为这两类类型发射 precise runtime type 重建代码
@@ -106,6 +107,9 @@ CQRS 迁移与收敛。
   - `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs` 已通过公开工厂 `CqrsRuntimeFactory.CreateRuntime(...)` 锁定默认 dispatcher 的失败语义
   - 当 context-aware request / notification / stream handler 遇到仅实现 `ICqrsContext`、但未实现 `IArchitectureContext` 的上下文时，dispatcher 会在调用前显式抛出 `InvalidOperationException`
   - 本轮只补测试，不改 runtime 实现与文档口径
+- `2026-04-29` 已接受一轮 delegated registrar fallback 失败分支测试：
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarFallbackFailureTests.cs` 已覆盖 named fallback 无法解析、named fallback 解析抛异常、direct fallback 跨程序集三类 warning 语义
+  - 主线程已复核该新文件并重新执行定向测试，确认当前 registrar 在 fallback 元数据失效时仍保持“跳过条目 + 记录告警”的既有语义
 - `2026-04-29` 已接受一轮 delegated 叶子级 fallback 合同测试：
   - `GFramework.Cqrs.Tests/Cqrs/CqrsReflectionFallbackAttributeTests.cs` 已锁定空 marker、字符串 fallback 名称去空/去重/排序、直接 `Type` fallback 去空/去重/排序与空参数数组防御语义
   - 当前 runtime 读取程序集级 fallback 元数据时所依赖的 attribute 归一化合同，现已有独立叶子级测试文件覆盖
@@ -148,6 +152,9 @@ CQRS 迁移与收敛。
 - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsDispatcherContextValidationTests"`
   - 结果：通过
   - 备注：`3/3` 测试通过；本轮锁定默认 dispatcher 对非 `IArchitectureContext` 上下文的 request / notification / stream 失败语义，且未引入新增 warning
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarFallbackFailureTests"`
+  - 结果：通过
+  - 备注：`3/3` 测试通过；本轮锁定 registrar 在 fallback 元数据失效时的 warning 语义，且保持 generated registry 主路径不回退
 - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false`
   - 结果：通过
   - 备注：`63/63` 测试通过；当前沙箱限制了 MSBuild named pipe，验证需在提权环境下运行
@@ -217,6 +224,6 @@ CQRS 迁移与收敛。
 
 ## 下一步
 
-1. 继续 `Phase 8` 主线，优先再找一个收益明确且写集独立的 generator 或 registrar/dispatcher 热点；当前工作区若提交 dispatcher 上下文前置条件回归批次，相对 `origin/main` 的累计 diff 将达到 `31 files`，仍低于本轮 `gframework-batch-boot 50` 的主要 stop condition
+1. 继续 `Phase 8` 主线，优先再找一个收益明确且写集独立的 generator 或 registrar/dispatcher 热点；当前工作区若提交 registrar fallback 失败分支回归批次，相对 `origin/main` 的累计 diff 将达到 `32 files`，仍低于本轮 `gframework-batch-boot 50` 的主要 stop condition
 2. 若继续文档主线，优先再扫教程入口页与 API 参考中的 CQRS 采用说明，确认是否还有旧 Command / Query 迁移口径残留
 3. 若后续再出现新的 PR review 或 review thread 变化，再重新执行 `$gframework-pr-review` 作为独立验证步骤
