@@ -15,7 +15,7 @@ internal sealed class DispatcherPipelineOrderCacheRequestHandler : IRequestHandl
     /// <returns>固定整数结果。</returns>
     public ValueTask<int> Handle(DispatcherPipelineOrderCacheRequest request, CancellationToken cancellationToken)
     {
-        DispatcherPipelineOrderState.Steps.Add("Handler");
+        DispatcherPipelineOrderState.Record("Handler");
         return ValueTask.FromResult(3);
     }
 }

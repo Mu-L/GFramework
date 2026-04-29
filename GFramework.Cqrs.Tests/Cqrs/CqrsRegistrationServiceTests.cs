@@ -69,13 +69,18 @@ internal sealed class CqrsRegistrationServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(registeredAssemblies, Is.EqualTo([firstAssembly.Object]));
+            var debugMessages = logger.Logs
+                .Where(static log => log.Level == LogLevel.Debug)
+                .Select(static log => log.Message)
+                .ToArray();
+            Assert.That(debugMessages, Has.Length.EqualTo(1));
             Assert.That(
-                logger.Logs.Where(static log => log.Level == LogLevel.Debug).Select(static log => log.Message),
-                Is.EqualTo(
-                [
-                    "Skipping CQRS handler registration for assembly " +
-                    "GFramework.Cqrs.Tests.RegisteredAssembly, Version=1.0.0.0 because it was already registered."
-                ]));
+                debugMessages[0],
+                Does.Contain("Skipping CQRS handler registration for assembly"));
+            Assert.That(
+                debugMessages[0],
+                Does.Contain("GFramework.Cqrs.Tests.RegisteredAssembly, Version=1.0.0.0"));
+            Assert.That(debugMessages[0], Does.Contain("already registered"));
         });
     }
 

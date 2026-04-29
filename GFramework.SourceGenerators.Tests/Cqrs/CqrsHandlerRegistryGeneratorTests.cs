@@ -1763,13 +1763,12 @@ public class CqrsHandlerRegistryGeneratorTests
         {
             Assert.That(
                 generatedSource,
-                Does.Contain(
-                    "var serviceType0_0Argument1Element = registryAssembly.GetType(\"TestApp.Container+HiddenResponse\", throwOnError: false, ignoreCase: false);"));
+                Does.Contain("registryAssembly.GetType(\"TestApp.Container+HiddenResponse\", throwOnError: false, ignoreCase: false);"));
             Assert.That(
                 generatedSource,
-                Does.Contain(
-                    "var serviceType0_0 = typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType(serviceType0_0Argument0, serviceType0_0Argument1Element.MakeArrayType(2));"));
-            Assert.That(generatedSource, Does.Not.Contain("RegisterRemainingReflectedHandlerInterfaces("));
+                Does.Contain("typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType("));
+            Assert.That(generatedSource, Does.Contain(".MakeArrayType(2)"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsReflectionFallbackAttribute("));
         });
     }
 
@@ -1786,13 +1785,12 @@ public class CqrsHandlerRegistryGeneratorTests
         {
             Assert.That(
                 generatedSource,
-                Does.Contain(
-                    "var serviceType0_0Argument1ElementElement = registryAssembly.GetType(\"TestApp.Container+HiddenResponse\", throwOnError: false, ignoreCase: false);"));
+                Does.Contain("registryAssembly.GetType(\"TestApp.Container+HiddenResponse\", throwOnError: false, ignoreCase: false);"));
             Assert.That(
                 generatedSource,
-                Does.Contain(
-                    "var serviceType0_0 = typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType(serviceType0_0Argument0, serviceType0_0Argument1ElementElement.MakeArrayType().MakeArrayType());"));
-            Assert.That(generatedSource, Does.Not.Contain("RegisterRemainingReflectedHandlerInterfaces("));
+                Does.Contain("typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType("));
+            Assert.That(generatedSource, Does.Contain(".MakeArrayType().MakeArrayType()"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsReflectionFallbackAttribute("));
         });
     }
 
@@ -1912,11 +1910,11 @@ public class CqrsHandlerRegistryGeneratorTests
             Assert.That(
                 generatedSource,
                 Does.Contain(
-                    "var serviceType0_0Argument1Element = ResolveReferencedAssemblyType(\"Dependency, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\", \"Dep.VisibilityScope+ProtectedResponse\");"));
+                    "ResolveReferencedAssemblyType(\"Dependency, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\", \"Dep.VisibilityScope+ProtectedResponse\")"));
             Assert.That(
                 generatedSource,
-                Does.Contain(
-                    "var serviceType0_0 = typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType(serviceType0_0Argument0, serviceType0_0Argument1Element.MakeArrayType(2));"));
+                Does.Contain("typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType("));
+            Assert.That(generatedSource, Does.Contain(".MakeArrayType(2)"));
             Assert.That(generatedSource, Does.Not.Contain("CqrsReflectionFallbackAttribute("));
         });
     }
@@ -1945,16 +1943,15 @@ public class CqrsHandlerRegistryGeneratorTests
             Assert.That(
                 generatedSource,
                 Does.Contain(
-                    "var serviceType0_0Argument0 = ResolveReferencedAssemblyType(\"Dependency, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\", \"Dep.VisibilityScope+ProtectedRequest\");"));
+                    "ResolveReferencedAssemblyType(\"Dependency, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\", \"Dep.VisibilityScope+ProtectedRequest\")"));
             Assert.That(
                 generatedSource,
                 Does.Contain(
-                    "var serviceType0_0Argument1GenericDefinition = ResolveReferencedAssemblyType(\"Dependency, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\", \"Dep.VisibilityScope+ProtectedEnvelope`1\");"));
+                    "ResolveReferencedAssemblyType(\"Dependency, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null\", \"Dep.VisibilityScope+ProtectedEnvelope`1\")"));
             Assert.That(
                 generatedSource,
-                Does.Contain(
-                    "var serviceType0_0 = typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType(serviceType0_0Argument0, serviceType0_0Argument1GenericDefinition.MakeGenericType(typeof(string)));"));
-            Assert.That(generatedSource, Does.Not.Contain("RegisterRemainingReflectedHandlerInterfaces("));
+                Does.Contain("typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<,>).MakeGenericType("));
+            Assert.That(generatedSource, Does.Contain(".MakeGenericType(typeof(string))"));
             Assert.That(generatedSource, Does.Not.Contain("CqrsReflectionFallbackAttribute("));
         });
     }

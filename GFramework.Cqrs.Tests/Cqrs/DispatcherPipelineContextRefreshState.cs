@@ -8,18 +8,41 @@ namespace GFramework.Cqrs.Tests.Cqrs;
 /// </summary>
 internal static class DispatcherPipelineContextRefreshState
 {
+    private static readonly Lock SyncRoot = new();
     private static int _nextBehaviorInstanceId;
     private static int _nextHandlerInstanceId;
+    private static readonly List<DispatcherPipelineContextSnapshot> _behaviorSnapshots = [];
+    private static readonly List<DispatcherPipelineContextSnapshot> _handlerSnapshots = [];
 
     /// <summary>
-    ///     获取每次 behavior 执行时记录的快照。
+    ///     获取每次 behavior 执行时记录的快照副本。
+    ///     共享状态通过 <c>SyncRoot</c> 串行化，读取端始终拿到当前稳定快照。
     /// </summary>
-    public static List<DispatcherPipelineContextSnapshot> BehaviorSnapshots { get; } = [];
+    public static IReadOnlyList<DispatcherPipelineContextSnapshot> BehaviorSnapshots
+    {
+        get
+        {
+            lock (SyncRoot)
+            {
+                return _behaviorSnapshots.ToArray();
+            }
+        }
+    }
 
     /// <summary>
-    ///     获取每次 handler 执行时记录的快照。
+    ///     获取每次 handler 执行时记录的快照副本。
+    ///     共享状态通过 <c>SyncRoot</c> 串行化，读取端始终拿到当前稳定快照。
     /// </summary>
-    public static List<DispatcherPipelineContextSnapshot> HandlerSnapshots { get; } = [];
+    public static IReadOnlyList<DispatcherPipelineContextSnapshot> HandlerSnapshots
+    {
+        get
+        {
+            lock (SyncRoot)
+            {
+                return _handlerSnapshots.ToArray();
+            }
+        }
+    }
 
     /// <summary>
     ///     为新的 behavior 测试实例分配稳定编号。
@@ -42,7 +65,10 @@ internal static class DispatcherPipelineContextRefreshState
     /// </summary>
     public static void RecordBehavior(string dispatchId, int instanceId, IArchitectureContext context)
     {
-        BehaviorSnapshots.Add(new DispatcherPipelineContextSnapshot(dispatchId, instanceId, context));
+        lock (SyncRoot)
+        {
+            _behaviorSnapshots.Add(new DispatcherPipelineContextSnapshot(dispatchId, instanceId, context));
+        }
     }
 
     /// <summary>
@@ -50,7 +76,10 @@ internal static class DispatcherPipelineContextRefreshState
     /// </summary>
     public static void RecordHandler(string dispatchId, int instanceId, IArchitectureContext context)
     {
-        HandlerSnapshots.Add(new DispatcherPipelineContextSnapshot(dispatchId, instanceId, context));
+        lock (SyncRoot)
+        {
+            _handlerSnapshots.Add(new DispatcherPipelineContextSnapshot(dispatchId, instanceId, context));
+        }
     }
 
     /// <summary>
@@ -58,9 +87,12 @@ internal static class DispatcherPipelineContextRefreshState
     /// </summary>
     public static void Reset()
     {
-        _nextBehaviorInstanceId = 0;
-        _nextHandlerInstanceId = 0;
-        BehaviorSnapshots.Clear();
-        HandlerSnapshots.Clear();
+        lock (SyncRoot)
+        {
+            _nextBehaviorInstanceId = 0;
+            _nextHandlerInstanceId = 0;
+            _behaviorSnapshots.Clear();
+            _handlerSnapshots.Clear();
+        }
     }
 }

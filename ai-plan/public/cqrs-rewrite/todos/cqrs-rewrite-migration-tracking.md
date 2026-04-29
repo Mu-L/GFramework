@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-061`
+- 恢复点编号：`CQRS-REWRITE-RP-062`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
@@ -29,6 +29,9 @@ CQRS 迁移与收敛。
   - 已将 registrar 的重复映射判定从线性扫描 `IServiceCollection` 收敛为本地映射索引，减少 fallback 注册路径的重复查找
   - 已完成一轮 `static lambda + state` 微收敛：`CqrsDispatcher` 与 `CqrsHandlerRegistrar` 现会在弱缓存 / 并发缓存入口优先使用无捕获工厂，继续压低热路径上的额外闭包分配
   - 已补充 `CqrsReflectionFallbackAttribute` 叶子级合同测试，锁定空 marker、字符串 fallback 名称归一化、直接 `Type` fallback 归一化与空参数防御语义
+  - 已完成 `PR #304` review follow-up 收敛：`CqrsDispatcher` 现补齐 pipeline executor / continuation 缓存的线程模型文档，并把 request pipeline invoker 从按 `behaviorCount` 重复创建收敛为 binding 内复用
+  - 已收紧 CQRS / generator 回归测试的脆弱断言：日志断言改为语义匹配，precise runtime type lookup 回归改为锁定数组秩、外部类型查找与“未发射 fallback metadata”这些稳定语义
+  - 已为 dispatcher cache / context refresh / pipeline order 三组测试状态容器补齐并发保护，并将 `CqrsDispatcherCacheTests` 标记为 `NonParallelizable`，避免静态缓存与共享快照在并行测试中相互污染
   - 中期上继续 `Phase 8` 主线：参考 `ai-libs/Mediator`，继续扩大 generator 覆盖，并选择下一个收益明确的 dispatch / invoker 反射收敛点
 
 ## 当前状态摘要
@@ -79,6 +82,11 @@ CQRS 迁移与收敛。
   - latest reviewed commit 当前剩余 `3` 条 open AI review threads：`2` 条 Greptile、`1` 条 CodeRabbit
   - 本地核对后确认 `dotnet-format` 仍只有 `Restore operation failed` 噪音，没有附带当前仍成立的文件级格式诊断
   - 已按 review triage 修正 generator source preamble 的多实例 fallback 特性排版、移除死参数，并补强 mixed/direct fallback 发射回归断言与 XML 文档
+- `2026-04-30` 已重新执行 `$gframework-pr-review`：
+  - 当前分支对应 `PR #304`，状态为 `OPEN`
+  - latest reviewed commit 当前剩余 `7` 条 CodeRabbit nitpick 与 `2` 条 Greptile open threads，集中在测试脆弱断言、共享测试状态并发保护，以及 `CqrsDispatcher` 的缓存线程模型文档
+  - 本地核对后，已确认这些评论仍对应当前代码；MegaLinter 继续只暴露 `dotnet-format` 的 `Restore operation failed` 环境噪音，CTRF 汇总为 `2203/2203` passed
+  - 已在本地完成 follow-up：request pipeline invoker 改为 binding 级复用、共享测试状态切换到 `System.Threading.Lock` 保护、顺序测试改为受控记录接口、`CqrsDispatcherCacheTests` 标记为 `NonParallelizable`，并补齐相关 XML / 线程模型注释
 - `2026-04-29` 已完成一轮 precise runtime type lookup 的数组回归补强：
   - `GFramework.SourceGenerators.Tests` 已新增多维数组、交错数组、外部程序集隐藏元素类型三类回归
   - 当前生成器在 precise runtime type lookup 下已稳定保留数组秩信息，并递归发射交错数组的 `MakeArrayType()` 链

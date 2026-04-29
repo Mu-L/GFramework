@@ -1,5 +1,36 @@
 # CQRS 重写迁移追踪
 
+## 2026-04-30
+
+### 阶段：PR #304 review follow-up 收敛（CQRS-REWRITE-RP-062）
+
+- 本轮使用 `$gframework-pr-review` 重新抓取当前分支 PR：
+  - 当前分支 `feat/cqrs-optimization` 对应 `PR #304`
+  - latest review 信号主要由 `7` 条 CodeRabbit nitpick 与 `2` 条 Greptile open threads 组成
+  - MegaLinter 仍只给出 `dotnet-format` 的 `Restore operation failed`，未附带当前仍成立的文件级格式问题；CTRF 汇总为 `2203/2203` passed
+- 本地复核后接受并收敛的 review follow-up：
+  - `GFramework.Cqrs/Internal/CqrsDispatcher.cs`
+    - 为 `_pipelineExecutors` 与 `RequestPipelineInvocation.GetContinuation(...)` 补齐线程模型与失败模式说明
+    - 将 request pipeline invoker 从“按 `behaviorCount` 重复创建”收敛为“binding 内创建一次、executor 缓存复用”
+  - `GFramework.Cqrs.Tests/Cqrs/*.cs`
+    - 将 `DispatcherPipelineContextRefreshState`、`DispatcherNotificationContextRefreshState`、`DispatcherStreamContextRefreshState` 与 `DispatcherPipelineOrderState` 切换为 `System.Threading.Lock` 保护的共享状态
+    - 将 pipeline 顺序记录从公开可变 `List<string>` 收敛为 `Record(...)` + 快照只读访问
+    - 为 `CqrsDispatcherCacheTests` 添加 `[NonParallelizable]`，并补齐反射辅助方法的 XML `param` / `returns`
+    - 将 `CqrsRegistrationServiceTests` 的 debug 日志断言改为锁定语义片段而非整句文本
+    - 将 `CqrsHandlerRegistrarFallbackFailureTests` 的缓存字段诊断改为显式指出 `CqrsHandlerRegistrar` 耦合点
+  - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs`
+    - 将 precise runtime type lookup 的数组 / 外部泛型回归断言从局部变量名绑定改为稳定的语义片段断言
+- 验证过程与结果：
+  - 首次把多个 `dotnet` restore / test 并发跑在同一 worktree 时，`GFramework.Cqrs.Tests` 出现 `*.nuget.g.props already exists` 竞争；该失败属于本地并发 restore 冲突，不代表代码问题
+  - 串行重跑后确认：
+    - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+    - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsDispatcherCacheTests|FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsRegistrationServiceTests|FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarFallbackFailureTests"`
+  - 在第一次串行测试中暴露 `MA0158 Use System.Threading.Lock` warning 后，已同轮切换同步原语并准备重跑无 warning 验证
+- 结果：
+  - 本轮把仍成立的 PR review 评论全部收敛到本地代码或测试基础设施
+  - 下一步应以“重跑无 warning 验证 + 提交本轮 follow-up”为恢复入口，而不是继续扩写新的 CQRS 优化切片
+
 ## 2026-04-29
 
 ### 阶段：registrar fallback 失败分支回归（CQRS-REWRITE-RP-061）

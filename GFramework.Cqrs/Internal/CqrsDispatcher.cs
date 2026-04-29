@@ -415,7 +415,11 @@ internal sealed class CqrsDispatcher(
         RequestInvoker<TResponse> requestInvoker,
         Type requestType)
     {
+        // 线程安全：该缓存按 behaviorCount 复用 pipeline executor 形状，GetPipelineExecutor 通过 ConcurrentDictionary
+        // 的 GetOrAdd 支持并发读写。缓存项只保存委托形状，不保留 handler/behavior 实例；若行为数量组合持续增长，
+        // 字典会随之增长且当前实现不提供回收。
         private readonly ConcurrentDictionary<int, RequestPipelineExecutor<TResponse>> _pipelineExecutors = new();
+        private readonly RequestPipelineInvoker<TResponse> _pipelineInvoker = CreateRequestPipelineInvoker<TResponse>(requestType);
 
         /// <summary>
         ///     获取请求处理器在容器中的服务类型。
@@ -441,8 +445,8 @@ internal sealed class CqrsDispatcher(
             ArgumentOutOfRangeException.ThrowIfNegative(behaviorCount);
             return _pipelineExecutors.GetOrAdd<RequestPipelineExecutorFactoryState<TResponse>>(
                 behaviorCount,
-                static (count, state) => CreateRequestPipelineExecutor<TResponse>(state.RequestType, count),
-                new RequestPipelineExecutorFactoryState<TResponse>(requestType));
+                static (count, state) => CreateRequestPipelineExecutor(count, state.PipelineInvoker),
+                new RequestPipelineExecutorFactoryState<TResponse>(_pipelineInvoker));
         }
 
         /// <summary>
@@ -460,17 +464,23 @@ internal sealed class CqrsDispatcher(
     ///     行为数量用于表达缓存形状，实际分发仍会消费本次容器解析出的 handler 与 behaviors 实例。
     /// </summary>
     private static RequestPipelineExecutor<TResponse> CreateRequestPipelineExecutor<TResponse>(
-        Type requestType,
-        int behaviorCount)
+        int behaviorCount,
+        RequestPipelineInvoker<TResponse> invoker)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(behaviorCount);
+        return new RequestPipelineExecutor<TResponse>(behaviorCount, invoker);
+    }
 
+    /// <summary>
+    ///     为指定请求/响应类型创建可跨多个 behaviorCount 复用的 typed pipeline invoker。
+    /// </summary>
+    private static RequestPipelineInvoker<TResponse> CreateRequestPipelineInvoker<TResponse>(Type requestType)
+    {
         var method = RequestPipelineInvokerMethodDefinition
             .MakeGenericMethod(requestType, typeof(TResponse));
-        var invoker = (RequestPipelineInvoker<TResponse>)Delegate.CreateDelegate(
+        return (RequestPipelineInvoker<TResponse>)Delegate.CreateDelegate(
             typeof(RequestPipelineInvoker<TResponse>),
             method);
-        return new RequestPipelineExecutor<TResponse>(behaviorCount, invoker);
     }
 
     /// <summary>
@@ -510,7 +520,8 @@ internal sealed class CqrsDispatcher(
     ///     为 pipeline executor 缓存携带当前请求类型，避免按行为数量建缓存时创建闭包。
     /// </summary>
     /// <typeparam name="TResponse">请求响应类型。</typeparam>
-    private readonly record struct RequestPipelineExecutorFactoryState<TResponse>(Type RequestType);
+    private readonly record struct RequestPipelineExecutorFactoryState<TResponse>(
+        RequestPipelineInvoker<TResponse> PipelineInvoker);
 
     /// <summary>
     ///     保存单次 request pipeline 分发所需的当前 handler、behavior 列表和 continuation 缓存。
@@ -537,6 +548,8 @@ internal sealed class CqrsDispatcher(
         /// <summary>
         ///     获取指定阶段的 continuation，并在首次请求时为该阶段绑定一次不可变调用入口。
         ///     同一行为多次调用 <c>next</c> 时会命中相同 continuation，保持与传统链式委托一致的语义。
+        ///     线程模型上，该缓存仅假定单次分发链按顺序推进；若某个 behavior 并发调用多个 <c>next</c>，
+        ///     这里可能重复创建等价 continuation，但不会跨分发共享，也不会缓存容器解析出的实例。
         /// </summary>
         private MessageHandlerDelegate<TRequest, TResponse> GetContinuation(int index)
         {

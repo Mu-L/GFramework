@@ -174,6 +174,7 @@ internal sealed class CqrsHandlerRegistrarFallbackFailureTests
 
     /// <summary>
     ///     清空本测试依赖的 registrar 静态缓存，确保每个用例都会重新执行 fallback 元数据解析。
+    ///     这些字段名直接耦合 <c>CqrsHandlerRegistrar</c> 当前内部实现；若后续重构缓存布局，需要同步更新这里。
     /// </summary>
     private static void ClearRegistrarCaches()
     {
@@ -194,11 +195,14 @@ internal sealed class CqrsHandlerRegistrarFallbackFailureTests
             fieldName,
             BindingFlags.NonPublic | BindingFlags.Static);
 
-        Assert.That(field, Is.Not.Null, $"Missing registrar cache field {fieldName}.");
+        Assert.That(
+            field,
+            Is.Not.Null,
+            $"Expected field '{fieldName}' on CqrsHandlerRegistrar not found; rename/refactor may require test update.");
 
         return field!.GetValue(null)
                ?? throw new InvalidOperationException(
-                   $"Registrar cache field {fieldName} returned null.");
+                   $"Registrar cache field '{fieldName}' on CqrsHandlerRegistrar returned null.");
     }
 
     /// <summary>

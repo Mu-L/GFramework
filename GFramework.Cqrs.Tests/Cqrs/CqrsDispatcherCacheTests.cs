@@ -10,6 +10,7 @@ namespace GFramework.Cqrs.Tests.Cqrs;
 ///     验证 CQRS dispatcher 会缓存热路径中的 dispatch binding。
 /// </summary>
 [TestFixture]
+[NonParallelizable]
 internal sealed class CqrsDispatcherCacheTests
 {
     private MicrosoftDiContainer? _container;
@@ -434,6 +435,11 @@ internal sealed class CqrsDispatcherCacheTests
     /// <summary>
     ///     读取 request dispatch binding 中指定行为数量的 pipeline executor 缓存项。
     /// </summary>
+    /// <param name="requestBindings">dispatcher 内部的 request binding 缓存对象。</param>
+    /// <param name="requestType">要读取的请求运行时类型。</param>
+    /// <param name="responseType">要读取的响应运行时类型。</param>
+    /// <param name="behaviorCount">目标 executor 对应的行为数量。</param>
+    /// <returns>已缓存的 executor；若 binding 或 executor 尚未建立则返回 <see langword="null" />。</returns>
     private static object? GetRequestPipelineExecutorValue(
         object requestBindings,
         Type requestType,
@@ -471,6 +477,10 @@ internal sealed class CqrsDispatcherCacheTests
     /// <summary>
     ///     读取指定请求/响应类型对对应的强类型 request dispatch binding。
     /// </summary>
+    /// <param name="requestBindings">dispatcher 内部的 request binding 缓存对象。</param>
+    /// <param name="requestType">要读取的请求运行时类型。</param>
+    /// <param name="responseType">要读取的响应运行时类型。</param>
+    /// <returns>强类型 binding；若缓存尚未建立则返回 <see langword="null" />。</returns>
     private static object? GetRequestDispatchBindingValue(object requestBindings, Type requestType, Type responseType)
     {
         var bindingBox = GetPairCacheValue(requestBindings, requestType, responseType);

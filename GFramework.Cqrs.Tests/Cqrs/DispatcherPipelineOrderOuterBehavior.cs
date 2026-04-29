@@ -19,9 +19,9 @@ internal sealed class DispatcherPipelineOrderOuterBehavior : IPipelineBehavior<D
         MessageHandlerDelegate<DispatcherPipelineOrderCacheRequest, int> next,
         CancellationToken cancellationToken)
     {
-        DispatcherPipelineOrderState.Steps.Add("Outer:Before");
+        DispatcherPipelineOrderState.Record("Outer:Before");
         var result = await next(request, cancellationToken).ConfigureAwait(false);
-        DispatcherPipelineOrderState.Steps.Add("Outer:After");
+        DispatcherPipelineOrderState.Record("Outer:After");
         return result;
     }
 }
