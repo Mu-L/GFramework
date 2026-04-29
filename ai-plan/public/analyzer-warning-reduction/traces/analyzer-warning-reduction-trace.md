@@ -1,5 +1,44 @@
 # Analyzer Warning Reduction 追踪
 
+## 2026-04-29 — RP-093
+
+### 阶段：按 `$gframework-batch-boot 50` 从 clean build warning 基线分批清理
+
+- 触发背景：
+  - 用户要求先拿构建 warning，再分批指派 subagent 加快处理；停止条件解析为分支相对 `origin/main` 接近 `50` 个变更文件
+- 基线与环境：
+  - 当前 `origin/main` 为 `0e32dab`（`2026-04-28T17:15:47+08:00`）
+  - 标准 `dotnet clean` 在当前 WSL 环境仍被 Windows NuGet fallback package folder 阻塞；按既有环境口径先执行 `dotnet restore GFramework.sln -p:RestoreFallbackFolders= --disable-parallel` 后，使用 `-p:RestoreFallbackFolders=` 完成 clean / build
+  - clean 后 warning 基线：`236` warnings、`0` errors
+- 已接受的 worker 范围：
+  - `ed269d4`：`GFramework.Cqrs.Tests/Mediator/MediatorArchitectureIntegrationTests.cs`，清理 `MA0048` / `MA0004` / `MA0016`
+  - `121df44`：`GFramework.Cqrs.Tests/Mediator/MediatorAdvancedFeaturesTests.cs`，清理 `MA0048` / `MA0004` / `MA0015`
+  - `9109eec`：`GFramework.Cqrs.Tests/Mediator/MediatorComprehensiveTests.cs`，清理 `MA0048` / `MA0004` / `MA0016` / `MA0002` / `MA0015`
+- 主线程实施：
+  - 在 `GFramework.Game/Config/YamlConfigSchemaValidator.cs` 为固定格式正则与 schema `pattern` 正则补充 timeout，避免运行时正则输入继续触发 `MA0009`
+  - 将三处字符串等值比较改为 ordinal `string.Equals`，清理 `MA0006`
+- 验证里程碑：
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release -p:RestoreFallbackFolders= -m:1 -nodeReuse:false -clp:Summary`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~Mediator"`
+    - 结果：成功；`45` 通过、`0` 失败
+  - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release -p:RestoreFallbackFolders= -m:1 -nodeReuse:false -clp:Summary`
+    - 结果：成功；`75 Warning(s)`、`0 Error(s)`
+  - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~YamlConfigLoaderTests|FullyQualifiedName~YamlConfigSchemaValidatorTests"`
+    - 结果：成功；`80` 通过、`0` 失败
+  - `dotnet clean -p:RestoreFallbackFolders= -v:quiet`
+    - 结果：成功
+  - `dotnet build -p:RestoreFallbackFolders= -clp:WarningsOnly -v:minimal -m:1 -nodeReuse:false`
+    - 结果：成功；`75` warnings、`0` errors
+  - `git diff --check`
+    - 结果：成功；无新增 whitespace / conflict-marker 问题
+- 当前指标：
+  - warning 总数：`236` -> `75`
+  - 剩余 warning 分布：`GFramework.Game/Config/YamlConfigSchemaValidator.cs` `60` 条，`GFramework.Game/Config/YamlConfigSchemaValidator.ObjectKeywords.cs` `15` 条；规则为 `MA0048` `45` 条、`MA0051` `30` 条
+  - 已提交分支 diff：`3` 个文件；主线程待提交后预计约 `6` 个文件，低于 `50` 个文件阈值
+- 下一步：
+  - 提交主线程 Game / ai-plan 同步后，继续 `YamlConfigSchemaValidator.cs` 末尾 schema model 类型拆文件，优先清理 `MA0048`
+
 ## 2026-04-28 — RP-092
 
 ### 阶段：复核 `PR #300` 的 open threads，并只修正当前分支仍然成立的 `ai-plan` 漂移

@@ -22,34 +22,42 @@ internal static partial class YamlConfigSchemaValidator
     // JS tooling so grouping and backreferences behave consistently across environments.
     private const RegexOptions SupportedPatternRegexOptions = RegexOptions.CultureInvariant;
     private const string SupportedStringFormatNames = "'date', 'date-time', 'duration', 'email', 'time', 'uri', 'uuid'";
+    private static readonly TimeSpan SupportedFormatRegexTimeout = TimeSpan.FromSeconds(1);
 
     private static readonly Regex ExactDecimalPattern = new(
         @"^(?<sign>[+-]?)(?:(?<integer>\d+)(?:\.(?<fraction>\d*))?|\.(?<fractionOnly>\d+))(?:[eE](?<exponent>[+-]?\d+))?$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        SupportedFormatRegexTimeout);
 
     private static readonly Regex SupportedEmailFormatRegex = new(
         @"^[^@\s]+@[^@\s]+\.[^@\s]+$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        SupportedFormatRegexTimeout);
 
     private static readonly Regex SupportedDateFormatRegex = new(
         @"^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        SupportedFormatRegexTimeout);
 
     private static readonly Regex SupportedDateTimeFormatRegex = new(
         @"^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        SupportedFormatRegexTimeout);
 
     private static readonly Regex SupportedDurationFormatRegex = new(
         @"^P(?:(?<days>\d+)D)?(?:T(?:(?<hours>\d+)H)?(?:(?<minutes>\d+)M)?(?:(?<seconds>\d+(?:\.\d+)?)S)?)?$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        SupportedFormatRegexTimeout);
 
     private static readonly Regex SupportedTimeFormatRegex = new(
         @"^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?<fraction>\.\d+)?(?<offset>Z|[+-]\d{2}:\d{2})$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        SupportedFormatRegexTimeout);
 
     private static readonly Regex SupportedUriSchemeRegex = new(
         @"^[A-Za-z][A-Za-z0-9+\.-]*:",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        SupportedFormatRegexTimeout);
 
     /// <summary>
     ///     从磁盘加载并解析一个 JSON Schema 文件。
@@ -1875,7 +1883,7 @@ internal static partial class YamlConfigSchemaValidator
         var pattern = patternElement.GetString() ?? string.Empty;
         try
         {
-            _ = new Regex(pattern, SupportedPatternRegexOptions);
+            _ = new Regex(pattern, SupportedPatternRegexOptions, SupportedFormatRegexTimeout);
         }
         catch (ArgumentException exception)
         {
@@ -2347,7 +2355,8 @@ internal static partial class YamlConfigSchemaValidator
                     ? null
                     : new Regex(
                         pattern,
-                        SupportedPatternRegexOptions),
+                        SupportedPatternRegexOptions,
+                        SupportedFormatRegexTimeout),
                 formatConstraint);
     }
 
@@ -2695,7 +2704,7 @@ internal static partial class YamlConfigSchemaValidator
         }
 
         var offset = match.Groups["offset"].Value;
-        if (offset == "Z")
+        if (string.Equals(offset, "Z", StringComparison.Ordinal))
         {
             return true;
         }
@@ -3287,7 +3296,7 @@ internal static partial class YamlConfigSchemaValidator
         }
 
         significand = BigInteger.Parse(digits, CultureInfo.InvariantCulture);
-        if (match.Groups["sign"].Value == "-")
+        if (string.Equals(match.Groups["sign"].Value, "-", StringComparison.Ordinal))
         {
             significand = BigInteger.Negate(significand);
         }
@@ -3579,7 +3588,9 @@ internal static partial class YamlConfigSchemaValidator
     /// <returns>组合后的路径。</returns>
     private static string CombineSchemaPath(string parentPath, string propertyName)
     {
-        return parentPath == "<root>" ? propertyName : $"{parentPath}.{propertyName}";
+        return string.Equals(parentPath, "<root>", StringComparison.Ordinal)
+            ? propertyName
+            : $"{parentPath}.{propertyName}";
     }
 
     /// <summary>
