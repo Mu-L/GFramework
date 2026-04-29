@@ -23,7 +23,7 @@ public sealed partial class CqrsHandlerRegistryGenerator
     /// <remarks>
     ///     当 <paramref name="reflectionFallbackEmission" /> 不包含任何 fallback handlers 时，
     ///     输出只包含程序集级 <c>CqrsHandlerRegistryAttribute</c> 和注册器实现。
-    ///     当其包含 fallback handlers 且 runtime 合同可用时，输出还会附带程序集级
+    ///     当其包含 fallback handlers 且 runtime 合同可用时，输出还会附带一个或多个程序集级
     ///     <c>CqrsReflectionFallbackAttribute</c>，让运行时补齐生成阶段无法精确表达的剩余 handler。
     ///     该方法本身不报告诊断；“fallback 必需但 runtime 契约缺失”的错误由调用方在进入本方法前处理。
     /// </remarks>
@@ -80,7 +80,7 @@ public sealed partial class CqrsHandlerRegistryGenerator
         builder.AppendLine();
         if (reflectionFallbackEmission.HasFallbackHandlers)
         {
-            AppendReflectionFallbackAttribute(builder, reflectionFallbackEmission);
+            AppendReflectionFallbackAttributes(builder, reflectionFallbackEmission);
             builder.AppendLine();
         }
 
@@ -98,38 +98,48 @@ public sealed partial class CqrsHandlerRegistryGenerator
     /// </summary>
     /// <param name="builder">生成源码构造器。</param>
     /// <param name="reflectionFallbackEmission">需要写入特性的 fallback 元数据策略。</param>
-    private static void AppendReflectionFallbackAttribute(
+    private static void AppendReflectionFallbackAttributes(
         StringBuilder builder,
         ReflectionFallbackEmissionSpec reflectionFallbackEmission)
+    {
+        foreach (var attributeEmission in reflectionFallbackEmission.Attributes)
+        {
+            AppendReflectionFallbackAttribute(builder, attributeEmission);
+            builder.AppendLine();
+        }
+    }
+
+    /// <summary>
+    ///     发射单个程序集级 reflection fallback 元数据特性实例。
+    /// </summary>
+    private static void AppendReflectionFallbackAttribute(
+        StringBuilder builder,
+        ReflectionFallbackAttributeEmissionSpec attributeEmission)
     {
         builder.Append("[assembly: global::");
         builder.Append(CqrsRuntimeNamespace);
         builder.Append(".CqrsReflectionFallbackAttribute(");
 
-        var fallbackValues = reflectionFallbackEmission.EmitDirectTypeReferences
-            ? reflectionFallbackEmission.HandlerTypeDisplayNames
-            : reflectionFallbackEmission.HandlerTypeMetadataNames;
-
-        for (var index = 0; index < fallbackValues.Length; index++)
+        for (var index = 0; index < attributeEmission.Values.Length; index++)
         {
             if (index > 0)
                 builder.Append(", ");
 
-            if (reflectionFallbackEmission.EmitDirectTypeReferences)
+            if (attributeEmission.EmitDirectTypeReferences)
             {
                 builder.Append("typeof(");
-                builder.Append(fallbackValues[index]);
+                builder.Append(attributeEmission.Values[index]);
                 builder.Append(')');
             }
             else
             {
                 builder.Append('"');
-                builder.Append(EscapeStringLiteral(fallbackValues[index]));
+                builder.Append(EscapeStringLiteral(attributeEmission.Values[index]));
                 builder.Append('"');
             }
         }
 
-        builder.AppendLine(")]");
+        builder.Append(")]");
     }
 
     /// <summary>

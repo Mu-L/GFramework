@@ -1,5 +1,38 @@
 # CQRS 重写迁移追踪
 
+## 2026-04-29
+
+### 阶段：mixed fallback 元数据拆分（CQRS-REWRITE-RP-052）
+
+- 延续 `gframework-batch-boot 50` 的 `Phase 8` 主线，本轮把上一批的“全部可直接引用 fallback handlers 走 `Type[]`”继续推进到 mixed 场景
+- 先复核现状后确认：
+  - `CqrsHandlerRegistrar` 已天然支持读取多个 `CqrsReflectionFallbackAttribute` 实例
+  - 上一批真正阻止 mixed 场景继续收敛的点，是 runtime attribute 本身尚未开放多实例，以及 generator 只能二选一发射单个 fallback 特性
+- 已在 `GFramework.Cqrs/CqrsReflectionFallbackAttribute.cs` 中将特性约束改为 `AllowMultiple = true`，并补充注释说明多个实例的用途
+- 已在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中扩展 fallback 合同探测：
+  - 探测 runtime 是否支持 `params string[]`
+  - 探测 runtime 是否支持 `params Type[]`
+  - 探测 runtime 是否允许多个 `CqrsReflectionFallbackAttribute` 实例
+- 已在 `CqrsHandlerRegistryGenerator.Models.cs` 与 `CqrsHandlerRegistryGenerator.SourceEmission.cs` 中重构 fallback 发射模型：
+  - fallback 元数据现在可表示为一个或多个程序集级特性实例
+  - 当 fallback handlers 全部可直接引用时，继续优先输出单个 `Type[]` 特性
+  - 当 fallback 同时包含可直接引用与仅能按名称恢复的 handlers，且 runtime 支持多实例时，拆分输出一条 `Type[]` 特性和一条字符串特性
+  - 若 runtime 不支持多实例或缺少相应构造函数，仍整体回退到字符串元数据，避免 mixed 场景漏注册
+- 已补充 runtime 与 generator 双侧回归：
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs` 新增 mixed fallback metadata 用例，锁定 registrar 只对字符串条目调用一次 `Assembly.GetType(...)`
+  - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 新增 mixed fallback emission 用例，锁定 generator 会输出两个程序集级 fallback 特性实例
+- 同步更新：
+  - `GFramework.Cqrs.SourceGenerators/README.md`
+  - `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
+  - 说明 mixed 场景现在会拆分 `Type` 元数据与字符串元数据
+- 定向验证已通过：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
+  - `13/13` passed
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - `18/18` passed
+
 ## 2026-04-20
 
 ### 阶段：direct fallback 元数据优先级收敛（CQRS-REWRITE-RP-051）

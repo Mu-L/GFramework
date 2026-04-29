@@ -155,23 +155,26 @@ public sealed partial class CqrsHandlerRegistryGenerator
         ImmutableArray<RuntimeTypeReferenceSpec> ServiceTypeArguments);
 
     /// <summary>
-    ///     描述本轮生成应如何发射程序集级 reflection fallback 元数据。
+    ///     描述单个程序集级 reflection fallback 特性实例的发射内容。
     /// </summary>
     /// <remarks>
-    ///     生成器会优先尝试使用 <c>typeof(...)</c> 形式的 <see cref="Type" /> 元数据，
-    ///     以减少运行时再做字符串类型名回查的成本；但当任一 fallback handler 仍无法被生成代码直接引用时，
-    ///     会整体回退到字符串元数据，避免 mixed 场景下遗漏剩余 handler。
+    ///     某些运行时合同允许生成器把可直接引用的 fallback handlers 与必须按名称恢复的 handlers
+    ///     拆成多个特性实例，以进一步减少运行时字符串查找成本。
     /// </remarks>
-    private readonly record struct ReflectionFallbackEmissionSpec(
+    private readonly record struct ReflectionFallbackAttributeEmissionSpec(
         bool EmitDirectTypeReferences,
-        ImmutableArray<string> HandlerTypeDisplayNames,
-        ImmutableArray<string> HandlerTypeMetadataNames)
+        ImmutableArray<string> Values);
+
+    /// <summary>
+    ///     描述本轮生成应如何发射程序集级 reflection fallback 元数据。
+    /// </summary>
+    private readonly record struct ReflectionFallbackEmissionSpec(
+        ImmutableArray<ReflectionFallbackAttributeEmissionSpec> Attributes)
     {
         /// <summary>
         ///     获取当前是否需要发射任何 fallback 元数据。
         /// </summary>
-        public bool HasFallbackHandlers =>
-            !HandlerTypeDisplayNames.IsDefaultOrEmpty || !HandlerTypeMetadataNames.IsDefaultOrEmpty;
+        public bool HasFallbackHandlers => !Attributes.IsDefaultOrEmpty;
     }
 
     private readonly record struct ImplementationRegistrationSpec(
@@ -314,5 +317,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
     private readonly record struct GenerationEnvironment(
         bool GenerationEnabled,
         bool SupportsNamedReflectionFallbackTypes,
-        bool SupportsDirectReflectionFallbackTypes);
+        bool SupportsDirectReflectionFallbackTypes,
+        bool SupportsMultipleReflectionFallbackAttributes);
 }

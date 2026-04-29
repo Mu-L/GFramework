@@ -1446,6 +1446,89 @@ public class CqrsHandlerRegistryGeneratorTests
                                                                      }
                                                                      """;
 
+    private const string AssemblyLevelMixedFallbackMetadataSource = """
+                                                                    using System;
+
+                                                                    namespace Microsoft.Extensions.DependencyInjection
+                                                                    {
+                                                                        public interface IServiceCollection { }
+
+                                                                        public static class ServiceCollectionServiceExtensions
+                                                                        {
+                                                                            public static void AddTransient(IServiceCollection services, Type serviceType, Type implementationType) { }
+                                                                        }
+                                                                    }
+
+                                                                    namespace GFramework.Core.Abstractions.Logging
+                                                                    {
+                                                                        public interface ILogger
+                                                                        {
+                                                                            void Debug(string msg);
+                                                                        }
+                                                                    }
+
+                                                                    namespace GFramework.Cqrs.Abstractions.Cqrs
+                                                                    {
+                                                                        public interface IRequest<TResponse> { }
+                                                                        public interface INotification { }
+                                                                        public interface IStreamRequest<TResponse> { }
+
+                                                                        public interface IRequestHandler<in TRequest, TResponse> where TRequest : IRequest<TResponse> { }
+                                                                        public interface INotificationHandler<in TNotification> where TNotification : INotification { }
+                                                                        public interface IStreamRequestHandler<in TRequest, out TResponse> where TRequest : IStreamRequest<TResponse> { }
+                                                                    }
+
+                                                                    namespace GFramework.Cqrs
+                                                                    {
+                                                                        public interface ICqrsHandlerRegistry
+                                                                        {
+                                                                            void Register(Microsoft.Extensions.DependencyInjection.IServiceCollection services, GFramework.Core.Abstractions.Logging.ILogger logger);
+                                                                        }
+
+                                                                        [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+                                                                        public sealed class CqrsHandlerRegistryAttribute : Attribute
+                                                                        {
+                                                                            public CqrsHandlerRegistryAttribute(Type registryType) { }
+                                                                        }
+
+                                                                        [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+                                                                        public sealed class CqrsReflectionFallbackAttribute : Attribute
+                                                                        {
+                                                                            public CqrsReflectionFallbackAttribute(params string[] fallbackHandlerTypeNames) { }
+
+                                                                            public CqrsReflectionFallbackAttribute(params Type[] fallbackHandlerTypes) { }
+                                                                        }
+                                                                    }
+
+                                                                    namespace TestApp
+                                                                    {
+                                                                        using GFramework.Cqrs.Abstractions.Cqrs;
+
+                                                                        public sealed class Container
+                                                                        {
+                                                                            private unsafe struct AlphaResponse
+                                                                            {
+                                                                            }
+
+                                                                            private unsafe struct BetaResponse
+                                                                            {
+                                                                            }
+
+                                                                            private unsafe sealed record AlphaRequest() : IRequest<delegate* unmanaged<AlphaResponse>>;
+
+                                                                            private unsafe sealed record BetaRequest() : IRequest<delegate* unmanaged<BetaResponse>>;
+
+                                                                            public unsafe sealed class AlphaHandler : IRequestHandler<AlphaRequest, delegate* unmanaged<AlphaResponse>>
+                                                                            {
+                                                                            }
+
+                                                                            private unsafe sealed class BetaHandler : IRequestHandler<BetaRequest, delegate* unmanaged<BetaResponse>>
+                                                                            {
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    """;
+
     /// <summary>
     ///     验证生成器会为当前程序集中的 request、notification 和 stream 处理器生成稳定顺序的注册器。
     /// </summary>
@@ -1809,6 +1892,45 @@ public class CqrsHandlerRegistryGeneratorTests
                 execution.GeneratedSources[0].content,
                 Does.Not.Contain(
                     "[assembly: global::GFramework.Cqrs.CqrsReflectionFallbackAttribute(\"TestApp.Container+AlphaHandler\", \"TestApp.Container+BetaHandler\")]"));
+        });
+    }
+
+    /// <summary>
+    ///     验证当 runtime 允许多个 fallback 特性实例，且本轮 fallback 同时包含可直接引用与仅能按名称恢复的 handlers 时，
+    ///     生成器会拆分出直接 <see cref="Type" /> 与字符串两类元数据，避免 mixed 场景整体退回字符串 fallback。
+    /// </summary>
+    [Test]
+    public void
+        Emits_Mixed_Direct_Type_And_String_Fallback_Metadata_When_Runtime_Allows_Multiple_Fallback_Attributes()
+    {
+        var execution = ExecuteGenerator(
+            AssemblyLevelMixedFallbackMetadataSource,
+            allowUnsafe: true);
+        var inputCompilationErrors = execution.InputCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        var generatedCompilationErrors = execution.GeneratedCompilationDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        var generatorErrors = execution.GeneratorDiagnostics
+            .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(inputCompilationErrors.Select(static diagnostic => diagnostic.Id), Does.Contain("CS0306"));
+            Assert.That(generatedCompilationErrors, Is.Empty);
+            Assert.That(generatorErrors, Is.Empty);
+            Assert.That(execution.GeneratedSources, Has.Length.EqualTo(1));
+            Assert.That(execution.GeneratedSources[0].filename, Is.EqualTo("CqrsHandlerRegistry.g.cs"));
+            Assert.That(
+                execution.GeneratedSources[0].content,
+                Does.Contain(
+                    "[assembly: global::GFramework.Cqrs.CqrsReflectionFallbackAttribute(typeof(global::TestApp.Container.AlphaHandler))]"));
+            Assert.That(
+                execution.GeneratedSources[0].content,
+                Does.Contain(
+                    "[assembly: global::GFramework.Cqrs.CqrsReflectionFallbackAttribute(\"TestApp.Container+BetaHandler\")]"));
         });
     }
 

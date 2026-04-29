@@ -7,12 +7,14 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-051`
+- 恢复点编号：`CQRS-REWRITE-RP-052`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
+  - 已将 mixed fallback 场景进一步收敛：当 runtime 允许同一程序集声明多个 `CqrsReflectionFallbackAttribute` 实例时，generator 现会把可直接引用的 fallback handlers 与仅能按名称恢复的 fallback handlers 拆分发射
+  - `CqrsReflectionFallbackAttribute` 现允许多实例，以承载 `Type[]` 与字符串 fallback 元数据的组合输出
   - 已将 generator 的程序集级 fallback 元数据进一步收敛：当全部 fallback handlers 都可直接引用且 runtime 暴露 `params Type[]` 合同时，生成器现优先发射 `typeof(...)` 形式的 fallback 元数据
-  - mixed fallback 场景继续整体保守回退到字符串元数据，避免仅部分 handler 走 `Type[]` 时漏掉剩余需按名称恢复的 handlers
+  - 当 runtime 不支持多实例 fallback 特性或缺少对应构造函数时，mixed fallback 场景仍会整体保守回退到字符串元数据，避免仅部分 handler 走 `Type[]` 时漏掉剩余需按名称恢复的 handlers
   - 已完成 generated registry 激活路径收敛：`CqrsHandlerRegistrar` 现优先复用缓存工厂委托，避免重复 `ConstructorInfo.Invoke`
   - 已补充私有无参构造 generated registry 的回归测试，确保兼容现有生成器产物
   - 已修正 pointer / function pointer 泛型合同的错误覆盖：生成器不再为这两类类型发射 precise runtime type 重建代码
@@ -58,6 +60,12 @@ CQRS 迁移与收敛。
   - 当本轮 fallback handlers 全部可被生成代码直接引用时，生成器会优先发射 `typeof(...)` 形式的程序集级 fallback 元数据，减少运行时 `Assembly.GetType(...)` 回查
   - 当 fallback handlers 中仍存在不能直接引用的实现类型时，生成器继续统一发射字符串元数据，避免 mixed 场景只恢复部分 handlers
   - `GFramework.SourceGenerators.Tests` 已补充 runtime 同时暴露两类构造函数时优先选择直接 `Type` 元数据的回归
+- `2026-04-29` 已完成一轮 mixed fallback 元数据拆分：
+  - `CqrsReflectionFallbackAttribute` 现显式允许 `AllowMultiple = true`
+  - `CqrsHandlerRegistryGenerator` 现会探测 runtime 是否允许多个 fallback 特性实例
+  - 当本轮 fallback 同时包含可直接引用与仅能按名称恢复的 handlers，且 runtime 同时支持 `Type[]`、`string[]` 和多实例特性时，生成器会拆分输出两段 fallback 元数据
+  - `GFramework.Cqrs.Tests` 已补充 mixed fallback metadata 回归，锁定 registrar 只对字符串条目执行定向 `Assembly.GetType(...)`
+  - `GFramework.SourceGenerators.Tests` 已补充 mixed fallback emission 回归，锁定 generator 会输出两个程序集级 fallback 特性实例而不是整体退回字符串
 - 当前主线优先级：
   - generator 覆盖面继续扩大
   - dispatch/invoker 反射占比继续下降
@@ -96,9 +104,21 @@ CQRS 迁移与收敛。
 - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
   - 结果：通过
   - 备注：`17/17` 测试通过；本轮覆盖字符串 fallback 合同兼容路径与直接 `Type` fallback 元数据优先级
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`
+- `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
+  - 结果：通过
+  - 备注：`13/13` 测试通过；本轮覆盖 mixed fallback metadata 的 registrar 消费路径
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - 结果：通过
+  - 备注：`18/18` 测试通过；本轮覆盖 mixed fallback metadata 的双特性发射路径
 
 ## 下一步
 
-1. 继续 `Phase 8` 主线，优先再找一个收益明确的 generator 覆盖缺口，继续减少仍依赖程序集级 fallback 字符串元数据的场景
+1. 继续 `Phase 8` 主线，优先再找一个收益明确的 generator 覆盖缺口，继续减少仍必须依赖字符串 fallback 元数据的 handler 类型形态
 2. 若继续文档主线，优先再扫 `docs/zh-CN/api-reference` 与教程入口页，补齐仍过时的 CQRS API / 命名空间表述
 3. 若后续再出现新的 PR review 或 review thread 变化，再重新执行 `$gframework-pr-review` 作为独立验证步骤

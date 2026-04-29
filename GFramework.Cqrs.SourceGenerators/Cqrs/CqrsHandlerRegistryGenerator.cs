@@ -77,11 +77,15 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                                                     HasParamsArrayConstructor(
                                                         reflectionFallbackAttributeType,
                                                         typeType);
+        var supportsMultipleReflectionFallbackAttributes = reflectionFallbackAttributeType is not null &&
+                                                           SupportsMultipleAttributeInstances(
+                                                               reflectionFallbackAttributeType);
 
         return new GenerationEnvironment(
             generationEnabled,
             supportsNamedReflectionFallbackTypes,
-            supportsDirectReflectionFallbackTypes);
+            supportsDirectReflectionFallbackTypes,
+            supportsMultipleReflectionFallbackAttributes);
     }
 
     private static bool IsHandlerCandidate(SyntaxNode node)
@@ -311,9 +315,21 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         if (!reflectionFallbackEmission.HasFallbackHandlers)
             return true;
 
-        return reflectionFallbackEmission.EmitDirectTypeReferences
-            ? generationEnvironment.SupportsDirectReflectionFallbackTypes
-            : generationEnvironment.SupportsNamedReflectionFallbackTypes;
+        foreach (var attributeEmission in reflectionFallbackEmission.Attributes)
+        {
+            if (attributeEmission.EmitDirectTypeReferences)
+            {
+                if (!generationEnvironment.SupportsDirectReflectionFallbackTypes)
+                    return false;
+
+                continue;
+            }
+
+            if (!generationEnvironment.SupportsNamedReflectionFallbackTypes)
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -380,48 +396,164 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
     ///     选择本轮生成应采用的 fallback 元数据发射策略。
     /// </summary>
     /// <remarks>
-    ///     只有当所有 fallback handlers 都能被生成代码直接引用，且 runtime 暴露了 <c>params Type[]</c> 重载时，
-    ///     才会选择直接 <see cref="Type" /> 元数据；否则统一回退到字符串类型名，避免 mixed 场景丢失剩余 handler。
+    ///     当所有 fallback handlers 都能被生成代码直接引用，且 runtime 暴露了 <c>params Type[]</c> 重载时，
+    ///     优先输出单个直接 <see cref="Type" /> 元数据特性；当 runtime 同时支持多个特性实例时，
+    ///     mixed 场景会拆分成“直接 <see cref="Type" /> + 字符串类型名”两类特性；其余场景统一回退到字符串元数据。
     /// </remarks>
     private static ReflectionFallbackEmissionSpec CreateReflectionFallbackEmissionSpec(
         GenerationEnvironment generationEnvironment,
         IReadOnlyList<ImplementationRegistrationSpec> registrations)
     {
-        var fallbackHandlerTypeMetadataNames = registrations
-            .Select(static registration => registration.ReflectionFallbackHandlerTypeMetadataName)
-            .Where(static typeMetadataName => !string.IsNullOrWhiteSpace(typeMetadataName))
-            .Distinct(StringComparer.Ordinal)
-            .Cast<string>()
-            .ToImmutableArray();
+        var fallbackCandidates = CollectFallbackCandidates(registrations);
+        if (fallbackCandidates.Count == 0)
+            return new ReflectionFallbackEmissionSpec(ImmutableArray<ReflectionFallbackAttributeEmissionSpec>.Empty);
 
-        if (fallbackHandlerTypeMetadataNames.IsDefaultOrEmpty)
+        var fallbackHandlerTypeMetadataNames = GetSortedFallbackMetadataNames(fallbackCandidates);
+        var fallbackHandlerTypeDisplayNames = GetSortedDirectFallbackDisplayNames(fallbackCandidates);
+
+        if (TryCreateDirectFallbackEmission(
+                generationEnvironment,
+                fallbackHandlerTypeDisplayNames,
+                fallbackHandlerTypeMetadataNames,
+                out var directFallbackEmission))
         {
-            return new ReflectionFallbackEmissionSpec(
-                EmitDirectTypeReferences: false,
-                HandlerTypeDisplayNames: ImmutableArray<string>.Empty,
-                HandlerTypeMetadataNames: ImmutableArray<string>.Empty);
+            return directFallbackEmission;
         }
 
-        var fallbackHandlerTypeDisplayNames = registrations
-            .Select(static registration => registration.ReflectionFallbackHandlerTypeDisplayName)
-            .Where(static typeDisplayName => !string.IsNullOrWhiteSpace(typeDisplayName))
-            .Distinct(StringComparer.Ordinal)
-            .Cast<string>()
-            .ToImmutableArray();
+        if (TryCreateMixedFallbackEmission(
+                generationEnvironment,
+                fallbackCandidates,
+                fallbackHandlerTypeDisplayNames,
+                out var mixedFallbackEmission))
+        {
+            return mixedFallbackEmission;
+        }
 
+        return CreateNamedFallbackEmission(fallbackHandlerTypeMetadataNames);
+    }
+
+    /// <summary>
+    ///     收集本轮所有 fallback handlers 的稳定元数据名和可选直接引用显示名。
+    /// </summary>
+    private static Dictionary<string, string?> CollectFallbackCandidates(
+        IReadOnlyList<ImplementationRegistrationSpec> registrations)
+    {
+        var fallbackCandidates = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var registration in registrations)
+        {
+            if (string.IsNullOrWhiteSpace(registration.ReflectionFallbackHandlerTypeMetadataName))
+                continue;
+
+            fallbackCandidates[registration.ReflectionFallbackHandlerTypeMetadataName!] =
+                registration.ReflectionFallbackHandlerTypeDisplayName;
+        }
+
+        return fallbackCandidates;
+    }
+
+    /// <summary>
+    ///     获取按稳定顺序排列的 fallback handler 元数据名称集合。
+    /// </summary>
+    private static ImmutableArray<string> GetSortedFallbackMetadataNames(
+        IReadOnlyDictionary<string, string?> fallbackCandidates)
+    {
+        return fallbackCandidates.Keys
+            .OrderBy(static metadataName => metadataName, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    /// <summary>
+    ///     获取按稳定顺序排列的可直接引用 fallback handler 显示名集合。
+    /// </summary>
+    private static ImmutableArray<string> GetSortedDirectFallbackDisplayNames(
+        IReadOnlyDictionary<string, string?> fallbackCandidates)
+    {
+        return fallbackCandidates.Values
+            .Where(static typeDisplayName => !string.IsNullOrWhiteSpace(typeDisplayName))
+            .Cast<string>()
+            .OrderBy(static typeDisplayName => typeDisplayName, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    /// <summary>
+    ///     当全部 fallback handlers 都可直接引用时，尝试创建直接 <see cref="Type" /> 元数据发射策略。
+    /// </summary>
+    private static bool TryCreateDirectFallbackEmission(
+        GenerationEnvironment generationEnvironment,
+        ImmutableArray<string> fallbackHandlerTypeDisplayNames,
+        ImmutableArray<string> fallbackHandlerTypeMetadataNames,
+        out ReflectionFallbackEmissionSpec emission)
+    {
         if (generationEnvironment.SupportsDirectReflectionFallbackTypes &&
             fallbackHandlerTypeDisplayNames.Length == fallbackHandlerTypeMetadataNames.Length)
         {
-            return new ReflectionFallbackEmissionSpec(
-                EmitDirectTypeReferences: true,
-                HandlerTypeDisplayNames: fallbackHandlerTypeDisplayNames,
-                HandlerTypeMetadataNames: ImmutableArray<string>.Empty);
+            emission = new ReflectionFallbackEmissionSpec(
+                [
+                    new ReflectionFallbackAttributeEmissionSpec(
+                        EmitDirectTypeReferences: true,
+                        fallbackHandlerTypeDisplayNames)
+                ]);
+            return true;
         }
 
+        emission = default;
+        return false;
+    }
+
+    /// <summary>
+    ///     当 runtime 允许多个 fallback 特性实例时，尝试为 mixed 场景拆分直接 <see cref="Type" /> 与字符串元数据。
+    /// </summary>
+    private static bool TryCreateMixedFallbackEmission(
+        GenerationEnvironment generationEnvironment,
+        IReadOnlyDictionary<string, string?> fallbackCandidates,
+        ImmutableArray<string> fallbackHandlerTypeDisplayNames,
+        out ReflectionFallbackEmissionSpec emission)
+    {
+        if (!generationEnvironment.SupportsDirectReflectionFallbackTypes ||
+            !generationEnvironment.SupportsNamedReflectionFallbackTypes ||
+            !generationEnvironment.SupportsMultipleReflectionFallbackAttributes ||
+            fallbackHandlerTypeDisplayNames.Length == 0)
+        {
+            emission = default;
+            return false;
+        }
+
+        var namedOnlyFallbackMetadataNames = fallbackCandidates
+            .Where(static pair => string.IsNullOrWhiteSpace(pair.Value))
+            .Select(static pair => pair.Key)
+            .OrderBy(static metadataName => metadataName, StringComparer.Ordinal)
+            .ToImmutableArray();
+
+        if (namedOnlyFallbackMetadataNames.Length == 0)
+        {
+            emission = default;
+            return false;
+        }
+
+        emission = new ReflectionFallbackEmissionSpec(
+            [
+                new ReflectionFallbackAttributeEmissionSpec(
+                    EmitDirectTypeReferences: true,
+                    fallbackHandlerTypeDisplayNames),
+                new ReflectionFallbackAttributeEmissionSpec(
+                    EmitDirectTypeReferences: false,
+                    namedOnlyFallbackMetadataNames)
+            ]);
+        return true;
+    }
+
+    /// <summary>
+    ///     创建统一的字符串 fallback 元数据发射策略。
+    /// </summary>
+    private static ReflectionFallbackEmissionSpec CreateNamedFallbackEmission(
+        ImmutableArray<string> fallbackHandlerTypeMetadataNames)
+    {
         return new ReflectionFallbackEmissionSpec(
-            EmitDirectTypeReferences: false,
-            HandlerTypeDisplayNames: ImmutableArray<string>.Empty,
-            HandlerTypeMetadataNames: fallbackHandlerTypeMetadataNames);
+            [
+                new ReflectionFallbackAttributeEmissionSpec(
+                    EmitDirectTypeReferences: false,
+                    fallbackHandlerTypeMetadataNames)
+            ]);
     }
 
     /// <summary>
@@ -443,6 +575,36 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             {
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     判断目标特性的 <see cref="AttributeUsageAttribute" /> 是否允许在同一程序集上声明多个实例。
+    /// </summary>
+    private static bool SupportsMultipleAttributeInstances(INamedTypeSymbol attributeType)
+    {
+        foreach (var attribute in attributeType.GetAttributes())
+        {
+            if (!string.Equals(
+                    attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    "global::System.AttributeUsageAttribute",
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            foreach (var namedArgument in attribute.NamedArguments)
+            {
+                if (string.Equals(namedArgument.Key, "AllowMultiple", StringComparison.Ordinal) &&
+                    namedArgument.Value.Value is bool allowMultiple)
+                {
+                    return allowMultiple;
+                }
+            }
+
+            return false;
         }
 
         return false;
