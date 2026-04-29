@@ -2,6 +2,34 @@
 
 ## 2026-04-20
 
+### 阶段：direct fallback 元数据优先级收敛（CQRS-REWRITE-RP-051）
+
+- 重新按 `gframework-batch-boot 50` 恢复 `Phase 8` 后，先复核当前 worktree 的恢复入口、`origin/main` 基线与分支规模：
+  - worktree 仍映射到 `cqrs-rewrite`
+  - 基线按批处理约定固定为 `origin/main`
+  - 本轮开始前分支累计 diff 为 `0 files / 0 lines`
+- 结合当前代码热点与历史归档后，选择本轮批次目标为“继续收敛 generator fallback 元数据，进一步减少 runtime 按字符串类型名回查 handler 的场景”
+- 已在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中新增 runtime fallback 合同探测：
+  - 识别 `CqrsReflectionFallbackAttribute` 是否支持 `params string[]`
+  - 识别 `CqrsReflectionFallbackAttribute` 是否支持 `params Type[]`
+- 已在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.Models.cs` 与
+  `CqrsHandlerRegistryGenerator.SourceEmission.cs` 中收敛 fallback 发射策略：
+  - 当本轮所有 fallback handlers 都可被生成代码直接引用，且 runtime 支持 `params Type[]` 时，生成器现优先发射 `typeof(...)` 形式的程序集级 fallback 元数据
+  - 当 fallback handlers 中仍存在不能直接引用的实现类型时，生成器继续整体回退到字符串元数据，避免 mixed 场景下部分 handler 走 `Type[]`、其余 handler 丢失恢复入口
+- 已在 `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 补充回归：
+  - 锁定 runtime 同时暴露字符串与 `Type` 两类 fallback 构造函数时，生成器优先选择直接 `Type` 元数据
+  - 保留现有字符串 fallback 合同测试，确保旧 contract 兼容路径不回退
+- 同步更新：
+  - `GFramework.Cqrs.SourceGenerators/README.md`
+  - `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
+  - 说明“可直接引用的 fallback handlers 会优先走 `typeof(...)` 元数据，减少运行时字符串回查”
+- 定向验证已通过：
+  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
+  - `17/17` passed
+- 额外修正：
+  - active tracking 中原先引用的 `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 在当前 worktree 已不存在；本轮已移除该失效路径，后续以 active tracking / trace 作为默认恢复入口
+
 ### 阶段：pointer / function pointer 泛型合同拒绝（CQRS-REWRITE-RP-050）
 
 - 重新执行 `$gframework-pr-review` 后，确认当前分支对应 `PR #261`，状态仍为 `OPEN`
@@ -72,6 +100,6 @@
 
 ### 当前下一步
 
-1. 回到 `Phase 8` 主线，优先选一个明确的 dispatch / invoker 反射缩减点继续推进
+1. 回到 `Phase 8` 主线，优先再找一个 generator 覆盖缺口，继续减少仍需程序集级字符串 fallback 元数据的 handler 场景
 2. 若继续文档主线，优先补齐 `docs/zh-CN/api-reference` 与教程入口页中仍过时的 CQRS API / 命名空间表述
 3. 若后续 review thread 或 PR 状态再次变化，再重新执行 `$gframework-pr-review` 复核远端信号

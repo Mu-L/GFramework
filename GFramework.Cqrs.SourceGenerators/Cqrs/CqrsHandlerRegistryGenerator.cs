@@ -56,6 +56,8 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
 
     private static GenerationEnvironment CreateGenerationEnvironment(Compilation compilation)
     {
+        var reflectionFallbackAttributeType =
+            compilation.GetTypeByMetadataName(CqrsReflectionFallbackAttributeMetadataName);
         var generationEnabled = compilation.GetTypeByMetadataName(IRequestHandlerMetadataName) is not null &&
                                 compilation.GetTypeByMetadataName(INotificationHandlerMetadataName) is not null &&
                                 compilation.GetTypeByMetadataName(IStreamRequestHandlerMetadataName) is not null &&
@@ -64,10 +66,22 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                                     CqrsHandlerRegistryAttributeMetadataName) is not null &&
                                 compilation.GetTypeByMetadataName(ILoggerMetadataName) is not null &&
                                 compilation.GetTypeByMetadataName(IServiceCollectionMetadataName) is not null;
-        var supportsReflectionFallbackAttribute =
-            compilation.GetTypeByMetadataName(CqrsReflectionFallbackAttributeMetadataName) is not null;
+        var stringType = compilation.GetSpecialType(SpecialType.System_String);
+        var typeType = compilation.GetTypeByMetadataName("System.Type");
+        var supportsNamedReflectionFallbackTypes = reflectionFallbackAttributeType is not null &&
+                                                   HasParamsArrayConstructor(
+                                                       reflectionFallbackAttributeType,
+                                                       stringType);
+        var supportsDirectReflectionFallbackTypes = reflectionFallbackAttributeType is not null &&
+                                                    typeType is not null &&
+                                                    HasParamsArrayConstructor(
+                                                        reflectionFallbackAttributeType,
+                                                        typeType);
 
-        return new GenerationEnvironment(generationEnabled, supportsReflectionFallbackAttribute);
+        return new GenerationEnvironment(
+            generationEnabled,
+            supportsNamedReflectionFallbackTypes,
+            supportsDirectReflectionFallbackTypes);
     }
 
     private static bool IsHandlerCandidate(SyntaxNode node)
@@ -130,6 +144,7 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             ImmutableArray.CreateBuilder<ReflectedImplementationRegistrationSpec>(handlerInterfaces.Length);
         var preciseReflectedRegistrations =
             ImmutableArray.CreateBuilder<PreciseReflectedRegistrationSpec>(handlerInterfaces.Length);
+        string? reflectionFallbackHandlerTypeDisplayName = null;
         string? reflectionFallbackHandlerTypeMetadataName = null;
         foreach (var handlerInterface in handlerInterfaces)
         {
@@ -151,6 +166,9 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             // If a future Roslyn type shape still slips through this net, keep the generator conservative:
             // preserve the static registrations we do understand, and let the runtime recover the remaining
             // interfaces via the existing assembly-level targeted reflection fallback contract.
+            if (canReferenceImplementation)
+                reflectionFallbackHandlerTypeDisplayName ??= implementationTypeDisplayName;
+
             reflectionFallbackHandlerTypeMetadataName ??= GetReflectionTypeMetadataName(type);
         }
 
@@ -161,6 +179,7 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             reflectedImplementationRegistrations.ToImmutable(),
             preciseReflectedRegistrations.ToImmutable(),
             canReferenceImplementation ? null : GetReflectionTypeMetadataName(type),
+            reflectionFallbackHandlerTypeDisplayName,
             reflectionFallbackHandlerTypeMetadataName);
     }
 
@@ -259,57 +278,59 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         if (registrations.Count == 0)
             return;
 
-        var fallbackHandlerTypeMetadataNames = registrations
-            .Select(static registration => registration.ReflectionFallbackHandlerTypeMetadataName)
-            .Where(static typeMetadataName => !string.IsNullOrWhiteSpace(typeMetadataName))
-            .Distinct(StringComparer.Ordinal)
-            .Cast<string>()
-            .ToArray();
+        var reflectionFallbackEmission = CreateReflectionFallbackEmissionSpec(generationEnvironment, registrations);
 
         if (!CanEmitGeneratedRegistry(
-                generationEnvironment.SupportsReflectionFallbackAttribute,
-                fallbackHandlerTypeMetadataNames.Length))
+                generationEnvironment,
+                reflectionFallbackEmission))
         {
             ReportMissingReflectionFallbackContractDiagnostic(
                 context,
-                fallbackHandlerTypeMetadataNames);
+                registrations);
             return;
         }
 
         context.AddSource(
             HintName,
-            GenerateSource(generationEnvironment, registrations, fallbackHandlerTypeMetadataNames));
+            GenerateSource(generationEnvironment, registrations, reflectionFallbackEmission));
     }
 
     /// <summary>
     ///     判断当前轮次是否允许输出生成注册器。
     /// </summary>
-    /// <param name="supportsReflectionFallbackAttribute">
-    ///     runtime 合同中是否存在 <c>CqrsReflectionFallbackAttribute</c>，以承载生成器无法静态精确表达的 handler 回退元数据。
-    /// </param>
-    /// <param name="fallbackHandlerTypeCount">
-    ///     当前轮次需要依赖程序集级 reflection fallback 元数据恢复的 handler 数量。
-    /// </param>
+    /// <param name="generationEnvironment">当前轮次可用的 fallback 合同能力。</param>
+    /// <param name="reflectionFallbackEmission">当前轮次选定的 fallback 元数据发射策略。</param>
     /// <returns>
-    ///     当没有 handler 依赖 fallback，或 runtime 已提供承载该元数据的特性契约时返回 <see langword="true" />；
+    ///     当没有 handler 依赖 fallback，或 runtime 已提供本轮策略所需的元数据承载重载时返回 <see langword="true" />；
     ///     否则返回 <see langword="false" />，调用方必须放弃生成以避免输出会静默漏注册的半成品注册器。
     /// </returns>
     private static bool CanEmitGeneratedRegistry(
-        bool supportsReflectionFallbackAttribute,
-        int fallbackHandlerTypeCount)
+        GenerationEnvironment generationEnvironment,
+        ReflectionFallbackEmissionSpec reflectionFallbackEmission)
     {
-        return fallbackHandlerTypeCount == 0 || supportsReflectionFallbackAttribute;
+        if (!reflectionFallbackEmission.HasFallbackHandlers)
+            return true;
+
+        return reflectionFallbackEmission.EmitDirectTypeReferences
+            ? generationEnvironment.SupportsDirectReflectionFallbackTypes
+            : generationEnvironment.SupportsNamedReflectionFallbackTypes;
     }
 
     /// <summary>
     ///     报告当前轮次因缺少 fallback 元数据承载契约而无法安全生成注册器的诊断。
     /// </summary>
     /// <param name="context">源生产上下文。</param>
-    /// <param name="fallbackHandlerTypeMetadataNames">需要通过程序集级 reflection fallback 元数据恢复的 handler 元数据名称。</param>
+    /// <param name="registrations">当前轮次汇总后的 handler 注册描述。</param>
     private static void ReportMissingReflectionFallbackContractDiagnostic(
         SourceProductionContext context,
-        IReadOnlyList<string> fallbackHandlerTypeMetadataNames)
+        IReadOnlyList<ImplementationRegistrationSpec> registrations)
     {
+        var fallbackHandlerTypeMetadataNames = registrations
+            .Select(static registration => registration.ReflectionFallbackHandlerTypeMetadataName)
+            .Where(static typeMetadataName => !string.IsNullOrWhiteSpace(typeMetadataName))
+            .Distinct(StringComparer.Ordinal)
+            .Cast<string>()
+            .ToArray();
         var handlerList = string.Join(
             ", ",
             fallbackHandlerTypeMetadataNames.OrderBy(static name => name, StringComparer.Ordinal));
@@ -346,12 +367,85 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 candidate.ReflectedImplementationRegistrations,
                 candidate.PreciseReflectedRegistrations,
                 candidate.ReflectionTypeMetadataName,
+                candidate.ReflectionFallbackHandlerTypeDisplayName,
                 candidate.ReflectionFallbackHandlerTypeMetadataName));
         }
 
         registrations.Sort(static (left, right) =>
             StringComparer.Ordinal.Compare(left.ImplementationLogName, right.ImplementationLogName));
         return registrations;
+    }
+
+    /// <summary>
+    ///     选择本轮生成应采用的 fallback 元数据发射策略。
+    /// </summary>
+    /// <remarks>
+    ///     只有当所有 fallback handlers 都能被生成代码直接引用，且 runtime 暴露了 <c>params Type[]</c> 重载时，
+    ///     才会选择直接 <see cref="Type" /> 元数据；否则统一回退到字符串类型名，避免 mixed 场景丢失剩余 handler。
+    /// </remarks>
+    private static ReflectionFallbackEmissionSpec CreateReflectionFallbackEmissionSpec(
+        GenerationEnvironment generationEnvironment,
+        IReadOnlyList<ImplementationRegistrationSpec> registrations)
+    {
+        var fallbackHandlerTypeMetadataNames = registrations
+            .Select(static registration => registration.ReflectionFallbackHandlerTypeMetadataName)
+            .Where(static typeMetadataName => !string.IsNullOrWhiteSpace(typeMetadataName))
+            .Distinct(StringComparer.Ordinal)
+            .Cast<string>()
+            .ToImmutableArray();
+
+        if (fallbackHandlerTypeMetadataNames.IsDefaultOrEmpty)
+        {
+            return new ReflectionFallbackEmissionSpec(
+                EmitDirectTypeReferences: false,
+                HandlerTypeDisplayNames: ImmutableArray<string>.Empty,
+                HandlerTypeMetadataNames: ImmutableArray<string>.Empty);
+        }
+
+        var fallbackHandlerTypeDisplayNames = registrations
+            .Select(static registration => registration.ReflectionFallbackHandlerTypeDisplayName)
+            .Where(static typeDisplayName => !string.IsNullOrWhiteSpace(typeDisplayName))
+            .Distinct(StringComparer.Ordinal)
+            .Cast<string>()
+            .ToImmutableArray();
+
+        if (generationEnvironment.SupportsDirectReflectionFallbackTypes &&
+            fallbackHandlerTypeDisplayNames.Length == fallbackHandlerTypeMetadataNames.Length)
+        {
+            return new ReflectionFallbackEmissionSpec(
+                EmitDirectTypeReferences: true,
+                HandlerTypeDisplayNames: fallbackHandlerTypeDisplayNames,
+                HandlerTypeMetadataNames: ImmutableArray<string>.Empty);
+        }
+
+        return new ReflectionFallbackEmissionSpec(
+            EmitDirectTypeReferences: false,
+            HandlerTypeDisplayNames: ImmutableArray<string>.Empty,
+            HandlerTypeMetadataNames: fallbackHandlerTypeMetadataNames);
+    }
+
+    /// <summary>
+    ///     判断目标特性是否暴露了指定元素类型的 <c>params T[]</c> 构造函数。
+    /// </summary>
+    private static bool HasParamsArrayConstructor(INamedTypeSymbol attributeType, ITypeSymbol elementType)
+    {
+        foreach (var constructor in attributeType.InstanceConstructors)
+        {
+            if (constructor.Parameters.Length != 1)
+                continue;
+
+            var parameter = constructor.Parameters[0];
+            if (!parameter.IsParams)
+                continue;
+
+            if (parameter.Type is IArrayTypeSymbol { Rank: 1 } arrayType &&
+                SymbolEqualityComparer.Default.Equals(arrayType.ElementType, elementType))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsConcreteHandlerType(INamedTypeSymbol type)
