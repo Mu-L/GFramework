@@ -17,27 +17,33 @@
 - 主线程实施：
   - 在 `GFramework.Game/Config/YamlConfigSchemaValidator.cs` 为固定格式正则与 schema `pattern` 正则补充 timeout，避免运行时正则输入继续触发 `MA0009`
   - 将三处字符串等值比较改为 ordinal `string.Equals`，清理 `MA0006`
+  - 接受 `1395b84` 的 `YamlConfigSchemaValidator.ObjectKeywords.cs` 方法拆分，清理该文件 `MA0051`
+  - 收口被中止 worker 留下的 schema model 拆文件变更，将 `YamlConfigSchemaValidator.cs` 末尾类型移动到同名文件，清理 `MA0048`
 - 验证里程碑：
   - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release -p:RestoreFallbackFolders= -m:1 -nodeReuse:false -clp:Summary`
     - 结果：成功；`0 Warning(s)`、`0 Error(s)`
   - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~Mediator"`
     - 结果：成功；`45` 通过、`0` 失败
   - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release -p:RestoreFallbackFolders= -m:1 -nodeReuse:false -clp:Summary`
-    - 结果：成功；`75 Warning(s)`、`0 Error(s)`
+    - 结果：成功；`0 Warning(s)`、`0 Error(s)`
   - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~YamlConfigLoaderTests|FullyQualifiedName~YamlConfigSchemaValidatorTests"`
     - 结果：成功；`80` 通过、`0` 失败
   - `dotnet clean -p:RestoreFallbackFolders= -v:quiet`
     - 结果：成功
   - `dotnet build -p:RestoreFallbackFolders= -clp:WarningsOnly -v:minimal -m:1 -nodeReuse:false`
-    - 结果：成功；`75` warnings、`0` errors
+    - 中间结果：成功；`75` warnings、`0` errors
+  - `dotnet clean -p:RestoreFallbackFolders= -v:quiet`
+    - 结果：成功
+  - `dotnet build -p:RestoreFallbackFolders= -clp:Summary -v:minimal -m:1 -nodeReuse:false`
+    - 结果：成功；`15 Warning(s)`、`0 Error(s)`
   - `git diff --check`
     - 结果：成功；无新增 whitespace / conflict-marker 问题
 - 当前指标：
-  - warning 总数：`236` -> `75`
-  - 剩余 warning 分布：`GFramework.Game/Config/YamlConfigSchemaValidator.cs` `60` 条，`GFramework.Game/Config/YamlConfigSchemaValidator.ObjectKeywords.cs` `15` 条；规则为 `MA0048` `45` 条、`MA0051` `30` 条
-  - 已提交分支 diff：`3` 个文件；主线程待提交后预计约 `6` 个文件，低于 `50` 个文件阈值
+  - warning 总数：`236` -> `15`
+  - 剩余 warning 分布：`GFramework.Game/Config/YamlConfigSchemaValidator.cs` 的 `MA0051` `15` 条（5 个方法跨 3 个 TFM）
+  - 本轮提交后预计分支 diff：`22` 个文件，低于 `50` 个文件阈值
 - 下一步：
-  - 提交主线程 Game / ai-plan 同步后，继续 `YamlConfigSchemaValidator.cs` 末尾 schema model 类型拆文件，优先清理 `MA0048`
+  - 按用户要求本轮到此结束；下一轮只处理 `YamlConfigSchemaValidator.cs` 剩余 `MA0051` 方法拆分
 
 ## 2026-04-28 — RP-092
 
