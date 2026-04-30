@@ -3,6 +3,7 @@ using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using GFramework.Cqrs.Notification;
 using LegacyICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
 
 namespace GFramework.Core.Services.Modules;
@@ -40,7 +41,8 @@ public sealed class CqrsRuntimeModule : IServiceModule
         var dispatcherLogger = LoggerFactoryResolver.Provider.CreateLogger("CqrsDispatcher");
         var registrarLogger = LoggerFactoryResolver.Provider.CreateLogger("DefaultCqrsHandlerRegistrar");
         var registrationLogger = LoggerFactoryResolver.Provider.CreateLogger("DefaultCqrsRegistrationService");
-        var runtime = CqrsRuntimeFactory.CreateRuntime(container, dispatcherLogger);
+        var notificationPublisher = container.Get<INotificationPublisher>();
+        var runtime = CqrsRuntimeFactory.CreateRuntime(container, dispatcherLogger, notificationPublisher);
         var registrar = CqrsRuntimeFactory.CreateHandlerRegistrar(container, registrarLogger);
 
         container.Register(runtime);

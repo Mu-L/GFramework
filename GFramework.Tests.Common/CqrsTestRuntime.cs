@@ -7,6 +7,7 @@ using GFramework.Core.Ioc;
 using GFramework.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using GFramework.Cqrs.Command;
+using GFramework.Cqrs.Notification;
 using LegacyICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
 
 namespace GFramework.Tests.Common;
@@ -59,7 +60,8 @@ public static class CqrsTestRuntime
         if (container.Get<ICqrsRuntime>() is null)
         {
             var runtimeLogger = LoggerFactoryResolver.Provider.CreateLogger("CqrsDispatcher");
-            var runtime = CqrsRuntimeFactory.CreateRuntime(container, runtimeLogger);
+            var notificationPublisher = container.Get<INotificationPublisher>();
+            var runtime = CqrsRuntimeFactory.CreateRuntime(container, runtimeLogger, notificationPublisher);
             container.Register(runtime);
             container.Register<LegacyICqrsRuntime>((LegacyICqrsRuntime)runtime);
         }

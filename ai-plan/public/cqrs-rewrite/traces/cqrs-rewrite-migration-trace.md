@@ -2,6 +2,41 @@
 
 ## 2026-04-30
 
+### 阶段：notification publisher seam 最小落地（CQRS-REWRITE-RP-064）
+
+- 本轮按 `gframework-batch-boot 50` 继续 `cqrs-rewrite`，基线使用本地现有 `origin/main`
+- 当前 branch diff 相对 `origin/main` 开始时仅 `3 files / 164 lines`，远低于 `50 files` stop condition，因此继续推进真实代码切片
+- 主线程锁定 `notification publisher seam` 为本轮最低风险高收益切片，并保持关键路径在本地实现
+- 接受两条只读 subagent 结论：
+  - 对照 `ai-libs/Mediator` 后，只吸收 notification publisher 策略接缝，不在本轮引入并行 publisher、异常聚合或公开配置面
+  - 现有仓库测试需要锁定的兼容语义是：零处理器静默完成、顺序执行、首错即停、上下文逐次注入
+- 已完成实现：
+  - `GFramework.Cqrs` 新增 `INotificationPublisher`、`NotificationPublishContext<TNotification>`、
+    `DelegatingNotificationPublishContext<TNotification, TState>` 与默认 `SequentialNotificationPublisher`
+  - `CqrsDispatcher.PublishAsync(...)` 改为解析 handlers 后构造发布上下文，并委托给 publisher seam 执行
+  - `CqrsRuntimeFactory`、`CqrsRuntimeModule` 与 `GFramework.Tests.Common.CqrsTestRuntime` 现会在 runtime 创建前复用容器里已注册的 `INotificationPublisher`
+  - `GFramework.Cqrs.Tests` 新增 `CqrsNotificationPublisherTests`，覆盖自定义 publisher、上下文注入、零处理器、首错即停与默认接线复用
+  - `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md` 已同步说明默认通知语义与可替换 seam
+- 中途验证曾因并行 .NET 构建产生输出文件锁噪音；已改为串行重跑并获取干净结果
+
+### 验证
+
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsNotificationPublisherTests"`
+  - 结果：通过，`5/5` passed
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+  - 结果：通过，`41/41` passed
+- `GIT_DIR=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework/.git/worktrees/GFramework-cqrs GIT_WORK_TREE=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework-WorkTree/GFramework-cqrs bash scripts/validate-csharp-naming.sh`
+  - 结果：通过
+
+### 当前下一步
+
+1. 评估 notification publisher seam 的第二阶段是否需要公开配置面、并行 publisher 或 telemetry decorator
+2. 把 `dispatch/invoker` 生成前移重新拉回 `Phase 8` 主线，作为下一个实现切片
+
 ### 阶段：CQRS vs Mediator 评估归档（CQRS-REWRITE-RP-063）
 
 - 本轮按用户要求使用 `gframework-boot` 启动上下文后，先完成 `cqrs-rewrite` 现状核对，再并行对照

@@ -4,6 +4,7 @@ using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Rule;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using GFramework.Cqrs.Notification;
 using ICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
 
 namespace GFramework.Cqrs.Internal;
@@ -14,7 +15,8 @@ namespace GFramework.Cqrs.Internal;
 /// </summary>
 internal sealed class CqrsDispatcher(
     IIocContainer container,
-    ILogger logger) : ICqrsRuntime
+    ILogger logger,
+    INotificationPublisher notificationPublisher) : ICqrsRuntime
 {
     // 卸载安全的进程级缓存：通知类型只以弱键语义保留。
     // 若插件/热重载程序集中的通知类型被卸载，对应分发绑定会自然失效，下次命中时再重新计算。
@@ -42,6 +44,10 @@ internal sealed class CqrsDispatcher(
 
     private static readonly MethodInfo StreamHandlerInvokerMethodDefinition = typeof(CqrsDispatcher)
         .GetMethod(nameof(InvokeStreamHandler), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private readonly INotificationPublisher _notificationPublisher = notificationPublisher
+                                                                     ?? throw new ArgumentNullException(
+                                                                         nameof(notificationPublisher));
 
     /// <summary>
     ///     发布通知到所有已注册处理器。
@@ -71,11 +77,8 @@ internal sealed class CqrsDispatcher(
             return;
         }
 
-        foreach (var handler in handlers)
-        {
-            PrepareHandler(handler, context);
-            await dispatchBinding.Invoker(handler, notification, cancellationToken).ConfigureAwait(false);
-        }
+        var publishContext = CreateNotificationPublishContext(notification, handlers, context, dispatchBinding.Invoker);
+        await _notificationPublisher.PublishAsync(publishContext, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -241,6 +244,50 @@ internal sealed class CqrsDispatcher(
     }
 
     /// <summary>
+    ///     为当前通知发布调用创建发布上下文，把处理器集合与执行入口收敛到同一对象。
+    /// </summary>
+    /// <typeparam name="TNotification">通知类型。</typeparam>
+    /// <param name="notification">当前通知。</param>
+    /// <param name="handlers">当前发布调用已解析到的处理器集合。</param>
+    /// <param name="context">当前 CQRS 分发上下文。</param>
+    /// <param name="invoker">执行单个通知处理器时复用的强类型调用委托。</param>
+    /// <returns>供通知发布器消费的执行上下文。</returns>
+    private static NotificationPublishContext<TNotification> CreateNotificationPublishContext<TNotification>(
+        TNotification notification,
+        IReadOnlyList<object> handlers,
+        ICqrsContext context,
+        NotificationInvoker invoker)
+        where TNotification : INotification
+    {
+        return new DelegatingNotificationPublishContext<TNotification, NotificationDispatchState>(
+            notification,
+            handlers,
+            new NotificationDispatchState(context, invoker),
+            static (handler, currentNotification, state, currentCancellationToken) =>
+                InvokePublishedNotificationHandlerAsync(handler, currentNotification, state, currentCancellationToken));
+    }
+
+    /// <summary>
+    ///     执行通知发布器选中的单个处理器，并在调用前注入当前分发上下文。
+    /// </summary>
+    /// <typeparam name="TNotification">通知类型。</typeparam>
+    /// <param name="handler">要执行的处理器实例。</param>
+    /// <param name="notification">当前通知。</param>
+    /// <param name="state">当前处理器执行所需的 dispatcher 状态。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示当前处理器执行完成的值任务。</returns>
+    private static ValueTask InvokePublishedNotificationHandlerAsync<TNotification>(
+        object handler,
+        TNotification notification,
+        NotificationDispatchState state,
+        CancellationToken cancellationToken)
+        where TNotification : INotification
+    {
+        PrepareHandler(handler, state.Context);
+        return state.Invoker(handler, notification!, cancellationToken);
+    }
+
+    /// <summary>
     ///     生成流式处理器调用委托，避免每次创建流都重复反射。
     /// </summary>
     private static StreamInvoker CreateStreamInvoker(Type requestType, Type responseType)
@@ -386,6 +433,15 @@ internal sealed class CqrsDispatcher(
         /// </summary>
         public NotificationInvoker Invoker { get; } = invoker;
     }
+
+    /// <summary>
+    ///     保存通知发布器执行单个 handler 时需要复用的 dispatcher 状态。
+    /// </summary>
+    /// <param name="Context">当前 CQRS 分发上下文。</param>
+    /// <param name="Invoker">执行单个通知处理器的强类型调用委托。</param>
+    private readonly record struct NotificationDispatchState(
+        ICqrsContext Context,
+        NotificationInvoker Invoker);
 
     /// <summary>
     ///     保存流式请求分发路径所需的服务类型与调用委托。

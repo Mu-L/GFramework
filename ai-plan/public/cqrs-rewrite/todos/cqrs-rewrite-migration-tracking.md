@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-063`
+- 恢复点编号：`CQRS-REWRITE-RP-064`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 已完成一轮 `CQRS vs Mediator` 只读评估归档，结论已沉淀到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
@@ -18,6 +18,14 @@ CQRS 迁移与收敛。
   - 下一阶段建议优先级已收敛为：`notification publisher seam`、`dispatch/invoker 生成前移`、`pipeline 分层扩展`、
     `可观测性 seam` 与 `benchmark / allocation baseline`
   - 当前功能历史已归档，active 跟踪仅保留 `Phase 8` 主线的恢复入口
+  - 已完成一轮 notification publisher seam 最小落地：`GFramework.Cqrs` 新增 `INotificationPublisher`、
+    `NotificationPublishContext<TNotification>` 与默认 `SequentialNotificationPublisher`
+  - `CqrsDispatcher` 现会在解析当前通知处理器集合后，把执行顺序委托给 publisher seam；默认行为仍保持
+    “零处理器静默完成、顺序执行、首错即停”
+  - `CqrsRuntimeFactory`、`CqrsRuntimeModule` 与 `GFramework.Tests.Common.CqrsTestRuntime` 现支持在 runtime 创建前复用
+    容器里已显式注册的 `INotificationPublisher`
+  - 已补充 `CqrsNotificationPublisherTests`，覆盖自定义 publisher 接管、上下文注入、零处理器静默完成、首错即停，以及
+    `RegisterInfrastructure` 默认接线复用预注册 publisher 的回归
   - 已将 mixed fallback 场景进一步收敛：当 runtime 允许同一程序集声明多个 `CqrsReflectionFallbackAttribute` 实例时，generator 现会把可直接引用的 fallback handlers 与仅能按名称恢复的 fallback handlers 拆分发射
   - `CqrsReflectionFallbackAttribute` 现允许多实例，以承载 `Type[]` 与字符串 fallback 元数据的组合输出
   - 已将 generator 的程序集级 fallback 元数据进一步收敛：当全部 fallback handlers 都可直接引用且 runtime 暴露 `params Type[]` 合同时，生成器现优先发射 `typeof(...)` 形式的 fallback 元数据
@@ -144,9 +152,15 @@ CQRS 迁移与收敛。
   - 设计吸收层面，当前已吸收统一消息模型、generator 优先注册与反射收敛思路；仍未完整吸收 publisher 策略抽象、
     stream / exception pipeline、telemetry / diagnostics / benchmark 体系与 runtime 主体生成
   - 详细结论与证据已归档到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
+- `2026-04-30` 已接受两条只读 subagent 结论并完成 notification publisher seam 最小实现：
+  - 相对 `ai-libs/Mediator`，本轮只吸收 notification publisher 的策略接缝，不照搬 `NotificationHandlers<T>` 包装、
+    并行 publisher 或异常聚合语义
+  - 当前 seam 刻意保持在默认 runtime 内部：`ICqrsRuntime.PublishAsync(...)` 外形不变，dispatcher 仍负责 handler 解析与
+    `IContextAware` 上下文注入
+  - 用户若需替换通知发布策略，只需在 runtime 创建前向容器显式注册 `INotificationPublisher`
 - 当前主线优先级：
-  - `notification publisher seam` 评估与设计优先
   - dispatch/invoker 反射占比继续下降，并优先评估生成前移方案
+  - 基于已落地 publisher seam，继续评估是否需要公开配置面、并行策略或 telemetry decorator
   - package / facade / 兼容层继续收口
   - pipeline 分层扩展、可观测性 seam 与 benchmark baseline 进入中期候选
 
@@ -180,9 +194,19 @@ CQRS 迁移与收敛。
   - 备注：使用显式 `GIT_DIR` / `GIT_WORK_TREE` 绑定重跑后，`1045` 个 tracked C# 文件的命名校验全部通过；本轮 `_syncRoot` 改名未引入命名规则回归
 - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
   - 结果：通过
-  - 备注：`0 warning / 0 error`；本轮确认 `ai-plan` 评估与恢复文档更新未影响 `GFramework.Cqrs` 的最小 Release 构建
+  - 备注：`0 warning / 0 error`；本轮确认 notification publisher seam、README 与文档更新未引入 `GFramework.Cqrs` 构建告警
+- `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`；确认 `CqrsRuntimeModule` 接线变更未引入 `GFramework.Core` 模块构建问题
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsNotificationPublisherTests"`
+  - 结果：通过
+  - 备注：`5/5` 通过；覆盖自定义 publisher 顺序、上下文注入、零处理器、首错即停与默认接线复用
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+  - 结果：通过
+  - 备注：`41/41` 通过；确认 CQRS 基础设施默认接线与容器行为未回归
 
 ## 下一步
 
-1. 以 `notification publisher seam` 与 `dispatch/invoker` 生成前移为优先对象，补一轮面向实现的设计评估
-2. 单独规划旧 `Command` / `Query` API、`LegacyICqrsRuntime` 与 `Mediator` 测试命名的收口顺序，避免与 runtime 微优化混做
+1. 基于已落地的 notification publisher seam，评估是否需要第二阶段公开配置面、并行 publisher 或 telemetry decorator
+2. 继续以 `dispatch/invoker` 生成前移为优先对象，补一轮面向实现的设计评估
+3. 单独规划旧 `Command` / `Query` API、`LegacyICqrsRuntime` 与 `Mediator` 测试命名的收口顺序，避免与 runtime 微优化混做
