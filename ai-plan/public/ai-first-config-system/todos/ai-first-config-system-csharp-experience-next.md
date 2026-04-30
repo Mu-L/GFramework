@@ -37,8 +37,8 @@
 
 - [x] 继续扩展最有价值的 JSON Schema 子集
   - 原则：只做 Runtime / Generator / Tooling 三端都能稳定解释的关键字
-  - 已补齐：`enum`（当前覆盖标量、对象、数组节点，以及标量数组元素）、`const`、`not`、`pattern`、`format`（当前稳定子集：`date`、`date-time`、`duration`、`email`、`time`、`uri`、`uuid`）、`minItems`、`maxItems`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf`、`uniqueItems`、`minProperties`、`maxProperties`、`dependentRequired`、`dependentSchemas`、`allOf`、object-focused `if` / `then` / `else`
-  - 当前产出：运行时拒绝相关约束违规值，VS Code 校验与表单 hint 对齐，生成代码 XML 文档同步暴露新关键字；对象 / 数组 `enum` 当前主要参与校验与文档输出，不额外扩展复杂表单控件；`allOf` 与 `if` / `then` / `else` 当前都收敛为 object-focused constraint block，不做属性合并
+  - 已补齐：`enum`（当前覆盖标量、对象、数组节点，以及标量数组元素）、`const`、`not`、`pattern`、`format`（当前稳定子集：`date`、`date-time`、`duration`、`email`、`time`、`uri`、`uuid`）、`minLength`、`maxLength`、`minItems`、`maxItems`、`contains`、`minContains`、`maxContains`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf`、`uniqueItems`、`minProperties`、`maxProperties`、`dependentRequired`、`dependentSchemas`、`allOf`、object-focused `if` / `then` / `else`
+  - 当前产出：运行时拒绝相关约束违规值，VS Code 校验与表单 hint 对齐，生成代码 XML 文档同步暴露新关键字；对象 / 数组 `enum` 当前主要参与校验与文档输出，不额外扩展复杂表单控件；`allOf` 与 `if` / `then` / `else` 当前都收敛为 object-focused constraint block，不做属性合并；`oneOf` / `anyOf` 当前已统一定义为不支持并在三端显式拒绝
 
 - [x] 评估可选只读索引能力
   - 目标：为高频查询字段提供比 `All()` 线性扫描更强的读取体验
@@ -63,7 +63,7 @@
 ## 暂缓
 
 - [ ] 不追求完整 JSON Schema 全量支持
-  - 原因：维护成本高，且容易造成 Runtime / Generator / Tooling 三端漂移
+  - 原因：维护成本高，且容易造成 Runtime / Generator / Tooling 三端漂移；像 `oneOf` / `anyOf` 这类会改变生成类型形状的组合关键字当前已明确排除
 
 - [ ] 不优先做运行时可写配置
   - 原因：当前系统定位仍然是静态内容只读查询
@@ -87,6 +87,7 @@
 ## 下次恢复点
 
 - 在当前稳定 `format` 子集（`date`、`date-time`、`duration`、`email`、`time`、`uri`、`uuid`）、object-focused `allOf` 与 object-focused `if` / `then` / `else` 之后，转到下一批仍不改变生成类型形状的关键字评估；仍然不要先回工具 UI
+- `oneOf` / `anyOf` 已明确跳过；恢复时不要再把它们当作默认候选
 - 恢复时优先检查：
   - `GFramework.Game/Config/YamlConfigSchemaValidator.cs`
   - `GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs`
@@ -108,5 +109,5 @@
   - 结果：通过
 - 下一步：
   1. 检查 `YamlConfigSchemaValidator.cs`、`SchemaConfigGenerator.cs`、`configValidation.js` 中当前已支持的关键字列表
-  2. 评估 `oneOf` / `anyOf` 是否存在可接受的 object-focused 子集
-  3. 若结论否定，选择下一批共享解释关键字而不是先回工具 UI
+  2. 跳过 `oneOf` / `anyOf`，选择下一批仍不改变生成类型形状的共享关键字
+  3. 优先找不需要属性合并、联合分支生成或额外 UI 形状解释的关键字，而不是先回工具 UI

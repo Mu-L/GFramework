@@ -178,6 +178,33 @@ test("parseSchemaContent should preserve empty-string const raw and display meta
     assert.equal(schema.properties.name.constDisplayValue, "\"\"");
 });
 
+test("parseSchemaContent should reject unsupported oneOf combinators", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  },
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": ["itemCount"],
+                      "properties": {
+                        "itemCount": { "type": "integer" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        `),
+        /unsupported combinator keyword 'oneOf'/u);
+});
+
 test("parseSchemaContent should build object const comparable keys with ordinal property ordering", () => {
     const schema = parseSchemaContent(`
         {

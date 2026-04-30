@@ -232,6 +232,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         }
 
         return TryValidateStringFormatMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
+            TryValidateUnsupportedCombinatorKeywordsRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateDependentRequiredMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateDependentSchemasMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateAllOfMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
@@ -842,6 +843,80 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
                     : (false, currentDiagnostic);
             },
             out diagnostic);
+    }
+
+    /// <summary>
+    ///     递归拒绝当前共享子集尚未支持的组合关键字。
+    ///     这里显式拦截 <c>oneOf</c> / <c>anyOf</c>，避免生成器静默接受会改变生成类型形状的 schema。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前节点树是否未声明不支持的组合关键字。</returns>
+    private static bool TryValidateUnsupportedCombinatorKeywordsRecursively(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        return TryTraverseSchemaRecursively(
+            filePath,
+            displayPath,
+            element,
+            static (currentFilePath, currentDisplayPath, currentElement, _) =>
+            {
+                return TryValidateUnsupportedCombinatorKeywords(
+                    currentFilePath,
+                    currentDisplayPath,
+                    currentElement,
+                    out var currentDiagnostic)
+                    ? (true, (Diagnostic?)null)
+                    : (false, currentDiagnostic);
+            },
+            out diagnostic);
+    }
+
+    /// <summary>
+    ///     验证当前节点是否声明了会改变生成类型形状的未支持组合关键字。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>未声明不支持关键字时返回 <see langword="true" />。</returns>
+    private static bool TryValidateUnsupportedCombinatorKeywords(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        diagnostic = null;
+        if (TryGetUnsupportedCombinatorKeywordName(element) is not { } keywordName)
+        {
+            return true;
+        }
+
+        diagnostic = Diagnostic.Create(
+            ConfigSchemaDiagnostics.UnsupportedCombinatorKeyword,
+            CreateFileLocation(filePath),
+            Path.GetFileName(filePath),
+            displayPath,
+            keywordName,
+            "The current config schema subset does not support combinators that can change generated type shape.");
+        return false;
+    }
+
+    /// <summary>
+    ///     返回当前节点声明的首个未支持组合关键字。
+    /// </summary>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <returns>命中的关键字名称；未声明时返回空。</returns>
+    private static string? TryGetUnsupportedCombinatorKeywordName(JsonElement element)
+    {
+        return element.TryGetProperty("oneOf", out _) ? "oneOf" :
+            element.TryGetProperty("anyOf", out _) ? "anyOf" :
+            null;
     }
 
     /// <summary>

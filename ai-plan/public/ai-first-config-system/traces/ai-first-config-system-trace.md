@@ -106,6 +106,32 @@
 
 ### 下一步
 
-1. 评估 `oneOf` / `anyOf` 是否值得继续沿用 object-focused 子集；若仍会造成生成形状漂移，就直接跳过
+1. 跳过 `oneOf` / `anyOf`，优先筛选下一个仍不改变生成类型形状、且不需要属性合并或联合分支生成的共享关键字
 2. 若继续扩共享关键字，先在 Runtime / Generator / Tooling 三端同时定义一致边界，再进入实现
 3. 继续把 active 入口保持精简，只记录当前恢复点、验证与下一步
+
+## 2026-04-30
+
+### 阶段：组合关键字边界收口（AI-FIRST-CONFIG-RP-003）
+
+- 已在 Runtime、Source Generator 与 VS Code Tooling 三端显式拒绝 `oneOf` / `anyOf`
+- 本轮结论不是继续做 object-focused 子集，而是先收紧共享边界：
+  - `oneOf` / `anyOf` 更容易引入联合分支、属性合并或生成类型形状漂移
+  - 当前配置系统主线仍优先保证 `C# Runtime + Source Generator + Consumer DX` 的稳定契约
+  - 因此三端统一改为在 schema 解析 / 生成阶段直接失败，避免静默忽略同一份 schema
+- active tracking 也已同步更新，不再把 `oneOf` / `anyOf` 作为下一批默认候选
+
+### 验证
+
+- 2026-04-30：`bun run test`（`tools/gframework-config-tool`）
+  - 目标：验证工具端会拒绝 `oneOf`
+- 2026-04-30：`dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~SchemaConfigGeneratorTests"`
+  - 目标：验证生成器新增 `GF_ConfigSchema_015`
+- 2026-04-30：`dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~YamlConfigLoaderAllOfTests"`
+  - 目标：验证运行时会拒绝对象节点上的 `oneOf`
+
+### 下一步
+
+1. 若本轮定向验证通过，继续盘点下一批真正低风险、且不改变生成类型形状的共享关键字
+2. 不再重复评估 `oneOf` / `anyOf` 的 object-focused 子集，除非未来主线明确接受联合形状生成
+3. 若后续关键字需要新诊断编号或文档边界说明，继续保持 Runtime / Generator / Tooling 同步收口

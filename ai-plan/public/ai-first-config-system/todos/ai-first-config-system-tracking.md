@@ -11,6 +11,7 @@
 - 当前阶段：`C# Runtime + Source Generator + Consumer DX`
 - 当前焦点：
   - 已完成 object-focused `if` / `then` / `else`，继续评估下一批仍不改变生成类型形状的共享关键字
+  - 已明确将 `oneOf` / `anyOf` 归类为当前不支持的组合关键字，并在 Runtime / Generator / Tooling 三端显式拒绝，避免静默接受导致形状漂移
   - 已完成 PR #262 的 CodeRabbit follow-up，补齐 latest review body 中 folded `Nitpick comments` 的 skill 解析并按建议收口 Tooling / Tests
   - 先以 Runtime / Generator / Tooling 三端一致语义为前提筛选下一项，而不是盲目扩全量 JSON Schema
   - 继续把 VS Code 工具能力视为非阻塞项，不让复杂 UI 编辑器需求反过来拖慢 C# 主线
@@ -18,7 +19,7 @@
 ### 已知风险
 
 - 组合关键字扩展风险：下一批候选关键字可能像标准 `oneOf` / `anyOf` 一样更容易引入生成类型形状漂移
-  - 缓解措施：延续 object-focused / focused matcher 约束，只接受三端都能稳定解释且不需要属性合并的子集
+  - 缓解措施：`oneOf` / `anyOf` 已改为三端显式拒绝；后续仅继续评估不会引入联合形状、属性合并或分支生成漂移的关键字子集
 - 工具链验证风险：VS Code 与 CI / 发布管道验证覆盖不足
   - 缓解措施：继续为新增共享关键字补齐三端测试覆盖，优先保证 C# Runtime 与 Generator 回归通过，并记录 JS 测试与构建验证
 - PR review 信号漂移风险：CodeRabbit 可能把建议折叠在 latest review body，而不是 issue comments
@@ -35,8 +36,10 @@
 - 已补齐一批共享 JSON Schema 子集，包括：
   - `enum`、`const`、`not`、`pattern`
   - `format` 稳定子集：`date`、`date-time`、`duration`、`email`、`time`、`uri`、`uuid`
-  - `minItems`、`maxItems`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf`、`uniqueItems`
+  - `minLength`、`maxLength`、`minItems`、`maxItems`、`contains`、`minContains`、`maxContains`、`exclusiveMinimum`、`exclusiveMaximum`、`multipleOf`、`uniqueItems`
   - `minProperties`、`maxProperties`、`dependentRequired`、`dependentSchemas`、`allOf`、object-focused `if` / `then` / `else`
+- 已明确拒绝会改变生成类型形状的组合关键字：
+  - `oneOf`、`anyOf` 当前会在 Runtime / Generator / Tooling 三端直接报错，而不是静默忽略
 - `if` / `then` / `else` 已按“不改变生成类型形状”的边界落地：
   - 只允许 object 节点上的 object-typed inline schema
   - `if` 必填，且必须至少伴随 `then` 或 `else` 之一
@@ -95,4 +98,4 @@
 
 1. 提交并推送当前 PR `#262` follow-up 修复后，重新抓取一次 PR review，确认 outside-diff comment 与 open thread 是否都已收口
 2. 若 PR review 已收口，再回到 `GFramework.Game/Config/YamlConfigSchemaValidator.cs`、`GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs`、`tools/gframework-config-tool/src/configValidation.js` 盘点下一批候选关键字
-3. 优先判断 `oneOf` / `anyOf` 是否存在可接受的 object-focused 子集；若仍会引入生成类型形状漂移，就直接跳过
+3. 跳过 `oneOf` / `anyOf`，优先筛选下一个仍不改变生成类型形状、且不需要属性合并或联合分支生成的共享关键字

@@ -162,4 +162,15 @@ public static class ConfigSchemaDiagnostics
         SourceGeneratorsConfigCategory,
         DiagnosticSeverity.Error,
         true);
+
+    /// <summary>
+    ///     schema 节点声明了当前共享子集尚未支持的组合关键字。
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedCombinatorKeyword = new(
+        "GF_ConfigSchema_015",
+        "Config schema uses an unsupported combinator keyword",
+        "Property '{1}' in schema file '{0}' uses unsupported combinator keyword '{2}': {3}",
+        SourceGeneratorsConfigCategory,
+        DiagnosticSeverity.Error,
+        true);
 }

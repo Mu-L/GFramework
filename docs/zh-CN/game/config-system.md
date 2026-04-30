@@ -802,6 +802,7 @@ if (MonsterConfigBindings.References.TryGetByDisplayPath("dropItems", out var re
 - `dependentSchemas`：供运行时校验、VS Code 校验、对象 section 表单 hint 和生成代码 XML 文档复用；当前只接受“已声明 sibling 字段触发 object 子 schema”的形状，不改变生成类型形状，并按 focused constraint block 语义允许条件子 schema 未声明的额外同级字段继续存在
 - `allOf`：供运行时校验、VS Code 校验、对象 section 表单 hint 和生成代码 XML 文档复用；当前只接受 object 节点上的 object-typed inline schema 数组，并按 focused constraint block 语义把每个条目叠加到当前对象上，不做属性合并，也不改变生成类型形状
 - `if` / `then` / `else`：供运行时校验、VS Code 校验、对象 section 表单 hint 和生成代码 XML 文档复用；当前只接受 object 节点上的 object-typed inline schema，`if` 必填且必须至少配合 `then` 或 `else` 之一使用，分支只能约束父对象已声明的字段，不做属性合并，也不改变生成类型形状；条件匹配本身沿用 `dependentSchemas` / `allOf` 的 focused matcher 语义，允许对象保留未在条件块中声明的额外同级字段
+- `oneOf` / `anyOf`：当前不属于共享支持子集；Runtime / Generator / Tooling 会在解析或生成阶段直接拒绝，避免静默接受会改变生成类型形状的组合关键字
 
 `allOf` 的最小可工作示例如下。关键点是：字段形状先在父对象 `properties` 中声明，再用 `allOf` 叠加 `required` 或更细的字段约束；`allOf` 条目不会把新字段并回父对象。
 

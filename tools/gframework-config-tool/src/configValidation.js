@@ -1095,6 +1095,13 @@ function unquoteScalar(value) {
  */
 function parseSchemaNode(rawNode, displayPath) {
     const value = rawNode && typeof rawNode === "object" ? rawNode : {};
+    const unsupportedCombinatorKeyword = getUnsupportedCombinatorKeywordName(value);
+    if (unsupportedCombinatorKeyword) {
+        throw new Error(
+            `Schema property '${displayPath}' declares unsupported combinator keyword '${unsupportedCombinatorKeyword}'. ` +
+            "The current config schema subset does not support combinators that can change generated type shape.");
+    }
+
     const type = typeof value.type === "string" ? value.type : "object";
     const patternMetadata = normalizeSchemaPattern(value.pattern, displayPath);
     const stringFormat = normalizeSchemaStringFormat(value.format, type, displayPath);
@@ -1251,6 +1258,25 @@ function parseSchemaNode(rawNode, displayPath) {
         refTable: metadata.refTable,
         not: negatedSchemaNode
     }, value.const, displayPath), value.enum, displayPath);
+}
+
+/**
+ * Return the first combinator keyword that the current shared schema subset
+ * intentionally rejects to keep Runtime / Generator / Tooling behavior aligned.
+ *
+ * @param {Record<string, unknown>} schemaNode Raw schema object.
+ * @returns {string | undefined} Unsupported keyword name when present.
+ */
+function getUnsupportedCombinatorKeywordName(schemaNode) {
+    if (Object.prototype.hasOwnProperty.call(schemaNode, "oneOf")) {
+        return "oneOf";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(schemaNode, "anyOf")) {
+        return "anyOf";
+    }
+
+    return undefined;
 }
 
 /**
