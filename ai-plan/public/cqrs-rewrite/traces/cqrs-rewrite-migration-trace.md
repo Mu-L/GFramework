@@ -2,6 +2,29 @@
 
 ## 2026-04-30
 
+### 阶段：invoker provider gate 合同回归（CQRS-REWRITE-RP-072）
+
+- 在 `RP-071` 提交后继续按 `gframework-batch-boot 50` 执行；当前 branch diff 相对 `origin/main` 仍为 `24 files`，未接近主要 stop condition，因此继续追加一轮 test-only generator 合同回归
+- 本轮接受一条只读 subagent 建议，把下一批进一步收敛为“runtime 合同不完整时不发射 provider 元数据”的单文件测试波次
+- 主线程已完成：
+  - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 新增四条 gate 回归，分别锁定 request / stream 在缺少 provider 接口或缺少 descriptor 枚举接口时，都会整体跳过元数据发射
+  - 初版实现曾使用整段源码片段替换来删减测试输入，但因三引号字符串缩进差异导致 helper 匹配失败；随后改为按稳定起止标记移除源码块的 `RemoveBlock(...)` helper，使测试意图与输入格式解耦
+  - 同一组定向验证同时保留 request / stream happy-path 两条既有回归，确认 gate 收紧后不会误伤原本完整合同下的 provider 发射
+
+### 验证（RP-072）
+
+- `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release`
+  - 结果：通过
+  - 备注：并行执行 build/test 时曾出现 `MSB3026` 输出文件竞争噪音；无真实编译错误，随后以串行 test 结果作为本轮 authoritative 行为验证
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Descriptor_Enumerator|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Enumerator|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过，`6/6` passed
+
+### 当前下一步（RP-072）
+
+1. 先提交本轮 generator gate 合同回归与恢复点更新
+2. 重新复算 branch diff 后，再决定是否继续推进 request / stream provider 的 runtime 失败边界测试
+3. 若继续下一批，优先保持 test-only 或极小写集，避免在接近阈值前扩散到新的生产模块
+
 ### 阶段：precise reflected invoker provider 合同边界回归（CQRS-REWRITE-RP-071）
 
 - 在 `RP-070` 提交后继续按 `gframework-batch-boot 50` 执行；当前已提交 branch diff 仍为 `24 files`，headroom 充足，因此继续下一批 generator-only 合同收敛

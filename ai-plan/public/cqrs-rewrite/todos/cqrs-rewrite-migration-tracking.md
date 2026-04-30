@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-071`
+- 恢复点编号：`CQRS-REWRITE-RP-072`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 已完成一轮 `CQRS vs Mediator` 只读评估归档，结论已沉淀到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
@@ -71,6 +71,9 @@ CQRS 迁移与收敛。
   - 已完成一轮 precise reflected invoker provider 合同边界回归：
     - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 现新增 request / stream 两条回归，明确当 handler 仍需走 `PreciseReflectedRegistrationSpec` 时，generator 即使检测到 invoker provider runtime 合同，也不会错误发射 descriptor、枚举接口或静态 invoker 桥接
     - 本轮接受了一条只读 subagent 的“继续评估 precise reflected + provider 发射”候选思路，但主线程复核后确认该候选并不存在可安全放宽的 `typeof(request/response)` 子集，因此收敛为“锁定当前排除边界”的测试批次，而不是修改生产 generator 逻辑
+  - 已完成一轮 invoker provider gate 合同回归：
+    - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 现新增四条回归，分别锁定 request / stream 在缺少 `ICqrsRequestInvokerProvider`、`IEnumeratesCqrsRequestInvokerDescriptors`、`ICqrsStreamInvokerProvider` 或 `IEnumeratesCqrsStreamInvokerDescriptors` 时，generator 都会整体跳过对应 provider 元数据发射
+    - 本轮最初采用固定源码片段替换来裁剪测试输入，但因三引号字符串缩进差异导致 helper 过脆；当前已收敛为按稳定起止标记移除源码块的 `RemoveBlock(...)` helper，避免 gate 回归依赖精确空格对齐
   - 当前相对 `origin/main` 的累计 branch diff 为 `24 files / 1754 changed lines`，仍低于本轮 `$gframework-batch-boot 50` 的主要 stop condition，可继续推进下一批低风险切片
   - 已将 mixed fallback 场景进一步收敛：当 runtime 允许同一程序集声明多个 `CqrsReflectionFallbackAttribute` 实例时，generator 现会把可直接引用的 fallback handlers 与仅能按名称恢复的 fallback handlers 拆分发射
   - `CqrsReflectionFallbackAttribute` 现允许多实例，以承载 `Type[]` 与字符串 fallback 元数据的组合输出
@@ -288,6 +291,12 @@ CQRS 迁移与收敛。
 - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_For_Precise_Reflected_Request_Registrations|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_For_Precise_Reflected_Stream_Registrations|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_For_Hidden_Implementation_With_Visible_Handler_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_For_Hidden_Implementation_With_Visible_Handler_Interface"`
   - 结果：通过
   - 备注：`4/4` passed；串行确认 visible-interface hidden-implementation 仍发射 provider 元数据，而 precise reflected 注册继续保持“不发射 provider descriptor”的当前合同
+- `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release`
+  - 结果：通过
+  - 备注：并行执行 build/test 时出现 `MSB3026` 输出文件竞争噪音；无真实编译错误，后续以串行 test 结果作为本轮 authoritative 行为验证
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Descriptor_Enumerator|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Enumerator|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过
+  - 备注：`6/6` passed；锁定 request / stream provider gate 依赖“provider 接口 + descriptor 枚举接口”同时存在，且原有 happy-path 发射仍保持通过
 - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；确认 `CqrsRuntimeModule` 接线变更未引入 `GFramework.Core` 模块构建问题
@@ -321,6 +330,6 @@ CQRS 迁移与收敛。
 
 ## 下一步
 
-1. 在保持 branch diff 明显低于 `50 files` 的前提下，继续挑选下一批低风险 `dispatch/invoker` 收敛切片，并优先考虑 request / stream provider 的诊断、入口或 runtime / generator 合同测试补强
+1. 在保持 branch diff 明显低于 `50 files` 的前提下，继续挑选下一批低风险 `dispatch/invoker` 收敛切片，并优先考虑 request / stream provider 的 runtime 失败边界或 generator gate 合同补强
 2. 基于已落地的 notification publisher seam，评估是否需要第二阶段公开配置面、并行 publisher 或 telemetry decorator
 3. 单独规划旧 `Command` / `Query` API 的收口顺序；`LegacyICqrsRuntime` compatibility slice 已收口到显式 helper 与专门测试，可暂时移出最高优先级

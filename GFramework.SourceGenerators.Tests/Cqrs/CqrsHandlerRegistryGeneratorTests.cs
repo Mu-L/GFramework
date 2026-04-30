@@ -2946,6 +2946,56 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
+    ///     验证当 runtime 缺少 <c>ICqrsRequestInvokerProvider</c> 时，
+    ///     生成器会整体跳过 request invoker provider 元数据发射，而不是输出半套 descriptor 成员。
+    /// </summary>
+    [Test]
+    public void Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Provider_Interface()
+    {
+        var generatedSource = RunGenerator(RemoveBlock(
+            RequestInvokerProviderSource,
+            "public interface ICqrsRequestInvokerProvider",
+            "public interface IEnumeratesCqrsRequestInvokerDescriptors"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "internal sealed class __GFrameworkGeneratedCqrsHandlerRegistry : global::GFramework.Cqrs.ICqrsHandlerRegistry"));
+            Assert.That(generatedSource, Does.Not.Contain("ICqrsRequestInvokerProvider"));
+            Assert.That(generatedSource, Does.Not.Contain("IEnumeratesCqrsRequestInvokerDescriptors"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsRequestInvokerDescriptorEntry("));
+            Assert.That(generatedSource, Does.Not.Contain("InvokeRequestHandler0"));
+        });
+    }
+
+    /// <summary>
+    ///     验证当 runtime 缺少 <c>IEnumeratesCqrsRequestInvokerDescriptors</c> 时，
+    ///     生成器不会只发射 request provider 的部分成员，而是整体保持不生成 provider 元数据。
+    /// </summary>
+    [Test]
+    public void Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Descriptor_Enumerator()
+    {
+        var generatedSource = RunGenerator(RemoveBlock(
+            RequestInvokerProviderSource,
+            "public interface IEnumeratesCqrsRequestInvokerDescriptors",
+            "public sealed class CqrsRequestInvokerDescriptor"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "internal sealed class __GFrameworkGeneratedCqrsHandlerRegistry : global::GFramework.Cqrs.ICqrsHandlerRegistry"));
+            Assert.That(generatedSource, Does.Not.Contain("ICqrsRequestInvokerProvider"));
+            Assert.That(generatedSource, Does.Not.Contain("IEnumeratesCqrsRequestInvokerDescriptors"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsRequestInvokerDescriptorEntry("));
+            Assert.That(generatedSource, Does.Not.Contain("InvokeRequestHandler0"));
+        });
+    }
+
+    /// <summary>
     ///     验证当 request handler 仍需走 precise reflected 注册时，
     ///     生成器即使检测到 request invoker provider runtime 合同，也不会错误发射无法稳定表达隐藏请求/响应类型的 provider 元数据。
     /// </summary>
@@ -3057,6 +3107,56 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
+    ///     验证当 runtime 缺少 <c>ICqrsStreamInvokerProvider</c> 时，
+    ///     生成器会整体跳过 stream invoker provider 元数据发射，而不是保留孤立的 descriptor 成员。
+    /// </summary>
+    [Test]
+    public void Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Provider_Interface()
+    {
+        var generatedSource = RunGenerator(RemoveBlock(
+            StreamInvokerProviderSource,
+            "public interface ICqrsStreamInvokerProvider",
+            "public interface IEnumeratesCqrsStreamInvokerDescriptors"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "internal sealed class __GFrameworkGeneratedCqrsHandlerRegistry : global::GFramework.Cqrs.ICqrsHandlerRegistry"));
+            Assert.That(generatedSource, Does.Not.Contain("ICqrsStreamInvokerProvider"));
+            Assert.That(generatedSource, Does.Not.Contain("IEnumeratesCqrsStreamInvokerDescriptors"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsStreamInvokerDescriptorEntry("));
+            Assert.That(generatedSource, Does.Not.Contain("InvokeStreamHandler0"));
+        });
+    }
+
+    /// <summary>
+    ///     验证当 runtime 缺少 <c>IEnumeratesCqrsStreamInvokerDescriptors</c> 时，
+    ///     生成器不会只发射 stream provider 的局部成员，而是整体保持不生成 provider 元数据。
+    /// </summary>
+    [Test]
+    public void Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Enumerator()
+    {
+        var generatedSource = RunGenerator(RemoveBlock(
+            StreamInvokerProviderSource,
+            "public interface IEnumeratesCqrsStreamInvokerDescriptors",
+            "public sealed class CqrsStreamInvokerDescriptor"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "internal sealed class __GFrameworkGeneratedCqrsHandlerRegistry : global::GFramework.Cqrs.ICqrsHandlerRegistry"));
+            Assert.That(generatedSource, Does.Not.Contain("ICqrsStreamInvokerProvider"));
+            Assert.That(generatedSource, Does.Not.Contain("IEnumeratesCqrsStreamInvokerDescriptors"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsStreamInvokerDescriptorEntry("));
+            Assert.That(generatedSource, Does.Not.Contain("InvokeStreamHandler0"));
+        });
+    }
+
+    /// <summary>
     ///     验证当 stream handler 仍需走 precise reflected 注册时，
     ///     生成器即使检测到 stream invoker provider runtime 合同，也不会错误发射无法稳定表达隐藏请求/响应类型的 provider 元数据。
     /// </summary>
@@ -3127,6 +3227,35 @@ public class CqrsHandlerRegistryGeneratorTests
         Assert.That(execution.GeneratedSources, Has.Length.EqualTo(1));
 
         return execution.GeneratedSources[0].content;
+    }
+
+    /// <summary>
+    ///     从测试输入源码中移除两个稳定标记之间的整段合同定义，
+    ///     避免回归用例依赖三引号字符串中的精确缩进。
+    /// </summary>
+    /// <param name="source">原始测试源码。</param>
+    /// <param name="startMarker">待移除代码块的起始标记。</param>
+    /// <param name="endMarker">待移除代码块之后紧邻的下一个稳定标记。</param>
+    /// <returns>移除指定代码块后的新源码。</returns>
+    private static string RemoveBlock(string source, string startMarker, string endMarker)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(startMarker);
+        ArgumentNullException.ThrowIfNull(endMarker);
+
+        var startIndex = source.IndexOf(startMarker, StringComparison.Ordinal);
+        if (startIndex < 0)
+        {
+            throw new InvalidOperationException("The requested start marker was not found in the generator test input.");
+        }
+
+        var endIndex = source.IndexOf(endMarker, startIndex, StringComparison.Ordinal);
+        if (endIndex < 0)
+        {
+            throw new InvalidOperationException("The requested end marker was not found in the generator test input.");
+        }
+
+        return source.Remove(startIndex, endIndex - startIndex);
     }
 
     /// <summary>
