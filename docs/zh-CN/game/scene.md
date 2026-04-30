@@ -254,6 +254,21 @@ await sceneRouter.PopAsync();
 - 项目提供 factory、root、资源映射和具体引擎装配
 - 文档中的最小示例应优先说明职责边界，而不是继续堆叠大而全教程
 
+## 配置系统边界提示
+
+如果你的场景路由接线同时依赖 AI-First 配置系统，本页只负责说明场景宿主、路由和生命周期接法，不负责定义配置
+schema 的正式支持边界。涉及 YAML 配置契约、组合关键字或编辑器辅助能力时，请回到
+[Game 配置系统](./config-system.md) 作为正式说明页。
+
+默认采用路径之外的场景包括：
+
+- `oneOf` / `anyOf`
+- 非 `false` 的 `additionalProperties`
+- 依赖开放对象形状、形状合并或更复杂嵌套数组的 schema shape
+
+这类复杂 shape 不应从场景接线页推断支持范围。`VS Code` 工具只是辅助编辑与预览层；如果遇到这些情况，应直接回到 raw YAML
+和 schema 本体设计处理。
+
 ## 推荐阅读
 
 1. [Game 模块总览](./index.md)

@@ -116,6 +116,11 @@ architecture.RegisterUtility<ISaveRepository<GameSaveData>>(new SaveRepository<G
 - 生成器表元数据
 - 热重载可用性边界
 
+如果这里涉及 schema 采用边界，也应以 [Game 配置系统](../game/config-system.md) 为正式说明页，而不是把
+`GodotFileStorage` 所在的宿主接线页理解成配置边界定义。默认采用路径之外的典型场景包括 `oneOf` / `anyOf`、
+非 `false` 的 `additionalProperties`，以及其他更复杂的 schema shape。`VS Code` 工具只是辅助编辑与预览层；
+遇到这些情况时，应直接回到 raw YAML 和 schema 本体设计处理。
+
 ### 通用存储契约
 
 宿主无关的 `IStorage`、`ScopedStorage`、`FileStorage` 和统一数据仓库语义，可继续阅读
