@@ -2,6 +2,37 @@
 
 ## 2026-04-30
 
+### 阶段：LegacyICqrsRuntime compatibility slice 收口（CQRS-REWRITE-RP-066）
+
+- 继续按 `gframework-batch-boot 50` 执行，基线仍为本地现有 `origin/main`
+- 在 `RP-065` 之后复算 branch diff，相对 `origin/main` 仍为 `19 files`，明显低于 `50 files` stop condition，因此继续下一批
+- 本轮按“关键路径本地、非冲突文档委派”的方式拆成两个切片：
+  - worker：`GFramework.Core.Abstractions/README.md`、`docs/zh-CN/abstractions/core-abstractions.md`、`docs/zh-CN/core/cqrs.md`
+  - 主线程：`GFramework.Core/Services/Modules/CqrsRuntimeModule.cs`、`GFramework.Tests.Common/CqrsTestRuntime.cs`、`GFramework.Core.Tests/Ioc/MicrosoftDiContainerTests.cs`
+- 接受只读 subagent 结论后，将 `LegacyICqrsRuntime` 定位为“容器兼容层”，明确本轮不删除别名、不改 dispatcher 主体、不与旧 `Command` / `Query` API 清理混做
+- 主线程已完成：
+  - `CqrsRuntimeModule` 把 legacy alias 注册收敛到 `RegisterLegacyRuntimeAlias(...)` helper，并在 XML 文档里明确新旧服务类型解析到同一 runtime 实例
+  - `CqrsTestRuntime.RegisterInfrastructure(...)` 现也通过同名 helper 补齐 legacy alias；当容器只预注册正式 `ICqrsRuntime` seam 时，会在幂等接线时回填旧命名空间 alias
+  - `MicrosoftDiContainerTests` 新增 `RegisterInfrastructure_Should_Backfill_Legacy_Cqrs_Runtime_Alias_With_The_Same_Instance`，锁定“只存在正式 seam 时也会补旧 alias，且两者仍指向同一实例”的兼容合同
+- worker 已完成文档收口：
+  - `GFramework.Core.Abstractions/README.md`
+  - `docs/zh-CN/abstractions/core-abstractions.md`
+  - `docs/zh-CN/core/cqrs.md`
+  - 三处文档都已明确：`GFramework.Core.Abstractions.Cqrs.ICqrsRuntime` 只是旧命名空间下保留的 compatibility alias，新代码应依赖 `GFramework.Cqrs.Abstractions.Cqrs.ICqrsRuntime`
+
+### 验证
+
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+  - 结果：通过，`42/42` passed
+- `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+
+### 当前下一步
+
+1. 在保持 branch diff 低于阈值的前提下，回到 `dispatch/invoker` 生成前移主线
+2. 优先尝试只覆盖 request 路径的 generated invoker/provider 最小切片，避免一次卷入 notification / stream / pipeline executor
+3. 下一次 batch 结束后继续复算 branch diff，确认距 `50 files` stop condition 的剩余 headroom
+
 ### 阶段：测试命名收口与 ArchitectureContext lazy-resolution 回归（CQRS-REWRITE-RP-065）
 
 - 继续按 `gframework-batch-boot 50` 执行，基线仍为本地现有 `origin/main`
