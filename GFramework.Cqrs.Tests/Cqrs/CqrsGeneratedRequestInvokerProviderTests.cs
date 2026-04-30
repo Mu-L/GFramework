@@ -58,6 +58,25 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证当实现类型隐藏、但 request handler interface 仍可直接表达时，
+    ///     registrar 仍会把 generated request invoker provider 注册到容器中。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Register_Generated_Request_Invoker_Provider_For_Hidden_Implementation()
+    {
+        var generatedAssembly = CreateHiddenImplementationGeneratedRequestInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+
+        var providers = container.GetAll<ICqrsRequestInvokerProvider>();
+
+        Assert.That(
+            providers.Select(static provider => provider.GetType()),
+            Is.EqualTo([typeof(HiddenImplementationGeneratedRequestInvokerProviderRegistry)]));
+    }
+
+    /// <summary>
     ///     验证 registrar 激活 generated registry 后，会把 stream invoker provider 注册到容器中。
     /// </summary>
     [Test]
@@ -73,6 +92,25 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         Assert.That(
             providers.Select(static provider => provider.GetType()),
             Is.EqualTo([typeof(GeneratedStreamInvokerProviderRegistry)]));
+    }
+
+    /// <summary>
+    ///     验证当实现类型隐藏、但 stream handler interface 仍可直接表达时，
+    ///     registrar 仍会把 generated stream invoker provider 注册到容器中。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Register_Generated_Stream_Invoker_Provider_For_Hidden_Implementation()
+    {
+        var generatedAssembly = CreateHiddenImplementationGeneratedStreamInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+
+        var providers = container.GetAll<ICqrsStreamInvokerProvider>();
+
+        Assert.That(
+            providers.Select(static provider => provider.GetType()),
+            Is.EqualTo([typeof(HiddenImplementationGeneratedStreamInvokerProviderRegistry)]));
     }
 
     /// <summary>
@@ -93,6 +131,25 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证当实现类型隐藏、但 request handler interface 仍可直接表达时，
+    ///     dispatcher 仍会消费 generated request invoker descriptor。
+    /// </summary>
+    [Test]
+    public async Task SendAsync_Should_Use_Generated_Request_Invoker_For_Hidden_Implementation_When_Provider_Is_Registered()
+    {
+        var generatedAssembly = CreateHiddenImplementationGeneratedRequestInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var response = await context.SendRequestAsync(
+            new HiddenImplementationRequestInvokerContainer.VisibleRequest("payload"));
+        Assert.That(response, Is.EqualTo("generated-hidden:payload"));
+    }
+
+    /// <summary>
     ///     验证 dispatcher 在首次创建 stream binding 时，会优先消费 generated stream invoker provider。
     /// </summary>
     [Test]
@@ -107,6 +164,25 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         var context = new ArchitectureContext(container);
         var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3)));
         Assert.That(results, Is.EqualTo([30, 31]));
+    }
+
+    /// <summary>
+    ///     验证当实现类型隐藏、但 stream handler interface 仍可直接表达时，
+    ///     dispatcher 仍会消费 generated stream invoker descriptor。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Use_Generated_Stream_Invoker_For_Hidden_Implementation_When_Provider_Is_Registered()
+    {
+        var generatedAssembly = CreateHiddenImplementationGeneratedStreamInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(
+            context.CreateStream(new HiddenImplementationStreamInvokerContainer.VisibleStreamRequest(3)));
+        Assert.That(results, Is.EqualTo([300, 301]));
     }
 
     /// <summary>
@@ -136,6 +212,36 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         generatedAssembly
             .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
             .Returns([new CqrsHandlerRegistryAttribute(typeof(GeneratedStreamInvokerProviderRegistry))]);
+        return generatedAssembly;
+    }
+
+    /// <summary>
+    ///     创建带有 hidden implementation request invoker registry 元数据的程序集替身。
+    /// </summary>
+    private static Mock<Assembly> CreateHiddenImplementationGeneratedRequestInvokerAssembly()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Cqrs.Tests.Cqrs.HiddenGeneratedRequestInvokerAssembly, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(HiddenImplementationGeneratedRequestInvokerProviderRegistry))]);
+        return generatedAssembly;
+    }
+
+    /// <summary>
+    ///     创建带有 hidden implementation stream invoker registry 元数据的程序集替身。
+    /// </summary>
+    private static Mock<Assembly> CreateHiddenImplementationGeneratedStreamInvokerAssembly()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Cqrs.Tests.Cqrs.HiddenGeneratedStreamInvokerAssembly, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(HiddenImplementationGeneratedStreamInvokerProviderRegistry))]);
         return generatedAssembly;
     }
 
