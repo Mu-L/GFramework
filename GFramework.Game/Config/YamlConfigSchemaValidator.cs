@@ -322,6 +322,7 @@ internal static partial class YamlConfigSchemaValidator
         bool isRoot = false)
     {
         ValidateUnsupportedCombinatorKeywords(tableName, schemaPath, propertyPath, element);
+        ValidateUnsupportedOpenObjectKeywords(tableName, schemaPath, propertyPath, element);
         var typeName = ResolveNodeTypeName(tableName, schemaPath, propertyPath, element);
         var referenceTableName = TryGetReferenceTableName(tableName, schemaPath, propertyPath, element);
         ValidateObjectOnlyKeywords(tableName, schemaPath, propertyPath, element, typeName);
@@ -362,6 +363,40 @@ internal static partial class YamlConfigSchemaValidator
             tableName,
             $"Property '{propertyPath}' in schema file '{schemaPath}' declares unsupported combinator keyword '{keywordName}'. " +
             "The current config schema subset does not support combinators that can change generated type shape.",
+            schemaPath: schemaPath,
+            displayPath: GetDiagnosticPath(propertyPath));
+    }
+
+    /// <summary>
+    ///     显式拒绝当前共享子集中尚未支持的开放对象关键字形状。
+    ///     当前配置系统默认采用闭合对象字段集；这里只接受显式重复该语义的
+    ///     <c>additionalProperties: false</c>，继续拒绝会引入动态字段形状的其它形式。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">当前节点的逻辑属性路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    private static void ValidateUnsupportedOpenObjectKeywords(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element)
+    {
+        if (!element.TryGetProperty("additionalProperties", out var additionalPropertiesElement))
+        {
+            return;
+        }
+
+        if (additionalPropertiesElement.ValueKind == JsonValueKind.False)
+        {
+            return;
+        }
+
+        throw ConfigLoadExceptionFactory.Create(
+            ConfigLoadFailureKind.SchemaUnsupported,
+            tableName,
+            $"Property '{propertyPath}' in schema file '{schemaPath}' uses unsupported 'additionalProperties' metadata. " +
+            "The current config schema subset only accepts 'additionalProperties: false' so object fields remain closed and strongly typed.",
             schemaPath: schemaPath,
             displayPath: GetDiagnosticPath(propertyPath));
     }

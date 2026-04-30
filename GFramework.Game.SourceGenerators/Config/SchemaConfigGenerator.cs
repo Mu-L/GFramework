@@ -233,6 +233,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
 
         return TryValidateStringFormatMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateUnsupportedCombinatorKeywordsRecursively(filePath, "<root>", root, out diagnostic) &&
+            TryValidateUnsupportedOpenObjectKeywordsRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateDependentRequiredMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateDependentSchemasMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateAllOfMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
@@ -878,6 +879,39 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     递归拒绝当前共享子集尚未支持的开放对象关键字形状。
+    ///     当前对象字段集默认是闭合的，因此这里只接受显式重复该语义的
+    ///     <c>additionalProperties: false</c>。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前节点树是否未声明不支持的开放对象关键字形状。</returns>
+    private static bool TryValidateUnsupportedOpenObjectKeywordsRecursively(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        return TryTraverseSchemaRecursively(
+            filePath,
+            displayPath,
+            element,
+            static (currentFilePath, currentDisplayPath, currentElement, _) =>
+            {
+                return TryValidateUnsupportedOpenObjectKeywords(
+                    currentFilePath,
+                    currentDisplayPath,
+                    currentElement,
+                    out var currentDiagnostic)
+                    ? (true, (Diagnostic?)null)
+                    : (false, currentDiagnostic);
+            },
+            out diagnostic);
+    }
+
+    /// <summary>
     ///     验证当前节点是否声明了会改变生成类型形状的未支持组合关键字。
     /// </summary>
     /// <param name="filePath">Schema 文件路径。</param>
@@ -904,6 +938,41 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             displayPath,
             keywordName,
             "The current config schema subset does not support combinators that can change generated type shape.");
+        return false;
+    }
+
+    /// <summary>
+    ///     验证当前节点是否声明了当前共享子集尚未支持的开放对象关键字形状。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>未声明不支持关键字时返回 <see langword="true" />。</returns>
+    private static bool TryValidateUnsupportedOpenObjectKeywords(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        diagnostic = null;
+        if (!element.TryGetProperty("additionalProperties", out var additionalPropertiesElement))
+        {
+            return true;
+        }
+
+        if (additionalPropertiesElement.ValueKind == JsonValueKind.False)
+        {
+            return true;
+        }
+
+        diagnostic = Diagnostic.Create(
+            ConfigSchemaDiagnostics.UnsupportedOpenObjectKeyword,
+            CreateFileLocation(filePath),
+            Path.GetFileName(filePath),
+            displayPath,
+            "additionalProperties",
+            "The current config schema subset only accepts 'additionalProperties: false' so object fields remain closed and strongly typed.");
         return false;
     }
 

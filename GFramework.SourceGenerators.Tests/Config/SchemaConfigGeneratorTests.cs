@@ -1844,6 +1844,77 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证生成器接受显式声明的 <c>additionalProperties: false</c>。
+    /// </summary>
+    [Test]
+    public void Run_Should_Accept_When_Object_Schema_Declares_AdditionalProperties_False()
+    {
+        const string source = DummySource;
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "reward"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "reward": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "itemCount": { "type": "integer" }
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        Assert.That(result.Results.Single().Diagnostics, Is.Empty);
+    }
+
+    /// <summary>
+    ///     验证生成器会拒绝会打开动态字段形状的 <c>additionalProperties</c>。
+    /// </summary>
+    [Test]
+    public void Run_Should_Report_Diagnostic_When_Object_Schema_Declares_Unsupported_AdditionalProperties()
+    {
+        const string source = DummySource;
+        const string schema = """
+                              {
+                                "type": "object",
+                                "required": ["id", "reward"],
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "reward": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "properties": {
+                                      "itemCount": { "type": "integer" }
+                                    }
+                                  }
+                                }
+                              }
+                              """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_016"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("reward"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("additionalProperties"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("only accepts 'additionalProperties: false'"));
+        });
+    }
+
+    /// <summary>
     ///     验证 <c>then</c> 子 schema 内的非法 <c>format</c> 也会在生成阶段直接给出诊断。
     /// </summary>
     [Test]
