@@ -12,10 +12,14 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-050`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-051`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
-  - 按 `$gframework-batch-boot 50` 继续推进 `documentation-full-coverage-governance`，沿用 `origin/main` 作为 stop-condition 基线，收口 `Game` / `Godot` 细页与少量 README 中残留的 reader-facing 措辞与标签问题
+  - 按 `$gframework-batch-boot 50` 继续推进 `documentation-full-coverage-governance`，沿用 `origin/main` 作为 stop-condition 基线，在保持 reader-facing 口吻治理的同时，继续补 `source-generators` / `CQRS` 的公开专题覆盖率
+- `2026-04-30` 本轮恢复时确认当前 `HEAD` 与 `origin/main` 同步，committed diff 为 `0` files / `0` lines；因此本批次不再只做措辞收口，而是允许补新的公开专题页和入口链路
+- `2026-04-30` 本轮接受 2 个 explorer 的只读结论：其一，`GFramework.SourceGenerators.Common` 更适合作为 landing / API 入口内的共享排障层，而不是新的独立 public page；其二，`Cqrs.SourceGenerators` 当前主要缺口不是“没有入口”，而是现有专题页与 `core/cqrs.md` 对生成策略层级、fallback 精度和 `GF_Cqrs_001` 的解释不够 reader-facing
+- `2026-04-30` 本批次已新增 `docs/zh-CN/source-generators/schema-config-generator.md`，并同步更新 `docs/zh-CN/source-generators/index.md`、`docs/zh-CN/api-reference/index.md`、`docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`、`docs/zh-CN/core/cqrs.md` 与 `docs/.vitepress/config.mts`，把 `Game.SourceGenerators` 的 schema 生成链路和 `Cqrs.SourceGenerators` 的定向 fallback 语义收敛成站内可见入口
+- 当前工作树相对 `origin/main` 已达到 `39` files / `2555` lines；仍低于 `50` 文件 stop condition，但后续若继续扩批，应优先提交本轮覆盖扩展后再开新批次
 - `2026-04-29` 重新进入时确认当前分支仍为 `docs/sdk-update-documentation`，但 upstream `origin/docs/sdk-update-documentation` 已不存在；因此本轮不再把旧 PR review 线程作为默认恢复入口，而是以本地 diff vs `origin/main` 为主
 - `2026-04-29` 上一批已完成 11 个低风险文档文件的收口：去掉 `ai-libs`、`旧文档`、`优先看` / `先看` / `转到` 这类内部或指令式措辞，并把 README 中暴露原始路径的链接标签改成 reader-facing 标题
 - `2026-04-29` 本批次继续接受 2 个 explorer 的只读结论：一个负责 `game/data.md`、`game/storage.md`、`godot/ui.md` 的热点排序，一个负责 README reader-facing 标签巡检；主线程只接受低风险措辞问题，不扩展到结构重写
@@ -26,6 +30,9 @@
 ## 当前状态摘要
 
 - `Core`、`Ecs.Arch`、`Cqrs`、`Game`、`Godot` 五个模块族当前都已有 README / landing / topic / API 参考层级的已验证入口。
+- `2026-04-30` source-generators 栏目当前已补出新的 `Schema 配置生成器` 专题页，并通过 landing、API 入口和侧栏把 `Game.SourceGenerators` 从“只在 `config-system.md` 侧面提到”提升到独立 reader-facing 入口。
+- `2026-04-30` `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md` 与 `docs/zh-CN/core/cqrs.md` 当前已明确“有 fallback != 退回整程序集盲扫”，并补充 direct registration、实现类型定向反射、精确 service type lookup 与程序集级 fallback 元数据之间的分层关系。
+- `2026-04-30` `docs/zh-CN/api-reference/index.md` 与 `source-generators/index.md` 当前把 `SourceGenerators.Common`、`*.SourceGenerators.Abstractions` 收敛为共享 diagnostics / attribute / 冲突规则的阅读入口，而不是新的安装包或维护者专题页。
 - `2026-04-29` 新一轮 batch boot 第 2 批次已进一步收口 `docs/zh-CN/game/data.md`、`game/storage.md`、`godot/ui.md` 与 `GFramework.Cqrs.Abstractions/README.md`、`GFramework.SourceGenerators.Common/README.md`：移除 “仓库和测试确认”“真实消费者 wiring”“CoreGrid 当前的做法”“优先看” 这类内部或生硬口吻，并把 CQRS 抽象层 README 的源文件列表改成契约类型族说明。
 - `2026-04-29` 新一轮 batch boot 已收口 `docs/zh-CN/godot/storage.md`、`godot/setting.md`、`godot/signal.md`、`godot/logging.md`、`godot/index.md`、`game/scene.md`、`core/index.md`、`game/config-system.md`、`ecs/arch.md` 与 `GFramework.Godot/README.md`、`tools/gframework-config-tool/README.md` 的 reader-facing 文案：移除 `ai-libs`、旧文档对比、命令式跳转和原始路径标签。
 - `2026-04-29` 当前分支的 upstream `origin/docs/sdk-update-documentation` 已 gone；后续若继续批处理，应继续以 `origin/main` 作为 branch-size stop condition 的 authoritative baseline，而不是默认恢复旧 PR review 状态。
@@ -70,6 +77,7 @@
 - `dotnet build GFramework.csproj -c Release` 当前仍会输出仓库既有 analyzer warnings（如 `MA0158`、`MA0051`、`MA0004`）；本轮仅修改文档与 package metadata，不扩展到 warning 清理。
 - 当前分支 upstream 已 gone；在重新建立 remote branch 或新的 PR 之前，不适合再把旧 PR `#299` 的 review 状态当作默认恢复信号。
 - 当前 batch boot 已从 `origin/main` 零 diff 状态重新起步；本轮仍是低风险措辞收口，但下一轮若继续深入 README 子系统地图或大段采用路径重写，review 面会明显扩大。
+- 当前工作树在 coverage 扩展后已接近 `$gframework-batch-boot 50` 的中后段窗口；如果继续新增 source-generator 或 README 专题，建议先提交本轮改动并重新计算 committed diff，再决定是否继续扩批。
 - `GFramework.Cqrs`、`GFramework.Cqrs.SourceGenerators`、`GFramework.Game.SourceGenerators`、`GFramework.Ecs.Arch` 等 README 仍有若干源文件列表式“子系统地图”段落；这些已经接近结构级改写，不适合作为本轮剩余低风险批次继续机械推进。
 
 ## 归档指针
@@ -91,6 +99,18 @@
 
 ## 最新验证
 
+- `2026-04-30` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/schema-config-generator.md`
+  - 结果：通过；新增 `Schema 配置生成器` 专题页的 frontmatter、链接与代码块校验通过。
+- `2026-04-30` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/index.md`
+  - 结果：通过；source-generators landing 在补 `Schema 配置生成器` 与共享支撑层阅读路线后校验通过。
+- `2026-04-30` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
+  - 结果：通过；`Cqrs` generator 专题页新增策略层级与 fallback 精度说明后校验通过。
+- `2026-04-30` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/cqrs.md`
+  - 结果：通过；`CQRS` 运行时页补充 generated registry 与 fallback 协作说明后校验通过。
+- `2026-04-30` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/api-reference/index.md`
+  - 结果：通过；API 入口页补充 `Game.SourceGenerators` 与共享 source-generator 支撑层阅读路线后校验通过。
+- `2026-04-30` `bun run build`（工作目录：`docs/`）
+  - 结果：通过；新增 source-generators 专题页与侧栏入口后站点仍可构建，仅保留既有大 chunk warning。
 - `2026-04-29` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/data.md`
   - 结果：通过；`game/data.md` 的 frontmatter、链接与代码块校验通过。
 - `2026-04-29` `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/game/storage.md`
@@ -132,7 +152,7 @@
 
 ## 下一步
 
-1. 提交本轮第 2 批低风险 reader-facing 文案批次，并在提交后重新计算 branch diff vs `origin/main`，确认仍明显低于 `50` 文件 stop condition。
-2. 若继续下一批，优先挑选仍可“局部改句子”的页面或 README 标签问题；`Cqrs`、`Game.SourceGenerators`、`Ecs.Arch` 这类源文件列表式 README 应视作结构级专题，必要时单独开一轮更明确的写作目标。
+1. 提交本轮 source-generators / CQRS coverage 扩展批次，并在提交后重新计算 committed branch diff vs `origin/main`，确认是否仍适合继续在同一 `$gframework-batch-boot 50` 窗口内推进。
+2. 若继续下一批，优先挑选“已有 package README、但站内专题仍不足”的模块入口，例如 `README` 与现有 docs 之间的采用路径补链；避免把 `SourceGenerators.Common` 之类共享支撑层继续扩写成维护者导向的独立专题。
 3. 只有在重新建立 remote branch 或新的 PR 之后，再恢复 `$gframework-pr-review` 作为默认恢复入口；在此之前以本地 diff 与验证结果为准。
 4. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、`storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。

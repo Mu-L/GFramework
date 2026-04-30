@@ -2,6 +2,39 @@
 
 ## 2026-04-29
 
+### 当前恢复点：RP-051
+
+- 本轮按 `$gframework-batch-boot 50` 恢复后，先确认 `HEAD` 与 `origin/main` `79f9cb37`（`2026-04-29 22:59:12 +08:00`）同步，committed diff 为 `0` files / `0` lines，因此允许把批次目标从“低风险句子收口”提升为“补新的 docs coverage 入口”。
+- 主线程保留实现与验证，同时接受了 2 个 explorer 的只读结论：一条用于判断 `SourceGenerators.Common` 是否值得升成独立 public page，一条用于判断 `Cqrs.SourceGenerators` 的真实公开缺口。accepted 结论是：共享 source-generator 支撑层更适合补 landing / API 入口，而 `Cqrs.SourceGenerators` 应增强现有专题页对策略层级与 fallback 精度的解释。
+- 一个 worker 曾被短暂分配去草拟独立 `shared-support-modules` 页面，但在 explorer 结论返回后被中断；最终无文件写入，也没有并行实现遗留。
+- 实际落地的 coverage 扩展集中在 6 个文件：新增 `docs/zh-CN/source-generators/schema-config-generator.md`，并更新 `docs/zh-CN/source-generators/index.md`、`docs/zh-CN/api-reference/index.md`、`docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`、`docs/zh-CN/core/cqrs.md` 与 `docs/.vitepress/config.mts`。
+- docs 页面与恢复文档更新完成后，工作树相对 `origin/main` 已到 `39` files / `2555` lines；仍低于 `50` 文件 stop condition，但本轮已不再适合继续新开第三类 coverage 切片。
+
+### 当前决策（RP-051）
+
+- `Game.SourceGenerators` 当前公开缺口足够明确，因此直接补一张新的 reader-facing 专题页，专门解释 schema 输入契约、生成物形态、聚合注册入口和 `ConfigSchemaDiagnostics` 边界。
+- `SourceGenerators.Common`、`Core.SourceGenerators.Abstractions`、`Godot.SourceGenerators.Abstractions` 不提升为新的独立 public docs 页面，只在现有 landing / API 入口里补共享 diagnostics、attribute 契约与冲突规则的阅读路线。
+- `Cqrs.SourceGenerators` 不再新增第二张专题页，而是在现有 `cqrs-handler-registry-generator.md` 与 `core/cqrs.md` 内明确“有 fallback != 整程序集盲扫”、direct registration / reflected implementation / precise service type lookup / assembly fallback 的层级关系，以及 `GF_Cqrs_001` 的 reader-facing 判断顺序。
+
+### 当前验证（RP-051）
+
+- 页面校验：
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/schema-config-generator.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/index.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/core/cqrs.md`
+  - `bash .agents/skills/gframework-doc-refresh/scripts/validate-all.sh docs/zh-CN/api-reference/index.md`
+  - 结果：通过；本轮新增专题页与 4 个入口页 / 专题页校验全部通过。
+- 站点构建：
+  - `bun run build`（工作目录：`docs/`）
+  - 结果：通过；新增 `Schema 配置生成器` 侧栏入口后站点仍可构建，仅保留既有大 chunk warning。
+
+### 下一步（RP-051）
+
+1. 提交本轮 source-generators / CQRS coverage 扩展批次，并把 committed diff vs `origin/main` 重新写回 active tracking。
+2. 若继续同一主题，优先挑选“已有用户面 package，但站内专题仍需补链”的模块，而不是继续给共享支撑层单开页面。
+3. 在 remote branch / PR 恢复之前，继续把 `origin/main` + branch-size 指标当作唯一 batch stop condition。
+
 ### 当前恢复点：RP-050
 
 - 本轮继续按 `$gframework-batch-boot 50` 推进，并沿用 `origin/main` `4557dde6`（`2026-04-29 11:14:56 +08:00`）作为唯一 branch-size baseline。
