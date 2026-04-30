@@ -96,6 +96,10 @@
 - `2026-04-30` Tooling / Docs reader-facing 收口：
   - `git diff --check -- docs/zh-CN/game/config-tool.md docs/zh-CN/game/config-system.md tools/gframework-config-tool/README.md ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`：通过
   - 已补齐工具能力边界、`additionalProperties: false` / `oneOf` / `anyOf` 说明、工具与 Runtime 契约关系，以及复杂 shape 的 raw YAML 回退路径
+- `2026-04-30` Tooling parser 边界收紧：
+  - `bun run test`（`tools/gframework-config-tool`）：通过（4 test files）
+  - 已让工具侧对 `additionalProperties` 的共享边界与 Runtime / Generator 对齐，只接受 `additionalProperties: false`
+  - 已让数组 `items` / `contains` 子 schema 必须显式声明 object-shaped 且带 `type`，避免 tuple-array 或缺失类型的坏形状被工具侧宽松吞掉
 
 ## 下一步
 

@@ -189,3 +189,25 @@
 
 1. Tooling / Docs 后续若继续推进，优先补真实采用示例，而不是重复扩写边界清单
 2. 主线代码批次继续以 Runtime / Generator / Tooling 三端共享关键字收口为中心
+
+## 2026-04-30
+
+### 阶段：Tooling parser 坏形状拒绝收紧（AI-FIRST-CONFIG-RP-003）
+
+- 已在 `tools/gframework-config-tool/src/configValidation.js` 收紧工具侧 schema parser 边界
+- 本轮不是扩 JSON Schema 能力，而是避免工具侧比 Runtime / Generator 更宽松：
+  - `additionalProperties` 现在只接受 `false`
+  - 数组 `items` 必须是 object-shaped 且显式带 `type`
+  - 数组 `contains` 若声明，也必须是 object-shaped 且显式带 `type`
+- 这样 tuple-array `items: []`、缺失 `type` 的 `contains` 子 schema，以及其他会误导用户以为“工具支持但运行时不支持”的坏形状，会在工具解析阶段直接失败
+
+### 验证
+
+- 2026-04-30：`bun run test`（`tools/gframework-config-tool`）
+  - 结果：通过
+  - 备注：新增 JS 回归覆盖 `additionalProperties`、tuple-array `items` 与缺失 `type` 的 `contains`
+
+### 下一步
+
+1. 继续盘点 Runtime / Generator / Tooling 三端是否还有类似“工具宽松吞掉、主线不支持”的 schema 形状
+2. 若继续做 Tooling lane，优先补 reader-facing 示例或采用路径，而不是继续堆积边界清单

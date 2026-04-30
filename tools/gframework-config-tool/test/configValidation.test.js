@@ -206,6 +206,25 @@ test("parseSchemaContent should reject unsupported oneOf combinators", () => {
         /unsupported combinator keyword 'oneOf'/u);
 });
 
+test("parseSchemaContent should reject unsupported additionalProperties forms", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'additionalProperties' metadata/u);
+});
+
 test("parseSchemaContent should build object const comparable keys with ordinal property ordering", () => {
     const schema = parseSchemaContent(`
         {
@@ -1542,6 +1561,45 @@ test("parseSchemaContent should reject nested-array contains schemas", () => {
             }
         `),
         /unsupported nested array 'contains' schemas/u);
+});
+
+test("parseSchemaContent should reject array items without an explicit typed object schema", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "items": [
+                    { "type": "integer" }
+                  ]
+                }
+              }
+            }
+        `),
+        /must declare 'items' as an object-valued schema with an explicit 'type'/u);
+});
+
+test("parseSchemaContent should reject contains without an explicit typed object schema", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "contains": {
+                    "const": 5
+                  },
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+        `),
+        /must declare 'contains' as an object-valued schema with an explicit 'type'/u);
 });
 
 test("parseSchemaContent should reject minContains and maxContains without contains", () => {

@@ -1102,6 +1102,8 @@ function parseSchemaNode(rawNode, displayPath) {
             "The current config schema subset does not support combinators that can change generated type shape.");
     }
 
+    validateUnsupportedOpenObjectKeyword(value, displayPath);
+
     const type = typeof value.type === "string" ? value.type : "object";
     const patternMetadata = normalizeSchemaPattern(value.pattern, displayPath);
     const stringFormat = normalizeSchemaStringFormat(value.format, type, displayPath);
@@ -1175,13 +1177,17 @@ function parseSchemaNode(rawNode, displayPath) {
     }
 
     if (type === "array") {
-        const itemNode = parseSchemaNode(value.items || {}, joinArrayTemplatePath(displayPath));
-        const containsNode = value.contains && typeof value.contains === "object"
-            ? parseSchemaNode(value.contains, joinArrayTemplatePath(displayPath))
-            : undefined;
+        const itemNode = parseRequiredArrayChildSchema(value.items, displayPath, "items");
+        const containsNode = value.contains === undefined
+            ? undefined
+            : parseOptionalArrayChildSchema(value.contains, displayPath, "contains");
         if (!containsNode &&
             (typeof metadata.minContains === "number" || typeof metadata.maxContains === "number")) {
             throw new Error(`Schema property '${displayPath}' declares 'minContains' or 'maxContains' without 'contains'.`);
+        }
+
+        if (itemNode.type === "array") {
+            throw new Error(`Schema property '${displayPath}' uses unsupported nested array items.`);
         }
 
         if (containsNode && containsNode.type === "array") {
@@ -1258,6 +1264,87 @@ function parseSchemaNode(rawNode, displayPath) {
         refTable: metadata.refTable,
         not: negatedSchemaNode
     }, value.const, displayPath), value.enum, displayPath);
+}
+
+/**
+ * Reject open-object keyword forms that would drift away from the Runtime and
+ * Source Generator contracts. The current shared subset keeps object fields
+ * closed and only accepts an explicit `additionalProperties: false` reminder.
+ *
+ * @param {Record<string, unknown>} schemaNode Raw schema object.
+ * @param {string} displayPath Logical property path.
+ */
+function validateUnsupportedOpenObjectKeyword(schemaNode, displayPath) {
+    if (!Object.prototype.hasOwnProperty.call(schemaNode, "additionalProperties")) {
+        return;
+    }
+
+    if (schemaNode.additionalProperties === false) {
+        return;
+    }
+
+    throw new Error(
+        `Schema property '${displayPath}' uses unsupported 'additionalProperties' metadata. ` +
+        "The current config schema subset only accepts 'additionalProperties: false' so object fields remain closed and strongly typed.");
+}
+
+/**
+ * Parse one required array child schema while keeping tooling errors aligned
+ * with the Runtime and Source Generator contracts.
+ *
+ * @param {unknown} rawChild Raw child schema node.
+ * @param {string} displayPath Logical parent array path.
+ * @param {"items" | "contains"} keywordName Child schema keyword.
+ * @returns {SchemaNode} Parsed child schema node.
+ */
+function parseRequiredArrayChildSchema(rawChild, displayPath, keywordName) {
+    const childNode = parseArrayChildSchema(rawChild, displayPath, keywordName);
+    if (childNode) {
+        return childNode;
+    }
+
+    throw new Error(
+        `Schema property '${displayPath}' must declare '${keywordName}' as an object-valued schema with an explicit 'type'.`);
+}
+
+/**
+ * Parse one optional array child schema when it is present.
+ *
+ * @param {unknown} rawChild Raw child schema node.
+ * @param {string} displayPath Logical parent array path.
+ * @param {"items" | "contains"} keywordName Child schema keyword.
+ * @returns {SchemaNode | undefined} Parsed child schema node.
+ */
+function parseOptionalArrayChildSchema(rawChild, displayPath, keywordName) {
+    const childNode = parseArrayChildSchema(rawChild, displayPath, keywordName);
+    if (childNode) {
+        return childNode;
+    }
+
+    throw new Error(
+        `Schema property '${displayPath}' must declare '${keywordName}' as an object-valued schema with an explicit 'type'.`);
+}
+
+/**
+ * Parse one array child schema only when it is object-shaped and explicitly
+ * typed. This avoids silently treating tuple arrays or malformed child
+ * schemas as empty object nodes.
+ *
+ * @param {unknown} rawChild Raw child schema node.
+ * @param {string} displayPath Logical parent array path.
+ * @param {"items" | "contains"} keywordName Child schema keyword.
+ * @returns {SchemaNode | undefined} Parsed child schema node.
+ */
+function parseArrayChildSchema(rawChild, displayPath, keywordName) {
+    if (!rawChild || typeof rawChild !== "object" || Array.isArray(rawChild)) {
+        return undefined;
+    }
+
+    if (typeof rawChild.type !== "string") {
+        return undefined;
+    }
+
+    return parseSchemaNode(rawChild, joinArrayTemplatePath(displayPath, keywordName));
 }
 
 /**
