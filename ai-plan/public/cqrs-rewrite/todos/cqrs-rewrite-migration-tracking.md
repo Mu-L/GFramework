@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-066`
+- 恢复点编号：`CQRS-REWRITE-RP-067`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 已完成一轮 `CQRS vs Mediator` 只读评估归档，结论已沉淀到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
@@ -40,6 +40,15 @@ CQRS 迁移与收敛。
     - `GFramework.Core.Abstractions/README.md`、`docs/zh-CN/abstractions/core-abstractions.md` 与
       `docs/zh-CN/core/cqrs.md` 现已明确：旧命名空间下的 `ICqrsRuntime` 仅作为 compatibility alias 保留，
       新代码应直接依赖 `GFramework.Cqrs.Abstractions.Cqrs.ICqrsRuntime`
+  - 已完成一轮 `dispatch/invoker` 生成前移的最小 request 切片：
+    - `GFramework.Cqrs` 新增 `ICqrsRequestInvokerProvider`、`IEnumeratesCqrsRequestInvokerDescriptors`、
+      `CqrsRequestInvokerDescriptor` 与 `CqrsRequestInvokerDescriptorEntry`
+    - generated registry 若实现 request invoker provider 契约，`CqrsHandlerRegistrar` 现会在激活 registry 后把 provider 注册进容器，
+      并把 provider 枚举出的 request invoker 描述符写入 dispatcher 的进程级弱缓存
+    - `CqrsDispatcher` 现会在首次创建 request dispatch binding 时优先命中 generated request invoker 描述符；
+      未命中时仍回退到既有 `MakeGenericMethod + Delegate.CreateDelegate` 路径
+    - `GFramework.Cqrs.Tests` 已补充 `CqrsGeneratedRequestInvokerProviderTests`，锁定 registrar 接线和 dispatcher 消费 generated invoker 的最小语义
+    - `GFramework.SourceGenerators.Tests` 已补充 generator 回归，锁定当 runtime 暴露新契约时，generated registry 会额外发射 request invoker provider 成员与 invoker 方法
   - 已将 mixed fallback 场景进一步收敛：当 runtime 允许同一程序集声明多个 `CqrsReflectionFallbackAttribute` 实例时，generator 现会把可直接引用的 fallback handlers 与仅能按名称恢复的 fallback handlers 拆分发射
   - `CqrsReflectionFallbackAttribute` 现允许多实例，以承载 `Type[]` 与字符串 fallback 元数据的组合输出
   - 已将 generator 的程序集级 fallback 元数据进一步收敛：当全部 fallback handlers 都可直接引用且 runtime 暴露 `params Type[]` 合同时，生成器现优先发射 `typeof(...)` 形式的 fallback 元数据
@@ -228,6 +237,15 @@ CQRS 迁移与收敛。
 - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；确认 legacy alias helper 收敛与文档更新未引入 `GFramework.Core` 模块构建告警
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests|FullyQualifiedName~CqrsHandlerRegistrarTests|FullyQualifiedName~CqrsDispatcherCacheTests"`
+  - 结果：通过
+  - 备注：`22/22` 通过；确认 generated request invoker provider 的 registrar 接线、dispatcher 消费与现有 request/notification/stream cache 语义未回归
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过
+  - 备注：`1/1` 通过；锁定 generator 会在 runtime 合同可用时发射 request invoker provider 成员
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`；确认 request invoker provider seam 与 dispatcher/registrar 接线未引入新增构建告警
 - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；确认三份 `Mediator` 命名收口后的 CQRS 测试项目构建仍然干净
@@ -238,5 +256,5 @@ CQRS 迁移与收敛。
 ## 下一步
 
 1. 基于已落地的 notification publisher seam，评估是否需要第二阶段公开配置面、并行 publisher 或 telemetry decorator
-2. 继续以 `dispatch/invoker` 生成前移为优先对象，优先尝试 “generated request invoker provider + dispatcher fallback” 这条最小实现切片
+2. 基于已落地的 request invoker provider，评估是否继续把 notification / stream 的 invoker 也前移，或先补 provider 发现/诊断与文档入口
 3. 单独规划旧 `Command` / `Query` API 的收口顺序；`LegacyICqrsRuntime` compatibility slice 已收口到显式 helper 与专门测试，可暂时移出最高优先级

@@ -2,6 +2,39 @@
 
 ## 2026-04-30
 
+### 阶段：generated request invoker provider 最小落地（CQRS-REWRITE-RP-067）
+
+- 继续按 `gframework-batch-boot 50` 执行，基线仍为本地现有 `origin/main`
+- 在 `RP-066` 提交后复算 branch diff，相对 `origin/main` 增长到 `22 files`，仍明显低于 `50 files` stop condition，因此继续下一批
+- 本轮 critical path 保持在主线程，本地完成 `dispatch/invoker` 生成前移的最小 request 切片；尝试委派 source-generator 测试给 worker 时因 subagent 名额已满失败，因此主线程直接接管该测试修改
+- 本轮关键设计调整：
+  - 不按 `requestType.Assembly` 做 provider 发现，避免“请求定义在 A、handler 与 generated registry 在 B”时漏掉 generated invoker
+  - generated registry 若实现 `ICqrsRequestInvokerProvider`，registrar 会在激活 registry 后把 provider 注册进容器，并通过 `IEnumeratesCqrsRequestInvokerDescriptors` 把描述符写入 dispatcher 的进程级弱缓存
+  - dispatcher 首次创建 request dispatch binding 时只按 `requestType + responseType` 读取静态弱缓存，不依赖具体容器实例；未命中时仍走既有反射创建路径
+- 已完成实现：
+  - `GFramework.Cqrs` 新增 `ICqrsRequestInvokerProvider`、`IEnumeratesCqrsRequestInvokerDescriptors`、
+    `CqrsRequestInvokerDescriptor` 与 `CqrsRequestInvokerDescriptorEntry`
+  - `CqrsHandlerRegistrar` 现会识别 generated registry 的 request invoker provider 能力，并登记 provider 与 request invoker 描述符
+  - `CqrsDispatcher` 新增 generated request invoker 弱缓存，并在 request binding 创建时优先消费该元数据
+  - `CqrsHandlerRegistryGenerator` 在 runtime 合同可用时，会让 generated registry 额外实现 request invoker provider 相关接口，并发射 descriptor 列表、`TryGetDescriptor(...)`、`GetDescriptors()` 与 request invoker 静态方法
+- 已补充测试：
+  - `CqrsGeneratedRequestInvokerProviderTests` 锁定 registrar 会注册 generated request invoker provider，且 dispatcher 走 generated invoker 后会返回 `generated:` 前缀结果
+  - `CqrsHandlerRegistryGeneratorTests` 锁定 generated source 会包含 request invoker provider 接口、descriptor 条目与 `InvokeRequestHandler0(...)` 方法
+
+### 验证
+
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests|FullyQualifiedName~CqrsHandlerRegistrarTests|FullyQualifiedName~CqrsDispatcherCacheTests"`
+  - 结果：通过，`22/22` passed
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过，`1/1` passed
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+
+### 当前下一步
+
+1. 评估 notification / stream invoker 是否值得沿同一 provider 模式继续前移，或先补 request provider 的公开说明与诊断语义
+2. 继续在保持 branch diff 低于阈值的前提下推进下一批；当前相对 `origin/main` 的 branch diff 为 `22 files`
+
 ### 阶段：LegacyICqrsRuntime compatibility slice 收口（CQRS-REWRITE-RP-066）
 
 - 继续按 `gframework-batch-boot 50` 执行，基线仍为本地现有 `origin/main`

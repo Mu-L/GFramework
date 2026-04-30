@@ -25,10 +25,11 @@ public sealed partial class CqrsHandlerRegistryGenerator
     ///     该方法本身不报告诊断；“fallback 必需但 runtime 契约缺失”的错误由调用方在进入本方法前处理。
     /// </remarks>
     private static string GenerateSource(
+        GenerationEnvironment generationEnvironment,
         IReadOnlyList<ImplementationRegistrationSpec> registrations,
         ReflectionFallbackEmissionSpec reflectionFallbackEmission)
     {
-        var sourceShape = CreateGeneratedRegistrySourceShape(registrations);
+        var sourceShape = CreateGeneratedRegistrySourceShape(generationEnvironment, registrations);
         var builder = new StringBuilder();
         AppendGeneratedSourcePreamble(builder, reflectionFallbackEmission);
         AppendGeneratedRegistryType(builder, registrations, sourceShape);
@@ -41,6 +42,7 @@ public sealed partial class CqrsHandlerRegistryGenerator
     /// <param name="registrations">已整理并排序的 handler 注册描述。</param>
     /// <returns>当前生成输出需要启用的结构分支。</returns>
     private static GeneratedRegistrySourceShape CreateGeneratedRegistrySourceShape(
+        GenerationEnvironment generationEnvironment,
         IReadOnlyList<ImplementationRegistrationSpec> registrations)
     {
         var hasReflectedImplementationRegistrations = registrations.Any(static registration =>
@@ -52,12 +54,44 @@ public sealed partial class CqrsHandlerRegistryGenerator
         var hasExternalAssemblyTypeLookups = registrations.Any(static registration =>
             registration.PreciseReflectedRegistrations.Any(static preciseRegistration =>
                 preciseRegistration.ServiceTypeArguments.Any(ContainsExternalAssemblyTypeLookup)));
+        var requestInvokerEmissions = CreateRequestInvokerEmissions(
+            generationEnvironment.SupportsRequestInvokerProvider,
+            registrations);
 
         return new GeneratedRegistrySourceShape(
             hasReflectedImplementationRegistrations,
             hasPreciseReflectedRegistrations,
             hasReflectionTypeLookups,
-            hasExternalAssemblyTypeLookups);
+            hasExternalAssemblyTypeLookups,
+            generationEnvironment.SupportsRequestInvokerProvider,
+            requestInvokerEmissions);
+    }
+
+    private static ImmutableArray<RequestInvokerEmissionSpec> CreateRequestInvokerEmissions(
+        bool supportsRequestInvokerProvider,
+        IReadOnlyList<ImplementationRegistrationSpec> registrations)
+    {
+        if (!supportsRequestInvokerProvider)
+            return ImmutableArray<RequestInvokerEmissionSpec>.Empty;
+
+        var builder = ImmutableArray.CreateBuilder<RequestInvokerEmissionSpec>();
+        var methodIndex = 0;
+        foreach (var registration in registrations)
+        {
+            foreach (var directRegistration in registration.DirectRegistrations)
+            {
+                if (directRegistration.RequestInvokerRegistration is not { } requestInvokerRegistration)
+                    continue;
+
+                builder.Add(new RequestInvokerEmissionSpec(
+                    requestInvokerRegistration.RequestTypeDisplayName,
+                    requestInvokerRegistration.ResponseTypeDisplayName,
+                    directRegistration.HandlerInterfaceDisplayName,
+                    methodIndex++));
+            }
+        }
+
+        return builder.ToImmutable();
     }
 
     /// <summary>
@@ -160,9 +194,25 @@ public sealed partial class CqrsHandlerRegistryGenerator
         builder.Append(GeneratedTypeName);
         builder.Append(" : global::");
         builder.Append(CqrsRuntimeNamespace);
-        builder.AppendLine(".ICqrsHandlerRegistry");
+        builder.Append(".ICqrsHandlerRegistry");
+        if (sourceShape.HasRequestInvokerProvider)
+        {
+            builder.Append(", global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".ICqrsRequestInvokerProvider, global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".IEnumeratesCqrsRequestInvokerDescriptors");
+        }
+
+        builder.AppendLine();
         builder.AppendLine("{");
         AppendRegisterMethod(builder, registrations, sourceShape);
+
+        if (sourceShape.HasRequestInvokerProvider)
+        {
+            builder.AppendLine();
+            AppendRequestInvokerProviderMembers(builder, sourceShape.RequestInvokerEmissions);
+        }
 
         if (sourceShape.HasExternalAssemblyTypeLookups)
         {
@@ -220,6 +270,103 @@ public sealed partial class CqrsHandlerRegistryGenerator
             }
         }
 
+        builder.AppendLine("    }");
+    }
+
+    private static void AppendRequestInvokerProviderMembers(
+        StringBuilder builder,
+        ImmutableArray<RequestInvokerEmissionSpec> requestInvokerEmissions)
+    {
+        AppendRequestInvokerDescriptorArray(builder, requestInvokerEmissions);
+        builder.AppendLine();
+        AppendRequestInvokerProviderMethods(builder);
+
+        for (var index = 0; index < requestInvokerEmissions.Length; index++)
+        {
+            builder.AppendLine();
+            AppendRequestInvokerMethod(builder, requestInvokerEmissions[index]);
+        }
+    }
+
+    private static void AppendRequestInvokerDescriptorArray(
+        StringBuilder builder,
+        ImmutableArray<RequestInvokerEmissionSpec> requestInvokerEmissions)
+    {
+        builder.AppendLine("    private static readonly global::GFramework.Cqrs.CqrsRequestInvokerDescriptorEntry[] RequestInvokerDescriptors =");
+        builder.AppendLine("    [");
+
+        for (var index = 0; index < requestInvokerEmissions.Length; index++)
+        {
+            var emission = requestInvokerEmissions[index];
+            builder.Append("        new global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".CqrsRequestInvokerDescriptorEntry(typeof(");
+            builder.Append(emission.RequestTypeDisplayName);
+            builder.Append("), typeof(");
+            builder.Append(emission.ResponseTypeDisplayName);
+            builder.Append("), new global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".CqrsRequestInvokerDescriptor(typeof(");
+            builder.Append(emission.HandlerInterfaceDisplayName);
+            builder.Append("), typeof(");
+            builder.Append(GeneratedTypeName);
+            builder.Append(").GetMethod(nameof(InvokeRequestHandler");
+            builder.Append(emission.MethodIndex);
+            builder.Append("), global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static)!))");
+            builder.AppendLine(index == requestInvokerEmissions.Length - 1 ? string.Empty : ",");
+        }
+
+        builder.AppendLine("    ];");
+    }
+
+    private static void AppendRequestInvokerProviderMethods(StringBuilder builder)
+    {
+        builder.Append("    public global::System.Collections.Generic.IReadOnlyList<global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.AppendLine(".CqrsRequestInvokerDescriptorEntry> GetDescriptors()");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return RequestInvokerDescriptors;");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.Append("    public bool TryGetDescriptor(global::System.Type requestType, global::System.Type responseType, out global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.AppendLine(".CqrsRequestInvokerDescriptor? descriptor)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (requestType is null)");
+        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(requestType));");
+        builder.AppendLine("        if (responseType is null)");
+        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(responseType));");
+        builder.AppendLine();
+        builder.AppendLine("        foreach (var entry in RequestInvokerDescriptors)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (entry.RequestType == requestType && entry.ResponseType == responseType)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                descriptor = entry.Descriptor;");
+        builder.AppendLine("                return true;");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        descriptor = null;");
+        builder.AppendLine("        return false;");
+        builder.AppendLine("    }");
+    }
+
+    private static void AppendRequestInvokerMethod(StringBuilder builder, RequestInvokerEmissionSpec emission)
+    {
+        builder.Append("    private static global::System.Threading.Tasks.ValueTask<");
+        builder.Append(emission.ResponseTypeDisplayName);
+        builder.Append("> InvokeRequestHandler");
+        builder.Append(emission.MethodIndex);
+        builder.Append("(object handler, object request, global::System.Threading.CancellationToken cancellationToken)");
+        builder.AppendLine();
+        builder.AppendLine("    {");
+        builder.Append("        var typedHandler = (");
+        builder.Append(emission.HandlerInterfaceDisplayName);
+        builder.AppendLine(")handler;");
+        builder.Append("        var typedRequest = (");
+        builder.Append(emission.RequestTypeDisplayName);
+        builder.AppendLine(")request;");
+        builder.AppendLine("        return typedHandler.Handle(typedRequest, cancellationToken);");
         builder.AppendLine("    }");
     }
 

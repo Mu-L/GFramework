@@ -18,6 +18,11 @@ internal sealed class CqrsDispatcher(
     ILogger logger,
     INotificationPublisher notificationPublisher) : ICqrsRuntime
 {
+    // 卸载安全的进程级缓存：当 generated registry 提供 request invoker 元数据时，
+    // registrar 会按请求/响应类型对把它们写入这里；若类型被卸载，条目会自然失效。
+    private static readonly WeakTypePairCache<GeneratedRequestInvokerMetadata>
+        GeneratedRequestInvokers = new();
+
     // 卸载安全的进程级缓存：通知类型只以弱键语义保留。
     // 若插件/热重载程序集中的通知类型被卸载，对应分发绑定会自然失效，下次命中时再重新计算。
     private static readonly WeakKeyCache<Type, NotificationDispatchBinding>
@@ -169,6 +174,17 @@ internal sealed class CqrsDispatcher(
     /// </summary>
     private static RequestDispatchBinding<TResponse> CreateRequestDispatchBinding<TResponse>(Type requestType)
     {
+        var generatedDescriptor = TryGetGeneratedRequestInvokerDescriptor<TResponse>(requestType);
+        if (generatedDescriptor is not null)
+        {
+            var resolvedGeneratedDescriptor = generatedDescriptor.Value;
+            return new RequestDispatchBinding<TResponse>(
+                resolvedGeneratedDescriptor.HandlerType,
+                typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse)),
+                resolvedGeneratedDescriptor.Invoker,
+                requestType);
+        }
+
         return new RequestDispatchBinding<TResponse>(
             typeof(IRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse)),
             typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse)),
@@ -201,6 +217,48 @@ internal sealed class CqrsDispatcher(
                 $"Request dispatch binding cache expected response type {typeof(TResponse).FullName}, but received {responseType.FullName}.");
 
         return RequestDispatchBindingBox.Create(CreateRequestDispatchBinding<TResponse>(requestType));
+    }
+
+    /// <summary>
+    ///     尝试从容器已注册的 generated request invoker provider 中获取指定请求/响应类型对的元数据。
+    /// </summary>
+    /// <typeparam name="TResponse">当前请求响应类型。</typeparam>
+    /// <param name="requestType">请求运行时类型。</param>
+    /// <returns>命中时返回强类型化后的描述符；否则返回 <see langword="null" />。</returns>
+    private static RequestInvokerDescriptor<TResponse>? TryGetGeneratedRequestInvokerDescriptor<TResponse>(Type requestType)
+    {
+        return GeneratedRequestInvokers.TryGetValue(requestType, typeof(TResponse), out var metadata) &&
+               metadata is not null
+            ? CreateRequestInvokerDescriptor<TResponse>(requestType, metadata)
+            : null;
+    }
+
+    /// <summary>
+    ///     把 provider 返回的弱类型描述符转换为 dispatcher 内部使用的强类型 request invoker 描述符。
+    /// </summary>
+    /// <typeparam name="TResponse">当前请求响应类型。</typeparam>
+    /// <param name="requestType">请求运行时类型。</param>
+    /// <param name="descriptor">provider 返回的弱类型描述符。</param>
+    /// <returns>可直接用于创建 request dispatch binding 的强类型描述符。</returns>
+    /// <exception cref="InvalidOperationException">当 provider 返回的委托签名与当前请求/响应类型对不匹配时抛出。</exception>
+    private static RequestInvokerDescriptor<TResponse> CreateRequestInvokerDescriptor<TResponse>(
+        Type requestType,
+        GeneratedRequestInvokerMetadata descriptor)
+    {
+        if (!descriptor.InvokerMethod.IsStatic)
+        {
+            throw new InvalidOperationException(
+                $"Generated CQRS request invoker provider returned a non-static invoker method for request type {requestType.FullName} and response type {typeof(TResponse).FullName}.");
+        }
+
+        if (Delegate.CreateDelegate(typeof(RequestInvoker<TResponse>), descriptor.InvokerMethod) is not
+            RequestInvoker<TResponse> invoker)
+        {
+            throw new InvalidOperationException(
+                $"Generated CQRS request invoker provider returned an incompatible invoker for request type {requestType.FullName} and response type {typeof(TResponse).FullName}.");
+        }
+
+        return new RequestInvokerDescriptor<TResponse>(descriptor.HandlerType, invoker);
     }
 
     /// <summary>
@@ -578,6 +636,46 @@ internal sealed class CqrsDispatcher(
     /// <typeparam name="TResponse">请求响应类型。</typeparam>
     private readonly record struct RequestPipelineExecutorFactoryState<TResponse>(
         RequestPipelineInvoker<TResponse> PipelineInvoker);
+
+    /// <summary>
+    ///     记录 registrar 写入的 generated request invoker 元数据。
+    /// </summary>
+    /// <param name="HandlerType">请求处理器在容器中的服务类型。</param>
+    /// <param name="InvokerMethod">执行请求处理器的开放静态方法。</param>
+    private sealed record GeneratedRequestInvokerMetadata(
+        Type HandlerType,
+        MethodInfo InvokerMethod);
+
+    /// <summary>
+    ///     保存 provider 返回的请求处理器服务类型与强类型 request invoker。
+    /// </summary>
+    /// <typeparam name="TResponse">当前请求响应类型。</typeparam>
+    private readonly record struct RequestInvokerDescriptor<TResponse>(
+        Type HandlerType,
+        RequestInvoker<TResponse> Invoker);
+
+    /// <summary>
+    ///     供 registrar 在 generated registry 激活后登记 request invoker 元数据。
+    /// </summary>
+    /// <param name="requestType">请求运行时类型。</param>
+    /// <param name="responseType">响应运行时类型。</param>
+    /// <param name="descriptor">要登记的 generated request invoker 描述符。</param>
+    internal static void RegisterGeneratedRequestInvokerDescriptor(
+        Type requestType,
+        Type responseType,
+        CqrsRequestInvokerDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(requestType);
+        ArgumentNullException.ThrowIfNull(responseType);
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        _ = GeneratedRequestInvokers.GetOrAdd(
+            requestType,
+            responseType,
+            (_, _) => new GeneratedRequestInvokerMetadata(
+                descriptor.HandlerType,
+                descriptor.InvokerMethod));
+    }
 
     /// <summary>
     ///     保存单次 request pipeline 分发所需的当前 handler、behavior 列表和 continuation 缓存。
