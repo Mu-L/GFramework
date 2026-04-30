@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-075`
+- 恢复点编号：`CQRS-REWRITE-RP-076`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 已完成一轮 `CQRS vs Mediator` 只读评估归档，结论已沉淀到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
@@ -74,6 +74,9 @@ CQRS 迁移与收敛。
   - 已完成一轮 invoker provider gate 合同回归：
     - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 现新增四条回归，分别锁定 request / stream 在缺少 `ICqrsRequestInvokerProvider`、`IEnumeratesCqrsRequestInvokerDescriptors`、`ICqrsStreamInvokerProvider` 或 `IEnumeratesCqrsStreamInvokerDescriptors` 时，generator 都会整体跳过对应 provider 元数据发射
     - 本轮最初采用固定源码片段替换来裁剪测试输入，但因三引号字符串缩进差异导致 helper 过脆；当前已收敛为按稳定起止标记移除源码块的 `RemoveBlock(...)` helper，避免 gate 回归依赖精确空格对齐
+  - 已完成一轮 stream invoker descriptor gate 合同补强：
+    - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 现额外新增两条 stream gate 回归，分别锁定 runtime 缺少 `CqrsStreamInvokerDescriptor` 或 `CqrsStreamInvokerDescriptorEntry` 时，generator 同样会整体跳过 stream provider 元数据发射
+    - 本轮补强直接对应 `CqrsHandlerRegistryGenerator` 中 `supportsStreamInvokerProvider` 的四项合同探测，避免此前只覆盖 provider / enumerator 缺失而漏掉 descriptor 两条分支
   - 已完成一轮 generated invoker provider runtime 失败边界修复：
     - `GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs` 现新增 request / stream 两组 `non-static invoker` 与 `incompatible invoker` 回归，锁定 dispatcher 在首次绑定阶段会显式拒绝非法 generated descriptor
     - `GFramework.Cqrs/Internal/CqrsDispatcher.cs` 现把 `Delegate.CreateDelegate(...)` 抛出的 `ArgumentException` 统一包装为已有 XML 文档承诺的 `InvalidOperationException`，保持 request / stream 两条错误消息语义一致

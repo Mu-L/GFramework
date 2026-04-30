@@ -3157,6 +3157,58 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
+    ///     验证当 runtime 缺少 <c>CqrsStreamInvokerDescriptor</c> 时，
+    ///     生成器不会继续发射依赖描述符类型的 stream provider 元数据。
+    /// </summary>
+    [Test]
+    public void Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Type()
+    {
+        var source = RenameTypeIdentifier(
+            StreamInvokerProviderSource,
+            "CqrsStreamInvokerDescriptor",
+            "MissingCqrsStreamInvokerDescriptor");
+        var generatedSource = RunGenerator(source);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "internal sealed class __GFrameworkGeneratedCqrsHandlerRegistry : global::GFramework.Cqrs.ICqrsHandlerRegistry"));
+            Assert.That(generatedSource, Does.Not.Contain("ICqrsStreamInvokerProvider"));
+            Assert.That(generatedSource, Does.Not.Contain("IEnumeratesCqrsStreamInvokerDescriptors"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsStreamInvokerDescriptorEntry("));
+            Assert.That(generatedSource, Does.Not.Contain("InvokeStreamHandler0"));
+        });
+    }
+
+    /// <summary>
+    ///     验证当 runtime 缺少 <c>CqrsStreamInvokerDescriptorEntry</c> 时，
+    ///     生成器不会继续保留 stream provider 的枚举接口或静态 invoker 元数据。
+    /// </summary>
+    [Test]
+    public void Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Entry_Type()
+    {
+        var source = RenameTypeIdentifier(
+            StreamInvokerProviderSource,
+            "CqrsStreamInvokerDescriptorEntry",
+            "MissingCqrsStreamInvokerDescriptorEntry");
+        var generatedSource = RunGenerator(source);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "internal sealed class __GFrameworkGeneratedCqrsHandlerRegistry : global::GFramework.Cqrs.ICqrsHandlerRegistry"));
+            Assert.That(generatedSource, Does.Not.Contain("ICqrsStreamInvokerProvider"));
+            Assert.That(generatedSource, Does.Not.Contain("IEnumeratesCqrsStreamInvokerDescriptors"));
+            Assert.That(generatedSource, Does.Not.Contain("CqrsStreamInvokerDescriptorEntry("));
+            Assert.That(generatedSource, Does.Not.Contain("InvokeStreamHandler0"));
+        });
+    }
+
+    /// <summary>
     ///     验证当 stream handler 仍需走 precise reflected 注册时，
     ///     生成器即使检测到 stream invoker provider runtime 合同，也不会错误发射无法稳定表达隐藏请求/响应类型的 provider 元数据。
     /// </summary>
@@ -3256,6 +3308,66 @@ public class CqrsHandlerRegistryGeneratorTests
         }
 
         return source.Remove(startIndex, endIndex - startIndex);
+    }
+
+    /// <summary>
+    ///     仅按完整类型标识符重命名测试输入中的合同类型，避免误伤共享前缀的其他类型名。
+    /// </summary>
+    /// <param name="source">原始测试源码。</param>
+    /// <param name="originalTypeName">原始合同类型名。</param>
+    /// <param name="replacementTypeName">替换后的占位类型名。</param>
+    /// <returns>完成精确类型重命名后的源码。</returns>
+    private static string RenameTypeIdentifier(string source, string originalTypeName, string replacementTypeName)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(originalTypeName);
+        ArgumentNullException.ThrowIfNull(replacementTypeName);
+
+        var result = new System.Text.StringBuilder(source.Length);
+        var currentIndex = 0;
+
+        while (currentIndex < source.Length)
+        {
+            var matchIndex = source.IndexOf(originalTypeName, currentIndex, StringComparison.Ordinal);
+            if (matchIndex < 0)
+            {
+                result.Append(source, currentIndex, source.Length - currentIndex);
+                break;
+            }
+
+            result.Append(source, currentIndex, matchIndex - currentIndex);
+
+            if (IsIdentifierBoundary(source, matchIndex - 1) &&
+                IsIdentifierBoundary(source, matchIndex + originalTypeName.Length))
+            {
+                result.Append(replacementTypeName);
+            }
+            else
+            {
+                result.Append(originalTypeName);
+            }
+
+            currentIndex = matchIndex + originalTypeName.Length;
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    ///     判断给定位置是否位于 C# 标识符边界，用于避免把共享前缀的其他类型名一并改写。
+    /// </summary>
+    /// <param name="source">待检查的完整源码。</param>
+    /// <param name="index">边界位置；允许落在字符串两端之外。</param>
+    /// <returns>若当前位置不在标识符内部，则返回 <see langword="true" />。</returns>
+    private static bool IsIdentifierBoundary(string source, int index)
+    {
+        if (index < 0 || index >= source.Length)
+        {
+            return true;
+        }
+
+        var character = source[index];
+        return !char.IsLetterOrDigit(character) && character != '_';
     }
 
     /// <summary>

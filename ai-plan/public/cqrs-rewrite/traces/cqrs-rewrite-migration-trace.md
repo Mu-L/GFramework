@@ -2,6 +2,30 @@
 
 ## 2026-04-30
 
+### 阶段：PR #307 stream invoker gate 回归补强（CQRS-REWRITE-RP-076）
+
+- 继续沿用 `$gframework-pr-review` 对 `PR #307` 的 latest-head review triage，只处理本地仍成立且写集可控的 generator regression gap
+- 主线程复核 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs:88-92` 后确认：`supportsStreamInvokerProvider` 依赖四项合同，但现有测试只覆盖 `ICqrsStreamInvokerProvider` 与 `IEnumeratesCqrsStreamInvokerDescriptors` 缺失分支，确实遗漏 `CqrsStreamInvokerDescriptor` / `CqrsStreamInvokerDescriptorEntry`
+- 本轮实现收敛：
+  - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 新增两条 `RemoveBlock(...)` 回归，分别移除 `CqrsStreamInvokerDescriptor` 与 `CqrsStreamInvokerDescriptorEntry` 合同定义
+  - 新回归继续锁定统一结果：当 stream invoker runtime 合同四者缺一时，generated registry 不会残留 provider 接口、descriptor entry 枚举或静态 invoker 桥接
+  - active tracking 已把恢复点推进到 `RP-076`，避免 PR review 结论只体现在测试代码里
+
+### 验证（RP-076）
+
+- `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+  - 备注：首轮并发跑 build/test 时出现过 `MSB3248` / `MSB3026` 输出文件占用噪音；按仓库规则改为串行复核后，本轮 authoritative build 结果为干净通过
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Enumerator|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Entry_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过，`5/5` passed
+  - 备注：新增两条 descriptor gate 回归与既有 stream happy-path 一并通过，确认 `supportsStreamInvokerProvider` 的四项合同缺一不可
+
+### 当前下一步（RP-076）
+
+1. 提交本轮 `PR #307` stream gate 合同补强与 `ai-plan` 恢复点更新
+2. 后续若继续处理 review，优先清点 request 侧是否也存在同构遗漏，再决定是否追加同批对称测试
+3. 保持忽略工作区里无关的 `.gitignore` 本地改动，不把它混入本轮提交
+
 ### 阶段：PR #307 review follow-up 收敛（CQRS-REWRITE-RP-075）
 
 - 在 `RP-074` 后继续沿用 `gframework-batch-boot 50` 的低风险切片策略，本轮只处理 `$gframework-pr-review` 对当前 `PR #307` 仍然成立的本地问题
