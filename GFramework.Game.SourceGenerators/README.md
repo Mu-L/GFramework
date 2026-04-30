@@ -14,6 +14,9 @@
 - 对应的表包装类型
 - 与 `GFramework.Game.Config` 运行时协作的访问辅助代码
 
+这里要先明确一条采用边界：`GFramework.Game.SourceGenerators` 服务的是当前与 `GFramework.Game`
+Runtime 对齐的共享 schema 子集，而不是任意 `JSON Schema` 的全量实现。它的目标是让配置生成、运行时校验和工具链维持同一份可落地契约，而不是把所有 schema 组合能力都映射成生成类型。
+
 ## 包关系
 
 - 运行时：`GFramework.Game`
@@ -72,6 +75,15 @@ GameProject/
 - 你想把静态游戏内容维护成 `YAML`
 - 你希望在编译期拿到强类型配置访问入口
 - 你希望运行时加载、schema 校验和编辑工具链共用同一份结构定义
+
+如果你的 schema 设计依赖下面这些场景，就不属于当前默认采用路径：
+
+- `oneOf`
+- `anyOf`
+- 非 `false` 的 `additionalProperties`
+- 其他依赖开放对象形状、联合分支或属性合并的复杂组合约束
+
+遇到这些情况时，建议先回到 [配置系统文档](../docs/zh-CN/game/config-system.md) 和原始 schema / YAML 设计本体，确认是否需要调整配置建模方式，而不是默认期待生成器直接支持完整 `JSON Schema` 语义。
 
 ## 对应文档
 
