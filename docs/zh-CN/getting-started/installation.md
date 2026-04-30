@@ -46,6 +46,8 @@ GFramework 采用模块化设计，不同包提供不同的功能：
 - Arch ECS：直接安装 `GeWuYou.GFramework.Ecs.Arch`；如果只想共享宿主循环或接口边界，可改为 `GeWuYou.GFramework.Ecs.Arch.Abstractions`
 
 如果你准备采用 AI-First 配置工作流，可以继续阅读 [游戏内容配置系统](../game/config-system.md) 与 [VS Code 配置工具](../game/config-tool.md)。
+接入时建议先按 Runtime + Source Generator 的共享 schema 子集设计配置模型，再把 `VS Code` 工具当作编辑辅助层来使用，而不是反过来以工具界面可编辑的 shape 作为正式契约。
+尤其需要尽早知道两个当前边界：对象闭合只收口到 `additionalProperties: false`，而 `oneOf` / `anyOf` 会被直接拒绝。若配置模型超出这组共享边界，优先回到 raw YAML 与 schema 本体调整结构，而不是把差异理解成工具遗漏能力。
 
 ## 安装方式
 
