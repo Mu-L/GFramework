@@ -14,7 +14,7 @@
   - 已明确将 `oneOf` / `anyOf` 归类为当前不支持的组合关键字，并在 Runtime / Generator / Tooling 三端显式拒绝，避免静默接受导致形状漂移
   - 已完成 PR #262 的 CodeRabbit follow-up，补齐 latest review body 中 folded `Nitpick comments` 的 skill 解析并按建议收口 Tooling / Tests
   - 先以 Runtime / Generator / Tooling 三端一致语义为前提筛选下一项，而不是盲目扩全量 JSON Schema
-  - 继续把 VS Code 工具能力视为非阻塞项，不让复杂 UI 编辑器需求反过来拖慢 C# 主线
+  - Tooling / Docs 后续改为非阻塞并行 lane；active 入口只保留主线恢复点，把批处理细节下沉到 backlog 文件
 
 ### 已知风险
 
@@ -26,8 +26,8 @@
   - 缓解措施：`gframework-pr-review` 现已同时解析 latest review body，并输出 declared / parsed 数量以便快速识别解析缺口
 - PR follow-up 残留风险：PR `#262` 最新 review thread 仍有少量 open comments，且 nitpick body 解析仍存在 declared / parsed 缺口
   - 缓解措施：先以 latest unresolved thread 为准逐条本地核验；已确认并补齐运行时诊断路径与 `else without if` 回归测试，skill 现已补齐 `.py` nitpick 与 outside-diff comment 解析，剩余项只需等待本地修复推送后再复抓确认
-- 非阻塞项回退风险：将 VS Code 功能标为非阻塞但导致主线回退的风险
-  - 缓解措施：C# 主线补齐新关键字时仍需在 `configValidation.js` 与 `extension.js` 中同步落地，只是不让复杂表单控件阻塞发布
+- 并行 lane 漂移风险：Tooling / Docs 作为并行项后，后续 batch 可能重新把治理说明写回 active 入口或 public docs
+  - 缓解措施：active tracking / trace 只保留恢复点、验证和 lane 指针；reader-facing 文档只写接入信息，治理说明继续留在 `ai-plan/**`
 
 ## 当前状态
 
@@ -73,9 +73,7 @@
 
 - 继续扩展“不会改变生成类型形状”的共享关键字支持
 - 继续降低复杂 schema 与多配置域项目的接入成本
-- 让 VS Code 表单支持更深层对象数组嵌套，减少 raw YAML 回退
-- 为复杂结构提供比“顶层标量 / 标量数组”更强的批量编辑能力
-- 在真实 VS Code 宿主中完成对象数组编辑与复杂 schema 的交互式手工验证
+- Tooling / Docs 并行 lane 仍需推进复杂表单、交互式宿主验证和后续接入文档，但这些事项不再阻塞当前恢复点
 
 ## 活跃文档
 
@@ -93,9 +91,11 @@
   - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~SchemaConfigGeneratorTests"`：通过
   - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~YamlConfigLoaderIfThenElseTests"`：通过（8 tests；新增 `else without if` 运行时回归）
   - `dotnet build GFramework.sln -c Release`：通过（存在仓库既有 analyzer warning，无新增错误）
+- `2026-04-30` Tooling lane 收口验证：
+  - `dotnet build GFramework.sln -c Release`：待本轮 ai-plan 收口后补记结果；仅用来确认计划文件改动没有伴随未验证的代码漂移
 
 ## 下一步
 
-1. 提交并推送当前 PR `#262` follow-up 修复后，重新抓取一次 PR review，确认 outside-diff comment 与 open thread 是否都已收口
-2. 若 PR review 已收口，再回到 `GFramework.Game/Config/YamlConfigSchemaValidator.cs`、`GFramework.Game.SourceGenerators/Config/SchemaConfigGenerator.cs`、`tools/gframework-config-tool/src/configValidation.js` 盘点下一批候选关键字
-3. 跳过 `oneOf` / `anyOf`，优先筛选下一个仍不改变生成类型形状、且不需要属性合并或联合分支生成的共享关键字
+1. 主线继续回到 `YamlConfigSchemaValidator.cs`、`SchemaConfigGenerator.cs` 与 `configValidation.js` 的共享关键字盘点，默认跳过 `oneOf` / `anyOf`
+2. Tooling / Docs 若要并发推进，直接从 `ai-first-config-system-csharp-experience-next.md` 的并行 lane 开新 batch，不再扩写 active 入口
+3. 保持 active tracking / trace 精简，只记录当前恢复点、最近验证和下一步恢复指针

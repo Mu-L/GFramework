@@ -135,3 +135,32 @@
 1. 若本轮定向验证通过，继续盘点下一批真正低风险、且不改变生成类型形状的共享关键字
 2. 不再重复评估 `oneOf` / `anyOf` 的 object-focused 子集，除非未来主线明确接受联合形状生成
 3. 若后续关键字需要新诊断编号或文档边界说明，继续保持 Runtime / Generator / Tooling 同步收口
+
+## 2026-04-30
+
+### 阶段：Tooling lane 收口整理（AI-FIRST-CONFIG-RP-003）
+
+- 已把 Tooling / Docs 后续动作从 active 入口的主线叙述中剥离，改成 backlog 文件里的非阻塞并行 lane
+- 当前 active tracking / trace 只继续承担三件事：
+  - 给 `boot` 提供当前恢复点
+  - 记录最近一次验证或计划性验证占位
+  - 指向真正承载并行批次细节的 backlog 文件
+- 本轮不新增代码范围、测试范围或文档范围，只整理 public `ai-plan/**` 的恢复入口表达，避免把治理噪音带回 reader-facing docs
+
+### 关键决定
+
+- `C# Runtime + Source Generator + Consumer DX` 仍是默认恢复主线
+- Tooling / Docs 可以并发推进，但后续 batch 应直接以 `ai-first-config-system-csharp-experience-next.md` 为入口，而不是继续扩写 active tracking / trace
+- public docs 后续只承接接入 guidance、能力边界和回退方式；批次编排、lane 风险和治理说明继续留在 `ai-plan/**`
+
+### 验证
+
+- 2026-04-30：`wc -l ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/todos/ai-first-config-system-csharp-experience-next.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`
+  - 结果：通过
+  - 备注：确认本轮仍把 active 入口控制在精简范围，并把 lane 细节下沉到 backlog 文件
+
+### 下一步
+
+1. 若继续做主线代码批次，直接回到共享关键字盘点，不让 Tooling / Docs 成为阻塞条件
+2. 若另开 Tooling / Docs batch，先读取 `ai-first-config-system-csharp-experience-next.md` 的并行 lane，再把结果摘要写回 active tracking / trace
+3. 继续保持 active 入口精简，不在默认恢复文件中追加 UI 细节、治理台账或面向读者的文档草稿

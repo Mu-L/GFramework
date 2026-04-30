@@ -6,6 +6,13 @@
 
 当前阶段不再把 VS Code 工具能力当作阻塞项；工具链只要不拖累 C# 首发可用版本即可。
 
+## 并行 Lane 约束
+
+- `C# Runtime + Source Generator + Consumer DX` 仍是当前主线恢复点
+- Tooling / Docs 作为非阻塞并行 lane 单独推进，但每一批仍要和 Runtime / Generator 的共享关键字边界保持一致
+- active tracking / trace 只保留恢复点、验证与 lane 指针；复杂编辑器细节、宿主手工验证和文档批次安排统一写在本文件
+- public docs 只写消费者接入、限制和迁移边界；治理噪音、批次编排和 recovery 元数据继续留在 `ai-plan/**`
+
 ## 当前状态
 
 - [x] 单表注册辅助：`Register{Entity}Table()`
@@ -60,6 +67,24 @@
 - [ ] 继续扩插件的复杂表单能力
   - 说明：这是可选项，不阻塞 C# 主线
 
+## Tooling / Docs 并行 Lane
+
+- [ ] Tooling：让 VS Code 表单支持更深层对象数组嵌套，减少 raw YAML 回退
+  - 边界：不改变 Runtime / Generator 已定义的 schema 形状契约
+  - 验证：优先补 JS 测试，其次再做真实 VS Code 宿主手工验证
+
+- [ ] Tooling：为复杂结构提供比“顶层标量 / 标量数组”更强的批量编辑能力
+  - 边界：只增强编辑体验，不反向要求 schema 扩展或新的生成类型形状
+  - 验证：记录可观察的编辑路径和回退路径，而不是在 active 入口堆叠 UI 细节
+
+- [ ] Tooling：在真实 VS Code 宿主中完成对象数组编辑与复杂 schema 的交互式手工验证
+  - 边界：作为发布前增强项，不阻塞共享关键字主线
+  - 验证：后续 batch 直接补记宿主验证结论与未覆盖场景
+
+- [ ] Docs：在相关接入文档里补齐“工具能力是辅助层，不定义 Runtime 契约”的读者提示
+  - 边界：只写 reader-facing 接入 guidance，不写批次、治理、风险台账
+  - 验证：确认文档用语聚焦接入路径、能力边界和回退方案
+
 ## 暂缓
 
 - [ ] 不追求完整 JSON Schema 全量支持
@@ -75,7 +100,7 @@
 
 1. 用 `GeneratedConfigCatalog` 继续补齐启动与诊断辅助
 2. 补一条比 `Architecture.OnInitialize()` 更正式的模块化接入建议
-   当前状态：第 1 项和第 2 项已完成，`allOf` 与 object-focused `if` / `then` / `else` 也已补齐；下一步转到下一批仍不改变生成形状的组合关键字评估，或继续推进 VS Code 复杂编辑体验
+   当前状态：第 1 项和第 2 项已完成，`allOf` 与 object-focused `if` / `then` / `else` 也已补齐；下一步默认转到下一批仍不改变生成形状的组合关键字评估。若另开并行 batch，再从本文件的 Tooling / Docs lane 接手
 
 ## 完成标准
 
@@ -94,6 +119,9 @@
   - `tools/gframework-config-tool/src/configValidation.js`
   - `tools/gframework-config-tool/src/extension.js`
   - `docs/zh-CN/game/config-system.md`
+- 若恢复的是 Tooling / Docs 并行 lane：
+  - 先回看本文件的 `Tooling / Docs 并行 Lane`
+  - 只把结果摘要回填到 active tracking / trace，避免把编辑器批次细节重新塞回默认入口
 
 ### 恢复块
 
@@ -111,3 +139,4 @@
   1. 检查 `YamlConfigSchemaValidator.cs`、`SchemaConfigGenerator.cs`、`configValidation.js` 中当前已支持的关键字列表
   2. 跳过 `oneOf` / `anyOf`，选择下一批仍不改变生成类型形状的共享关键字
   3. 优先找不需要属性合并、联合分支生成或额外 UI 形状解释的关键字，而不是先回工具 UI
+  4. 若主线批次暂不动代码，可并行开启 Tooling / Docs lane，但不要让其反向改写主线恢复点定义
