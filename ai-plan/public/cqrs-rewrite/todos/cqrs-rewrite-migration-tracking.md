@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-073`
+- 恢复点编号：`CQRS-REWRITE-RP-074`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 已完成一轮 `CQRS vs Mediator` 只读评估归档，结论已沉淀到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
@@ -78,6 +78,9 @@ CQRS 迁移与收敛。
     - `GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs` 现新增 request / stream 两组 `non-static invoker` 与 `incompatible invoker` 回归，锁定 dispatcher 在首次绑定阶段会显式拒绝非法 generated descriptor
     - `GFramework.Cqrs/Internal/CqrsDispatcher.cs` 现把 `Delegate.CreateDelegate(...)` 抛出的 `ArgumentException` 统一包装为已有 XML 文档承诺的 `InvalidOperationException`，保持 request / stream 两条错误消息语义一致
     - 本轮顺手为新增异步断言补齐 `ConfigureAwait(false)`，消除新测试引入的 `MA0004` warning
+  - 已完成一轮 non-enumerating provider reflection fallback 回归：
+    - `GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs` 现新增 request / stream 两条回归，锁定当 registry 只暴露 provider 接口、但不实现 `IEnumeratesCqrs*InvokerDescriptors` 时，registrar 不会预热 dispatcher 缓存，后续 dispatch 会继续回退到既有反射路径
+    - 当前回归明确区分“provider 已注册”和“descriptor 已枚举入缓存”这两个阶段，避免后续把 `TryGetDescriptor(...)` 的存在误当成 dispatcher 会主动查询 provider 的合同
   - 当前相对 `origin/main` 的累计 branch diff 为 `24 files / 1754 changed lines`，仍低于本轮 `$gframework-batch-boot 50` 的主要 stop condition，可继续推进下一批低风险切片
   - 已将 mixed fallback 场景进一步收敛：当 runtime 允许同一程序集声明多个 `CqrsReflectionFallbackAttribute` 实例时，generator 现会把可直接引用的 fallback handlers 与仅能按名称恢复的 fallback handlers 拆分发射
   - `CqrsReflectionFallbackAttribute` 现允许多实例，以承载 `Type[]` 与字符串 fallback 元数据的组合输出
@@ -307,6 +310,12 @@ CQRS 迁移与收敛。
 - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests.SendAsync_Should_Throw_When_Generated_Request_Invoker_Is_Not_Static|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests.SendAsync_Should_Throw_When_Generated_Request_Invoker_Is_Incompatible|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests.CreateStream_Should_Throw_When_Generated_Stream_Invoker_Is_Not_Static|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests.CreateStream_Should_Throw_When_Generated_Stream_Invoker_Is_Incompatible|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests.SendAsync_Should_Use_Generated_Request_Invoker_When_Provider_Is_Registered|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests.CreateStream_Should_Use_Generated_Stream_Invoker_When_Provider_Is_Registered"`
   - 结果：通过
   - 备注：`6/6` passed；确认 request / stream 的非法 generated invoker 现统一抛出 `InvalidOperationException`，且原有 happy-path 未回归
+- `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`；确认新增 non-enumerating provider 回归未引入构建告警
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+  - 结果：通过
+  - 备注：`14/14` passed；确认 request / stream 的 generated happy-path、异常路径与 non-enumerating provider 反射回退语义均保持通过
 - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；确认 `CqrsRuntimeModule` 接线变更未引入 `GFramework.Core` 模块构建问题
@@ -340,6 +349,6 @@ CQRS 迁移与收敛。
 
 ## 下一步
 
-1. 在保持 branch diff 明显低于 `50 files` 的前提下，继续挑选下一批低风险 `dispatch/invoker` 收敛切片，并优先考虑 request / stream provider 的剩余 runtime 失败边界或 generator gate 合同补强
+1. 在保持 branch diff 明显低于 `50 files` 的前提下，继续挑选下一批低风险 `dispatch/invoker` 收敛切片，并优先考虑 request / stream provider 的剩余 runtime 失败边界、缓存预热边界或 generator gate 合同补强
 2. 基于已落地的 notification publisher seam，评估是否需要第二阶段公开配置面、并行 publisher 或 telemetry decorator
 3. 单独规划旧 `Command` / `Query` API 的收口顺序；`LegacyICqrsRuntime` compatibility slice 已收口到显式 helper 与专门测试，可暂时移出最高优先级

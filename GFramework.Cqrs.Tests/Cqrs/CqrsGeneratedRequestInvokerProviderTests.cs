@@ -186,6 +186,46 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证当 registry 只暴露 request invoker provider 接口、但不提供可枚举描述符契约时，
+    ///     dispatcher 仍会回退到既有反射路径，而不是错误依赖未预热的 generated metadata。
+    /// </summary>
+    [Test]
+    public async Task SendAsync_Should_Fall_Back_To_Runtime_Path_When_Request_Provider_Does_Not_Enumerate_Descriptors()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(NonEnumeratingRequestInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.NonEnumeratingRequestInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var response = await context.SendRequestAsync(new GeneratedRequestInvokerRequest("payload")).ConfigureAwait(false);
+        Assert.That(response, Is.EqualTo("runtime:payload"));
+    }
+
+    /// <summary>
+    ///     验证当 registry 只暴露 stream invoker provider 接口、但不提供可枚举描述符契约时，
+    ///     dispatcher 仍会回退到既有流式反射路径。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Fall_Back_To_Runtime_Path_When_Stream_Provider_Does_Not_Enumerate_Descriptors()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(NonEnumeratingStreamInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.NonEnumeratingStreamInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+        Assert.That(results, Is.EqualTo([3, 4]));
+    }
+
+    /// <summary>
     ///     验证当 generated request invoker provider 返回实例方法时，
     ///     dispatcher 会显式拒绝该描述符，而不是在后续绑定阶段静默接受非法合同。
     /// </summary>
@@ -494,6 +534,88 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         private static object InvokeGenerated(object handler, object request)
         {
             return Array.Empty<int>().ToAsyncEnumerable();
+        }
+    }
+
+    /// <summary>
+    ///     模拟只暴露 request provider 接口、但不暴露描述符枚举契约的 generated registry。
+    /// </summary>
+    private sealed class NonEnumeratingRequestInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsRequestInvokerProvider
+    {
+        private static readonly CqrsRequestInvokerDescriptor Descriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(GeneratedRequestInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+                typeof(GeneratedRequestInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsRequestInvokerDescriptor? descriptor)
+        {
+            if (requestType == typeof(GeneratedRequestInvokerRequest) && responseType == typeof(string))
+            {
+                descriptor = Descriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     模拟只暴露 stream provider 接口、但不暴露描述符枚举契约的 generated registry。
+    /// </summary>
+    private sealed class NonEnumeratingStreamInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsStreamInvokerProvider
+    {
+        private static readonly CqrsStreamInvokerDescriptor Descriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(GeneratedStreamInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+                typeof(GeneratedStreamInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsStreamInvokerDescriptor? descriptor)
+        {
+            if (requestType == typeof(GeneratedStreamInvokerRequest) && responseType == typeof(int))
+            {
+                descriptor = Descriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
         }
     }
 

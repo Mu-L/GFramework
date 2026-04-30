@@ -2,6 +2,27 @@
 
 ## 2026-04-30
 
+### 阶段：non-enumerating provider reflection fallback 回归（CQRS-REWRITE-RP-074）
+
+- 在 `RP-073` 提交后继续按 `gframework-batch-boot 50` 执行；当前 branch diff 相对 `origin/main` 仍远低于 `50 files` 阈值，因此继续追加一轮单文件 runtime contract 回归
+- 本轮接受只读 subagent 的收敛建议，把切片限定为“provider 已注册但未向 dispatcher 可枚举地贡献 descriptor”时的 fallback 语义
+- 主线程已完成：
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs` 新增 request / stream 两条回归，锁定仅实现 `ICqrsRequestInvokerProvider` / `ICqrsStreamInvokerProvider`、但未实现 `IEnumeratesCqrs*InvokerDescriptors` 的 registry 仍会让 dispatch 回退到既有反射路径
+  - 当前回归刻意不修改 `CqrsDispatcher` 或 `CqrsHandlerRegistrar`：它只把现有实现和注释里已经隐含的“descriptor cache 预热优先于 provider 显式查询”语义提升为可执行合同
+
+### 验证（RP-074）
+
+- `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+  - 结果：通过，`14/14` passed
+
+### 当前下一步（RP-074）
+
+1. 先提交本轮 non-enumerating provider 回归与恢复点更新
+2. 重新复算 branch diff 后，再判断是否继续推进 provider 的空枚举 descriptor 边界或在本轮阈值前停下
+3. 若继续下一批，优先保持单文件测试写集，不扩散到新的模块
+
 ### 阶段：generated invoker provider runtime 失败边界修复（CQRS-REWRITE-RP-073）
 
 - 在 `RP-072` 提交后继续按 `gframework-batch-boot 50` 执行；当前 branch diff 相对 `origin/main` 仍为 `24 files`，文件阈值 headroom 依然充足，因此继续推进下一批 runtime 失败边界回归
