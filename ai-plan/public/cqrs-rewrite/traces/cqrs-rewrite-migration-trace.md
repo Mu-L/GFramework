@@ -58,6 +58,34 @@
 2. 优先候选仍是 notification 路径是否值得引入同类 generated invoker seam，或继续补强 request / stream provider 的公开 API 入口与诊断语义
 3. 下一批落地前先提交当前 stream provider 批次，避免未提交改动持续堆叠
 
+### 阶段：generated invoker reflected-implementation 发射范围补强（CQRS-REWRITE-RP-069）
+
+- 在 `RP-068` 提交后，重新复算 branch diff，相对 `origin/main` 升至 `20 files / 1015 changed lines`，仍明显低于 `gframework-batch-boot 50` 的 stop condition，因此继续下一批
+- 本轮目标只收敛 source generator，不扩散到 runtime 或公开文档：把 generated request / stream invoker 的发射范围从“仅 direct registration”扩大到“实现类型隐藏、但 handler interface 可直接表达”的 reflected-implementation registration
+- 接受只读 subagent 结论后确认：
+  - 现有分类阶段已经为 reflected-implementation registration 保留了 request / stream invoker registration 元数据
+  - 真正缺口只在 `CreateRequestInvokerEmissions(...)` 与 `CreateStreamInvokerEmissions(...)` 仍只遍历 `DirectRegistrations`
+  - `PreciseReflectedRegistrationSpec` 继续排除在 provider 发射范围外，避免隐藏 request/response 类型导致生成源码不可编译
+- 主线程已完成：
+  - `ReflectedImplementationRegistrationSpec` 显式承载 request / stream invoker registration 元数据
+  - `CreateRequestInvokerEmissions(...)` 与 `CreateStreamInvokerEmissions(...)` 现会同时消费 reflected-implementation registration
+  - `GFramework.SourceGenerators.Tests` 已新增 hidden-implementation + visible-interface 两条 provider 回归
+- 本轮不改 runtime：dispatcher / registrar 对 generated provider 的消费语义保持不变，变化只在 generator 愿意发射更多可安全静态表达的 descriptor
+
+### 验证（RP-069）
+
+- `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Generates_Direct_Interface_Registrations_For_Hidden_Implementation_When_Handler_Interface_Is_Public|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过，`3/3` passed
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_For_Hidden_Implementation_With_Visible_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_For_Hidden_Implementation_With_Visible_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过，`4/4` passed
+
+### 当前下一步（RP-069）
+
+1. 提交当前 generator-only 批次，继续保持每个低风险切片可独立回滚与审查
+2. 继续评估下一个能明显降低反射占比、但不需要同时改动 runtime 语义的切片
+
 ### 阶段：generated request invoker provider 最小落地（CQRS-REWRITE-RP-067）
 
 - 继续按 `gframework-batch-boot 50` 执行，基线仍为本地现有 `origin/main`

@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-068`
+- 恢复点编号：`CQRS-REWRITE-RP-069`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 已完成一轮 `CQRS vs Mediator` 只读评估归档，结论已沉淀到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
@@ -60,6 +60,10 @@ CQRS 迁移与收敛。
     - `GFramework.SourceGenerators.Tests` 已补充 generator 回归，锁定当 runtime 暴露新契约时，generated registry 会额外发射 stream invoker provider 成员与 invoker 方法
     - `GFramework.Cqrs/README.md`、`GFramework.Cqrs.SourceGenerators/README.md`、`docs/zh-CN/core/cqrs.md` 与
       `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md` 现已同步说明 generated stream invoker 的接线与回退边界
+  - 已完成一轮 generated invoker 发射范围补强：
+    - `CqrsHandlerRegistryGenerator` 现会把 generated request / stream invoker 的发射范围，从“仅 direct registration”扩大到“实现类型隐藏、但 handler interface 仍可直接表达”的 reflected-implementation registration
+    - 当前扩展仍刻意避开 `PreciseReflectedRegistrationSpec`，不把隐藏 request/response 类型误拉进 provider 发射，继续保持生成源码可编译边界
+    - `GFramework.SourceGenerators.Tests` 已新增两条 hidden-implementation 回归，锁定 request / stream provider 在该场景下都会继续发射 descriptor 与静态 invoker 方法
   - 已将 mixed fallback 场景进一步收敛：当 runtime 允许同一程序集声明多个 `CqrsReflectionFallbackAttribute` 实例时，generator 现会把可直接引用的 fallback handlers 与仅能按名称恢复的 fallback handlers 拆分发射
   - `CqrsReflectionFallbackAttribute` 现允许多实例，以承载 `Type[]` 与字符串 fallback 元数据的组合输出
   - 已将 generator 的程序集级 fallback 元数据进一步收敛：当全部 fallback handlers 都可直接引用且 runtime 暴露 `params Type[]` 合同时，生成器现优先发射 `typeof(...)` 形式的 fallback 元数据
@@ -261,6 +265,9 @@ CQRS 迁移与收敛。
 - `GIT_DIR=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework/.git/worktrees/GFramework-cqrs GIT_WORK_TREE=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework-WorkTree/GFramework-cqrs bash scripts/validate-csharp-naming.sh`
   - 结果：通过
   - 备注：`1059` 个 tracked C# 文件命名校验全部通过；本轮新增 stream invoker 类型与测试命名未引入回归
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_For_Hidden_Implementation_With_Visible_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_For_Hidden_Implementation_With_Visible_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过
+  - 备注：`4/4` passed；确认 hidden implementation + visible interface 场景也会继续发射 request / stream invoker provider 元数据
 - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；确认 `CqrsRuntimeModule` 接线变更未引入 `GFramework.Core` 模块构建问题

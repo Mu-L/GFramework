@@ -258,7 +258,13 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         {
             reflectedImplementationRegistrations.Add(new ReflectedImplementationRegistrationSpec(
                 handlerInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                GetLogDisplayName(handlerInterface)));
+                GetLogDisplayName(handlerInterface),
+                TryCreateRequestInvokerRegistrationSpec(handlerInterface, out var requestInvokerRegistration)
+                    ? requestInvokerRegistration
+                    : null,
+                TryCreateStreamInvokerRegistrationSpec(handlerInterface, out var streamInvokerRegistration)
+                    ? streamInvokerRegistration
+                    : null));
             return true;
         }
 

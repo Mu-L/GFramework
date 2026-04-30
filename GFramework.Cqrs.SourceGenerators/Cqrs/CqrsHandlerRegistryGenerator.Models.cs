@@ -23,7 +23,9 @@ public sealed partial class CqrsHandlerRegistryGenerator
 
     private readonly record struct ReflectedImplementationRegistrationSpec(
         string HandlerInterfaceDisplayName,
-        string HandlerInterfaceLogName);
+        string HandlerInterfaceLogName,
+        RequestInvokerRegistrationSpec? RequestInvokerRegistration,
+        StreamInvokerRegistrationSpec? StreamInvokerRegistration);
 
     private readonly record struct OrderedRegistrationSpec(
         string HandlerInterfaceLogName,

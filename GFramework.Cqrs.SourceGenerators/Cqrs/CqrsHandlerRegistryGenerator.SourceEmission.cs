@@ -73,7 +73,7 @@ public sealed partial class CqrsHandlerRegistryGenerator
     }
 
     /// <summary>
-    ///     从 direct handler 注册描述中提取 request invoker 发射计划。
+    ///     从可直接表达 handler 接口的注册描述中提取 request invoker 发射计划。
     /// </summary>
     /// <param name="supportsRequestInvokerProvider">
     ///     指示当前 runtime 是否同时暴露 <c>ICqrsRequestInvokerProvider</c> 与
@@ -81,7 +81,8 @@ public sealed partial class CqrsHandlerRegistryGenerator
     /// </param>
     /// <param name="registrations">已按稳定顺序整理完成的 handler 注册描述。</param>
     /// <returns>
-    ///     由 <c>directRegistration.RequestInvokerRegistration</c> 派生出的 <see cref="RequestInvokerEmissionSpec" /> 集合。
+    ///     由 direct registration 或 reflected-implementation registration 上的
+    ///     <c>RequestInvokerRegistration</c> 派生出的 <see cref="RequestInvokerEmissionSpec" /> 集合。
     ///     <c>methodIndex</c> 按 <paramref name="registrations" /> 与其 direct registration 的遍历顺序单调递增，
     ///     因而只要上游排序稳定，生成的 invoker 方法名与描述符顺序就跨运行保持稳定。
     /// </returns>
@@ -111,13 +112,25 @@ public sealed partial class CqrsHandlerRegistryGenerator
                     directRegistration.HandlerInterfaceDisplayName,
                     methodIndex++));
             }
+
+            foreach (var reflectedRegistration in registration.ReflectedImplementationRegistrations)
+            {
+                if (reflectedRegistration.RequestInvokerRegistration is not { } requestInvokerRegistration)
+                    continue;
+
+                builder.Add(new RequestInvokerEmissionSpec(
+                    requestInvokerRegistration.RequestTypeDisplayName,
+                    requestInvokerRegistration.ResponseTypeDisplayName,
+                    reflectedRegistration.HandlerInterfaceDisplayName,
+                    methodIndex++));
+            }
         }
 
         return builder.ToImmutable();
     }
 
     /// <summary>
-    ///     从 direct handler 注册描述中提取 stream invoker 发射计划。
+    ///     从可直接表达 handler 接口的注册描述中提取 stream invoker 发射计划。
     /// </summary>
     /// <param name="supportsStreamInvokerProvider">
     ///     指示当前 runtime 是否同时暴露 <c>ICqrsStreamInvokerProvider</c> 与
@@ -125,7 +138,8 @@ public sealed partial class CqrsHandlerRegistryGenerator
     /// </param>
     /// <param name="registrations">已按稳定顺序整理完成的 handler 注册描述。</param>
     /// <returns>
-    ///     由 <c>directRegistration.StreamInvokerRegistration</c> 派生出的 <see cref="StreamInvokerEmissionSpec" /> 集合。
+    ///     由 direct registration 或 reflected-implementation registration 上的
+    ///     <c>StreamInvokerRegistration</c> 派生出的 <see cref="StreamInvokerEmissionSpec" /> 集合。
     ///     <c>methodIndex</c> 按 <paramref name="registrations" /> 与其 direct registration 的遍历顺序单调递增，
     ///     因而只要上游排序稳定，生成的 invoker 方法名与描述符顺序就跨运行保持稳定。
     /// </returns>
@@ -149,6 +163,18 @@ public sealed partial class CqrsHandlerRegistryGenerator
                     streamInvokerRegistration.RequestTypeDisplayName,
                     streamInvokerRegistration.ResponseTypeDisplayName,
                     directRegistration.HandlerInterfaceDisplayName,
+                    methodIndex++));
+            }
+
+            foreach (var reflectedRegistration in registration.ReflectedImplementationRegistrations)
+            {
+                if (reflectedRegistration.StreamInvokerRegistration is not { } streamInvokerRegistration)
+                    continue;
+
+                builder.Add(new StreamInvokerEmissionSpec(
+                    streamInvokerRegistration.RequestTypeDisplayName,
+                    streamInvokerRegistration.ResponseTypeDisplayName,
+                    reflectedRegistration.HandlerInterfaceDisplayName,
                     methodIndex++));
             }
         }
