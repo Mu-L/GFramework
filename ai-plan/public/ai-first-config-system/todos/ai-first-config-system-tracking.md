@@ -92,7 +92,7 @@
   - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~YamlConfigLoaderIfThenElseTests"`：通过（8 tests；新增 `else without if` 运行时回归）
   - `dotnet build GFramework.sln -c Release`：通过（存在仓库既有 analyzer warning，无新增错误）
 - `2026-04-30` Tooling lane 收口验证：
-  - `dotnet build GFramework.sln -c Release`：待本轮 ai-plan 收口后补记结果；仅用来确认计划文件改动没有伴随未验证的代码漂移
+  - `dotnet build GFramework.sln -c Release`：通过（0 Warnings, 0 Errors；本轮仅改 ai-plan 文件，确认没有伴随未验证的代码漂移）
 
 ## 下一步
 
