@@ -138,6 +138,7 @@ RegisterCqrsHandlersFromAssemblies(
 - `GFramework.Cqrs.CqrsHandlerRegistryAttribute`
 - `GFramework.Cqrs.CqrsReflectionFallbackAttribute`
 - `GFramework.Cqrs.ICqrsRequestInvokerProvider`
+- `GFramework.Cqrs.ICqrsStreamInvokerProvider`
 - `GFramework.Cqrs.SourceGenerators.Cqrs.CqrsHandlerRegistryGenerator`
 
 模块族入口见：

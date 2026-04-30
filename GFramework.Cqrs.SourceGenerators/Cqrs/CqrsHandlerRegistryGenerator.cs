@@ -22,6 +22,13 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         $"{CqrsRuntimeNamespace}.CqrsRequestInvokerDescriptor";
     private const string CqrsRequestInvokerDescriptorEntryMetadataName =
         $"{CqrsRuntimeNamespace}.CqrsRequestInvokerDescriptorEntry";
+    private const string ICqrsStreamInvokerProviderMetadataName = $"{CqrsRuntimeNamespace}.ICqrsStreamInvokerProvider";
+    private const string IEnumeratesCqrsStreamInvokerDescriptorsMetadataName =
+        $"{CqrsRuntimeNamespace}.IEnumeratesCqrsStreamInvokerDescriptors";
+    private const string CqrsStreamInvokerDescriptorMetadataName =
+        $"{CqrsRuntimeNamespace}.CqrsStreamInvokerDescriptor";
+    private const string CqrsStreamInvokerDescriptorEntryMetadataName =
+        $"{CqrsRuntimeNamespace}.CqrsStreamInvokerDescriptorEntry";
 
     private const string CqrsHandlerRegistryAttributeMetadataName =
         $"{CqrsRuntimeNamespace}.CqrsHandlerRegistryAttribute";
@@ -78,6 +85,11 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             compilation.GetTypeByMetadataName(IEnumeratesCqrsRequestInvokerDescriptorsMetadataName) is not null &&
             compilation.GetTypeByMetadataName(CqrsRequestInvokerDescriptorMetadataName) is not null &&
             compilation.GetTypeByMetadataName(CqrsRequestInvokerDescriptorEntryMetadataName) is not null;
+        var supportsStreamInvokerProvider =
+            compilation.GetTypeByMetadataName(ICqrsStreamInvokerProviderMetadataName) is not null &&
+            compilation.GetTypeByMetadataName(IEnumeratesCqrsStreamInvokerDescriptorsMetadataName) is not null &&
+            compilation.GetTypeByMetadataName(CqrsStreamInvokerDescriptorMetadataName) is not null &&
+            compilation.GetTypeByMetadataName(CqrsStreamInvokerDescriptorEntryMetadataName) is not null;
         var stringType = compilation.GetSpecialType(SpecialType.System_String);
         var typeType = compilation.GetTypeByMetadataName("System.Type");
         var supportsNamedReflectionFallbackTypes = reflectionFallbackAttributeType is not null &&
@@ -98,7 +110,8 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
             supportsNamedReflectionFallbackTypes,
             supportsDirectReflectionFallbackTypes,
             supportsMultipleReflectionFallbackAttributes,
-            supportsRequestInvokerProvider);
+            supportsRequestInvokerProvider,
+            supportsStreamInvokerProvider);
     }
 
     private static bool IsHandlerCandidate(SyntaxNode node)
@@ -234,6 +247,9 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
                 implementationLogName,
                 TryCreateRequestInvokerRegistrationSpec(handlerInterface, out var requestInvokerRegistration)
                     ? requestInvokerRegistration
+                    : null,
+                TryCreateStreamInvokerRegistrationSpec(handlerInterface, out var streamInvokerRegistration)
+                    ? streamInvokerRegistration
                     : null));
             return true;
         }
@@ -276,6 +292,34 @@ public sealed partial class CqrsHandlerRegistryGenerator : IIncrementalGenerator
         }
 
         requestInvokerRegistration = new RequestInvokerRegistrationSpec(
+            handlerInterface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            handlerInterface.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        return true;
+    }
+
+    /// <summary>
+    ///     当当前直接注册项属于流式请求处理器时，提取 stream invoker provider 所需的请求/响应类型显示名。
+    /// </summary>
+    private static bool TryCreateStreamInvokerRegistrationSpec(
+        INamedTypeSymbol handlerInterface,
+        out StreamInvokerRegistrationSpec streamInvokerRegistration)
+    {
+        if (!string.Equals(
+                handlerInterface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                $"global::{CqrsContractsNamespace}.IStreamRequestHandler<TRequest, TResponse>",
+                StringComparison.Ordinal))
+        {
+            streamInvokerRegistration = default;
+            return false;
+        }
+
+        if (handlerInterface.TypeArguments.Length != 2)
+        {
+            streamInvokerRegistration = default;
+            return false;
+        }
+
+        streamInvokerRegistration = new StreamInvokerRegistrationSpec(
             handlerInterface.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             handlerInterface.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
         return true;

@@ -58,6 +58,24 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证 registrar 激活 generated registry 后，会把 stream invoker provider 注册到容器中。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Register_Generated_Stream_Invoker_Provider()
+    {
+        var generatedAssembly = CreateGeneratedStreamInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+
+        var providers = container.GetAll<ICqrsStreamInvokerProvider>();
+
+        Assert.That(
+            providers.Select(static provider => provider.GetType()),
+            Is.EqualTo([typeof(GeneratedStreamInvokerProviderRegistry)]));
+    }
+
+    /// <summary>
     ///     验证 dispatcher 在首次创建 request binding 时，会优先消费 generated request invoker provider。
     /// </summary>
     [Test]
@@ -75,6 +93,23 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证 dispatcher 在首次创建 stream binding 时，会优先消费 generated stream invoker provider。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Use_Generated_Stream_Invoker_When_Provider_Is_Registered()
+    {
+        var generatedAssembly = CreateGeneratedStreamInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3)));
+        Assert.That(results, Is.EqualTo([30, 31]));
+    }
+
+    /// <summary>
     ///     创建带有 generated request invoker registry 元数据的程序集替身。
     /// </summary>
     private static Mock<Assembly> CreateGeneratedRequestInvokerAssembly()
@@ -86,6 +121,21 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         generatedAssembly
             .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
             .Returns([new CqrsHandlerRegistryAttribute(typeof(GeneratedRequestInvokerProviderRegistry))]);
+        return generatedAssembly;
+    }
+
+    /// <summary>
+    ///     创建带有 generated stream invoker registry 元数据的程序集替身。
+    /// </summary>
+    private static Mock<Assembly> CreateGeneratedStreamInvokerAssembly()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Cqrs.Tests.Cqrs.GeneratedStreamInvokerAssembly, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(GeneratedStreamInvokerProviderRegistry))]);
         return generatedAssembly;
     }
 
@@ -109,6 +159,7 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         ClearCache(GetDispatcherCacheField("RequestDispatchBindings"));
         ClearCache(GetDispatcherCacheField("StreamDispatchBindings"));
         ClearCache(GetDispatcherCacheField("GeneratedRequestInvokers"));
+        ClearCache(GetDispatcherCacheField("GeneratedStreamInvokers"));
     }
 
     /// <summary>
@@ -149,4 +200,22 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
             .Invoke(cache, Array.Empty<object>());
     }
 
+    /// <summary>
+    ///     枚举并收集当前异步流中的全部元素，便于断言 generated stream invoker 的输出。
+    /// </summary>
+    /// <typeparam name="TItem">流元素类型。</typeparam>
+    /// <param name="stream">待消耗的异步流。</param>
+    /// <returns>按产出顺序收集得到的元素列表。</returns>
+    private static async Task<IReadOnlyList<TItem>> DrainAsync<TItem>(IAsyncEnumerable<TItem> stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        var items = new List<TItem>();
+        await foreach (var item in stream.ConfigureAwait(false))
+        {
+            items.Add(item);
+        }
+
+        return items;
+    }
 }

@@ -57,6 +57,9 @@ public sealed partial class CqrsHandlerRegistryGenerator
         var requestInvokerEmissions = CreateRequestInvokerEmissions(
             generationEnvironment.SupportsRequestInvokerProvider,
             registrations);
+        var streamInvokerEmissions = CreateStreamInvokerEmissions(
+            generationEnvironment.SupportsStreamInvokerProvider,
+            registrations);
 
         return new GeneratedRegistrySourceShape(
             hasReflectedImplementationRegistrations,
@@ -64,7 +67,9 @@ public sealed partial class CqrsHandlerRegistryGenerator
             hasReflectionTypeLookups,
             hasExternalAssemblyTypeLookups,
             generationEnvironment.SupportsRequestInvokerProvider,
-            requestInvokerEmissions);
+            requestInvokerEmissions,
+            generationEnvironment.SupportsStreamInvokerProvider,
+            streamInvokerEmissions);
     }
 
     /// <summary>
@@ -103,6 +108,46 @@ public sealed partial class CqrsHandlerRegistryGenerator
                 builder.Add(new RequestInvokerEmissionSpec(
                     requestInvokerRegistration.RequestTypeDisplayName,
                     requestInvokerRegistration.ResponseTypeDisplayName,
+                    directRegistration.HandlerInterfaceDisplayName,
+                    methodIndex++));
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
+    ///     从 direct handler 注册描述中提取 stream invoker 发射计划。
+    /// </summary>
+    /// <param name="supportsStreamInvokerProvider">
+    ///     指示当前 runtime 是否同时暴露 <c>ICqrsStreamInvokerProvider</c> 与
+    ///     <c>IEnumeratesCqrsStreamInvokerDescriptors</c> 契约；若不支持，则本方法必须返回空结果并让后续发射路径整体跳过。
+    /// </param>
+    /// <param name="registrations">已按稳定顺序整理完成的 handler 注册描述。</param>
+    /// <returns>
+    ///     由 <c>directRegistration.StreamInvokerRegistration</c> 派生出的 <see cref="StreamInvokerEmissionSpec" /> 集合。
+    ///     <c>methodIndex</c> 按 <paramref name="registrations" /> 与其 direct registration 的遍历顺序单调递增，
+    ///     因而只要上游排序稳定，生成的 invoker 方法名与描述符顺序就跨运行保持稳定。
+    /// </returns>
+    private static ImmutableArray<StreamInvokerEmissionSpec> CreateStreamInvokerEmissions(
+        bool supportsStreamInvokerProvider,
+        IReadOnlyList<ImplementationRegistrationSpec> registrations)
+    {
+        if (!supportsStreamInvokerProvider)
+            return ImmutableArray<StreamInvokerEmissionSpec>.Empty;
+
+        var builder = ImmutableArray.CreateBuilder<StreamInvokerEmissionSpec>();
+        var methodIndex = 0;
+        foreach (var registration in registrations)
+        {
+            foreach (var directRegistration in registration.DirectRegistrations)
+            {
+                if (directRegistration.StreamInvokerRegistration is not { } streamInvokerRegistration)
+                    continue;
+
+                builder.Add(new StreamInvokerEmissionSpec(
+                    streamInvokerRegistration.RequestTypeDisplayName,
+                    streamInvokerRegistration.ResponseTypeDisplayName,
                     directRegistration.HandlerInterfaceDisplayName,
                     methodIndex++));
             }
@@ -221,6 +266,15 @@ public sealed partial class CqrsHandlerRegistryGenerator
             builder.Append(".IEnumeratesCqrsRequestInvokerDescriptors");
         }
 
+        if (sourceShape.HasStreamInvokerProvider)
+        {
+            builder.Append(", global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".ICqrsStreamInvokerProvider, global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".IEnumeratesCqrsStreamInvokerDescriptors");
+        }
+
         builder.AppendLine();
         builder.AppendLine("{");
         AppendRegisterMethod(builder, registrations, sourceShape);
@@ -229,6 +283,12 @@ public sealed partial class CqrsHandlerRegistryGenerator
         {
             builder.AppendLine();
             AppendRequestInvokerProviderMembers(builder, sourceShape.RequestInvokerEmissions);
+        }
+
+        if (sourceShape.HasStreamInvokerProvider)
+        {
+            builder.AppendLine();
+            AppendStreamInvokerProviderMembers(builder, sourceShape.StreamInvokerEmissions);
         }
 
         if (sourceShape.HasExternalAssemblyTypeLookups)
@@ -366,9 +426,11 @@ public sealed partial class CqrsHandlerRegistryGenerator
     /// </remarks>
     private static void AppendRequestInvokerProviderMethods(StringBuilder builder)
     {
-        builder.Append("    public global::System.Collections.Generic.IReadOnlyList<global::");
+        builder.Append("    global::System.Collections.Generic.IReadOnlyList<global::");
         builder.Append(CqrsRuntimeNamespace);
-        builder.AppendLine(".CqrsRequestInvokerDescriptorEntry> GetDescriptors()");
+        builder.Append(".CqrsRequestInvokerDescriptorEntry> global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.AppendLine(".IEnumeratesCqrsRequestInvokerDescriptors.GetDescriptors()");
         builder.AppendLine("    {");
         builder.AppendLine("        return RequestInvokerDescriptors;");
         builder.AppendLine("    }");
@@ -410,6 +472,117 @@ public sealed partial class CqrsHandlerRegistryGenerator
         builder.Append("    private static global::System.Threading.Tasks.ValueTask<");
         builder.Append(emission.ResponseTypeDisplayName);
         builder.Append("> InvokeRequestHandler");
+        builder.Append(emission.MethodIndex);
+        builder.Append("(object handler, object request, global::System.Threading.CancellationToken cancellationToken)");
+        builder.AppendLine();
+        builder.AppendLine("    {");
+        builder.Append("        var typedHandler = (");
+        builder.Append(emission.HandlerInterfaceDisplayName);
+        builder.AppendLine(")handler;");
+        builder.Append("        var typedRequest = (");
+        builder.Append(emission.RequestTypeDisplayName);
+        builder.AppendLine(")request;");
+        builder.AppendLine("        return typedHandler.Handle(typedRequest, cancellationToken);");
+        builder.AppendLine("    }");
+    }
+
+    /// <summary>
+    ///     发射 generated registry 的 stream invoker provider 成员。
+    /// </summary>
+    /// <param name="builder">生成源码构造器。</param>
+    /// <param name="streamInvokerEmissions">当前要输出的 stream invoker 发射计划。</param>
+    private static void AppendStreamInvokerProviderMembers(
+        StringBuilder builder,
+        ImmutableArray<StreamInvokerEmissionSpec> streamInvokerEmissions)
+    {
+        AppendStreamInvokerDescriptorArray(builder, streamInvokerEmissions);
+        builder.AppendLine();
+        AppendStreamInvokerProviderMethods(builder);
+
+        for (var index = 0; index < streamInvokerEmissions.Length; index++)
+        {
+            builder.AppendLine();
+            AppendStreamInvokerMethod(builder, streamInvokerEmissions[index]);
+        }
+    }
+
+    /// <summary>
+    ///     发射 generated registry 的 stream invoker 描述符数组。
+    /// </summary>
+    private static void AppendStreamInvokerDescriptorArray(
+        StringBuilder builder,
+        ImmutableArray<StreamInvokerEmissionSpec> streamInvokerEmissions)
+    {
+        builder.AppendLine("    private static readonly global::GFramework.Cqrs.CqrsStreamInvokerDescriptorEntry[] StreamInvokerDescriptors =");
+        builder.AppendLine("    [");
+
+        for (var index = 0; index < streamInvokerEmissions.Length; index++)
+        {
+            var emission = streamInvokerEmissions[index];
+            builder.Append("        new global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".CqrsStreamInvokerDescriptorEntry(typeof(");
+            builder.Append(emission.RequestTypeDisplayName);
+            builder.Append("), typeof(");
+            builder.Append(emission.ResponseTypeDisplayName);
+            builder.Append("), new global::");
+            builder.Append(CqrsRuntimeNamespace);
+            builder.Append(".CqrsStreamInvokerDescriptor(typeof(");
+            builder.Append(emission.HandlerInterfaceDisplayName);
+            builder.Append("), typeof(");
+            builder.Append(GeneratedTypeName);
+            builder.Append(").GetMethod(nameof(InvokeStreamHandler");
+            builder.Append(emission.MethodIndex);
+            builder.Append("), global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static)!))");
+            builder.AppendLine(index == streamInvokerEmissions.Length - 1 ? string.Empty : ",");
+        }
+
+        builder.AppendLine("    ];");
+    }
+
+    /// <summary>
+    ///     发射 generated registry 对 stream invoker provider 契约的实现方法。
+    /// </summary>
+    private static void AppendStreamInvokerProviderMethods(StringBuilder builder)
+    {
+        builder.Append("    global::System.Collections.Generic.IReadOnlyList<global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.Append(".CqrsStreamInvokerDescriptorEntry> global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.AppendLine(".IEnumeratesCqrsStreamInvokerDescriptors.GetDescriptors()");
+        builder.AppendLine("    {");
+        builder.AppendLine("        return StreamInvokerDescriptors;");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.Append("    public bool TryGetDescriptor(global::System.Type requestType, global::System.Type responseType, out global::");
+        builder.Append(CqrsRuntimeNamespace);
+        builder.AppendLine(".CqrsStreamInvokerDescriptor? descriptor)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (requestType is null)");
+        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(requestType));");
+        builder.AppendLine("        if (responseType is null)");
+        builder.AppendLine("            throw new global::System.ArgumentNullException(nameof(responseType));");
+        builder.AppendLine();
+        builder.AppendLine("        foreach (var entry in StreamInvokerDescriptors)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (entry.RequestType == requestType && entry.ResponseType == responseType)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                descriptor = entry.Descriptor;");
+        builder.AppendLine("                return true;");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        descriptor = null;");
+        builder.AppendLine("        return false;");
+        builder.AppendLine("    }");
+    }
+
+    /// <summary>
+    ///     为单个 stream invoker 描述符发射对应的静态强类型桥接方法。
+    /// </summary>
+    private static void AppendStreamInvokerMethod(StringBuilder builder, StreamInvokerEmissionSpec emission)
+    {
+        builder.Append("    private static object InvokeStreamHandler");
         builder.Append(emission.MethodIndex);
         builder.Append("(object handler, object request, global::System.Threading.CancellationToken cancellationToken)");
         builder.AppendLine();

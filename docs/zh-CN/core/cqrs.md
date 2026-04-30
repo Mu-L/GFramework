@@ -236,7 +236,7 @@ RegisterCqrsPipelineBehavior<LoggingBehavior<,>>();
 | `GFramework.Cqrs.Abstractions/Cqrs/` | `ICqrsRuntime`、`ICqrsHandlerRegistrar`、`IPipelineBehavior<,>`、`IRequestHandler<,>`、`Unit` | 请求、处理器和 runtime seam 的最小契约 |
 | `GFramework.Cqrs/Command` `Query` `Notification` `Request` `Extensions` | `CommandBase<TInput, TResponse>`、`QueryBase<TInput, TResponse>`、`NotificationBase<TInput>`、`RequestBase<TInput, TResponse>`、`ContextAwareCqrsExtensions` | 业务侧常用基类和上下文发送入口 |
 | `GFramework.Cqrs/Cqrs/` | `AbstractCommandHandler<,>`、`AbstractQueryHandler<,>`、`AbstractRequestHandler<,>`、`AbstractStreamCommandHandler<,>`、`AbstractStreamQueryHandler<,>`、`LoggingBehavior<,>` | 默认处理器基类、上下文注入、流式处理与行为管道 |
-| `GFramework.Cqrs` 根入口与 `Internal/` | `CqrsRuntimeFactory`、`ICqrsHandlerRegistry`、`CqrsHandlerRegistryAttribute`、`CqrsReflectionFallbackAttribute`、`ICqrsRequestInvokerProvider` | runtime 创建入口、generated-registry 优先级、request / stream invoker provider 协作点、targeted fallback 语义和程序集去重规则 |
+| `GFramework.Cqrs` 根入口与 `Internal/` | `CqrsRuntimeFactory`、`ICqrsHandlerRegistry`、`CqrsHandlerRegistryAttribute`、`CqrsReflectionFallbackAttribute`、`ICqrsRequestInvokerProvider`、`ICqrsStreamInvokerProvider` | runtime 创建入口、generated-registry 优先级、request / stream invoker provider 协作点、targeted fallback 语义和程序集去重规则 |
 | `GFramework.Cqrs.SourceGenerators/Cqrs/` | `CqrsHandlerRegistryGenerator`、`RuntimeTypeReferenceSpec`、`OrderedRegistrationKind` | 生成注册器、可直接引用类型判定、mixed fallback 发射与诊断边界 |
 
 ## 继续阅读

@@ -23,6 +23,11 @@ internal sealed class CqrsDispatcher(
     private static readonly WeakTypePairCache<GeneratedRequestInvokerMetadata>
         GeneratedRequestInvokers = new();
 
+    // 卸载安全的进程级缓存：当 generated registry 提供 stream invoker 元数据时，
+    // registrar 会按流式请求/响应类型对把它们写入这里；若类型被卸载，条目会自然失效。
+    private static readonly WeakTypePairCache<GeneratedStreamInvokerMetadata>
+        GeneratedStreamInvokers = new();
+
     // 卸载安全的进程级缓存：通知类型只以弱键语义保留。
     // 若插件/热重载程序集中的通知类型被卸载，对应分发绑定会自然失效，下次命中时再重新计算。
     private static readonly WeakKeyCache<Type, NotificationDispatchBinding>
@@ -276,9 +281,60 @@ internal sealed class CqrsDispatcher(
     /// </summary>
     private static StreamDispatchBinding CreateStreamDispatchBinding(Type requestType, Type responseType)
     {
+        var generatedDescriptor = TryGetGeneratedStreamInvokerDescriptor(requestType, responseType);
+        if (generatedDescriptor is not null)
+        {
+            var resolvedGeneratedDescriptor = generatedDescriptor.Value;
+            return new StreamDispatchBinding(
+                resolvedGeneratedDescriptor.HandlerType,
+                resolvedGeneratedDescriptor.Invoker);
+        }
+
         return new StreamDispatchBinding(
             typeof(IStreamRequestHandler<,>).MakeGenericType(requestType, responseType),
             CreateStreamInvoker(requestType, responseType));
+    }
+
+    /// <summary>
+    ///     尝试从容器已注册的 generated stream invoker provider 中获取指定流式请求/响应类型对的元数据。
+    /// </summary>
+    /// <param name="requestType">流式请求运行时类型。</param>
+    /// <param name="responseType">流式响应元素类型。</param>
+    /// <returns>命中时返回强类型化后的描述符；否则返回 <see langword="null" />。</returns>
+    private static StreamInvokerDescriptor? TryGetGeneratedStreamInvokerDescriptor(Type requestType, Type responseType)
+    {
+        return GeneratedStreamInvokers.TryGetValue(requestType, responseType, out var metadata) &&
+               metadata is not null
+            ? CreateStreamInvokerDescriptor(requestType, responseType, metadata)
+            : null;
+    }
+
+    /// <summary>
+    ///     把 provider 返回的弱类型描述符转换为 dispatcher 内部使用的 stream invoker 描述符。
+    /// </summary>
+    /// <param name="requestType">流式请求运行时类型。</param>
+    /// <param name="responseType">流式响应元素类型。</param>
+    /// <param name="descriptor">provider 返回的弱类型描述符。</param>
+    /// <returns>可直接用于创建 stream dispatch binding 的描述符。</returns>
+    /// <exception cref="InvalidOperationException">当 provider 返回的委托签名与当前流式请求/响应类型对不匹配时抛出。</exception>
+    private static StreamInvokerDescriptor CreateStreamInvokerDescriptor(
+        Type requestType,
+        Type responseType,
+        GeneratedStreamInvokerMetadata descriptor)
+    {
+        if (!descriptor.InvokerMethod.IsStatic)
+        {
+            throw new InvalidOperationException(
+                $"Generated CQRS stream invoker provider returned a non-static invoker method for request type {requestType.FullName} and response type {responseType.FullName}.");
+        }
+
+        if (Delegate.CreateDelegate(typeof(StreamInvoker), descriptor.InvokerMethod) is not StreamInvoker invoker)
+        {
+            throw new InvalidOperationException(
+                $"Generated CQRS stream invoker provider returned an incompatible invoker for request type {requestType.FullName} and response type {responseType.FullName}.");
+        }
+
+        return new StreamInvokerDescriptor(descriptor.HandlerType, invoker);
     }
 
     /// <summary>
@@ -647,12 +703,30 @@ internal sealed class CqrsDispatcher(
         MethodInfo InvokerMethod);
 
     /// <summary>
+    ///     记录 registrar 写入的 generated stream invoker 元数据。
+    /// </summary>
+    /// <param name="HandlerType">流式请求处理器在容器中的服务类型。</param>
+    /// <param name="InvokerMethod">执行流式请求处理器的开放静态方法。</param>
+    private sealed record GeneratedStreamInvokerMetadata(
+        Type HandlerType,
+        MethodInfo InvokerMethod);
+
+    /// <summary>
     ///     保存 provider 返回的请求处理器服务类型与强类型 request invoker。
     /// </summary>
     /// <typeparam name="TResponse">当前请求响应类型。</typeparam>
     private readonly record struct RequestInvokerDescriptor<TResponse>(
         Type HandlerType,
         RequestInvoker<TResponse> Invoker);
+
+    /// <summary>
+    ///     保存 provider 返回的流式请求处理器服务类型与 stream invoker。
+    /// </summary>
+    /// <param name="HandlerType">流式请求处理器在容器中的服务类型。</param>
+    /// <param name="Invoker">执行流式请求处理器的调用委托。</param>
+    private readonly record struct StreamInvokerDescriptor(
+        Type HandlerType,
+        StreamInvoker Invoker);
 
     /// <summary>
     ///     供 registrar 在 generated registry 激活后登记 request invoker 元数据。
@@ -673,6 +747,29 @@ internal sealed class CqrsDispatcher(
             requestType,
             responseType,
             (_, _) => new GeneratedRequestInvokerMetadata(
+                descriptor.HandlerType,
+                descriptor.InvokerMethod));
+    }
+
+    /// <summary>
+    ///     供 registrar 在 generated registry 激活后登记 stream invoker 元数据。
+    /// </summary>
+    /// <param name="requestType">流式请求运行时类型。</param>
+    /// <param name="responseType">流式响应元素类型。</param>
+    /// <param name="descriptor">要登记的 generated stream invoker 描述符。</param>
+    internal static void RegisterGeneratedStreamInvokerDescriptor(
+        Type requestType,
+        Type responseType,
+        CqrsStreamInvokerDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(requestType);
+        ArgumentNullException.ThrowIfNull(responseType);
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        _ = GeneratedStreamInvokers.GetOrAdd(
+            requestType,
+            responseType,
+            (_, _) => new GeneratedStreamInvokerMetadata(
                 descriptor.HandlerType,
                 descriptor.InvokerMethod));
     }

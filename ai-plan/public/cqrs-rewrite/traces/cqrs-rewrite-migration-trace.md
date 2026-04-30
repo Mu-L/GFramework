@@ -2,6 +2,62 @@
 
 ## 2026-04-30
 
+### 阶段：generated stream invoker provider 最小落地（CQRS-REWRITE-RP-068）
+
+- 继续按 `gframework-batch-boot 50` 执行，基线仍为当前本地 `origin/main`
+- 本轮开始前，`origin/main` 已追平到当前 `HEAD`；因此 branch diff 重新归零，主 stop condition 仍为“相对 `origin/main` 接近 `50 files`”
+- 当前批次沿用上一轮 request invoker provider 的设计形状，只做 stream 路径的最小对称扩展，避免把 notification publisher seam、pipeline 或 telemetry 一并卷入
+- 本轮切片拆分：
+  - worker：`GFramework.Cqrs/README.md`、`docs/zh-CN/core/cqrs.md`、`docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
+  - worker：`GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs`
+  - 主线程：`GFramework.Cqrs/Internal/CqrsDispatcher.cs`、`GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs`、
+    `GFramework.Cqrs/*.cs` 新增 stream provider 契约、`GFramework.Cqrs.SourceGenerators/Cqrs/*`、
+    `GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs`
+- 主线程关键设计调整：
+  - 继续保持 dispatcher 的 stream binding 静态缓存只依赖 `requestType + responseType`，不回调具体容器实例
+  - stream provider 与 request provider 一样在 registrar 注册阶段一次性枚举 descriptor，并写入 dispatcher 的进程级弱缓存
+  - generated registry 同时实现 request 与 stream 两组 descriptor 枚举契约时，改用显式接口实现 `GetDescriptors()`，避免同名方法冲突
+- 已完成实现：
+  - `GFramework.Cqrs` 新增 `ICqrsStreamInvokerProvider`、`IEnumeratesCqrsStreamInvokerDescriptors`、
+    `CqrsStreamInvokerDescriptor` 与 `CqrsStreamInvokerDescriptorEntry`
+  - `CqrsHandlerRegistrar` 新增 stream provider 接线与 descriptor 登记路径
+  - `CqrsDispatcher` 新增 generated stream invoker 弱缓存，并在 `CreateStream(...)` 首次创建 stream binding 时优先消费 generated stream invoker 元数据
+  - `CqrsHandlerRegistryGenerator` 新增 stream invoker registration 建模、descriptor 发射、显式枚举接口实现与 `InvokeStreamHandler{n}(...)` 静态桥接方法
+  - `GFramework.Cqrs.Tests` 新增 `GeneratedStreamInvokerProviderRegistry`、`GeneratedStreamInvokerRequest`、`GeneratedStreamInvokerRequestHandler`，并扩充 `CqrsGeneratedRequestInvokerProviderTests`
+  - `GFramework.Cqrs.SourceGenerators/README.md` 额外补齐模块级 README，对齐 generated stream invoker 语义
+- worker 产出已接受：
+  - 文档切片已把 request / stream invoker provider 作为并列 reader-facing 语义写入公开文档
+  - generator 测试切片已补齐 stream invoker provider fixture 与断言；主线程根据最终实现把 request / stream 的 `GetDescriptors()` 断言统一收敛到显式接口实现版本
+
+### 验证（RP-068）
+
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+  - 结果：通过，`4/4` passed
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过，`2/2` passed
+- `GIT_DIR=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework/.git/worktrees/GFramework-cqrs GIT_WORK_TREE=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework-WorkTree/GFramework-cqrs bash scripts/validate-csharp-naming.sh`
+  - 结果：通过
+- `git diff --name-only origin/main...HEAD | wc -l`
+  - 结果：通过
+  - 备注：当前相对 `origin/main` 的已提交 branch diff 为 `4 files`
+- `git diff --numstat origin/main...HEAD`
+  - 结果：通过
+  - 备注：当前相对 `origin/main` 的已提交 branch diff 为 `217 changed lines`
+
+### 当前下一步（RP-068）
+
+1. 在保持 branch diff 远低于 `50 files` 阈值的前提下，继续评估下一个低风险 `dispatch/invoker` 收敛切片
+2. 优先候选仍是 notification 路径是否值得引入同类 generated invoker seam，或继续补强 request / stream provider 的公开 API 入口与诊断语义
+3. 下一批落地前先提交当前 stream provider 批次，避免未提交改动持续堆叠
+
 ### 阶段：generated request invoker provider 最小落地（CQRS-REWRITE-RP-067）
 
 - 继续按 `gframework-batch-boot 50` 执行，基线仍为本地现有 `origin/main`

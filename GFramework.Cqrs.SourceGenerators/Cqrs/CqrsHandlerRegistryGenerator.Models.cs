@@ -9,12 +9,17 @@ public sealed partial class CqrsHandlerRegistryGenerator
         string RequestTypeDisplayName,
         string ResponseTypeDisplayName);
 
+    private readonly record struct StreamInvokerRegistrationSpec(
+        string RequestTypeDisplayName,
+        string ResponseTypeDisplayName);
+
     private readonly record struct HandlerRegistrationSpec(
         string HandlerInterfaceDisplayName,
         string ImplementationTypeDisplayName,
         string HandlerInterfaceLogName,
         string ImplementationLogName,
-        RequestInvokerRegistrationSpec? RequestInvokerRegistration);
+        RequestInvokerRegistrationSpec? RequestInvokerRegistration,
+        StreamInvokerRegistrationSpec? StreamInvokerRegistration);
 
     private readonly record struct ReflectedImplementationRegistrationSpec(
         string HandlerInterfaceDisplayName,
@@ -31,7 +36,9 @@ public sealed partial class CqrsHandlerRegistryGenerator
         bool HasReflectionTypeLookups,
         bool HasExternalAssemblyTypeLookups,
         bool SupportsRequestInvokerProvider,
-        ImmutableArray<RequestInvokerEmissionSpec> RequestInvokerEmissions)
+        ImmutableArray<RequestInvokerEmissionSpec> RequestInvokerEmissions,
+        bool SupportsStreamInvokerProvider,
+        ImmutableArray<StreamInvokerEmissionSpec> StreamInvokerEmissions)
     {
         public bool RequiresRegistryAssemblyVariable =>
             HasReflectedImplementationRegistrations ||
@@ -39,9 +46,17 @@ public sealed partial class CqrsHandlerRegistryGenerator
             HasReflectionTypeLookups;
 
         public bool HasRequestInvokerProvider => SupportsRequestInvokerProvider && !RequestInvokerEmissions.IsDefaultOrEmpty;
+
+        public bool HasStreamInvokerProvider => SupportsStreamInvokerProvider && !StreamInvokerEmissions.IsDefaultOrEmpty;
     }
 
     private readonly record struct RequestInvokerEmissionSpec(
+        string RequestTypeDisplayName,
+        string ResponseTypeDisplayName,
+        string HandlerInterfaceDisplayName,
+        int MethodIndex);
+
+    private readonly record struct StreamInvokerEmissionSpec(
         string RequestTypeDisplayName,
         string ResponseTypeDisplayName,
         string HandlerInterfaceDisplayName,
@@ -328,5 +343,6 @@ public sealed partial class CqrsHandlerRegistryGenerator
         bool SupportsNamedReflectionFallbackTypes,
         bool SupportsDirectReflectionFallbackTypes,
         bool SupportsMultipleReflectionFallbackAttributes,
-        bool SupportsRequestInvokerProvider);
+        bool SupportsRequestInvokerProvider,
+        bool SupportsStreamInvokerProvider);
 }

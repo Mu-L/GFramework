@@ -2489,7 +2489,7 @@ public class CqrsHandlerRegistryGeneratorTests
             Assert.That(
                 generatedSource,
                 Does.Contain(
-                    "public global::System.Collections.Generic.IReadOnlyList<global::GFramework.Cqrs.CqrsRequestInvokerDescriptorEntry> GetDescriptors()"));
+                    "global::System.Collections.Generic.IReadOnlyList<global::GFramework.Cqrs.CqrsRequestInvokerDescriptorEntry> global::GFramework.Cqrs.IEnumeratesCqrsRequestInvokerDescriptors.GetDescriptors()"));
         });
     }
 
@@ -2498,7 +2498,6 @@ public class CqrsHandlerRegistryGeneratorTests
     ///     stream invoker 描述符与对应的开放静态 invoker 方法。
     /// </summary>
     [Test]
-    [Ignore("Enable after generated stream invoker provider / descriptor emission lands in Phase 8.")]
     public void Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available()
     {
         var execution = ExecuteGenerator(StreamInvokerProviderSource);
@@ -2549,7 +2548,7 @@ public class CqrsHandlerRegistryGeneratorTests
             Assert.That(
                 generatedSource,
                 Does.Contain(
-                    "public global::System.Collections.Generic.IReadOnlyList<global::GFramework.Cqrs.CqrsStreamInvokerDescriptorEntry> GetDescriptors()"));
+                    "global::System.Collections.Generic.IReadOnlyList<global::GFramework.Cqrs.CqrsStreamInvokerDescriptorEntry> global::GFramework.Cqrs.IEnumeratesCqrsStreamInvokerDescriptors.GetDescriptors()"));
         });
     }
 

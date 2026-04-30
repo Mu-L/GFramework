@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-067`
+- 恢复点编号：`CQRS-REWRITE-RP-068`
 - 当前阶段：`Phase 8`
 - 当前焦点：
   - 已完成一轮 `CQRS vs Mediator` 只读评估归档，结论已沉淀到 `archive/todos/cqrs-vs-mediator-assessment-rp063.md`
@@ -49,6 +49,17 @@ CQRS 迁移与收敛。
       未命中时仍回退到既有 `MakeGenericMethod + Delegate.CreateDelegate` 路径
     - `GFramework.Cqrs.Tests` 已补充 `CqrsGeneratedRequestInvokerProviderTests`，锁定 registrar 接线和 dispatcher 消费 generated invoker 的最小语义
     - `GFramework.SourceGenerators.Tests` 已补充 generator 回归，锁定当 runtime 暴露新契约时，generated registry 会额外发射 request invoker provider 成员与 invoker 方法
+  - 已完成一轮 `dispatch/invoker` 生成前移的最小 stream 切片：
+    - `GFramework.Cqrs` 新增 `ICqrsStreamInvokerProvider`、`IEnumeratesCqrsStreamInvokerDescriptors`、
+      `CqrsStreamInvokerDescriptor` 与 `CqrsStreamInvokerDescriptorEntry`
+    - generated registry 若实现 stream invoker provider 契约，`CqrsHandlerRegistrar` 现会在激活 registry 后把 provider 注册进容器，
+      并把 provider 枚举出的 stream invoker 描述符写入 dispatcher 的进程级弱缓存
+    - `CqrsDispatcher` 现会在首次创建 stream dispatch binding 时优先命中 generated stream invoker 描述符；
+      未命中时仍回退到既有 `MakeGenericMethod + Delegate.CreateDelegate` 流式 binding 路径
+    - `GFramework.Cqrs.Tests` 已扩充 `CqrsGeneratedRequestInvokerProviderTests`，锁定 registrar 接线和 dispatcher 消费 generated stream invoker 的最小语义
+    - `GFramework.SourceGenerators.Tests` 已补充 generator 回归，锁定当 runtime 暴露新契约时，generated registry 会额外发射 stream invoker provider 成员与 invoker 方法
+    - `GFramework.Cqrs/README.md`、`GFramework.Cqrs.SourceGenerators/README.md`、`docs/zh-CN/core/cqrs.md` 与
+      `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md` 现已同步说明 generated stream invoker 的接线与回退边界
   - 已将 mixed fallback 场景进一步收敛：当 runtime 允许同一程序集声明多个 `CqrsReflectionFallbackAttribute` 实例时，generator 现会把可直接引用的 fallback handlers 与仅能按名称恢复的 fallback handlers 拆分发射
   - `CqrsReflectionFallbackAttribute` 现允许多实例，以承载 `Type[]` 与字符串 fallback 元数据的组合输出
   - 已将 generator 的程序集级 fallback 元数据进一步收敛：当全部 fallback handlers 都可直接引用且 runtime 暴露 `params Type[]` 合同时，生成器现优先发射 `typeof(...)` 形式的 fallback 元数据
@@ -235,6 +246,21 @@ CQRS 迁移与收敛。
 - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；本轮确认 notification publisher seam、README 与文档更新未引入 `GFramework.Cqrs` 构建告警
+- `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`；确认 stream invoker provider 生成与显式枚举接口实现未引入生成器编译问题
+- `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release`
+  - 结果：通过
+  - 备注：`0 warning / 0 error`；确认 stream invoker provider fixture 与回归断言可以编译通过
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+  - 结果：通过
+  - 备注：`4/4` passed；覆盖 generated request / stream invoker provider 的 registrar 接线与 dispatcher 消费语义
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
+  - 结果：通过
+  - 备注：`2/2` passed；确认 generated registry 会同时发射 request / stream invoker provider 描述符与静态 invoker 方法
+- `GIT_DIR=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework/.git/worktrees/GFramework-cqrs GIT_WORK_TREE=/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework-WorkTree/GFramework-cqrs bash scripts/validate-csharp-naming.sh`
+  - 结果：通过
+  - 备注：`1059` 个 tracked C# 文件命名校验全部通过；本轮新增 stream invoker 类型与测试命名未引入回归
 - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
   - 结果：通过
   - 备注：`0 warning / 0 error`；确认 `CqrsRuntimeModule` 接线变更未引入 `GFramework.Core` 模块构建问题
