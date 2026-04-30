@@ -1,14 +1,14 @@
 {
   "extension.displayName": "GFramework Config Tool",
-  "extension.description": "VS Code tooling for browsing, validating, and editing AI-First config files in GFramework projects.",
+  "extension.description": "VS Code tooling for browsing, validating, form-preview editing, and domain batch updates for AI-First config files in GFramework projects.",
   "view.gframeworkConfig.name": "GFramework Config",
   "command.refresh.title": "GFramework Config: Refresh",
-  "command.openRaw.title": "GFramework Config: Open Raw File",
+  "command.openRaw.title": "GFramework Config: Open Raw YAML",
   "command.openSchema.title": "GFramework Config: Open Schema",
   "command.openFormPreview.title": "GFramework Config: Open Form Preview",
   "command.batchEditDomain.title": "GFramework Config: Batch Edit Domain",
   "command.validateAll.title": "GFramework Config: Validate All",
   "configuration.title": "GFramework Config",
-  "configuration.configPath.description": "Relative path from the workspace root to the config directory.",
-  "configuration.schemasPath.description": "Relative path from the workspace root to the schema directory."
+  "configuration.configPath.description": "Relative path from the first workspace folder to the config directory.",
+  "configuration.schemasPath.description": "Relative path from the first workspace folder to the schema directory."
 }

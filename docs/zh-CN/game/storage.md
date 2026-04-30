@@ -165,6 +165,8 @@ var cacheStorage = new ScopedStorage(rootStorage, "runtime-cache");
 - 业务层如果想保存设置，可继续阅读 [设置系统](./setting.md)
 - 业务层如果只是需要底层存储实现，才直接依赖 `IStorage`
 
+如果你是在“配置系统最终把内容保存到哪里”这个角度读到这里，需要先把边界分开：`IStorage` 负责运行时持久化，不负责定义配置 schema 的支持范围。配置工作流里只要开始出现更复杂的 schema shape，仍应先回到 [配置系统](./config-system.md) 和 raw YAML / schema 本体继续设计，再决定运行时是否需要额外存储落盘策略。
+
 ## 当前边界
 
 - `FileStorage` 已经会通过注入的 `ISerializer` 自动序列化对象；默认接法不需要先手工 `Serialize(...)` 再把字符串写回
@@ -172,6 +174,7 @@ var cacheStorage = new ScopedStorage(rootStorage, "runtime-cache");
 - `ScopedStorage` 只做 key 前缀，不做权限、事务或迁移控制
 - 锁粒度是“当前实例内的目标路径”，不是跨进程文件锁
 - 原子写入只覆盖单文件替换，不等于多文件事务
+- 如果配置建模依赖 `oneOf`、`anyOf`、非 `false` 的 `additionalProperties`（例如省略或 `true`），或其他超出当前共享 schema 子集的复杂组合约束，这不是 `IStorage` 层能放宽的限制；应直接回到配置系统主文档与 raw YAML / schema 设计处理
 
 ## 继续阅读
 

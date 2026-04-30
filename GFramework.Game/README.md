@@ -292,6 +292,13 @@ var registry = bootstrap.Registry;
 
 - [内容配置系统](../docs/zh-CN/game/config-system.md)
 
+接入前建议先记住当前采用边界：
+
+- 正式契约以 `YamlConfigLoader` 与 `GFramework.Game.SourceGenerators` 共享支持的 schema 子集为准
+- `additionalProperties` 当前只接受 `false`，用于保持对象字段集闭合
+- `oneOf` / `anyOf` 这类会改变生成类型形状的组合关键字当前不属于采用路径
+- VS Code 配置工具是内容维护辅助层；如果 schema 超出共享子集，应回退到 raw YAML 与 schema 本体设计
+
 ### 4. 接入 Scene / UI 路由
 
 这里的最小前提不是“直接 new 一个 router”，而是先补齐运行时依赖：

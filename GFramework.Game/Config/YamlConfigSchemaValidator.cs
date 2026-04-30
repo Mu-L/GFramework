@@ -321,6 +321,8 @@ internal static partial class YamlConfigSchemaValidator
         JsonElement element,
         bool isRoot = false)
     {
+        ValidateUnsupportedCombinatorKeywords(tableName, schemaPath, propertyPath, element);
+        ValidateUnsupportedOpenObjectKeywords(tableName, schemaPath, propertyPath, element);
         var typeName = ResolveNodeTypeName(tableName, schemaPath, propertyPath, element);
         var referenceTableName = TryGetReferenceTableName(tableName, schemaPath, propertyPath, element);
         ValidateObjectOnlyKeywords(tableName, schemaPath, propertyPath, element, typeName);
@@ -334,6 +336,81 @@ internal static partial class YamlConfigSchemaValidator
             referenceTableName,
             isRoot);
         return parsedNode.WithNegatedSchemaNode(ParseNegatedSchemaNode(tableName, schemaPath, propertyPath, element));
+    }
+
+    /// <summary>
+    ///     显式拒绝当前共享子集中尚未支持、且会改变生成类型形状的组合关键字。
+    ///     这样 Runtime / Generator / Tooling 会对同一份 schema 给出一致失败，
+    ///     而不是默默忽略 <c>oneOf</c> / <c>anyOf</c> 造成接受范围漂移。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">当前节点的逻辑属性路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    private static void ValidateUnsupportedCombinatorKeywords(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element)
+    {
+        if (TryGetUnsupportedCombinatorKeywordName(element) is not { } keywordName)
+        {
+            return;
+        }
+
+        throw ConfigLoadExceptionFactory.Create(
+            ConfigLoadFailureKind.SchemaUnsupported,
+            tableName,
+            $"Property '{propertyPath}' in schema file '{schemaPath}' declares unsupported combinator keyword '{keywordName}'. " +
+            "The current config schema subset does not support combinators that can change generated type shape.",
+            schemaPath: schemaPath,
+            displayPath: GetDiagnosticPath(propertyPath));
+    }
+
+    /// <summary>
+    ///     显式拒绝当前共享子集中尚未支持的开放对象关键字形状。
+    ///     当前配置系统默认采用闭合对象字段集；这里只接受显式重复该语义的
+    ///     <c>additionalProperties: false</c>，继续拒绝会引入动态字段形状的其它形式。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">当前节点的逻辑属性路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    private static void ValidateUnsupportedOpenObjectKeywords(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element)
+    {
+        if (!element.TryGetProperty("additionalProperties", out var additionalPropertiesElement))
+        {
+            return;
+        }
+
+        if (additionalPropertiesElement.ValueKind == JsonValueKind.False)
+        {
+            return;
+        }
+
+        throw ConfigLoadExceptionFactory.Create(
+            ConfigLoadFailureKind.SchemaUnsupported,
+            tableName,
+            $"Property '{propertyPath}' in schema file '{schemaPath}' uses unsupported 'additionalProperties' metadata. " +
+            "The current config schema subset only accepts 'additionalProperties: false' so object fields remain closed and strongly typed.",
+            schemaPath: schemaPath,
+            displayPath: GetDiagnosticPath(propertyPath));
+    }
+
+    /// <summary>
+    ///     返回当前节点声明的首个未支持组合关键字。
+    /// </summary>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <returns>命中的关键字名称；未声明时返回空。</returns>
+    private static string? TryGetUnsupportedCombinatorKeywordName(JsonElement element)
+    {
+        return element.TryGetProperty("oneOf", out _) ? "oneOf" :
+            element.TryGetProperty("anyOf", out _) ? "anyOf" :
+            null;
     }
 
     /// <summary>

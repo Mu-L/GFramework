@@ -1,6 +1,43 @@
 const fs = require("fs");
 const path = require("path");
-const vscode = require("vscode");
+let vscode;
+try {
+    vscode = require("vscode");
+} catch {
+    // Tests load pure helpers from this module without the VS Code host.
+    vscode = {
+        env: {
+            language: "en"
+        },
+        EventEmitter: class EventEmitter {
+            constructor() {
+                this.event = () => undefined;
+            }
+
+            fire() {
+            }
+        },
+        TreeItem: class TreeItem {
+            constructor(label, collapsibleState) {
+                this.label = label;
+                this.collapsibleState = collapsibleState;
+            }
+        },
+        TreeItemCollapsibleState: {
+            None: 0,
+            Collapsed: 1,
+            Expanded: 2
+        },
+        Uri: {
+            joinPath() {
+                return undefined;
+            }
+        },
+        window: {},
+        workspace: {},
+        languages: {}
+    };
+}
 const {
     applyFormUpdates,
     createSampleConfigYaml,
@@ -972,14 +1009,66 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml, options) {
                 current = current[segment];
             }
         }
+        function getDirectObjectArrayItems(editor) {
+            const itemsHost = editor.querySelector(":scope > [data-object-array-items]");
+            return itemsHost
+                ? Array.from(itemsHost.querySelectorAll(":scope > [data-object-array-item]"))
+                : [];
+        }
         function renumberObjectArrayItems(editor) {
-            const items = editor.querySelectorAll("[data-object-array-item]");
+            const items = getDirectObjectArrayItems(editor);
             items.forEach((item, index) => {
                 const title = item.querySelector(".object-array-item-title");
                 if (title) {
                     title.textContent = objectArrayItemLabel + " " + (index + 1);
                 }
             });
+        }
+        function shouldIncludeNestedControl(control, ownerItem) {
+            return control.closest("[data-object-array-item]") === ownerItem;
+        }
+        function collectObjectArrayEditorItems(editor) {
+            const items = [];
+            for (const item of getDirectObjectArrayItems(editor)) {
+                items.push(collectObjectArrayItemValue(item));
+            }
+
+            return items;
+        }
+        function collectObjectArrayItemValue(item) {
+            const itemValue = {};
+
+            for (const control of item.querySelectorAll("[data-item-local-path]")) {
+                if (!shouldIncludeNestedControl(control, item)) {
+                    continue;
+                }
+
+                setNestedObjectValue(itemValue, control.dataset.itemLocalPath, control.value);
+            }
+
+            for (const textarea of item.querySelectorAll("textarea[data-item-array-path]")) {
+                if (!shouldIncludeNestedControl(textarea, item)) {
+                    continue;
+                }
+
+                setNestedObjectValue(
+                    itemValue,
+                    textarea.dataset.itemArrayPath,
+                    parseArrayEditorValue(textarea.value));
+            }
+
+            for (const nestedEditor of item.querySelectorAll("[data-item-object-array-path]")) {
+                if (!shouldIncludeNestedControl(nestedEditor, item)) {
+                    continue;
+                }
+
+                setNestedObjectValue(
+                    itemValue,
+                    nestedEditor.dataset.itemObjectArrayPath,
+                    collectObjectArrayEditorItems(nestedEditor));
+            }
+
+            return itemValue;
         }
         document.addEventListener("click", (event) => {
             const schemaButton = event.target.closest("[data-open-ref-schema]");
@@ -1048,23 +1137,9 @@ function renderFormHtml(fileName, schemaInfo, parsedYaml, options) {
             for (const textarea of document.querySelectorAll("textarea[data-comment-path]")) {
                 comments[textarea.dataset.commentPath] = textarea.value;
             }
-            for (const editor of document.querySelectorAll("[data-object-array-editor]")) {
+            for (const editor of document.querySelectorAll("[data-object-array-editor][data-object-array-path]")) {
                 const path = editor.dataset.objectArrayPath;
-                const items = [];
-                for (const item of editor.querySelectorAll("[data-object-array-items] > [data-object-array-item]")) {
-                    const itemValue = {};
-                    for (const control of item.querySelectorAll("[data-item-local-path]")) {
-                        setNestedObjectValue(itemValue, control.dataset.itemLocalPath, control.value);
-                    }
-                    for (const textarea of item.querySelectorAll("textarea[data-item-array-path]")) {
-                        setNestedObjectValue(
-                            itemValue,
-                            textarea.dataset.itemArrayPath,
-                            parseArrayEditorValue(textarea.value));
-                    }
-                    items.push(itemValue);
-                }
-                objectArrays[path] = items;
+                objectArrays[path] = collectObjectArrayEditorItems(editor);
             }
             vscode.postMessage({ type: "save", scalars, arrays, objectArrays, comments });
         });
@@ -1110,8 +1185,11 @@ function renderFormField(field) {
             title: localizer.t("webview.objectArray.item"),
             fields: field.templateFields
         });
+        const pathAttribute = field.itemMode
+            ? `data-item-object-array-path="${escapeHtml(field.path)}"`
+            : `data-object-array-path="${escapeHtml(field.path)}"`;
         return `
-            <div class="object-array depth-${field.depth}" data-object-array-editor data-object-array-path="${escapeHtml(field.path)}">
+            <div class="object-array depth-${field.depth}" data-object-array-editor ${pathAttribute}>
                 <div class="label">${escapeHtml(field.label)} ${field.required ? `<span class="badge">${escapeHtml(localizer.t("webview.badge.required"))}</span>` : ""}</div>
                 <div class="meta-key">${escapeHtml(field.displayPath || field.path)}</div>
                 ${renderYamlCommentBlock(field)}
@@ -1503,6 +1581,41 @@ function collectObjectArrayItemFields(schemaNode, yamlNode, localPath, displayPa
                 schema: propertySchema,
                 itemMode: true,
                 comment: commentLookup[itemDisplayPath] || ""
+            });
+            continue;
+        }
+
+        if (propertySchema.type === "array" &&
+            propertySchema.items &&
+            propertySchema.items.type === "object") {
+            const templateFields = [];
+            collectObjectArrayItemFields(
+                propertySchema.items,
+                undefined,
+                "",
+                joinArrayTemplatePath(itemDisplayPath),
+                depth + 1,
+                templateFields,
+                unsupported,
+                commentLookup);
+            fields.push({
+                kind: "objectArray",
+                path: itemLocalPath,
+                displayPath: itemDisplayPath,
+                label,
+                required: requiredSet.has(key),
+                depth,
+                schema: propertySchema,
+                itemMode: true,
+                comment: commentLookup[itemDisplayPath] || "",
+                items: buildObjectArrayItemModels(
+                    propertySchema.items,
+                    propertyValue,
+                    itemDisplayPath,
+                    depth + 1,
+                    unsupported,
+                    commentLookup),
+                templateFields
             });
             continue;
         }
@@ -2096,5 +2209,8 @@ function parseArrayFieldPayload(arrays) {
 
 module.exports = {
     activate,
-    deactivate
+    deactivate,
+    __test: {
+        buildFormModel
+    }
 };

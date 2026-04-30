@@ -324,6 +324,21 @@ uiRouter.Hide(modalHandle, UiLayer.Modal);
 - 页面行为不仅有生命周期，还有输入、阻断、暂停契约
 - router 是 UI 语义仲裁中心，项目输入层应主动接入它
 
+## 配置系统边界提示
+
+如果你的 UI 宿主接线还会读取 AI-First 配置或 schema 驱动的页面数据，本页只说明 UI router、root、factory 与输入语义，
+不负责定义配置系统的正式边界。凡是配置契约、组合关键字或工具辅助的支持范围，都应以
+[Game 配置系统](./config-system.md) 为准。
+
+默认采用路径之外的典型场景包括：
+
+- `oneOf` / `anyOf`
+- 非 `false` 的 `additionalProperties`
+- 更复杂的 schema shape，例如依赖开放对象形状、形状合并或更深层异构数组
+
+`VS Code` 工具只是辅助层，不是配置边界定义页。遇到这些复杂 shape 时，应直接回到 raw YAML 和 schema 本体设计，
+而不是从 UI 接线页推断是否“已经被工具支持”。
+
 ## 推荐阅读
 
 1. [Game 模块总览](./index.md)

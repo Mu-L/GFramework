@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const {__test: extensionTest} = require("../src/extension");
 const {
     applyFormUpdates,
     applyScalarUpdates,
@@ -176,6 +177,67 @@ test("parseSchemaContent should preserve empty-string const raw and display meta
 
     assert.equal(schema.properties.name.constValue, "");
     assert.equal(schema.properties.name.constDisplayValue, "\"\"");
+});
+
+test("parseSchemaContent should reject unsupported oneOf combinators", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  },
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": ["itemCount"],
+                      "properties": {
+                        "itemCount": { "type": "integer" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        `),
+        /unsupported combinator keyword 'oneOf'/u);
+});
+
+test("parseSchemaContent should reject unsupported additionalProperties forms", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'additionalProperties' metadata/u);
+});
+
+test("parseSchemaContent should reject unsupported explicit schema types", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "bogus"
+                }
+              }
+            }
+        `),
+        /declares unsupported type 'bogus'/u);
 });
 
 test("parseSchemaContent should build object const comparable keys with ordinal property ordering", () => {
@@ -1516,6 +1578,45 @@ test("parseSchemaContent should reject nested-array contains schemas", () => {
         /unsupported nested array 'contains' schemas/u);
 });
 
+test("parseSchemaContent should reject array items without an explicit typed object schema", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "items": [
+                    { "type": "integer" }
+                  ]
+                }
+              }
+            }
+        `),
+        /must declare 'items' as an object-valued schema with an explicit 'type'/u);
+});
+
+test("parseSchemaContent should reject contains without an explicit typed object schema", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "contains": {
+                    "const": 5
+                  },
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+        `),
+        /must declare 'contains' as an object-valued schema with an explicit 'type'/u);
+});
+
 test("parseSchemaContent should reject minContains and maxContains without contains", () => {
     assert.throws(
         () => parseSchemaContent(`
@@ -2496,6 +2597,166 @@ test("applyFormUpdates should rewrite object-array items from structured form pa
     assert.match(updated, /^      gold: 10$/mu);
     assert.match(updated, /^      currency: coin$/mu);
     assert.match(updated, /^    monsterId: goblin$/mu);
+});
+
+test("buildFormModel should expose nested object-array editors inside object-array items", () => {
+    const schema = parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "phases": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "wave": { "type": "integer" },
+                  "spawns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "monsterId": { "type": "string" },
+                        "tags": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+    `);
+    const yaml = parseTopLevelYaml(`
+phases:
+  -
+    wave: 1
+    spawns:
+      -
+        monsterId: slime
+        tags:
+          - starter
+`);
+
+    const formModel = extensionTest.buildFormModel(schema, yaml, {});
+    const phasesField = formModel.fields.find((field) => field.path === "phases");
+
+    assert.ok(phasesField);
+    assert.equal(phasesField.kind, "objectArray");
+    assert.equal(phasesField.items.length, 1);
+    assert.deepEqual(formModel.unsupported, []);
+
+    const nestedSpawnField = phasesField.items[0].fields.find((field) => field.path === "spawns");
+    assert.ok(nestedSpawnField);
+    assert.equal(nestedSpawnField.kind, "objectArray");
+    assert.equal(nestedSpawnField.itemMode, true);
+    assert.equal(nestedSpawnField.items.length, 1);
+
+    const spawnMonsterField = nestedSpawnField.items[0].fields.find((field) => field.path === "monsterId");
+    assert.ok(spawnMonsterField);
+    assert.equal(spawnMonsterField.kind, "scalar");
+
+    const spawnTagsField = nestedSpawnField.items[0].fields.find((field) => field.path === "tags");
+    assert.ok(spawnTagsField);
+    assert.equal(spawnTagsField.kind, "array");
+});
+
+test("applyFormUpdates should rewrite nested object arrays from structured form payloads", () => {
+    const updated = applyFormUpdates(
+        [
+            "phases:",
+            "  -",
+            "    wave: 1"
+        ].join("\n"),
+        {
+            objectArrays: {
+                phases: [
+                    {
+                        wave: "1",
+                        spawns: [
+                            {
+                                monsterId: "slime",
+                                tags: ["starter", "melee"],
+                                reward: {
+                                    gold: "10"
+                                }
+                            },
+                            {
+                                monsterId: "goblin",
+                                conditions: [
+                                    {
+                                        type: "night",
+                                        value: "true"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        });
+
+    assert.match(updated, /^phases:$/mu);
+    assert.match(updated, /^  -$/mu);
+    assert.match(updated, /^    wave: 1$/mu);
+    assert.match(updated, /^    spawns:$/mu);
+    assert.match(updated, /^      -$/mu);
+    assert.match(updated, /^        monsterId: slime$/mu);
+    assert.match(updated, /^        tags:$/mu);
+    assert.match(updated, /^          - starter$/mu);
+    assert.match(updated, /^          - melee$/mu);
+    assert.match(updated, /^        reward:$/mu);
+    assert.match(updated, /^          gold: 10$/mu);
+    assert.match(updated, /^        monsterId: goblin$/mu);
+    assert.match(updated, /^        conditions:$/mu);
+    assert.match(updated, /^          -$/mu);
+    assert.match(updated, /^            type: night$/mu);
+    assert.match(updated, /^            value: true$/mu);
+});
+
+test("applyFormUpdates should not mix nested object-array items into the parent array", () => {
+    const updated = applyFormUpdates(
+        [
+            "phases:",
+            "  -",
+            "    wave: 1"
+        ].join("\n"),
+        {
+            objectArrays: {
+                phases: [
+                    {
+                        wave: "1",
+                        spawns: [
+                            {
+                                monsterId: "slime"
+                            },
+                            {
+                                monsterId: "goblin"
+                            }
+                        ]
+                    },
+                    {
+                        wave: "2",
+                        spawns: [
+                            {
+                                monsterId: "bat"
+                            }
+                        ]
+                    }
+                ]
+            }
+        });
+
+    assert.equal((updated.match(/^  -$/gmu) || []).length, 2);
+    assert.equal((updated.match(/^      -$/gmu) || []).length, 3);
+    assert.doesNotMatch(updated, /^    monsterId: slime$/mu);
+    assert.doesNotMatch(updated, /^    monsterId: goblin$/mu);
+    assert.match(updated, /^      -$/mu);
+    assert.match(updated, /^        monsterId: slime$/mu);
+    assert.match(updated, /^        monsterId: goblin$/mu);
+    assert.match(updated, /^        monsterId: bat$/mu);
 });
 
 test("applyFormUpdates should clear object arrays when the form removes all items", () => {

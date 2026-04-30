@@ -271,6 +271,181 @@ public sealed class YamlConfigLoaderAllOfTests
     }
 
     /// <summary>
+    ///     验证运行时会显式拒绝当前共享子集尚未支持的 <c>oneOf</c>。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Object_Schema_Declares_Unsupported_OneOf()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            BuildMonsterConfigYaml(
+                """
+                itemCount: 3
+                """));
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            BuildMonsterSchema(
+                DefaultRewardPropertiesJson,
+                """
+                [
+                  {
+                    "type": "object",
+                    "required": ["itemCount"],
+                    "properties": {
+                      "itemCount": { "type": "integer" }
+                    }
+                  }
+                ]
+                """,
+                """
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": ["bonus"],
+                    "properties": {
+                      "bonus": { "type": "integer" }
+                    }
+                  }
+                ]
+                """));
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(() => loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Message, Does.Contain("unsupported combinator keyword 'oneOf'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证运行时会显式拒绝当前共享子集尚未支持的 <c>anyOf</c>。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Object_Schema_Declares_Unsupported_AnyOf()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            BuildMonsterConfigYaml(
+                """
+                itemCount: 3
+                """));
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            BuildMonsterSchema(
+                DefaultRewardPropertiesJson,
+                """
+                [
+                  {
+                    "type": "object",
+                    "required": ["itemCount"],
+                    "properties": {
+                      "itemCount": { "type": "integer" }
+                    }
+                  }
+                ]
+                """,
+                """
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": ["bonus"],
+                    "properties": {
+                      "bonus": { "type": "integer" }
+                    }
+                  }
+                ]
+                """));
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(() => loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Message, Does.Contain("unsupported combinator keyword 'anyOf'"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证运行时接受显式声明的 <c>additionalProperties: false</c>，
+    ///     因为这与当前闭合对象字段集语义保持一致。
+    /// </summary>
+    [Test]
+    public async Task LoadAsync_Should_Accept_When_Object_Schema_Declares_AdditionalProperties_False()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            BuildMonsterConfigYaml(
+                """
+                itemCount: 3
+                """));
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            BuildMonsterSchema(
+                DefaultRewardPropertiesJson,
+                DefaultAllOfJson,
+                """
+                "additionalProperties": false
+                """));
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        await loader.LoadAsync(registry).ConfigureAwait(false);
+
+        var table = registry.GetTable<int, MonsterAllOfConfigStub>("monster");
+        Assert.That(table.Count, Is.EqualTo(1));
+    }
+
+    /// <summary>
+    ///     验证运行时会拒绝会打开动态字段形状的 <c>additionalProperties</c>。
+    /// </summary>
+    [Test]
+    public void LoadAsync_Should_Throw_When_Object_Schema_Declares_Unsupported_AdditionalProperties()
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            BuildMonsterConfigYaml(
+                """
+                itemCount: 3
+                """));
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            BuildMonsterSchema(
+                DefaultRewardPropertiesJson,
+                DefaultAllOfJson,
+                """
+                "additionalProperties": true
+                """));
+
+        var loader = CreateMonsterRewardLoader();
+        var registry = CreateRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(() => loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("reward"));
+            Assert.That(exception.Message, Does.Contain("unsupported 'additionalProperties' metadata"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证 allOf 条目只接受 object-typed schema。
     /// </summary>
     [Test]
@@ -566,10 +741,12 @@ public sealed class YamlConfigLoaderAllOfTests
     /// </summary>
     /// <param name="rewardPropertiesJson">奖励对象的 properties JSON 片段。</param>
     /// <param name="allOfJson">allOf 约束的 JSON 数组片段。</param>
+    /// <param name="additionalRewardKeywordsJson">追加到奖励对象上的额外关键字 JSON 片段。</param>
     /// <returns>完整的 schema JSON 文本。</returns>
     private static string BuildMonsterSchema(
         string rewardPropertiesJson,
-        string allOfJson)
+        string allOfJson,
+        string additionalRewardKeywordsJson = "")
     {
         return $$"""
                 {
@@ -580,7 +757,7 @@ public sealed class YamlConfigLoaderAllOfTests
                     "reward": {
                       "type": "object",
                       "properties": {{rewardPropertiesJson}},
-                      "allOf": {{allOfJson}}
+                      "allOf": {{allOfJson}}{{(string.IsNullOrWhiteSpace(additionalRewardKeywordsJson) ? string.Empty : "," + Environment.NewLine + additionalRewardKeywordsJson.Trim())}}
                     }
                   }
                 }
