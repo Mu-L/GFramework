@@ -1,5 +1,34 @@
 # Documentation Full Coverage Governance Trace
 
+## 2026-04-30
+
+### 当前恢复点：RP-052
+
+- 本轮 coverage 扩展已提交为 `f88f96c3`（`docs(source-generators): 补充生成器专题覆盖并更新进度`）。提交后重新计算发现，committed branch diff vs `origin/main` 已回落到 `8` files / `337` lines，工作树 clean，说明提交前的 `39` files / `2555` lines 只是临时工作树峰值，不应继续作为默认恢复指标。
+- 这次提交把 `Game.SourceGenerators` 的 schema 生成链路提升成独立 public docs 专题，并把 `Cqrs.SourceGenerators` 的 fallback 精度、共享 source-generator 支撑层的阅读路线，一并接回 landing / API / CQRS 入口。
+- 由于 stop-condition 余量重新恢复，下一轮仍可以继续沿 `$gframework-batch-boot 50` 推进，但应优先挑“已有模块、已有 README、站内专题仍不足”的 coverage 切片，而不是继续给共享支撑层单开页面。
+
+### 当前决策（RP-052）
+
+- 把 `8` files / `337` lines 视作新的 authoritative branch-size baseline，而不是沿用提交前的工作树峰值。
+- 保留 `RP-051` 的结论：共享 source-generator 支撑层继续通过 landing / API 入口解释，不提升为独立 public docs 页面。
+- 后续若继续扩批，优先考虑 README 与站内 docs 之间仍缺的 reader-facing 采用链路，而不是只做措辞巡检。
+
+### 当前验证（RP-052）
+
+- 继承 `RP-051` 的页面校验与 `bun run build` 成功结果。
+- 提交后状态确认：
+  - `git status --short --branch`
+  - `git diff --name-only origin/main...HEAD | wc -l`
+  - `git diff --numstat origin/main...HEAD`
+  - 结果：通过；当前分支工作树 clean，相对 `origin/main` 的 committed diff 为 `8` files / `337` lines。
+
+### 下一步（RP-052）
+
+1. 继续同一主题时，把 `8` files / `337` lines 作为新的 batch 起点。
+2. 优先挑选“已有 package README、但站内专题仍不足”的 coverage 切片。
+3. 在 remote branch / PR 恢复之前，继续把 `origin/main` + committed branch diff 当作唯一 stop-condition 度量。
+
 ## 2026-04-29
 
 ### 当前恢复点：RP-051

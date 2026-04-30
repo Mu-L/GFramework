@@ -12,14 +12,15 @@
 
 ## 当前恢复点
 
-- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-051`
+- 恢复点编号：`DOCUMENTATION-FULL-COVERAGE-GOV-RP-052`
 - 当前阶段：`Phase 5 - Governance Maintenance`
 - 当前焦点：
   - 按 `$gframework-batch-boot 50` 继续推进 `documentation-full-coverage-governance`，沿用 `origin/main` 作为 stop-condition 基线，在保持 reader-facing 口吻治理的同时，继续补 `source-generators` / `CQRS` 的公开专题覆盖率
+- `2026-04-30` 本轮 coverage 扩展已提交为 `f88f96c3`（`docs(source-generators): 补充生成器专题覆盖并更新进度`）；当前 committed branch diff vs `origin/main` 已回落到 `8` files / `337` lines，工作树重新变为 clean，仍保留充足阈值余量可供后续批次继续推进
 - `2026-04-30` 本轮恢复时确认当前 `HEAD` 与 `origin/main` 同步，committed diff 为 `0` files / `0` lines；因此本批次不再只做措辞收口，而是允许补新的公开专题页和入口链路
 - `2026-04-30` 本轮接受 2 个 explorer 的只读结论：其一，`GFramework.SourceGenerators.Common` 更适合作为 landing / API 入口内的共享排障层，而不是新的独立 public page；其二，`Cqrs.SourceGenerators` 当前主要缺口不是“没有入口”，而是现有专题页与 `core/cqrs.md` 对生成策略层级、fallback 精度和 `GF_Cqrs_001` 的解释不够 reader-facing
 - `2026-04-30` 本批次已新增 `docs/zh-CN/source-generators/schema-config-generator.md`，并同步更新 `docs/zh-CN/source-generators/index.md`、`docs/zh-CN/api-reference/index.md`、`docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`、`docs/zh-CN/core/cqrs.md` 与 `docs/.vitepress/config.mts`，把 `Game.SourceGenerators` 的 schema 生成链路和 `Cqrs.SourceGenerators` 的定向 fallback 语义收敛成站内可见入口
-- 当前工作树相对 `origin/main` 已达到 `39` files / `2555` lines；仍低于 `50` 文件 stop condition，但后续若继续扩批，应优先提交本轮覆盖扩展后再开新批次
+- 本轮在提交前一度把工作树推到 `39` files / `2555` lines；提交后 committed diff 已收敛到 `8` files / `337` lines，说明当前 batch 仍适合继续承接下一轮中等规模 coverage 切片
 - `2026-04-29` 重新进入时确认当前分支仍为 `docs/sdk-update-documentation`，但 upstream `origin/docs/sdk-update-documentation` 已不存在；因此本轮不再把旧 PR review 线程作为默认恢复入口，而是以本地 diff vs `origin/main` 为主
 - `2026-04-29` 上一批已完成 11 个低风险文档文件的收口：去掉 `ai-libs`、`旧文档`、`优先看` / `先看` / `转到` 这类内部或指令式措辞，并把 README 中暴露原始路径的链接标签改成 reader-facing 标题
 - `2026-04-29` 本批次继续接受 2 个 explorer 的只读结论：一个负责 `game/data.md`、`game/storage.md`、`godot/ui.md` 的热点排序，一个负责 README reader-facing 标签巡检；主线程只接受低风险措辞问题，不扩展到结构重写
@@ -152,7 +153,7 @@
 
 ## 下一步
 
-1. 提交本轮 source-generators / CQRS coverage 扩展批次，并在提交后重新计算 committed branch diff vs `origin/main`，确认是否仍适合继续在同一 `$gframework-batch-boot 50` 窗口内推进。
-2. 若继续下一批，优先挑选“已有 package README、但站内专题仍不足”的模块入口，例如 `README` 与现有 docs 之间的采用路径补链；避免把 `SourceGenerators.Common` 之类共享支撑层继续扩写成维护者导向的独立专题。
+1. 若继续下一批，优先挑选“已有 package README、但站内专题仍不足”的模块入口，例如 `README` 与现有 docs 之间的采用路径补链；避免把 `SourceGenerators.Common` 之类共享支撑层继续扩写成维护者导向的独立专题。
+2. 在继续扩批前，先沿用当前 committed diff `8` files / `337` lines 作为新的 batch 起点，避免把提交前的工作树计量误当成现状。
 3. 只有在重新建立 remote branch 或新的 PR 之后，再恢复 `$gframework-pr-review` 作为默认恢复入口；在此之前以本地 diff 与验证结果为准。
 4. 若后续分支继续调整 `Game` persistence runtime、README 或公共 API，优先复核 `docs/zh-CN/game/data.md`、`storage.md`、`serialization.md`、`setting.md` 与 landing page 是否仍保持同一套职责边界。
