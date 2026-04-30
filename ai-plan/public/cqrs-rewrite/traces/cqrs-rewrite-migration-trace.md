@@ -1,154 +1,37 @@
 # CQRS 重写迁移追踪
 
-## 2026-04-29
+## 2026-04-30
 
-### 阶段：mixed fallback 元数据拆分（CQRS-REWRITE-RP-052）
+### 阶段：PR #304 剩余 review follow-up 收敛（CQRS-REWRITE-RP-062）
 
-- 延续 `gframework-batch-boot 50` 的 `Phase 8` 主线，本轮把上一批的“全部可直接引用 fallback handlers 走 `Type[]`”继续推进到 mixed 场景
-- 先复核现状后确认：
-  - `CqrsHandlerRegistrar` 已天然支持读取多个 `CqrsReflectionFallbackAttribute` 实例
-  - 上一批真正阻止 mixed 场景继续收敛的点，是 runtime attribute 本身尚未开放多实例，以及 generator 只能二选一发射单个 fallback 特性
-- 已在 `GFramework.Cqrs/CqrsReflectionFallbackAttribute.cs` 中将特性约束改为 `AllowMultiple = true`，并补充注释说明多个实例的用途
-- 已在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中扩展 fallback 合同探测：
-  - 探测 runtime 是否支持 `params string[]`
-  - 探测 runtime 是否支持 `params Type[]`
-  - 探测 runtime 是否允许多个 `CqrsReflectionFallbackAttribute` 实例
-- 已在 `CqrsHandlerRegistryGenerator.Models.cs` 与 `CqrsHandlerRegistryGenerator.SourceEmission.cs` 中重构 fallback 发射模型：
-  - fallback 元数据现在可表示为一个或多个程序集级特性实例
-  - 当 fallback handlers 全部可直接引用时，继续优先输出单个 `Type[]` 特性
-  - 当 fallback 同时包含可直接引用与仅能按名称恢复的 handlers，且 runtime 支持多实例时，拆分输出一条 `Type[]` 特性和一条字符串特性
-  - 若 runtime 不支持多实例或缺少相应构造函数，仍整体回退到字符串元数据，避免 mixed 场景漏注册
-- 已补充 runtime 与 generator 双侧回归：
-  - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs` 新增 mixed fallback metadata 用例，锁定 registrar 只对字符串条目调用一次 `Assembly.GetType(...)`
-  - `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 新增 mixed fallback emission 用例，锁定 generator 会输出两个程序集级 fallback 特性实例
-- 同步更新：
-  - `GFramework.Cqrs.SourceGenerators/README.md`
-  - `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
-  - 说明 mixed 场景现在会拆分 `Type` 元数据与字符串元数据
-- 定向验证已通过：
-  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
-  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
-  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
-  - `13/13` passed
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
-  - `18/18` passed
-- 随后按 `$gframework-pr-review` 重新拉取当前分支 PR 审查数据：
-  - 当前 worktree `feat/cqrs-optimization` 已对应 `PR #302`
-  - latest head commit 仍有 `3` 条 open AI review threads：Greptile 指向 generator preamble 的死参数与多实例 fallback 特性空行，CodeRabbit 指向 mixed/direct fallback 测试断言过宽
-  - MegaLinter 仍只暴露 `dotnet-format` 的 `Restore operation failed`，未给出本地仍成立的格式文件线索，因此按环境噪音处理
-- 本轮已继续收口 `RP-052` 的 follow-up：
-  - 在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.SourceEmission.cs` 中移除已不再参与判断的 `generationEnvironment` 透传参数
-  - 调整多实例 fallback 特性发射时的换行策略，避免最后一个 fallback 特性与 `CqrsHandlerRegistryAttribute` 之间保留多余空行
-  - 在 `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 中补强 direct/mixed fallback 发射断言，锁定特性实例个数、拒绝空 marker，并确保 mixed 场景的程序集级 preamble 排版稳定
-  - 在 `GFramework.Cqrs.Tests/Cqrs/ReflectionFallbackNotificationContainer.cs` 中为 `DirectFallbackHandlerType` 补齐 `<returns>` XML 文档
-- 本轮 review follow-up 验证已通过：
-  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
-  - `0 warning / 0 error`
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
-  - `18/18` passed
-  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
-  - `13/13` passed
+- 本轮再次执行 `$gframework-pr-review`，确认当前分支 `feat/cqrs-optimization` 仍对应 `PR #304`
+- 本地复核后继续收敛了上一轮遗留的 review 项：
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarFallbackFailureTests.cs` 已补 `NonParallelizable`
+  - `GFramework.Cqrs.Tests/Cqrs/DispatcherStreamContextRefreshState.cs` 已改用 `_syncRoot` 命名，并补齐缺失的 XML 文档标签
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs` 三个内部 `Handle(...)` 已补齐 XML `param` / `returns`
+  - `DispatcherNotificationContextRefreshNotification` 与 `DispatcherStreamContextRefreshRequest` 已补 `DispatchId` XML 参数注释
+  - `cqrs-rewrite` active tracking / trace 已压缩为当前恢复入口，并将已完成阶段的详细历史移入 archive
+- 验证：
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
 
-## 2026-04-20
+## 活跃事实
 
-### 阶段：direct fallback 元数据优先级收敛（CQRS-REWRITE-RP-051）
+- 当前主题仍处于 `Phase 8`
+- `PR #304` 的本地 follow-up 已再次收口一轮，后续需要在 push 后重新观察 GitHub 的 unresolved thread 刷新结果
+- 已完成阶段的详细执行历史不再留在 active trace；默认恢复入口只保留当前恢复点、活跃事实、风险与下一步
 
-- 重新按 `gframework-batch-boot 50` 恢复 `Phase 8` 后，先复核当前 worktree 的恢复入口、`origin/main` 基线与分支规模：
-  - worktree 仍映射到 `cqrs-rewrite`
-  - 基线按批处理约定固定为 `origin/main`
-  - 本轮开始前分支累计 diff 为 `0 files / 0 lines`
-- 结合当前代码热点与历史归档后，选择本轮批次目标为“继续收敛 generator fallback 元数据，进一步减少 runtime 按字符串类型名回查 handler 的场景”
-- 已在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中新增 runtime fallback 合同探测：
-  - 识别 `CqrsReflectionFallbackAttribute` 是否支持 `params string[]`
-  - 识别 `CqrsReflectionFallbackAttribute` 是否支持 `params Type[]`
-- 已在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.Models.cs` 与
-  `CqrsHandlerRegistryGenerator.SourceEmission.cs` 中收敛 fallback 发射策略：
-  - 当本轮所有 fallback handlers 都可被生成代码直接引用，且 runtime 支持 `params Type[]` 时，生成器现优先发射 `typeof(...)` 形式的程序集级 fallback 元数据
-  - 当 fallback handlers 中仍存在不能直接引用的实现类型时，生成器继续整体回退到字符串元数据，避免 mixed 场景下部分 handler 走 `Type[]`、其余 handler 丢失恢复入口
-- 已在 `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 补充回归：
-  - 锁定 runtime 同时暴露字符串与 `Type` 两类 fallback 构造函数时，生成器优先选择直接 `Type` 元数据
-  - 保留现有字符串 fallback 合同测试，确保旧 contract 兼容路径不回退
-- 同步更新：
-  - `GFramework.Cqrs.SourceGenerators/README.md`
-  - `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
-  - 说明“可直接引用的 fallback handlers 会优先走 `typeof(...)` 元数据，减少运行时字符串回查”
-- 定向验证已通过：
-  - `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
-  - `17/17` passed
-- 额外修正：
-  - active tracking 中原先引用的 `ai-plan/migration/CQRS_MODULE_SPLIT_PLAN.md` 在当前 worktree 已不存在；本轮已移除该失效路径，后续以 active tracking / trace 作为默认恢复入口
+## 当前风险
 
-### 阶段：pointer / function pointer 泛型合同拒绝（CQRS-REWRITE-RP-050）
+- 当前 `dotnet build GFramework.sln -c Release` 在 WSL 环境仍会受顶层 `GFramework.csproj` 的 Windows NuGet fallback 配置影响
+- 远端 review thread 在本地提交前不会自动刷新，GitHub 上看到的 open 状态可能暂时滞后于当前代码
 
-- 重新执行 `$gframework-pr-review` 后，确认当前分支对应 `PR #261`，状态仍为 `OPEN`
-- latest reviewed commit 当前剩余 `1` 条 open CodeRabbit thread，指向 `RP-047` 历史记录仍把 `MakePointerType()` precise registration 写成现行路径
-- 本地核对后确认该评论有效：当前 pointer / function pointer 语义已由 `RP-050` 收敛为 fallback / diagnostic 路径，历史追踪必须显式标注 `RP-047` 已废弃，避免后续恢复时误回滚到旧方案
-- 已在 `GFramework.Cqrs.SourceGenerators/Cqrs/CqrsHandlerRegistryGenerator.cs` 中收紧 `TryCreateRuntimeTypeReference` 与 `CanReferenceFromGeneratedRegistry`
-- pointer / function pointer 现统一视为不可精确生成的 CQRS 泛型合同，生成器会保守回退到既有 fallback / diagnostic 路径，而不再发射运行时 `MakeGenericType(...)` 风险代码
-- 已在 `GFramework.SourceGenerators.Tests/Cqrs/CqrsHandlerRegistryGeneratorTests.cs` 中补充输入源诊断分离，并将相关测试改为显式断言 `CS0306` 与 fallback / diagnostic 结果
-- 已同步修正 `ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md` 中 `RP-047` 段落，明确其已被 `RP-050` 覆盖，且不得恢复 `MakePointerType()` precise registration
-- 定向验证已通过：
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~Reports_Compilation_Error_And_Skips_Precise_Registration_For_Hidden_Pointer_Response|FullyQualifiedName~Reports_Diagnostic_And_Skips_Registry_When_Fallback_Metadata_Is_Required_But_Runtime_Contract_Lacks_Fallback_Attribute|FullyQualifiedName~Emits_Assembly_Level_Fallback_Metadata_When_Fallback_Is_Required_And_Runtime_Contract_Is_Available"`
-  - `3/3` passed
-- 扩展验证已通过：
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
-  - `14/14` passed
+## Archive Context
 
-### 阶段：registrar duplicate mapping 索引收敛（CQRS-REWRITE-RP-049）
-
-- 已将 `CqrsHandlerRegistrar` 的重复 handler mapping 判定从逐条线性扫描 `IServiceCollection` 收敛为单次构建的本地映射索引
-- reflection fallback 或重复类型输入场景下，后续 duplicate mapping 判定改为 `HashSet` 命中，不再重复遍历已有服务描述符
-- `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs` 已补充“程序集枚举返回重复 handler 类型时仍只注册一份映射”的回归
-- 定向验证已通过：
-  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
-  - `11/11` passed
-  - 当前沙箱限制 MSBuild named pipe，因此验证在提权环境下执行
-
-### 阶段：registrar handler-interface 反射缓存（CQRS-REWRITE-RP-048）
-
-- 已在 `CqrsHandlerRegistrar` 中新增按 `Type` 弱键缓存的 supported handler interface 元数据，reflection 注册路径现会复用已筛选且排序好的接口列表
-- 同一 handler 类型跨容器重复注册时，不再重复执行 `GetInterfaces()` 与支持接口筛选；缓存仍保持卸载安全，不会长期钉住 collectible 类型
-- `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs` 已补充 registrar 静态缓存清理与 supported interface 缓存复用回归
-- 定向验证已通过：
-  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~GFramework.Cqrs.Tests.Cqrs.CqrsHandlerRegistrarTests"`
-  - `10/10` passed
-  - 当前沙箱限制 MSBuild named pipe，因此验证在提权环境下执行
-
-### 阶段：pointer precise runtime type 覆盖扩展（CQRS-REWRITE-RP-047，已由 RP-050 覆盖）
-
-- 曾在 `CqrsHandlerRegistryGenerator` 中尝试补充 pointer 类型的 runtime type 递归建模与源码发射，计划通过 `MakePointerType()` 还原隐藏 pointer 响应类型
-- 该方案后续已被 `RP-050` 明确废弃：pointer / function pointer 不能作为 CQRS 泛型合同的 precise registration 输入，当前实现统一回到 fallback / diagnostic 路径，不能恢复到 `MakePointerType()` 精确注册
-- 已同步收紧 function pointer 签名的可直接生成判定，只有当签名中的返回值与参数类型均可从 generated registry 安全引用时才走静态注册
-- 已保留含隐藏类型 function pointer handler 的 fallback / 诊断回归覆盖，确保 pointer 支持扩展不会误删原有程序集级 fallback 契约边界
-- 后续若需恢复当前 pointer / function pointer 行为，应以 `RP-050` 为权威记录，而不是继续沿用本阶段的旧设计假设
-- 定向验证与 `CqrsHandlerRegistryGeneratorTests` 全组验证均已通过：
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~Generates_Precise_Service_Type_For_Hidden_Pointer_Response|FullyQualifiedName~Reports_Diagnostic_And_Skips_Registry_When_Fallback_Metadata_Is_Required_But_Runtime_Contract_Lacks_Fallback_Attribute|FullyQualifiedName~Emits_Assembly_Level_Fallback_Metadata_When_Fallback_Is_Required_And_Runtime_Contract_Is_Available"`
-  - `3/3` passed
-  - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests"`
-  - `14/14` passed
-  - 当前沙箱限制 MSBuild named pipe，因此验证在提权环境下执行
-
-### 阶段：generated registry 激活反射收敛（CQRS-REWRITE-RP-046）
-
-- 已在 `CqrsHandlerRegistrar` 中将 generated registry 的无参构造激活改为类型级缓存工厂
-- 默认路径优先使用一次性动态方法直接创建 registry，避免后续每次命中缓存仍走 `ConstructorInfo.Invoke`
-- 若运行环境不允许动态方法，则保留原有反射激活回退，确保 generated registry 路径不因运行时限制失效
-- 已补充“私有无参构造 generated registry 仍可激活”的回归测试，覆盖现有生成器产物兼容性
-- 定向验证已通过：
-  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-restore -p:RestoreFallbackFolders= -m:1 -nodeReuse:false`
-  - `63/63` passed
-  - 当前沙箱限制 MSBuild named pipe，因此验证在提权环境下执行
-
-### Archive Context
-
-- 历史跟踪归档：
-  - `ai-plan/public/cqrs-rewrite/archive/todos/cqrs-rewrite-history-through-rp043.md`
 - 历史 trace 归档：
   - `ai-plan/public/cqrs-rewrite/archive/traces/cqrs-rewrite-history-through-rp043.md`
+  - `ai-plan/public/cqrs-rewrite/archive/traces/cqrs-rewrite-history-rp046-through-rp061.md`
 
-### 当前下一步
+## 当前下一步
 
-1. 回到 `Phase 8` 主线，优先再找一个 generator 覆盖缺口，继续减少仍需程序集级字符串 fallback 元数据的 handler 场景
-2. 若继续文档主线，优先补齐 `docs/zh-CN/api-reference` 与教程入口页中仍过时的 CQRS API / 命名空间表述
-3. 若后续 review thread 或 PR 状态再次变化，再重新执行 `$gframework-pr-review` 复核远端信号
+1. push 当前 follow-up 提交后，重新执行 `$gframework-pr-review`，确认 `PR #304` 的 latest unresolved threads 是否已刷新为已解决，或仅剩新增有效项
