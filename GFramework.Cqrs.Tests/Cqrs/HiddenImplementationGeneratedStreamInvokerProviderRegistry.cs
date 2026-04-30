@@ -32,6 +32,9 @@ internal sealed class HiddenImplementationGeneratedStreamInvokerProviderRegistry
     /// </summary>
     /// <param name="services">承载处理器映射的服务集合。</param>
     /// <param name="logger">用于记录注册诊断的日志器。</param>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="services" /> 或 <paramref name="logger" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public void Register(IServiceCollection services, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -50,11 +53,17 @@ internal sealed class HiddenImplementationGeneratedStreamInvokerProviderRegistry
     /// <param name="responseType">流式响应元素类型。</param>
     /// <param name="descriptor">命中时返回的描述符。</param>
     /// <returns>若类型对匹配当前测试流式请求则返回 <see langword="true" />。</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     当 <paramref name="requestType" /> 或 <paramref name="responseType" /> 为 <see langword="null" /> 时抛出。
+    /// </exception>
     public bool TryGetDescriptor(
         Type requestType,
         Type responseType,
         out CqrsStreamInvokerDescriptor? descriptor)
     {
+        ArgumentNullException.ThrowIfNull(requestType);
+        ArgumentNullException.ThrowIfNull(responseType);
+
         if (requestType == typeof(HiddenImplementationStreamInvokerContainer.VisibleStreamRequest)
             && responseType == typeof(int))
         {

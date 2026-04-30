@@ -167,7 +167,7 @@ protected override void OnInitialize()
 2. 存在生成注册器时优先使用 `ICqrsHandlerRegistry`
 3. 当生成注册器同时暴露 generated request invoker provider 时，runtime 会把 request/response 类型对对应的 descriptor 预先接线到 dispatcher 缓存，后续请求分发优先消费这些 generated request invoker 元数据
 4. 当生成注册器同时暴露 generated stream invoker provider 时，runtime 会以同样方式优先消费 stream request 对应的 generated stream invoker descriptor；只有当前类型对未命中时，才回退到既有反射 stream binding
-5. 生成注册器不可用或元数据异常时记录告警并回退到反射路径
+5. 生成注册器不可用时记录告警并回退到反射路径；只有“未命中 generated descriptor”才会走反射绑定，已命中的不兼容元数据会直接抛出异常
 6. 当生成注册器携带 `CqrsReflectionFallbackAttribute` 元数据时，运行时会先完成生成注册器注册，再补剩余 handler
 7. `CqrsReflectionFallbackAttribute` 可以同时携带 `Type[]` 和 `string[]` 两类清单；运行时会优先复用直接 `Type` 条目，只对名称条目做定向 `Assembly.GetType(...)` 查找
 8. 只有旧版空 marker 或生成注册器不可用时，才会回到整程序集反射扫描
@@ -236,7 +236,7 @@ RegisterCqrsPipelineBehavior<LoggingBehavior<,>>();
 | `GFramework.Cqrs.Abstractions/Cqrs/` | `ICqrsRuntime`、`ICqrsHandlerRegistrar`、`IPipelineBehavior<,>`、`IRequestHandler<,>`、`Unit` | 请求、处理器和 runtime seam 的最小契约 |
 | `GFramework.Cqrs/Command` `Query` `Notification` `Request` `Extensions` | `CommandBase<TInput, TResponse>`、`QueryBase<TInput, TResponse>`、`NotificationBase<TInput>`、`RequestBase<TInput, TResponse>`、`ContextAwareCqrsExtensions` | 业务侧常用基类和上下文发送入口 |
 | `GFramework.Cqrs/Cqrs/` | `AbstractCommandHandler<,>`、`AbstractQueryHandler<,>`、`AbstractRequestHandler<,>`、`AbstractStreamCommandHandler<,>`、`AbstractStreamQueryHandler<,>`、`LoggingBehavior<,>` | 默认处理器基类、上下文注入、流式处理与行为管道 |
-| `GFramework.Cqrs` 根入口与 `Internal/` | `CqrsRuntimeFactory`、`ICqrsHandlerRegistry`、`CqrsHandlerRegistryAttribute`、`CqrsReflectionFallbackAttribute`、`ICqrsRequestInvokerProvider`、`ICqrsStreamInvokerProvider` | runtime 创建入口、generated-registry 优先级、request / stream invoker provider 协作点、targeted fallback 语义和程序集去重规则 |
+| 运行时入口与内部协作层 | `CqrsRuntimeFactory`、`ICqrsHandlerRegistry`、`CqrsHandlerRegistryAttribute`、`CqrsReflectionFallbackAttribute`、`ICqrsRequestInvokerProvider`、`ICqrsStreamInvokerProvider` | runtime 创建入口、generated-registry 优先级、request / stream invoker provider 协作点、targeted fallback 语义和程序集去重规则 |
 | `GFramework.Cqrs.SourceGenerators/Cqrs/` | `CqrsHandlerRegistryGenerator`、`RuntimeTypeReferenceSpec`、`OrderedRegistrationKind` | 生成注册器、可直接引用类型判定、mixed fallback 发射与诊断边界 |
 
 ## 继续阅读

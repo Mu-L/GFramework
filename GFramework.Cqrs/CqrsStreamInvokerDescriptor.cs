@@ -19,6 +19,9 @@ public sealed class CqrsStreamInvokerDescriptor(
     Type handlerType,
     MethodInfo invokerMethod)
 {
+    private static readonly string NonStaticInvokerMessage =
+        "CQRS stream invoker descriptors require an open static invoker method so generated metadata can be bound deterministically.";
+
     /// <summary>
     ///     获取流式请求处理器在容器中的服务类型。
     /// </summary>
@@ -27,5 +30,22 @@ public sealed class CqrsStreamInvokerDescriptor(
     /// <summary>
     ///     获取执行流式请求处理器的开放静态方法。
     /// </summary>
-    public MethodInfo InvokerMethod { get; } = invokerMethod ?? throw new ArgumentNullException(nameof(invokerMethod));
+    public MethodInfo InvokerMethod { get; } = ValidateInvokerMethod(invokerMethod);
+
+    /// <summary>
+    ///     在描述符构造阶段拒绝实例方法，避免非法 generated metadata 延迟到首次建流时才暴露。
+    /// </summary>
+    /// <param name="invokerMethod">待验证的 generated invoker 方法。</param>
+    /// <returns>通过校验的静态方法。</returns>
+    /// <exception cref="ArgumentNullException">当 <paramref name="invokerMethod" /> 为 <see langword="null" /> 时抛出。</exception>
+    /// <exception cref="ArgumentException">当 <paramref name="invokerMethod" /> 不是静态方法时抛出。</exception>
+    private static MethodInfo ValidateInvokerMethod(MethodInfo invokerMethod)
+    {
+        ArgumentNullException.ThrowIfNull(invokerMethod);
+
+        if (!invokerMethod.IsStatic)
+            throw new ArgumentException(NonStaticInvokerMessage, nameof(invokerMethod));
+
+        return invokerMethod;
+    }
 }

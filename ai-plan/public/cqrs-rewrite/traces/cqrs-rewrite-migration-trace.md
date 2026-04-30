@@ -2,6 +2,35 @@
 
 ## 2026-04-30
 
+### 阶段：PR #307 review follow-up 收敛（CQRS-REWRITE-RP-075）
+
+- 在 `RP-074` 后继续沿用 `gframework-batch-boot 50` 的低风险切片策略，本轮只处理 `$gframework-pr-review` 对当前 `PR #307` 仍然成立的本地问题
+- 主线程先用 `fetch_current_pr_review.py --json-output /tmp/current-pr-review.json` 抓取 PR #307 的 latest-head open threads，确认真正仍需处理的项集中在：
+  - stream/request invoker 描述符入口缺少更早的合同防御
+  - request/stream provider 测试缺少“实现枚举契约但返回空 descriptor 集合”的回退覆盖
+  - `docs/zh-CN/core/cqrs.md` 把 generated metadata 不兼容时的行为误写成“回退到反射”
+  - active tracking 累积了 `RP-063` 至 `RP-074` 的长验证历史，不再适合作为默认恢复入口
+- 本轮实现收敛：
+  - `GFramework.Cqrs/CqrsRequestInvokerDescriptor.cs` 与 `GFramework.Cqrs/CqrsStreamInvokerDescriptor.cs` 现会在构造阶段拒绝实例方法，把非法 generated metadata 失败点前移到 registrar 激活/预热阶段
+  - `GFramework.Cqrs/CqrsRequestInvokerDescriptorEntry.cs` 与 `GFramework.Cqrs/CqrsStreamInvokerDescriptorEntry.cs` 现补齐公开构造入口的空值防御，并保持 request / stream 形状对称
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs` 现补齐 request / stream 的空 descriptor 枚举回退回归，并把“非静态 invoker”断言从首次分发抛错收敛为 registrar 放弃 generated registry 后回退到反射路径
+  - `GFramework.Cqrs.Tests/Cqrs/HiddenImplementationGeneratedStreamInvokerProviderRegistry.cs` 现补齐 `<exception>` XML 注释与 `TryGetDescriptor(...)` 参数空值防御
+  - `docs/zh-CN/core/cqrs.md` 现明确区分“未命中 generated descriptor 时回退到反射绑定”和“已命中的不兼容 generated metadata 会直接抛错”，并把 reader-facing 表格里的 `Internal/` 路径标签改成语义文案
+  - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md` 现把恢复点推进到 `RP-075`，同时把 `RP-063` 至 `RP-074` 的命令级验证历史迁移到新的归档文件，active 入口只保留最近 PR 锚点与权威验证
+
+### 验证（RP-075）
+
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+  - 结果：通过，`16/16` passed
+
+### 当前下一步（RP-075）
+
+1. 提交本轮 PR #307 review follow-up 收敛，保持恢复点、trace 与已验证代码状态一致
+2. 若继续下一批，优先挑选 request / stream provider 的缓存预热边界或 generator gate 合同补强，而不是扩散到新的模块
+3. 保持只暂存本轮相关文件，避免把工作区里无关的 `.gitignore` 本地改动混入提交
+
 ### 阶段：non-enumerating provider reflection fallback 回归（CQRS-REWRITE-RP-074）
 
 - 在 `RP-073` 提交后继续按 `gframework-batch-boot 50` 执行；当前 branch diff 相对 `origin/main` 仍远低于 `50 files` 阈值，因此继续追加一轮单文件 runtime contract 回归
