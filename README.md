@@ -15,6 +15,7 @@
 - 想先跑一个最小例子：[快速开始](docs/zh-CN/getting-started/quick-start.md)
 - 想先确认该装哪些包：[安装配置](docs/zh-CN/getting-started/installation.md)
 - 想接入 AI-First 配置工作流：[配置系统](docs/zh-CN/game/config-system.md) / [VS Code 配置工具](docs/zh-CN/game/config-tool.md)
+  当前正式支持边界以 `GFramework.Game` Runtime 与 `GFramework.Game.SourceGenerators` 共享 schema 子集为准；VS Code 工具是辅助层，不会单独扩出另一套配置契约
 - 已经知道要用哪个模块：直接进入对应模块的说明页
 
 ## 模块地图
@@ -73,6 +74,13 @@
   适合需要单独依赖契约层、插件化、测试替身或多模块解耦的场景。
 - `GeWuYou.GFramework.*.SourceGenerators`
   只在需要编译期生成代码时安装，版本应与运行时包保持一致。
+
+如果你采用 AI-First 配置工作流，建议在进入实现前先确认两条边界：
+
+- 当前共享子集接受闭合对象边界 `additionalProperties: false`
+- `oneOf` / `anyOf` 这类会改变生成类型形状的组合关键字当前会被 Runtime / Generator / Tooling 直接拒绝
+
+更复杂的 schema shape 需要先回到 schema 设计与 raw YAML 维护路径，而不是假定编辑器工具存在隐藏支持。
 
 ## 最小安装组合
 
