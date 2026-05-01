@@ -165,6 +165,27 @@ var bootstrap = new GameConfigBootstrap(
 当你需要继续手动拼装运行时，也可以直接用单表绑定或聚合目录做自己的注册封装。这时建议把“启动生命周期”和“业务读取入口”分开，继续沿用
 [游戏内容配置系统](../game/config-system.md) 里的 `GameConfigHost` / `GameConfigRuntime` 模板。
 
+## 迁移与兼容性
+
+如果你当前项目还在手写逐表注册，最小迁移路径可以按下面的顺序推进：
+
+1. 保持 `GeWuYou.GFramework.Game` 与 `GeWuYou.GFramework.Game.SourceGenerators` 版本一致，并把生成器包声明为 `PrivateAssets="all"` 的编译期依赖。
+2. 把现有 schema 收敛到 `schemas/**/*.schema.json`，或在项目文件中显式设置 `GFrameworkConfigSchemaDirectory`。
+3. 用 `RegisterAllGeneratedConfigTables(...)` 替换启动阶段里手写的逐表注册代码，再按需通过 `GeneratedConfigRegistrationOptions` 补充单表比较器或个别覆盖。
+4. 继续保留原有运行时消费入口，例如 `GameConfigBootstrap`、`YamlConfigLoader`、`GameConfigHost` 或 `GameConfigRuntime`，避免把“生成注册入口切换”与“运行时读取方式重写”混成同一步。
+
+当前兼容边界主要有三类：
+
+- 生成器只覆盖当前公开的 schema 子集；如果现有 schema 使用了尚未支持的结构或元数据，编译期会通过 `ConfigSchemaDiagnostics` 直接暴露，而不会静默退回到手写模型。
+- `x-gframework-index`、路径元数据和标识符映射都要求满足安全约束；旧项目里依赖宽松命名或不安全路径的配置，需要先整理 schema，再切换到聚合注册入口。
+- 迁移到生成链路后，运行时读取模型保持不变，但“表类型定义”和“注册目录”会改为编译期输出，因此自定义扩展更适合挂在单表绑定或 `ConfigureLoader` 阶段，而不是继续复制生成器会维护的样板代码。
+
+如果你需要分批迁移，当前更稳妥的回退方式是只回退注册入口，而不是同时回退 schema 结构：
+
+- 可以先让一部分表继续沿手写注册保留，另一部分切到生成的单表绑定或聚合注册。
+- 如果某张表在迁移后触发诊断，优先根据诊断 ID 收敛 schema，再决定是否临时回到手写注册。
+- 当项目已经接受 schema 目录约定后，尽量不要再把生成链路和旧的命名 / 路径规则长期并存，否则后续维护会同时承担两套约束。
+
 ## 常见诊断边界
 
 当前 `ConfigSchemaDiagnostics` 暴露的错误主要分成四类：
