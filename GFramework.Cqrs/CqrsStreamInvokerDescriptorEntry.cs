@@ -1,23 +1,23 @@
 namespace GFramework.Cqrs;
 
 /// <summary>
-///     描述单个 request/response 类型对与其 generated invoker 元数据之间的映射条目。
+///     描述单个 stream request/response 类型对与其 generated invoker 元数据之间的映射条目。
 /// </summary>
-public sealed record CqrsRequestInvokerDescriptorEntry
+public sealed record CqrsStreamInvokerDescriptorEntry
 {
     /// <summary>
-    ///     初始化 request invoker 描述符映射条目。
+    ///     初始化 stream invoker 描述符映射条目。
     /// </summary>
-    /// <param name="requestType">请求运行时类型。</param>
-    /// <param name="responseType">响应运行时类型。</param>
-    /// <param name="descriptor">对应的 generated request invoker 描述符。</param>
+    /// <param name="requestType">流式请求运行时类型。</param>
+    /// <param name="responseType">流式响应元素类型。</param>
+    /// <param name="descriptor">对应的 generated stream invoker 描述符。</param>
     /// <exception cref="ArgumentNullException">
     ///     当 <paramref name="requestType" />、<paramref name="responseType" /> 或 <paramref name="descriptor" /> 为 <see langword="null" /> 时抛出。
     /// </exception>
-    public CqrsRequestInvokerDescriptorEntry(
+    public CqrsStreamInvokerDescriptorEntry(
         Type requestType,
         Type responseType,
-        CqrsRequestInvokerDescriptor descriptor)
+        CqrsStreamInvokerDescriptor descriptor)
     {
         RequestType = requestType ?? throw new ArgumentNullException(nameof(requestType));
         ResponseType = responseType ?? throw new ArgumentNullException(nameof(responseType));
@@ -25,17 +25,17 @@ public sealed record CqrsRequestInvokerDescriptorEntry
     }
 
     /// <summary>
-    ///     获取请求运行时类型。
+    ///     获取流式请求运行时类型。
     /// </summary>
     public Type RequestType { get; }
 
     /// <summary>
-    ///     获取响应运行时类型。
+    ///     获取流式响应元素类型。
     /// </summary>
     public Type ResponseType { get; }
 
     /// <summary>
-    ///     获取对应的 generated request invoker 描述符。
+    ///     获取对应的 generated stream invoker 描述符。
     /// </summary>
-    public CqrsRequestInvokerDescriptor Descriptor { get; }
+    public CqrsStreamInvokerDescriptor Descriptor { get; }
 }

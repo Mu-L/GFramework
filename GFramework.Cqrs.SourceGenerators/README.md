@@ -15,6 +15,7 @@
 并生成：
 
 - `ICqrsHandlerRegistry` 实现
+- 在运行时合同允许时，额外生成 request / stream invoker provider 与 descriptor 元数据
 - 程序集级 `CqrsHandlerRegistryAttribute`
 - 必要时的 `CqrsReflectionFallbackAttribute` 元数据
 
@@ -34,6 +35,8 @@
 
 它会在可以安全生成静态注册器时前移注册工作；对无法由生成代码直接引用的 handler，则通过 reflection fallback 元数据让运行时做定向补扫，而不是整程序集盲扫。
 当 fallback handler 本身仍可直接引用时，生成器会优先发射 `typeof(...)` 形式的 fallback 元数据；如果 runtime 允许同一程序集声明多个 fallback 特性实例，mixed 场景也会拆成 `Type` 元数据和字符串元数据两段，进一步减少运行时按类型名回查程序集的成本。
+当 runtime 同时暴露 request / stream invoker provider 契约时，生成注册器还会为可直接静态表达的 `IRequestHandler<,>` 与
+`IStreamRequestHandler<,>` 发射对应 descriptor 与开放静态 invoker 方法，让 runtime 在首次创建 request / stream binding 时优先消费这些编译期元数据；未命中时仍保持既有反射 binding 创建语义。
 
 ## 最小接入路径
 
@@ -55,6 +58,7 @@ RegisterCqrsHandlersFromAssembly(typeof(GameArchitecture).Assembly);
 ```
 
 安装生成器后，运行时会优先走生成的 registry；无法静态表达的部分再走定向回退。
+如果当前 runtime 合同已经包含 request / stream invoker provider seam，generated registry 还会把这两类 invoker 元数据一并前移到编译期。
 
 ## 什么时候值得安装
 
