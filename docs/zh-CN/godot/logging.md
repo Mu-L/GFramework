@@ -91,6 +91,10 @@ var logger = GodotLog.CreateLogger<Main>();
 - 自动按 `GODOT_LOGGER_CONFIG` -> 可执行目录 `appsettings.json` -> `res://appsettings.json` 顺序发现配置
 - 返回延迟解析 logger，避免 `static readonly` 字段过早锁死配置
 
+`GodotLog.ConfigurationPath` 可以用于诊断当前会命中的配置文件路径；读取它不会提前创建全局配置源，也不会让后续
+`GodotLog.Configure(...)` 失效。长生命周期服务器或测试宿主如果需要在退出时主动释放配置文件 watcher，可以调用
+`GodotLog.Shutdown()`；它会停止热重载监听，已创建 logger 仍然继续使用最后一次成功发布的配置快照。
+
 ## 最小接入路径
 
 ### 1. 在 `ArchitectureConfiguration` 中挂上 Godot provider

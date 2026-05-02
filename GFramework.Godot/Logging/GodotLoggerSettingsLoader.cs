@@ -8,8 +8,18 @@ using Godot;
 
 namespace GFramework.Godot.Logging;
 
+/// <summary>
+///     Discovers and parses Godot logging configuration documents.
+/// </summary>
+/// <remarks>
+///     The loader treats JSON as external input: enum values are validated, nullable serializer output is normalized,
+///     and unsupported values produce clear exceptions before a settings snapshot reaches runtime log rendering.
+/// </remarks>
 internal static class GodotLoggerSettingsLoader
 {
+    /// <summary>
+    ///     Names the environment variable that can point to an explicit Godot logging configuration file.
+    /// </summary>
     internal const string ConfigEnvironmentVariableName = "GODOT_LOGGER_CONFIG";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -24,6 +34,13 @@ internal static class GodotLoggerSettingsLoader
         }
     };
 
+    /// <summary>
+    ///     Finds the first supported configuration file location.
+    /// </summary>
+    /// <param name="environmentPath">Optional explicit path used instead of reading the environment variable.</param>
+    /// <param name="processPath">Optional process path used when checking the executable directory.</param>
+    /// <param name="projectPathResolver">Optional resolver for Godot <c>res://</c> paths.</param>
+    /// <returns>The first existing configuration path, or null when none exists.</returns>
     public static string? DiscoverConfigurationPath(
         string? environmentPath = null,
         string? processPath = null,
@@ -59,6 +76,12 @@ internal static class GodotLoggerSettingsLoader
         return null;
     }
 
+    /// <summary>
+    ///     Loads a settings snapshot from a JSON file.
+    /// </summary>
+    /// <param name="filePath">The configuration file path.</param>
+    /// <returns>The parsed and normalized settings snapshot.</returns>
+    /// <exception cref="FileNotFoundException">Thrown when <paramref name="filePath"/> does not exist.</exception>
     public static GodotLoggerSettings LoadFromJsonFile(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -71,6 +94,12 @@ internal static class GodotLoggerSettingsLoader
         return LoadFromJsonString(File.ReadAllText(filePath));
     }
 
+    /// <summary>
+    ///     Parses a settings snapshot from a JSON string.
+    /// </summary>
+    /// <param name="json">The JSON configuration content.</param>
+    /// <returns>The parsed and normalized settings snapshot.</returns>
+    /// <exception cref="JsonException">Thrown when an unsupported log level or malformed document is encountered.</exception>
     public static GodotLoggerSettings LoadFromJsonString(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
@@ -79,7 +108,7 @@ internal static class GodotLoggerSettingsLoader
                    ?? throw new InvalidOperationException("Failed to deserialize Godot logging configuration.");
 
         var logging = root.Logging;
-        var options = logging?.GodotLogger ?? new GodotLoggerOptions();
+        var options = (logging?.GodotLogger ?? new GodotLoggerOptions()).CreateNormalizedCopy();
 
         LogLevel? defaultLogLevel = null;
         var loggerLevels = new Dictionary<string, LogLevel>(StringComparer.Ordinal);
@@ -132,6 +161,12 @@ internal static class GodotLoggerSettingsLoader
         {
             if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var numericValue))
             {
+                if (!Enum.IsDefined(typeof(LogLevel), numericValue))
+                {
+                    throw new JsonException(
+                        $"Unsupported numeric {nameof(LogLevel)} value '{numericValue}'. Expected a defined {nameof(LogLevel)} value.");
+                }
+
                 return (LogLevel)numericValue;
             }
 

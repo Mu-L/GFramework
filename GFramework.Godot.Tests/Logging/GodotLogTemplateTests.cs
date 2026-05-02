@@ -129,4 +129,14 @@ public sealed class GodotLogTemplateTests
 
         Assert.That(result, Is.EqualTo("red"));
     }
+
+    [Test]
+    public void Options_Should_Use_White_Color_When_Level_Is_Not_Defined()
+    {
+        var options = new GodotLoggerOptions();
+
+        var result = options.GetColor((LogLevel)999);
+
+        Assert.That(result, Is.EqualTo("white"));
+    }
 }

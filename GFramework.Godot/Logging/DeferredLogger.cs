@@ -1,14 +1,39 @@
 using System;
 using System.Linq;
+using System.Threading;
 using GFramework.Core.Abstractions.Logging;
 
 namespace GFramework.Godot.Logging;
 
+/// <summary>
+///     Defers resolving the real Godot logger until the first logging operation needs it.
+/// </summary>
+/// <remarks>
+///     This wrapper allows static logger fields to be created before <see cref="GodotLog.Configure"/> or
+///     <see cref="GodotLog.UseAsDefaultProvider"/> runs. The resolved inner logger is published with an atomic compare
+///     exchange so concurrent first-use calls converge on one cached instance without relying on the non-atomic
+///     null-coalescing assignment pattern.
+/// </remarks>
 internal sealed class DeferredLogger(string category, Func<ILoggerFactoryProvider> providerAccessor) : IStructuredLogger
 {
     private ILogger? _inner;
 
-    private ILogger Inner => _inner ??= ResolveLogger();
+    private ILogger Inner
+    {
+        get
+        {
+            var current = Volatile.Read(ref _inner);
+            if (current != null)
+            {
+                return current;
+            }
+
+            var createdLogger = ResolveLogger();
+
+            // Multiple callers can resolve concurrently; only one publishes the cached reference.
+            return Interlocked.CompareExchange(ref _inner, createdLogger, null) ?? createdLogger;
+        }
+    }
 
     public string Name()
     {

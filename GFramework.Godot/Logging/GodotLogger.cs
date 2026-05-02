@@ -13,7 +13,6 @@ namespace GFramework.Godot.Logging;
 /// </summary>
 public sealed class GodotLogger : AbstractLogger
 {
-    private readonly Func<LogLevel> _minLevelProvider;
     private readonly Func<GodotLoggerOptions> _optionsProvider;
 
     /// <summary>
@@ -37,9 +36,10 @@ public sealed class GodotLogger : AbstractLogger
     public GodotLogger(string? name, GodotLoggerOptions options)
         : this(
             name ?? RootLoggerName,
-            () => options ?? throw new ArgumentNullException(nameof(options)),
-            () => (options ?? throw new ArgumentNullException(nameof(options))).GetEffectiveMinLevel())
+            () => options,
+            () => options.GetEffectiveMinLevel())
     {
+        ArgumentNullException.ThrowIfNull(options);
     }
 
     internal GodotLogger(
@@ -49,7 +49,6 @@ public sealed class GodotLogger : AbstractLogger
         : base(name, minLevelProvider ?? throw new ArgumentNullException(nameof(minLevelProvider)))
     {
         _optionsProvider = optionsProvider ?? throw new ArgumentNullException(nameof(optionsProvider));
-        _minLevelProvider = minLevelProvider;
     }
 
     /// <summary>
@@ -68,7 +67,7 @@ public sealed class GodotLogger : AbstractLogger
     /// </summary>
     public override void Log(LogLevel level, string message, params (string Key, object? Value)[] properties)
     {
-        if (level < _minLevelProvider())
+        if (!IsEnabled(level))
         {
             return;
         }
@@ -85,7 +84,7 @@ public sealed class GodotLogger : AbstractLogger
         Exception? exception,
         params (string Key, object? Value)[] properties)
     {
-        if (level < _minLevelProvider())
+        if (!IsEnabled(level))
         {
             return;
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Godot.Logging;
 
@@ -86,6 +87,50 @@ public sealed class GodotLoggerSettingsLoaderTests
             Assert.That(settings.GetEffectiveMinLevel("Game.Services.Inventory", LogLevel.Trace), Is.EqualTo(LogLevel.Error));
             Assert.That(settings.GetEffectiveMinLevel("Game.Other", LogLevel.Trace), Is.EqualTo(LogLevel.Warning));
         });
+    }
+
+    [Test]
+    public void LoadFromJsonString_Should_Normalize_Null_GodotLogger_Options()
+    {
+        const string json = """
+                            {
+                              "Logging": {
+                                "GodotLogger": {
+                                  "DebugOutputTemplate": null,
+                                  "ReleaseOutputTemplate": null,
+                                  "Colors": null
+                                }
+                              }
+                            }
+                            """;
+
+        var settings = GodotLoggerSettingsLoader.LoadFromJsonString(json);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.Options.DebugOutputTemplate, Is.Not.Null.And.Not.Empty);
+            Assert.That(settings.Options.ReleaseOutputTemplate, Is.Not.Null.And.Not.Empty);
+            Assert.That(settings.Options.GetColor(LogLevel.Info), Is.EqualTo("white"));
+            Assert.That(settings.Options.GetColor(LogLevel.Error), Is.EqualTo("red"));
+        });
+    }
+
+    [Test]
+    public void LoadFromJsonString_Should_Reject_Invalid_Numeric_LogLevel()
+    {
+        const string json = """
+                            {
+                              "Logging": {
+                                "LogLevel": {
+                                  "Default": 999
+                                }
+                              }
+                            }
+                            """;
+
+        var error = Assert.Throws<JsonException>(() => GodotLoggerSettingsLoader.LoadFromJsonString(json));
+
+        Assert.That(error?.Message, Does.Contain("Unsupported numeric LogLevel value '999'"));
     }
 
     [Test]

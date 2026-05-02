@@ -82,19 +82,39 @@ public sealed class GodotLoggerOptions
     /// <returns>The Godot named color.</returns>
     public string GetColor(LogLevel level)
     {
-        if (Colors.TryGetValue(level, out var color) && !string.IsNullOrWhiteSpace(color))
+        if (Colors is { } colors && colors.TryGetValue(level, out var color) && !string.IsNullOrWhiteSpace(color))
         {
             return color;
         }
 
-        return DefaultColors[level];
+        return DefaultColors.TryGetValue(level, out var fallback) ? fallback : "white";
     }
 
+    /// <summary>
+    ///     Gets the active minimum level for the current <see cref="Mode"/>.
+    /// </summary>
+    /// <returns>
+    ///     <see cref="DebugMinLevel"/> when <see cref="Mode"/> is <see cref="GodotLoggerMode.Debug"/>; otherwise
+    ///     <see cref="ReleaseMinLevel"/>.
+    /// </returns>
+    /// <remarks>
+    ///     Factories use this value as the option-level floor before category-specific settings are applied.
+    /// </remarks>
     internal LogLevel GetEffectiveMinLevel()
     {
         return Mode == GodotLoggerMode.Debug ? DebugMinLevel : ReleaseMinLevel;
     }
 
+    /// <summary>
+    ///     Creates a copy whose debug and release floors are at least <paramref name="minLevel"/>.
+    /// </summary>
+    /// <param name="minLevel">The minimum level that both mode-specific floors must satisfy.</param>
+    /// <returns>A normalized copy with stricter or equal mode-specific minimum levels.</returns>
+    /// <remarks>
+    ///     The operation can raise <see cref="DebugMinLevel"/> and <see cref="ReleaseMinLevel"/> through
+    ///     <see cref="Max(LogLevel, LogLevel)"/>, but it never lowers them. <see cref="DebugOutputTemplate"/>,
+    ///     <see cref="ReleaseOutputTemplate"/>, and <see cref="Colors"/> are preserved through a defensive copy.
+    /// </remarks>
     internal GodotLoggerOptions WithMinimumLevelFloor(LogLevel minLevel)
     {
         return new GodotLoggerOptions
@@ -104,12 +124,59 @@ public sealed class GodotLoggerOptions
             ReleaseMinLevel = Max(ReleaseMinLevel, minLevel),
             DebugOutputTemplate = DebugOutputTemplate,
             ReleaseOutputTemplate = ReleaseOutputTemplate,
-            Colors = new Dictionary<LogLevel, string>(Colors)
+            Colors = CopyColorsWithDefaults(Colors)
+        };
+    }
+
+    /// <summary>
+    ///     Creates a copy that replaces missing templates or color mappings with safe defaults.
+    /// </summary>
+    /// <returns>A normalized copy suitable for runtime rendering.</returns>
+    /// <remarks>
+    ///     JSON input can set <see cref="DebugOutputTemplate"/>, <see cref="ReleaseOutputTemplate"/>, or
+    ///     <see cref="Colors"/> to null even though the public API treats them as non-null. This method keeps
+    ///     deserialization and imperative configuration from publishing values that would fail during rendering.
+    /// </remarks>
+    internal GodotLoggerOptions CreateNormalizedCopy()
+    {
+        var defaults = new GodotLoggerOptions();
+
+        return new GodotLoggerOptions
+        {
+            Mode = Mode,
+            DebugMinLevel = DebugMinLevel,
+            ReleaseMinLevel = ReleaseMinLevel,
+            DebugOutputTemplate = string.IsNullOrWhiteSpace(DebugOutputTemplate)
+                ? defaults.DebugOutputTemplate
+                : DebugOutputTemplate,
+            ReleaseOutputTemplate = string.IsNullOrWhiteSpace(ReleaseOutputTemplate)
+                ? defaults.ReleaseOutputTemplate
+                : ReleaseOutputTemplate,
+            Colors = CopyColorsWithDefaults(Colors)
         };
     }
 
     private static LogLevel Max(LogLevel left, LogLevel right)
     {
         return left > right ? left : right;
+    }
+
+    private static Dictionary<LogLevel, string> CopyColorsWithDefaults(Dictionary<LogLevel, string>? colors)
+    {
+        var merged = new Dictionary<LogLevel, string>(DefaultColors);
+        if (colors == null)
+        {
+            return merged;
+        }
+
+        foreach (var pair in colors)
+        {
+            if (!string.IsNullOrWhiteSpace(pair.Value))
+            {
+                merged[pair.Key] = pair.Value;
+            }
+        }
+
+        return merged;
     }
 }

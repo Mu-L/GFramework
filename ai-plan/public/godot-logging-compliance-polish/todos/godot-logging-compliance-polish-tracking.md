@@ -7,14 +7,15 @@ GFramework 自身日志抽象不分叉”的稳定宿主层，并为后续 Godot
 
 ## 当前恢复点
 
-- 恢复点编号：`GODOT-LOGGING-COMPLIANCE-POLISH-RP-001`
-- 当前阶段：`Phase 1`
+- 恢复点编号：`GODOT-LOGGING-COMPLIANCE-POLISH-RP-002`
+- 当前阶段：`PR review hardening`
 - 当前焦点：
   - 已补齐 `GodotLog` 静态入口、延迟 logger 解析、配置自动发现与热重载
   - 已让 `GodotLoggerFactoryProvider` 对已缓存 logger 生效动态配置，而不是只在新建 logger 时读快照
   - 已让 `GodotLogger` 支持 `{properties}` 占位符，并把 `IStructuredLogger` / `LogContext` 属性落到 Godot 输出
   - 已兼容 `GodotLogger` 风格配置值，如 `Information` / `Critical`
-  - 下一轮优先评估是否把 Godot 输出进一步并入 Core 的 appender / formatter / filter 组合管线
+  - 已处理 PR #314 最新 AI review 中仍适用的生命周期、配置输入、缓存边界、注释和脚本健壮性问题
+  - 下一轮优先只复核 CI 反馈是否已收敛，避免继续扩大 Godot logging API 面
 
 ## 当前状态摘要
 
@@ -43,6 +44,10 @@ GFramework 自身日志抽象不分叉”的稳定宿主层，并为后续 Godot
   - GFramework 风格：`Info` / `Fatal`
   - `GodotLogger` 风格：`Information` / `Critical`
 - 现有设计仍保留 UTC 时间戳语义，没有为了对齐原项目而默认切回本地时间
+- `GodotLog.ConfigurationPath` 现在不会提前 materialize 全局配置源；`GodotLog.Shutdown()` 可释放已创建配置源的 watcher
+- 配置 JSON 会先归一化模板和颜色字典，并拒绝未定义的数字 `LogLevel`
+- `GodotLogTemplate` 的模板缓存和分类格式缓存已改为有界并发缓存，避免热重载或动态 category 长期单向增长
+- `refactor-scripts/update-namespaces.py` 已移除本机绝对路径默认值，并会把文件处理失败汇总成非零退出码
 
 ## 当前风险
 
@@ -52,6 +57,8 @@ GFramework 自身日志抽象不分叉”的稳定宿主层，并为后续 Godot
   - 缓解措施：下一轮只评估“Godot sink / appender 化”，不再继续扩张独立的 Godot logging 面
 - 配置热重载的宿主差异风险：Godot 编辑器、导出包和测试宿主的文件系统语义不完全一致
   - 缓解措施：active 入口先锁定 discovery / reload 语义，后续若遇到平台差异，再用定向回归和文档补充收口
+- `GodotLog.ConfigurationPath` 的“不会 materialize”语义没有加入自动化测试
+  - 缓解措施：直接调用会触碰 Godot project path resolver，在普通 test host 中可能崩溃；当前以实现和文档约束记录，后续若增加 Godot 宿主集成测试再覆盖
 
 ## 活跃文档
 
@@ -69,9 +76,18 @@ GFramework 自身日志抽象不分叉”的稳定宿主层，并为后续 Godot
 - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter FullyQualifiedName~Logging -nologo`
   - 结果：通过
   - 备注：Core logging 相关测试共 `214` 项通过，覆盖 `AbstractLogger` 动态最小级别改造回归
+- `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter FullyQualifiedName~GodotLog -nologo`
+  - 结果：通过
+  - 备注：PR review hardening 后 Godot logging 定向测试共 `14` 项通过
+- `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release -nologo`
+  - 结果：通过
+  - 备注：PR review hardening 后 Godot 测试项目共 `72` 项通过
+- `python3 -B refactor-scripts/update-namespaces.py --help`
+  - 结果：通过
+  - 备注：确认脚本 CLI 参数解析可用
 
 ## 下一步
 
-1. 评估是否需要把 Godot 控制台输出收敛成 Core 可组合 sink / appender，而不是继续扩张独立 provider 逻辑
-2. 若继续做 Godot logger 能力，优先补真实宿主下的配置 reload / 输出行为回归，而不是再添加新的公开入口
-3. 若本轮改动进入 PR，后续 review / follow-up 继续写回本 topic，而不是另开第二份 Godot logging 追踪
+1. 刷新 PR review / CI 状态，确认最新 head 上 CodeRabbit 与 Greptile 线程是否关闭或变为 stale
+2. 若 CI 仍报 MegaLinter `dotnet-format` restore 失败，优先复核 Actions restore 环境，而不是继续改本地格式
+3. 后续若继续推进能力设计，再评估 Godot 输出是否应变成 Core 可组合 sink / appender

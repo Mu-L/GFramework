@@ -5,9 +5,10 @@
 
 import os
 import re
-from pathlib import Path
+import sys
+from argparse import ArgumentParser
 
-ROOT_DIR = "/mnt/f/gewuyou/System/Documents/WorkSpace/GameDev/GFramework"
+DEFAULT_ROOT_DIR = os.getcwd()
 
 # 命名空间替换规则（按优先级排序，长的先匹配）
 NAMESPACE_RULES = [
@@ -120,15 +121,26 @@ def update_file(file_path):
 
         return 0
     except Exception as e:
-        print(f"错误处理文件 {file_path}: {e}")
-        return 0
+        raise RuntimeError(f"错误处理文件 {file_path}: {e}") from e
 
 def main():
+    parser = ArgumentParser(description="更新 C# 文件中的命名空间声明和 using 语句")
+    parser.add_argument(
+        "--root-dir",
+        default=os.getenv("ROOT_DIR", DEFAULT_ROOT_DIR),
+        help="要扫描的仓库根目录，默认使用 ROOT_DIR 环境变量或当前工作目录")
+    args = parser.parse_args()
+    root_dir = os.path.abspath(args.root_dir)
+
+    if not os.path.isdir(root_dir):
+        print(f"根目录不存在或不是目录: {root_dir}", file=sys.stderr)
+        return 2
+
     print("开始更新命名空间...")
 
     # 查找所有 C# 文件
     cs_files = []
-    for root, dirs, files in os.walk(ROOT_DIR):
+    for root, dirs, files in os.walk(root_dir):
         # 跳过 bin, obj, Generated 目录
         dirs[:] = [d for d in dirs if d not in ['bin', 'obj', 'Generated', '.git', 'node_modules']]
 
@@ -140,15 +152,28 @@ def main():
 
     updated_files = 0
     total_replacements = 0
+    failed_files = []
 
     for file_path in cs_files:
-        replacements = update_file(file_path)
+        try:
+            replacements = update_file(file_path)
+        except RuntimeError as e:
+            failed_files.append((file_path, str(e)))
+            continue
+
         if replacements > 0:
             updated_files += 1
             total_replacements += replacements
             print(f"更新: {os.path.basename(file_path)} ({replacements} 处替换)")
 
     print(f"\n完成！更新了 {updated_files} 个文件，共 {total_replacements} 处替换")
+    if failed_files:
+        print(f"失败文件数: {len(failed_files)}", file=sys.stderr)
+        for file_path, error in failed_files:
+            print(f"- {file_path}: {error}", file=sys.stderr)
+        return 1
+
+    return 0
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

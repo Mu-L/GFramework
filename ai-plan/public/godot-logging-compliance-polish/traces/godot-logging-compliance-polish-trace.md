@@ -52,3 +52,33 @@
 1. 若继续推进本主题，优先评估 Godot 输出是否应变成 Core 可组合 appender / sink
 2. 若出现后续 review 反馈，直接在本 topic 追加 RP-002，而不是重新开临时 local-plan
 3. 若本主题阶段性完成，再把详细实现 history 迁入 `archive/`，active 入口只保留恢复点与风险
+
+### 阶段：PR review hardening（RP-002）
+
+- 使用 `$gframework-pr-review` 抓取 PR #314 最新 review payload，确认当前 head 上仍有 CodeRabbit 与 Greptile
+  未解决线程
+- 接受并处理仍适用的 review 结论：
+  - `GodotLog.ConfigurationPath` 不应提前创建全局配置源，`Configure(...)` 需要在 provider 或配置源已创建后 fail-fast
+  - 静态配置源需要可显式释放 watcher，因此新增 `GodotLog.Shutdown()`
+  - `DeferredLogger` 首次解析改为 `Interlocked.CompareExchange` 发布，避免 `_inner ??=` 并发竞态
+  - `GodotLogger` 结构化 `Log(...)` 覆写改为复用 `IsEnabled(level)`，删除重复的最小级别 provider 字段
+  - JSON 配置输入需要归一化模板和颜色字典，并拒绝未定义的数字 `LogLevel`
+  - `GodotLogTemplate` 模板缓存和分类缓存需要有界，避免热重载或动态 category 长期增长
+  - `refactor-scripts/update-namespaces.py` 不能依赖本机绝对路径，也不能把文件处理异常吞成 0 次替换
+- 同步补充 Godot logging 内部类型和关键方法 XML 文档，说明热重载、快照发布、分类匹配和模板缓存语义
+- 同步更新 `docs/zh-CN/godot/logging.md`，记录 `ConfigurationPath` 的诊断语义和 `Shutdown()` teardown 用法
+
+### 验证
+
+- `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter FullyQualifiedName~GodotLog -nologo`
+  - 结果：通过（14/14）
+- `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release -nologo`
+  - 结果：通过（72/72）
+- `python3 -B refactor-scripts/update-namespaces.py --help`
+  - 结果：通过
+
+### 下一步
+
+1. 提交 RP-002 review hardening 改动
+2. 刷新 PR review / CI，确认最新 head 是否关闭已处理线程
+3. 若 CI 仍只有 MegaLinter `dotnet-format` restore 失败，优先定位 Actions restore 环境

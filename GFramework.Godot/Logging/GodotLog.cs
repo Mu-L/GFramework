@@ -34,10 +34,10 @@ public static class GodotLog
 
         lock (ConfigureLock)
         {
-            if (LazyProvider.IsValueCreated)
+            if (LazyProvider.IsValueCreated || LazyConfigurationSource.IsValueCreated)
             {
                 throw new InvalidOperationException(
-                    "GodotLog.Configure must be called before any GodotLog logger is materialized.");
+                    "GodotLog.Configure must be called before any GodotLog provider or configuration source is materialized.");
             }
 
             _configure = configure;
@@ -59,9 +59,16 @@ public static class GodotLog
     }
 
     /// <summary>
-    ///     Gets the discovered configuration file path, if any.
+    ///     Gets the discovered configuration file path, if any, without materializing the global configuration source.
     /// </summary>
-    public static string? ConfigurationPath => LazyConfigurationSource.Value.ConfigurationPath;
+    /// <remarks>
+    ///     This property is safe for diagnostics before <see cref="Configure"/> runs. When the source is not created
+    ///     yet, it performs discovery directly instead of touching <c>LazyConfigurationSource.Value</c>, so callers do
+    ///     not accidentally lock in the default options before configuring <see cref="Provider"/>.
+    /// </remarks>
+    public static string? ConfigurationPath => LazyConfigurationSource.IsValueCreated
+        ? LazyConfigurationSource.Value.ConfigurationPath
+        : GodotLoggerSettingsLoader.DiscoverConfigurationPath();
 
     /// <summary>
     ///     Creates a logger for the specified category without materializing the provider until first use.
@@ -86,6 +93,23 @@ public static class GodotLog
     public static void UseAsDefaultProvider()
     {
         LoggerFactoryResolver.Provider = Provider;
+    }
+
+    /// <summary>
+    ///     Stops the file watcher owned by the materialized configuration source, if the source has been created.
+    /// </summary>
+    /// <remarks>
+    ///     Godot hosts often keep process-wide logging for the whole game lifetime. Dedicated servers and tests can call
+    ///     this method during teardown to release the watcher handle deterministically. The static lazy source is not
+    ///     reset; later logger usage continues with the last published settings snapshot but no longer receives reload
+    ///     notifications from the disposed watcher.
+    /// </remarks>
+    public static void Shutdown()
+    {
+        if (LazyConfigurationSource.IsValueCreated)
+        {
+            LazyConfigurationSource.Value.Dispose();
+        }
     }
 
     private static GodotLogConfigurationSource CreateConfigurationSource()
