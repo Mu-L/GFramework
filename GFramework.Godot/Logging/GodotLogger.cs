@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging;
 using Godot;
@@ -6,69 +6,79 @@ using Godot;
 namespace GFramework.Godot.Logging;
 
 /// <summary>
-///     Godot平台的日志记录器实现。
-///     该类继承自 <see cref="AbstractLogger"/>，用于在 Godot 引擎中输出日志信息。
-///     支持不同日志级别的输出，并根据级别调用 Godot 的相应方法。
+///     Godot platform logger implementation.
 /// </summary>
-/// <param name="name">日志记录器的名称，默认为根日志记录器名称。</param>
-/// <param name="minLevel">最低日志级别，默认为 <see cref="LogLevel.Info"/>。</param>
-public sealed class GodotLogger(
-    string? name = null,
-    LogLevel minLevel = LogLevel.Info) : AbstractLogger(name ?? RootLoggerName, minLevel)
+public sealed class GodotLogger : AbstractLogger
 {
-    // 静态缓存日志级别字符串，避免重复格式化
-    private static readonly string[] LevelStrings =
-    [
-        "TRACE  ",
-        "DEBUG  ",
-        "INFO   ",
-        "WARNING",
-        "ERROR  ",
-        "FATAL  "
-    ];
+    private readonly GodotLoggerOptions _options;
 
     /// <summary>
-    ///     写入日志的核心方法。
-    ///     格式化日志消息并根据日志级别调用 Godot 的输出方法。
+    ///     Initializes a logger that preserves the historical fixed-format template.
     /// </summary>
-    /// <param name="level">日志级别。</param>
-    /// <param name="message">日志消息内容。</param>
-    /// <param name="exception">可选的异常信息。</param>
+    /// <param name="name">The logger name.</param>
+    /// <param name="minLevel">The minimum enabled log level.</param>
+    public GodotLogger(string? name = null, LogLevel minLevel = LogLevel.Info)
+        : this(name, GodotLoggerOptions.ForMinimumLevel(minLevel))
+    {
+    }
+
+    /// <summary>
+    ///     Initializes a logger with Godot-specific formatting options.
+    /// </summary>
+    /// <param name="name">The logger name.</param>
+    /// <param name="options">The logger options.</param>
+    public GodotLogger(string? name, GodotLoggerOptions options)
+        : base(name ?? RootLoggerName, (options ?? throw new ArgumentNullException(nameof(options))).GetEffectiveMinLevel())
+    {
+        _options = options;
+    }
+
+    /// <summary>
+    ///     Writes a log entry to Godot.
+    /// </summary>
+    /// <param name="level">The log level.</param>
+    /// <param name="message">The rendered message body.</param>
+    /// <param name="exception">The optional exception.</param>
     protected override void Write(LogLevel level, string message, Exception? exception)
     {
-        // 构造时间戳和日志前缀
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-        var levelStr = LevelStrings[(int)level];
-        var logPrefix = $"[{timestamp}] {levelStr} [{Name()}]";
+        var templateText = _options.Mode == GodotLoggerMode.Debug
+            ? _options.DebugOutputTemplate
+            : _options.ReleaseOutputTemplate;
+        var context = new GodotLogRenderContext(
+            DateTime.UtcNow,
+            level,
+            Name(),
+            message,
+            _options.GetColor(level));
+        var rendered = GodotLogTemplate.Parse(templateText).Render(context);
 
-        // 添加异常信息到日志消息中
-        if (exception != null) message += "\n" + exception;
+        if (_options.Mode == GodotLoggerMode.Debug)
+        {
+            WriteDebug(level, rendered);
+        }
+        else
+        {
+            GD.Print(rendered);
+        }
 
-        var logMessage = $"{logPrefix} {message}";
+        if (exception != null)
+        {
+            GD.PrintErr(exception.ToString());
+        }
+    }
 
-        // 根据日志级别选择 Godot 输出方法
+    private static void WriteDebug(LogLevel level, string rendered)
+    {
+        GD.PrintRich(rendered);
+
         switch (level)
         {
             case LogLevel.Fatal:
-                GD.PushError(logMessage);
-                break;
             case LogLevel.Error:
-                GD.PrintErr(logMessage);
+                GD.PushError(rendered);
                 break;
             case LogLevel.Warning:
-                GD.PushWarning(logMessage);
-                break;
-            case LogLevel.Trace:
-                GD.PrintRich($"[color=gray]{logMessage}[/color]");
-                break;
-            case LogLevel.Debug:
-                GD.PrintRich($"[color=cyan]{logMessage}[/color]");
-                break;
-            case LogLevel.Info:
-                GD.Print(logMessage);
-                break;
-            default:
-                GD.Print(logMessage);
+                GD.PushWarning(rendered);
                 break;
         }
     }

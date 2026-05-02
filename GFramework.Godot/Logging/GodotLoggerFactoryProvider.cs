@@ -1,35 +1,51 @@
-﻿using GFramework.Core.Abstractions.Logging;
+using System;
+using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging;
 
 namespace GFramework.Godot.Logging;
 
 /// <summary>
-///     Godot日志工厂提供程序，用于创建Godot日志记录器实例
+///     Provides cached Godot logger instances.
 /// </summary>
 public sealed class GodotLoggerFactoryProvider : ILoggerFactoryProvider
 {
     private readonly ILoggerFactory _cachedFactory;
 
     /// <summary>
-    ///     初始化Godot日志记录器工厂提供程序
+    ///     Initializes a Godot logger provider with the default logger factory.
     /// </summary>
     public GodotLoggerFactoryProvider()
     {
-        _cachedFactory = new CachedLoggerFactory(new GodotLoggerFactory());
+        _cachedFactory = CreateCachedFactory(new GodotLoggerFactory());
     }
 
     /// <summary>
-    ///     获取或设置最小日志级别
+    ///     Initializes a Godot logger provider with Godot-specific formatting options.
+    /// </summary>
+    /// <param name="options">The logger options.</param>
+    public GodotLoggerFactoryProvider(GodotLoggerOptions options)
+    {
+        _cachedFactory = CreateCachedFactory(new GodotLoggerFactory(options));
+    }
+
+    /// <summary>
+    ///     Gets or sets the provider minimum level.
     /// </summary>
     public LogLevel MinLevel { get; set; }
 
     /// <summary>
-    ///     创建指定名称的日志记录器实例（带缓存）
+    ///     Creates a cached logger with the specified name.
     /// </summary>
-    /// <param name="name">日志记录器的名称</param>
-    /// <returns>返回配置了最小日志级别的Godot日志记录器实例</returns>
+    /// <param name="name">The logger name.</param>
+    /// <returns>A logger configured with <see cref="MinLevel"/>.</returns>
     public ILogger CreateLogger(string name)
     {
         return _cachedFactory.GetLogger(name, MinLevel);
+    }
+
+    private static ILoggerFactory CreateCachedFactory(ILoggerFactory innerFactory)
+    {
+        ArgumentNullException.ThrowIfNull(innerFactory);
+        return new CachedLoggerFactory(innerFactory);
     }
 }
