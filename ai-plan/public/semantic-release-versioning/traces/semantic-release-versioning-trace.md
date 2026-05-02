@@ -40,6 +40,16 @@
 - `dotnet build GFramework.sln -c Release` 通过，`0 warning / 0 error`。
 - 下一步是提交并推送本轮 PR review 修复，然后重新抓取 PR review 确认相关线程状态。
 
+## 2026-05-02
+
+### SEMREL-RP-004 合并后归档
+
+- `feat/release-summary-notes` 已合入 `main`，本地 `main` 快进到合并提交 `35a62e6b`。
+- 已将 `SEMREL-RP-004` 的 release notes 模板修复、验证和分支收尾记录归档到
+  `ai-plan/public/semantic-release-versioning/archive/todos/semantic-release-versioning-rp004-2026-05-02.md`。
+- 已从 `ai-plan/public/README.md` 移除 `feat/release-summary-notes` 到 `semantic-release-versioning` 的 active topic 映射。
+- `semantic-release-versioning` 主题仍保持 active，等待下一轮 semantic-release 维护任务。
+
 ## 2026-04-26
 
 ### 当前恢复点（SEMREL-RP-004）
