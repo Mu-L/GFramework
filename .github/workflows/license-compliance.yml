@@ -62,6 +62,7 @@ jobs:
       #   with: 配置上传的具体内容
       #     name: 工件名称，用于标识上传的文件集合
       #     path: 指定需要上传的文件路径列表（支持多行格式）
+      #       third-party-licenses/**: 手工维护的参考源码许可证原文
       - name: Upload compliance artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -69,6 +70,7 @@ jobs:
           path: |
             NOTICE
             THIRD_PARTY_LICENSES.md
+            third-party-licenses/**
             sbom.spdx.json
             sbom.cyclonedx.json
             sbom-spdx-validation.txt
@@ -79,15 +81,17 @@ jobs:
       # 压缩包中包含以下文件：
       #   - NOTICE: 项目声明文件
       #   - THIRD_PARTY_LICENSES.md: 第三方许可证列表
+      #   - third-party-licenses/: 手工维护的参考源码许可证原文
       #   - sbom.spdx.json: SPDX 格式的软件物料清单
       #   - sbom.cyclonedx.json: CycloneDX 格式的软件物料清单
       #   - sbom-spdx-validation.txt: SPDX 格式验证结果
       #   - sbom-cyclonedx-validation.txt: CycloneDX 格式验证结果
       - name: Package compliance bundle
         run: |
-          zip license-compliance.zip \
+          zip -r license-compliance.zip \
             NOTICE \
             THIRD_PARTY_LICENSES.md \
+            third-party-licenses \
             sbom.spdx.json \
             sbom.cyclonedx.json \
             sbom-spdx-validation.txt \
