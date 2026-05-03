@@ -83,6 +83,64 @@ using (LogContext.Push("RequestId", requestId))
 `GFramework.Godot.Logging.GodotLogAppender`，再用 `CompositeLogger` 或自定义 factory 把它和文件、JSON、异步输出等
 Core 组件组合在同一条调用面下。
 
+## 组合多个输出目标
+
+需要同时写入宿主控制台和文件时，保留业务侧 `ILogger` 调用面不变，替换 provider 即可。下面的 provider 会为每个
+logger 创建一个 `CompositeLogger`，并把同步的 Godot 控制台输出和异步文件输出组合在一起：
+
+```csharp
+using GFramework.Core.Abstractions.Logging;
+using GFramework.Core.Logging;
+using GFramework.Core.Logging.Appenders;
+using GFramework.Core.Logging.Formatters;
+using GFramework.Godot.Logging;
+
+public sealed class GodotCompositeLoggerFactoryProvider : ILoggerFactoryProvider
+{
+    private readonly GodotLogAppender _godotAppender = new();
+    private readonly AsyncLogAppender _fileAppender;
+
+    public GodotCompositeLoggerFactoryProvider(string filePath)
+    {
+        _fileAppender = new AsyncLogAppender(new FileAppender(filePath, new DefaultLogFormatter()));
+    }
+
+    public LogLevel MinLevel { get; set; } = LogLevel.Info;
+
+    public ILogger CreateLogger(string name)
+    {
+        return new CompositeLogger(
+            name,
+            MinLevel,
+            _godotAppender,
+            _fileAppender);
+    }
+}
+```
+
+把 provider 挂到架构配置时，传入已经解析好的普通文件系统路径：
+
+```csharp
+using GFramework.Core.Abstractions.Logging;
+using GFramework.Core.Abstractions.Properties;
+using GFramework.Core.Architectures;
+
+var logPath = "path/to/game.log";
+var configuration = new ArchitectureConfiguration
+{
+    LoggerProperties = new LoggerProperties
+    {
+        LoggerFactoryProvider = new GodotCompositeLoggerFactoryProvider(logPath)
+        {
+            MinLevel = LogLevel.Debug
+        }
+    }
+};
+```
+
+`GodotLogAppender` 只负责 Godot 控制台落点；文件生命周期、异步缓冲、formatter 与过滤规则仍然来自 Core logging 组件。
+Godot 项目的 `user://` 路径解析方式见 [Godot 日志集成](../godot/logging.md#_3-组合-godot-控制台和文件输出)。
+
 ## 什么时候该换 provider
 
 下面这些场景通常不该只靠改 `MinLevel`：
