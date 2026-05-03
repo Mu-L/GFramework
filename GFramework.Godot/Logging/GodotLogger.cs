@@ -133,11 +133,6 @@ public sealed class GodotLogger : AbstractLogger
         _appender.Append(entry);
     }
 
-    private static string FormatProperties((string Key, object? Value)[]? properties)
-    {
-        return GodotLogAppender.FormatProperties(ToPropertiesDictionary(properties));
-    }
-
     private static IReadOnlyDictionary<string, object?> ToPropertiesDictionary(
         (string Key, object? Value)[]? properties)
     {

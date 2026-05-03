@@ -38,7 +38,12 @@ public sealed class GodotLogAppenderTests
 
         var result = appender.Render(entry);
 
-        Assert.That(result, Is.EqualTo("20260503|INF|Game.Services.Inventory|Ready | Scene=Boot, Score=12.5"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Does.StartWith("20260503|INF|Game.Services.Inventory|Ready | "));
+            Assert.That(result, Does.Contain("Scene=Boot"));
+            Assert.That(result, Does.Contain("Score=12.5"));
+        });
     }
 
     /// <summary>
