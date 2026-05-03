@@ -97,11 +97,12 @@ using GFramework.Godot.Logging;
 
 public sealed class GodotCompositeLoggerFactoryProvider : ILoggerFactoryProvider
 {
-    private readonly string _filePath;
+    private readonly GodotLogAppender _godotAppender = new();
+    private readonly AsyncLogAppender _fileAppender;
 
     public GodotCompositeLoggerFactoryProvider(string filePath)
     {
-        _filePath = filePath;
+        _fileAppender = new AsyncLogAppender(new FileAppender(filePath, new DefaultLogFormatter()));
     }
 
     public LogLevel MinLevel { get; set; } = LogLevel.Info;
@@ -111,21 +112,20 @@ public sealed class GodotCompositeLoggerFactoryProvider : ILoggerFactoryProvider
         return new CompositeLogger(
             name,
             MinLevel,
-            new GodotLogAppender(),
-            new AsyncLogAppender(new FileAppender(_filePath, new DefaultLogFormatter())));
+            _godotAppender,
+            _fileAppender);
     }
 }
 ```
 
-在 Godot 宿主里，文件路径应先解析成普通文件系统路径，再挂到架构配置：
+把 provider 挂到架构配置时，传入已经解析好的普通文件系统路径：
 
 ```csharp
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Properties;
 using GFramework.Core.Architectures;
-using Godot;
 
-var logPath = ProjectSettings.GlobalizePath("user://logs/game.log");
+var logPath = "path/to/game.log";
 var configuration = new ArchitectureConfiguration
 {
     LoggerProperties = new LoggerProperties
@@ -139,6 +139,7 @@ var configuration = new ArchitectureConfiguration
 ```
 
 `GodotLogAppender` 只负责 Godot 控制台落点；文件生命周期、异步缓冲、formatter 与过滤规则仍然来自 Core logging 组件。
+Godot 项目的 `user://` 路径解析方式见 [Godot 日志集成](../godot/logging.md#_3-组合-godot-控制台和文件输出)。
 
 ## 什么时候该换 provider
 

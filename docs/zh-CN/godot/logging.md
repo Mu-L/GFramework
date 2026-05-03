@@ -230,11 +230,12 @@ using GFramework.Godot.Logging;
 
 public sealed class GodotCompositeLoggerFactoryProvider : ILoggerFactoryProvider
 {
-    private readonly string _filePath;
+    private readonly GodotLogAppender _godotAppender = new();
+    private readonly AsyncLogAppender _fileAppender;
 
     public GodotCompositeLoggerFactoryProvider(string filePath)
     {
-        _filePath = filePath;
+        _fileAppender = new AsyncLogAppender(new FileAppender(filePath, new DefaultLogFormatter()));
     }
 
     public LogLevel MinLevel { get; set; } = LogLevel.Info;
@@ -244,8 +245,8 @@ public sealed class GodotCompositeLoggerFactoryProvider : ILoggerFactoryProvider
         return new CompositeLogger(
             name,
             MinLevel,
-            new GodotLogAppender(),
-            new AsyncLogAppender(new FileAppender(_filePath, new DefaultLogFormatter())));
+            _godotAppender,
+            _fileAppender);
     }
 }
 ```
