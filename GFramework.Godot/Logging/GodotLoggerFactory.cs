@@ -1,20 +1,46 @@
-﻿using GFramework.Core.Abstractions.Logging;
+using System;
+using GFramework.Core.Abstractions.Logging;
 
 namespace GFramework.Godot.Logging;
 
 /// <summary>
-///     Godot日志工厂类，用于创建Godot平台专用的日志记录器实例
+///     Creates Godot platform logger instances.
 /// </summary>
-public class GodotLoggerFactory : ILoggerFactory
+public sealed class GodotLoggerFactory : ILoggerFactory
 {
+    private readonly GodotLoggerOptions? _options;
+
     /// <summary>
-    ///     获取指定名称的日志记录器实例
+    ///     Initializes a factory that preserves the historical fixed-format logger behavior.
     /// </summary>
-    /// <param name="name">日志记录器的名称</param>
-    /// <param name="minLevel">日志记录器的最小日志级别</param>
-    /// <returns>返回GodotLogger类型的日志记录器实例</returns>
+    public GodotLoggerFactory()
+    {
+    }
+
+    /// <summary>
+    ///     Initializes a factory with Godot-specific formatting options.
+    /// </summary>
+    /// <param name="options">The logger options.</param>
+    public GodotLoggerFactory(GodotLoggerOptions options)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    /// <summary>
+    ///     Gets a logger with the specified name.
+    /// </summary>
+    /// <param name="name">The logger name.</param>
+    /// <param name="minLevel">The minimum enabled level.</param>
+    /// <returns>A Godot logger instance.</returns>
     public ILogger GetLogger(string name, LogLevel minLevel = LogLevel.Info)
     {
-        return new GodotLogger(name, minLevel);
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (_options == null)
+        {
+            return new GodotLogger(name, minLevel);
+        }
+
+        return new GodotLogger(name, _options.WithMinimumLevelFloor(minLevel));
     }
 }

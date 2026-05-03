@@ -1,4 +1,7 @@
-﻿using System.Globalization;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Logging;
 using Godot;
@@ -6,69 +9,215 @@ using Godot;
 namespace GFramework.Godot.Logging;
 
 /// <summary>
-///     Godot平台的日志记录器实现。
-///     该类继承自 <see cref="AbstractLogger"/>，用于在 Godot 引擎中输出日志信息。
-///     支持不同日志级别的输出，并根据级别调用 Godot 的相应方法。
+///     Godot platform logger implementation.
 /// </summary>
-/// <param name="name">日志记录器的名称，默认为根日志记录器名称。</param>
-/// <param name="minLevel">最低日志级别，默认为 <see cref="LogLevel.Info"/>。</param>
-public sealed class GodotLogger(
-    string? name = null,
-    LogLevel minLevel = LogLevel.Info) : AbstractLogger(name ?? RootLoggerName, minLevel)
+public sealed class GodotLogger : AbstractLogger
 {
-    // 静态缓存日志级别字符串，避免重复格式化
-    private static readonly string[] LevelStrings =
-    [
-        "TRACE  ",
-        "DEBUG  ",
-        "INFO   ",
-        "WARNING",
-        "ERROR  ",
-        "FATAL  "
-    ];
+    private readonly Func<GodotLoggerOptions> _optionsProvider;
 
     /// <summary>
-    ///     写入日志的核心方法。
-    ///     格式化日志消息并根据日志级别调用 Godot 的输出方法。
+    ///     Initializes a logger that preserves the historical fixed-format template.
     /// </summary>
-    /// <param name="level">日志级别。</param>
-    /// <param name="message">日志消息内容。</param>
-    /// <param name="exception">可选的异常信息。</param>
+    /// <param name="name">The logger name.</param>
+    /// <param name="minLevel">The minimum enabled log level.</param>
+    public GodotLogger(string? name = null, LogLevel minLevel = LogLevel.Info)
+        : this(
+            name ?? RootLoggerName,
+            CreateFixedOptionsProvider(minLevel),
+            () => minLevel)
+    {
+    }
+
+    /// <summary>
+    ///     Initializes a logger with Godot-specific formatting options.
+    /// </summary>
+    /// <param name="name">The logger name.</param>
+    /// <param name="options">The logger options.</param>
+    public GodotLogger(string? name, GodotLoggerOptions options)
+        : this(
+            name ?? RootLoggerName,
+            CreateOptionsProvider(options),
+            CreateMinLevelProvider(options))
+    {
+    }
+
+    /// <summary>
+    ///     Initializes the core logger with dynamic options and level providers.
+    /// </summary>
+    /// <param name="name">The resolved logger name used in rendered output.</param>
+    /// <param name="optionsProvider">The provider that supplies the latest rendering options for each write.</param>
+    /// <param name="minLevelProvider">The provider that supplies the latest effective minimum level.</param>
+    /// <remarks>
+    ///     The Godot factory uses this constructor so cached logger instances can observe hot-reloaded settings without
+    ///     being recreated. The default public constructor supplies a fixed provider to avoid allocation on the log path.
+    /// </remarks>
+    internal GodotLogger(
+        string name,
+        Func<GodotLoggerOptions> optionsProvider,
+        Func<LogLevel> minLevelProvider)
+        : base(name, minLevelProvider ?? throw new ArgumentNullException(nameof(minLevelProvider)))
+    {
+        _optionsProvider = optionsProvider ?? throw new ArgumentNullException(nameof(optionsProvider));
+    }
+
+    /// <summary>
+    ///     Writes a log entry to Godot.
+    /// </summary>
+    /// <param name="level">The log level.</param>
+    /// <param name="message">The rendered message body.</param>
+    /// <param name="exception">The optional exception.</param>
     protected override void Write(LogLevel level, string message, Exception? exception)
     {
-        // 构造时间戳和日志前缀
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-        var levelStr = LevelStrings[(int)level];
-        var logPrefix = $"[{timestamp}] {levelStr} [{Name()}]";
+        WriteEntry(level, message, exception, properties: null);
+    }
 
-        // 添加异常信息到日志消息中
-        if (exception != null) message += "\n" + exception;
+    /// <summary>
+    ///     Uses Godot-aware structured rendering instead of the base string concatenation fallback.
+    /// </summary>
+    public override void Log(LogLevel level, string message, params (string Key, object? Value)[] properties)
+    {
+        if (!IsEnabled(level))
+        {
+            return;
+        }
 
-        var logMessage = $"{logPrefix} {message}";
+        WriteEntry(level, message, exception: null, properties);
+    }
 
-        // 根据日志级别选择 Godot 输出方法
+    /// <summary>
+    ///     Uses Godot-aware structured rendering instead of the base string concatenation fallback.
+    /// </summary>
+    public override void Log(
+        LogLevel level,
+        string message,
+        Exception? exception,
+        params (string Key, object? Value)[] properties)
+    {
+        if (!IsEnabled(level))
+        {
+            return;
+        }
+
+        WriteEntry(level, message, exception, properties);
+    }
+
+    private void WriteEntry(
+        LogLevel level,
+        string message,
+        Exception? exception,
+        (string Key, object? Value)[]? properties)
+    {
+        var options = _optionsProvider();
+        var templateText = options.Mode == GodotLoggerMode.Debug
+            ? options.DebugOutputTemplate
+            : options.ReleaseOutputTemplate;
+        var context = new GodotLogRenderContext(
+            DateTime.UtcNow,
+            level,
+            Name(),
+            message,
+            options.GetColor(level),
+            FormatProperties(properties));
+        var rendered = GodotLogTemplate.Parse(templateText).Render(context);
+
+        if (options.Mode == GodotLoggerMode.Debug)
+        {
+            WriteDebug(level, rendered);
+        }
+        else
+        {
+            GD.Print(rendered);
+        }
+
+        if (exception != null)
+        {
+            GD.PrintErr(exception.ToString());
+        }
+    }
+
+    private static string FormatProperties((string Key, object? Value)[]? properties)
+    {
+        var merged = MergeProperties(properties);
+        if (merged.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return " | " + string.Join(", ", merged.Select(static pair => $"{pair.Key}={FormatValue(pair.Value)}"));
+    }
+
+    private static IReadOnlyDictionary<string, object?> MergeProperties((string Key, object? Value)[]? properties)
+    {
+        var contextProperties = LogContext.Current;
+        if ((properties == null || properties.Length == 0) && contextProperties.Count == 0)
+        {
+            return EmptyProperties;
+        }
+
+        var merged = new Dictionary<string, object?>(contextProperties, StringComparer.Ordinal);
+        if (properties != null)
+        {
+            foreach (var property in properties)
+            {
+                if (string.IsNullOrWhiteSpace(property.Key))
+                {
+                    continue;
+                }
+
+                merged[property.Key.Trim()] = property.Value;
+            }
+        }
+
+        return merged;
+    }
+
+    private static readonly IReadOnlyDictionary<string, object?> EmptyProperties =
+        new Dictionary<string, object?>(StringComparer.Ordinal);
+
+    private static Func<GodotLoggerOptions> CreateFixedOptionsProvider(LogLevel minLevel)
+    {
+        var options = GodotLoggerOptions.ForMinimumLevel(minLevel);
+        return () => options;
+    }
+
+    private static Func<GodotLoggerOptions> CreateOptionsProvider(GodotLoggerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return () => options;
+    }
+
+    private static Func<LogLevel> CreateMinLevelProvider(GodotLoggerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return () => options.GetEffectiveMinLevel();
+    }
+
+    private static string FormatValue(object? value)
+    {
+        if (value == null)
+        {
+            return "null";
+        }
+
+        return value switch
+        {
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? string.Empty
+        };
+    }
+
+    private static void WriteDebug(LogLevel level, string rendered)
+    {
+        GD.PrintRich(rendered);
+
         switch (level)
         {
             case LogLevel.Fatal:
-                GD.PushError(logMessage);
-                break;
             case LogLevel.Error:
-                GD.PrintErr(logMessage);
+                GD.PushError(rendered);
                 break;
             case LogLevel.Warning:
-                GD.PushWarning(logMessage);
-                break;
-            case LogLevel.Trace:
-                GD.PrintRich($"[color=gray]{logMessage}[/color]");
-                break;
-            case LogLevel.Debug:
-                GD.PrintRich($"[color=cyan]{logMessage}[/color]");
-                break;
-            case LogLevel.Info:
-                GD.Print(logMessage);
-                break;
-            default:
-                GD.Print(logMessage);
+                GD.PushWarning(rendered);
                 break;
         }
     }
