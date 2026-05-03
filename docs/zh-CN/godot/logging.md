@@ -95,6 +95,47 @@ var logger = GodotLog.CreateLogger<Main>();
 `GodotLog.Configure(...)` 失效。长生命周期服务器或测试宿主如果需要在退出时主动释放配置文件 watcher，可以调用
 `GodotLog.Shutdown()`；它会停止热重载监听，已创建 logger 仍然继续使用最后一次成功发布的配置快照。
 
+最小可复制的 `appsettings.json` 可以只包含 `Logging` 根节点。`LogLevel` 使用 `Default` 和类别名控制过滤阈值，
+`GodotLogger` 控制 Godot 输出模式、模板和颜色：
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Info",
+      "Game.Services": "Debug"
+    },
+    "GodotLogger": {
+      "Mode": "Debug",
+      "DebugMinLevel": "Debug",
+      "ReleaseMinLevel": "Info",
+      "DebugOutputTemplate": "[{timestamp:HH:mm:ss.fff}] [color={color}][{level:u3}][/color] [{category:l16}] {message}{properties}",
+      "ReleaseOutputTemplate": "[{timestamp:HH:mm:ss.fff}] [{level:u3}] [{category:l16}] {message}{properties}",
+      "Colors": {
+        "Info": "white",
+        "Warning": "orange",
+        "Error": "red"
+      }
+    }
+  }
+}
+```
+
+配置文件发现顺序固定为：
+
+1. `GODOT_LOGGER_CONFIG` 指向的文件
+2. 导出程序或测试进程所在目录的 `appsettings.json`
+3. Godot 项目资源根目录的 `res://appsettings.json`
+
+在编辑器项目里，`res://appsettings.json` 放在项目根目录；在导出包或专用服务器里，优先把
+`appsettings.json` 放到可执行文件同目录，便于运维脚本替换。运行中修改已发现的配置文件会热重载
+`Logging:LogLevel` 与 `Logging:GodotLogger` 下的模式、最小级别、模板和颜色；已创建 logger 不会重新实例化，
+但下一次级别判定和写入会读取最新成功发布的配置快照。热重载解析失败或文件被短暂锁定时会保留上一份可用配置。
+
+`GodotLog.Configure(...)` 适合在没有配置文件或需要代码覆盖默认值时使用，并且必须在首次创建 provider 或配置源前调用。
+`GodotLog.ConfigurationPath` 适合启动诊断和测试断言；`GodotLog.Shutdown()` 适合测试 teardown 或长生命周期服务器退出时释放
+文件 watcher，不会清空已经发布给 logger 的最后一份配置。
+
 ## 最小接入路径
 
 ### 1. 在 `ArchitectureConfiguration` 中挂上 Godot provider

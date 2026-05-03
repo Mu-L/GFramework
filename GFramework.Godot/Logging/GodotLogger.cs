@@ -23,7 +23,7 @@ public sealed class GodotLogger : AbstractLogger
     public GodotLogger(string? name = null, LogLevel minLevel = LogLevel.Info)
         : this(
             name ?? RootLoggerName,
-            () => GodotLoggerOptions.ForMinimumLevel(minLevel),
+            CreateFixedOptionsProvider(minLevel),
             () => minLevel)
     {
     }
@@ -36,12 +36,21 @@ public sealed class GodotLogger : AbstractLogger
     public GodotLogger(string? name, GodotLoggerOptions options)
         : this(
             name ?? RootLoggerName,
-            () => options,
-            () => options.GetEffectiveMinLevel())
+            CreateOptionsProvider(options),
+            CreateMinLevelProvider(options))
     {
-        ArgumentNullException.ThrowIfNull(options);
     }
 
+    /// <summary>
+    ///     Initializes the core logger with dynamic options and level providers.
+    /// </summary>
+    /// <param name="name">The resolved logger name used in rendered output.</param>
+    /// <param name="optionsProvider">The provider that supplies the latest rendering options for each write.</param>
+    /// <param name="minLevelProvider">The provider that supplies the latest effective minimum level.</param>
+    /// <remarks>
+    ///     The Godot factory uses this constructor so cached logger instances can observe hot-reloaded settings without
+    ///     being recreated. The default public constructor supplies a fixed provider to avoid allocation on the log path.
+    /// </remarks>
     internal GodotLogger(
         string name,
         Func<GodotLoggerOptions> optionsProvider,
@@ -150,7 +159,12 @@ public sealed class GodotLogger : AbstractLogger
         {
             foreach (var property in properties)
             {
-                merged[property.Key] = property.Value;
+                if (string.IsNullOrWhiteSpace(property.Key))
+                {
+                    continue;
+                }
+
+                merged[property.Key.Trim()] = property.Value;
             }
         }
 
@@ -159,6 +173,24 @@ public sealed class GodotLogger : AbstractLogger
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyProperties =
         new Dictionary<string, object?>(StringComparer.Ordinal);
+
+    private static Func<GodotLoggerOptions> CreateFixedOptionsProvider(LogLevel minLevel)
+    {
+        var options = GodotLoggerOptions.ForMinimumLevel(minLevel);
+        return () => options;
+    }
+
+    private static Func<GodotLoggerOptions> CreateOptionsProvider(GodotLoggerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return () => options;
+    }
+
+    private static Func<LogLevel> CreateMinLevelProvider(GodotLoggerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return () => options.GetEffectiveMinLevel();
+    }
 
     private static string FormatValue(object? value)
     {

@@ -1,15 +1,22 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Godot.Logging;
 
 namespace GFramework.Godot.Tests.Logging;
 
+/// <summary>
+///     Verifies Godot logging configuration discovery, parsing, normalization, and live settings propagation.
+/// </summary>
 [TestFixture]
 public sealed class GodotLoggerSettingsLoaderTests
 {
+    /// <summary>
+    ///     Verifies that configuration discovery honors the environment path, executable directory, and project path order.
+    /// </summary>
     [Test]
     public void DiscoverConfigurationPath_Should_Prefer_EnvironmentVariable_Then_ProcessPath_Then_ProjectPath()
     {
@@ -53,6 +60,9 @@ public sealed class GodotLoggerSettingsLoaderTests
         }
     }
 
+    /// <summary>
+    ///     Verifies that JSON settings bind Godot logger options and category log-level overrides.
+    /// </summary>
     [Test]
     public void LoadFromJsonString_Should_Read_GodotLogger_Options_And_Category_Levels()
     {
@@ -89,6 +99,9 @@ public sealed class GodotLoggerSettingsLoaderTests
         });
     }
 
+    /// <summary>
+    ///     Verifies that nullable JSON option fields are normalized before the runtime receives the settings snapshot.
+    /// </summary>
     [Test]
     public void LoadFromJsonString_Should_Normalize_Null_GodotLogger_Options()
     {
@@ -115,6 +128,9 @@ public sealed class GodotLoggerSettingsLoaderTests
         });
     }
 
+    /// <summary>
+    ///     Verifies that numeric JSON log levels must map to defined <see cref="LogLevel"/> values.
+    /// </summary>
     [Test]
     public void LoadFromJsonString_Should_Reject_Invalid_Numeric_LogLevel()
     {
@@ -133,6 +149,9 @@ public sealed class GodotLoggerSettingsLoaderTests
         Assert.That(error?.Message, Does.Contain("Unsupported numeric LogLevel value '999'"));
     }
 
+    /// <summary>
+    ///     Verifies that cached provider loggers read the latest settings after the provider snapshot changes.
+    /// </summary>
     [Test]
     public void Provider_Should_Apply_Updated_Settings_To_Existing_Loggers()
     {
@@ -165,5 +184,26 @@ public sealed class GodotLoggerSettingsLoaderTests
             Assert.That(logger.IsInfoEnabled(), Is.True);
             Assert.That(logger.IsDebugEnabled(), Is.False);
         });
+    }
+
+    /// <summary>
+    ///     Verifies that caller-supplied structured property keys cannot break Godot log rendering.
+    /// </summary>
+    [Test]
+    public void StructuredProperties_Should_Skip_Blank_Keys_And_Trim_Valid_Keys()
+    {
+        var formatProperties = typeof(GodotLogger).GetMethod(
+            "FormatProperties",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var properties = new (string Key, object? Value)[]
+        {
+            (null!, "ignored"),
+            ("   ", "ignored"),
+            (" Player ", 42)
+        };
+
+        var result = formatProperties?.Invoke(null, [properties]);
+
+        Assert.That(result, Is.EqualTo(" | Player=42"));
     }
 }
