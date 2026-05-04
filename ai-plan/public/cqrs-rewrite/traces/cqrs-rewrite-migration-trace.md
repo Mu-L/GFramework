@@ -134,3 +134,26 @@
 
 1. 继续复算 branch diff vs `origin/main`，若仍低于 `25` 个文件可继续下一批
 2. 下一批优先复核基础 generation gate 中 logging / DI 依赖是否已有合适的输入编译安全回归覆盖方式
+
+### 阶段：基础 generated registry external contract gate 回归（CQRS-REWRITE-RP-081）
+
+- 延续 `RP-080` 的参数化基础 generation gate 测试，将外部 logging / DI 依赖也纳入同一组静默跳过回归
+- 已补齐缺失分支：
+  - `GFramework.Core.Abstractions.Logging.ILogger`
+  - `Microsoft.Extensions.DependencyInjection.IServiceCollection`
+- 两个变体均通过类型重命名构造 runtime metadata miss，保持输入源码可编译，避免把依赖缺失测试误写成编译失败测试
+
+### 验证（RP-081）
+
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Generate_Registry_When_Runtime_Lacks_Required_Generation_Contract"`
+  - 结果：通过，`6/6` passed
+- `python3 scripts/license-header.py --check`
+  - 结果：通过
+  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
+- `git diff --check`
+  - 结果：通过
+
+### 当前下一步（RP-081）
+
+1. 继续复算 branch diff vs `origin/main`，若仍低于 `25` 个文件可继续下一批
+2. 下一批优先复核基础 generation gate 中 request handler contract 与 handler registry attribute 以外是否还有可安全构造的缺失分支

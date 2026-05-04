@@ -2350,6 +2350,12 @@ public class CqrsHandlerRegistryGeneratorTests
     [TestCase(
         "[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]",
         "[AttributeUsage(AttributeTargets.Assembly)]")]
+    [TestCase(
+        "public interface ILogger",
+        "rename:MissingILogger")]
+    [TestCase(
+        "public interface IServiceCollection",
+        "rename:MissingServiceCollection")]
     public void Does_Not_Generate_Registry_When_Runtime_Lacks_Required_Generation_Contract(
         string startMarker,
         string endMarker)
