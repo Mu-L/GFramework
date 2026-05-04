@@ -109,3 +109,28 @@
 
 1. 继续复算 branch diff vs `origin/main`，若仍低于 `25` 个文件可继续下一批
 2. 下一批优先复核基础 generation gate 中其他必需 runtime contracts 是否也需要同类回归覆盖
+
+### 阶段：基础 generated registry contract gate 扩展回归（CQRS-REWRITE-RP-080）
+
+- 将 `RP-079` 的单一 handler registry interface 缺失回归扩展为基础 generation gate 参数化测试
+- 已补齐缺失分支：
+  - `ICqrsHandlerRegistry`
+  - `INotificationHandler<TNotification>`
+  - `IStreamRequestHandler<TRequest, TResponse>`
+  - `CqrsHandlerRegistryAttribute`
+- stream handler interface 变体采用类型重命名构造 runtime metadata miss，避免删除命名空间尾部单行接口时引入输入编译错误
+
+### 验证（RP-080）
+
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Generate_Registry_When_Runtime_Lacks_Required_Generation_Contract"`
+  - 结果：通过，`4/4` passed
+- `python3 scripts/license-header.py --check`
+  - 结果：通过
+  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
+- `git diff --check`
+  - 结果：通过
+
+### 当前下一步（RP-080）
+
+1. 继续复算 branch diff vs `origin/main`，若仍低于 `25` 个文件可继续下一批
+2. 下一批优先复核基础 generation gate 中 logging / DI 依赖是否已有合适的输入编译安全回归覆盖方式

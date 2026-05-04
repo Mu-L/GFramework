@@ -2333,16 +2333,36 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
-    ///     验证当 runtime 缺少 generated registry 需要实现的基础注册接口时，
+    ///     验证当 runtime 缺少 generated registry 需要依赖的基础合同时，
     ///     生成器会整体跳过发射，避免产出无法承载运行时注册合同的半成品源码。
     /// </summary>
-    [Test]
-    public void Does_Not_Generate_Registry_When_Runtime_Lacks_Handler_Registry_Interface()
+    /// <param name="startMarker">待移除 runtime 合同块的起始标记。</param>
+    /// <param name="endMarker">待移除 runtime 合同块之后的下一个稳定标记。</param>
+    [TestCase(
+        "public interface ICqrsHandlerRegistry",
+        "[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]")]
+    [TestCase(
+        "public interface INotificationHandler",
+        "public interface IStreamRequestHandler")]
+    [TestCase(
+        "public interface IStreamRequestHandler",
+        "rename:MissingIStreamRequestHandler")]
+    [TestCase(
+        "[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]",
+        "[AttributeUsage(AttributeTargets.Assembly)]")]
+    public void Does_Not_Generate_Registry_When_Runtime_Lacks_Required_Generation_Contract(
+        string startMarker,
+        string endMarker)
     {
-        var source = RemoveBlock(
-            HiddenNestedHandlerSelfRegistrationSource,
-            "public interface ICqrsHandlerRegistry",
-            "[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]");
+        var source = endMarker.StartsWith("rename:", StringComparison.Ordinal)
+            ? RenameTypeIdentifier(
+                HiddenNestedHandlerSelfRegistrationSource,
+                startMarker.Replace("public interface ", string.Empty, StringComparison.Ordinal),
+                endMarker["rename:".Length..])
+            : RemoveBlock(
+                HiddenNestedHandlerSelfRegistrationSource,
+                startMarker,
+                endMarker);
         var execution = ExecuteGenerator(source);
         var inputCompilationErrors = execution.InputCompilationDiagnostics
             .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
