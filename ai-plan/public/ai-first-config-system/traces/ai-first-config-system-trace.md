@@ -324,3 +324,40 @@
 1. 执行本轮受影响 Tooling / Runtime / Generator 定向验证，并确认没有新增 warning 或格式漂移
 2. 若验证通过，重新抓取 PR `#325` review 状态，区分哪些 open threads 会随推送自动折叠
 3. 继续把 PR review follow-up 约束在“latest unresolved thread + 本地仍成立问题”，不回头追旧 summary 噪音
+
+### 阶段：Tooling 文档与实际编辑边界对齐（AI-FIRST-CONFIG-RP-003）
+
+- 已重新核对 `tools/gframework-config-tool/src/extension.js` 的对象数组表单能力，并确认当前实现不只支持对象数组本身
+- 当前表单还支持“对象数组项内部继续嵌套的对象数组”，前提是内层条目仍保持共享子集允许的对象 / 标量字段 / 标量数组 / 嵌套对象形状
+- 本轮不扩 Runtime / Generator / Tooling 的 schema 契约，只修正 reader-facing docs 漂移：
+  - `tools/gframework-config-tool/README.md` 不再把“更深层嵌套编辑”笼统描述成默认回退 raw YAML
+  - `docs/zh-CN/game/config-tool.md` 改为明确：只有当对象数组继续嵌套后的结构超出当前共享子集，才需要回到 raw YAML
+
+### 关键决定
+
+- 这轮批次继续遵守“先核对共享契约，再改文档”的 lane 规则，没有为追求批量推进而硬扩一个收益不明确的新关键字
+- Tooling 的 reader-facing 说明要以 `extension.js` 当前真实能力为准，避免把已经支持的对象数组路径继续描述成工具缺口
+- raw YAML 回退条件保留，但需要收敛为“超出共享子集或当前编辑器边界”而不是“只要更深层对象数组就默认回退”
+
+### Stop Condition
+
+- Batch baseline：`origin/main` (`c01abac0`, `2026-05-06 09:40:08 +0800`)
+- Primary metric：branch diff vs `origin/main` changed files，阈值 `30`
+- 本轮开始前 branch diff 指标为 `0` files / `0` changed lines；本批次只触碰 reader-facing docs 与 active `ai-plan`，预计仍远低于阈值
+
+### 验证
+
+- 2026-05-06：`rg -n "nested object arrays|回退到 raw YAML|更深层对象数组"`（文档 + `extension.js`）
+  - 结果：通过
+  - 备注：确认 `README` / 中文工具文档存在旧边界表述，而 `extension.js` 已支持对象数组项内部继续嵌套的对象数组编辑
+- 2026-05-06：`git diff --check -- tools/gframework-config-tool/README.md docs/zh-CN/game/config-tool.md ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`
+  - 结果：通过
+- 2026-05-06：`python3 scripts/license-header.py --check --paths tools/gframework-config-tool/README.md docs/zh-CN/game/config-tool.md ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`
+  - 结果：通过
+- 2026-05-06：`dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+  - 结果：通过（0 warnings, 0 errors）
+
+### 下一步
+
+1. 继续优先找“实现已存在但 reader-facing 表述漂移”的低风险 lane，避免在批处理模式下引入收益不明的新 schema contract
+2. 若下一轮回到主线代码批次，再继续盘点不会改变生成类型形状的共享关键字，而不是重复刷新同一组 Tooling 边界说明

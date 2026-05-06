@@ -106,8 +106,8 @@ This extension is an editor-side helper. It does not define the runtime contract
    project-specific paths relative to the first workspace folder.
 3. Open the `GFramework Config` explorer view and select a config file or domain.
 4. Run validation first to confirm the current YAML files still match the supported schema subset.
-5. Open the lightweight form preview or domain batch editing actions, then fall back to raw YAML for deeper nested edits
-   when needed.
+5. Open the lightweight form preview or domain batch editing actions, then fall back to raw YAML only when the current
+   path exceeds the supported object-array editor boundary or leaves the shared schema subset.
 
 Minimal adoption checklist:
 
@@ -136,8 +136,8 @@ Use raw YAML directly when you need:
 
 - Multi-root workspaces use the first workspace folder
 - Validation only covers the repository's current schema subset
-- Form preview supports nested objects and object-array editing, but deeper nested object arrays inside array items still
-  fall back to raw YAML
+- Form preview supports nested objects, object arrays, and nested object arrays inside object-array items as long as
+  those nested items still stay within the shared subset's object/scalar/array shape
 - Batch editing remains limited to top-level scalar fields and top-level scalar arrays
 - Closed-object support is limited to `additionalProperties: false`; open-object keywords such as
   `patternProperties`, `propertyNames`, and `unevaluatedProperties` are rejected on purpose, as are unsupported
