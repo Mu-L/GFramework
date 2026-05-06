@@ -392,13 +392,6 @@ internal static partial class YamlConfigSchemaValidator
             return;
         }
 
-        if (string.Equals(keywordName, "additionalProperties", StringComparison.Ordinal) &&
-            element.TryGetProperty("additionalProperties", out var additionalPropertiesElement) &&
-            additionalPropertiesElement.ValueKind == JsonValueKind.False)
-        {
-            return;
-        }
-
         throw ConfigLoadExceptionFactory.Create(
             ConfigLoadFailureKind.SchemaUnsupported,
             tableName,

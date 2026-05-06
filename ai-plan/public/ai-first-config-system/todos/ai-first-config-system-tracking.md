@@ -93,6 +93,7 @@
 - active 跟踪文件只保留当前恢复点、当前状态和下一步，不再重复堆积已完成阶段的完整历史
 - 最近验证摘要：`2026-04-30` 已完成 Tooling / Docs reader-facing 收口与工具 parser 边界收紧，详细命令、批次背景与验证结果保留在 trace 的 `2026-04-30` 分阶段记录中
 - 最近验证摘要：`2026-05-06` 已完成开放对象关键字边界收口；Runtime / Generator / Tooling 现统一拒绝 `patternProperties`、`propertyNames`、`unevaluatedProperties`，并保留 `additionalProperties: false` 作为唯一共享闭合对象入口；详细命令与批次背景保留在 trace 的 `2026-05-06` 记录中
+- 最近验证摘要：`2026-05-06` 已按 PR `#325` latest review follow-up 移除三端开放对象校验中的不可达 `additionalProperties: false` 放行分支，补齐 Tooling 正向回归，并同步拆分 reader-facing docs 对开放对象边界的表述；细节与验证命令保留在 trace 的 `2026-05-06` 追加记录中
 - PR `#306` follow-up 摘要：已按 latest open review threads 补齐 Generator `anyOf` 对称回归、Tooling schema type 白名单、object-array 直系收集边界，以及 reader-facing docs 的显式 `additionalProperties: false` / adoption guidance 说明；细节和验证命令保留在 trace 的 `2026-04-30` 新增阶段记录中
 - PR review 跟进指针：当前分支的 latest review follow-up 与后续本地核验结论以 `ai-first-config-system-trace.md` 为准，active tracking 不再重复展开逐条命令历史
 

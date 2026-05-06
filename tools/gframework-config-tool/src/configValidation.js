@@ -1285,10 +1285,6 @@ function validateUnsupportedOpenObjectKeyword(schemaNode, displayPath) {
         return;
     }
 
-    if (unsupportedKeyword === "additionalProperties" && schemaNode.additionalProperties === false) {
-        return;
-    }
-
     throw new Error(
         `Schema property '${displayPath}' uses unsupported '${unsupportedKeyword}' metadata. ` +
         "The current config schema subset only accepts 'additionalProperties: false' and rejects keywords that reopen object shapes so fields remain closed and strongly typed.");

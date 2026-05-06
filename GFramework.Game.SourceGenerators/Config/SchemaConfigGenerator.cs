@@ -966,13 +966,6 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
             return true;
         }
 
-        if (string.Equals(keywordName, "additionalProperties", StringComparison.Ordinal) &&
-            element.TryGetProperty("additionalProperties", out var additionalPropertiesElement) &&
-            additionalPropertiesElement.ValueKind == JsonValueKind.False)
-        {
-            return true;
-        }
-
         diagnostic = Diagnostic.Create(
             ConfigSchemaDiagnostics.UnsupportedOpenObjectKeyword,
             CreateFileLocation(filePath),

@@ -228,6 +228,23 @@ test("parseSchemaContent should reject unsupported additionalProperties forms", 
         /unsupported 'additionalProperties' metadata/u);
 });
 
+test("parseSchemaContent should allow explicit additionalProperties false", () => {
+    assert.doesNotThrow(() => parseSchemaContent(`
+        {
+          "type": "object",
+          "properties": {
+            "reward": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "itemCount": { "type": "integer" }
+              }
+            }
+          }
+        }
+    `));
+});
+
 test("parseSchemaContent should reject unsupported open-object keywords", () => {
     assert.throws(
         () => parseSchemaContent(`
