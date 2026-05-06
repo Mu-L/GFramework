@@ -212,3 +212,87 @@
 
 1. 若 review 重新触发后仍有 latest-head open thread，继续以 `PR #323` 为当前唯一 PR 恢复锚点复核
 2. 后续若继续推进代码切片，优先复核基础 generation gate 之外的 runtime contract 或 fallback selection 分支
+
+## 2026-05-06
+
+### 阶段：mixed invoker provider 排序回归（CQRS-REWRITE-RP-083）
+
+- 使用 `$gframework-batch-boot 50` 继续 `feat/cqrs-optimization` 的 CQRS 收口批次
+- 批次目标：在 branch diff 相对 `origin/main` 接近 `50` 个文件前，继续补齐低风险的 generator runtime contract / emission 回归
+- 本轮基线选择：
+  - `origin/main a8c6c11e`，committer date `2026-05-05 13:14:24 +0800`
+  - `main a8c6c11e`，committer date `2026-05-05 13:14:24 +0800`
+  - 当前分支 `feat/cqrs-optimization a8c6c11e`，committer date `2026-05-05 13:14:24 +0800`
+- 启动时 branch diff vs `origin/main` 为 `0` files / `0` lines，因此继续选择低风险测试回归切片
+- 本轮复核 `CreateGeneratedRegistrySourceShape` 与 invoker emission 路径后确认：
+  - 现有测试已覆盖 request / stream provider 的单一 direct 场景、单一 reflected-implementation 场景、precise reflected 跳过边界，以及各项 runtime contract 缺失分支
+  - 尚未锁定“同一 registry 同时包含 direct registration 与 reflected-implementation registration”时的 descriptor 顺序与 `Invoke*HandlerN` 编号稳定性
+- 已补齐：
+  - `Emits_Request_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations`
+  - `Emits_Stream_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations`
+  - 两组 source fixture：`MixedRequestInvokerProviderSource`、`MixedStreamInvokerProviderSource`
+- 通过新增回归，显式锁定以下约束：
+  - provider descriptor 条目按稳定实现排序输出
+  - `InvokeRequestHandler0/1` 与 `InvokeStreamHandler0/1` 的方法编号随 emission 顺序连续增长
+  - 隐藏实现类型不会破坏 direct registration 与 reflected-implementation registration 的混合发射
+
+### 验证（RP-083）
+
+- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations"`
+  - 结果：通过，`2/2` passed
+
+### 当前 stop-condition 度量（RP-083）
+
+- primary metric：branch diff files vs `origin/main`
+- 当前说明：active batch 尚未提交时，基于 `HEAD` 的 branch diff 仍显示 `0` files / `0` lines；提交本批后再以新 `HEAD` 复算累计 branch diff
+
+### 当前下一步（RP-083）
+
+1. 提交本轮 mixed invoker provider 排序回归后，复算 branch diff vs `origin/main`，确认 `50` 文件阈值仍有充足余量
+2. 若继续推进代码切片，优先复核 invoker provider 之外的 runtime contract 或 fallback selection 分支
+
+### 阶段：benchmark 基础设施引入（CQRS-REWRITE-RP-084）
+
+- 用户明确将当前长期分支目标上提为：系统性吸收 `ai-libs/Mediator` 的实现思路与设计哲学，并将可取部分纳入 `GFramework.Cqrs`
+- 本轮据此调整批次目标，不再把关注点收缩到单个 generator 回归，而是建立能持续比较和吸收设计差异的 benchmark 基础设施
+- 参考 `ai-libs/Mediator` 的 benchmark 设计后，本轮采纳的核心结构包括：
+  - 独立 benchmark 项目壳，而非扩展现有 NUnit 测试项目
+  - 共享 `Fixture` 输出并校验场景配置
+  - `Request` / `Notification` 两个 messaging 场景作为首批最小落点
+  - 自定义列 `CustomColumn`，为后续矩阵扩展保留可读结果标签
+- 本轮新增：
+  - `GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj`
+  - `GFramework.Cqrs.Benchmarks/Program.cs`
+  - `GFramework.Cqrs.Benchmarks/CustomColumn.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/Fixture.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/BenchmarkContext.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/RequestBenchmarks.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/NotificationBenchmarks.cs`
+  - `GFramework.Cqrs.Benchmarks/README.md`
+- 设计取舍：
+  - 使用最小 `ICqrsContext` marker，避免把完整 `ArchitectureContext` 初始化成本混入 steady-state dispatch
+  - 直接复用 `GFramework.Cqrs.CqrsRuntimeFactory` 与 `MicrosoftDiContainer`，让基准聚焦于 runtime dispatch / publish
+  - 外部对照组先接入 `MediatR`，保持与 `Mediator` benchmark 的对照哲学一致；但本轮仍只做最小 request / notification 场景
+  - 暂不把 source generator benchmark、cold-start 独立工程或完整 pipeline / stream 矩阵一起引入，避免首批 scope 失控
+- 兼容性修正：
+  - 在根 `GFramework.csproj` 中显式排除 `GFramework.Cqrs.Benchmarks/**`，避免 meta-package 意外编译 benchmark 源码
+  - 将 benchmark 项目加入 `GFramework.sln`，保持仓库级工作流完整
+
+### 验证（RP-084）
+
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `GIT_DIR=<worktree-git-dir> GIT_WORK_TREE=<worktree-root> python3 scripts/license-header.py --check`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+
+### 当前 stop-condition 度量（RP-084）
+
+- primary metric：branch diff files vs `origin/main`
+- 当前说明：本轮仍在 `50` 文件阈值以内，可继续按 benchmark 场景或 CQRS runtime 对照能力分批推进
+
+### 当前下一步（RP-084）
+
+1. 继续扩展 `GFramework.Cqrs.Benchmarks`，优先补齐 pipeline、stream、cold-start 与 generated invoker provider 对照场景
+2. 当后续有具体 runtime 优化切片时，用该 benchmark 项目验证是否真正吸收到了 `Mediator` 的低开销 dispatch 设计收益

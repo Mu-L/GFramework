@@ -2003,6 +2003,120 @@ public class CqrsHandlerRegistryGeneratorTests
                                                                            }
                                                                            """;
 
+    private const string MixedRequestInvokerProviderSource = """
+                                                            using System;
+                                                            using System.Collections.Generic;
+                                                            using System.Reflection;
+                                                            using System.Threading;
+                                                            using System.Threading.Tasks;
+
+                                                            namespace Microsoft.Extensions.DependencyInjection
+                                                            {
+                                                                public interface IServiceCollection { }
+
+                                                                public static class ServiceCollectionServiceExtensions
+                                                                {
+                                                                    public static void AddTransient(IServiceCollection services, Type serviceType, Type implementationType) { }
+                                                                }
+                                                            }
+
+                                                            namespace GFramework.Core.Abstractions.Logging
+                                                            {
+                                                                public interface ILogger
+                                                                {
+                                                                    void Debug(string msg);
+                                                                }
+                                                            }
+
+                                                            namespace GFramework.Cqrs.Abstractions.Cqrs
+                                                            {
+                                                                public interface IRequest<TResponse> { }
+                                                                public interface INotification { }
+                                                                public interface IStreamRequest<TResponse> { }
+
+                                                                public interface IRequestHandler<in TRequest, TResponse> where TRequest : IRequest<TResponse>
+                                                                {
+                                                                    ValueTask<TResponse> Handle(TRequest request, CancellationToken cancellationToken);
+                                                                }
+
+                                                                public interface INotificationHandler<in TNotification> where TNotification : INotification { }
+                                                                public interface IStreamRequestHandler<in TRequest, out TResponse> where TRequest : IStreamRequest<TResponse> { }
+                                                            }
+
+                                                            namespace GFramework.Cqrs
+                                                            {
+                                                                public interface ICqrsHandlerRegistry
+                                                                {
+                                                                    void Register(Microsoft.Extensions.DependencyInjection.IServiceCollection services, GFramework.Core.Abstractions.Logging.ILogger logger);
+                                                                }
+
+                                                                public interface ICqrsRequestInvokerProvider
+                                                                {
+                                                                    bool TryGetDescriptor(Type requestType, Type responseType, out CqrsRequestInvokerDescriptor? descriptor);
+                                                                }
+
+                                                                public interface IEnumeratesCqrsRequestInvokerDescriptors
+                                                                {
+                                                                    IReadOnlyList<CqrsRequestInvokerDescriptorEntry> GetDescriptors();
+                                                                }
+
+                                                                public sealed class CqrsRequestInvokerDescriptor
+                                                                {
+                                                                    public CqrsRequestInvokerDescriptor(Type handlerType, MethodInfo invokerMethod) { }
+                                                                }
+
+                                                                public sealed class CqrsRequestInvokerDescriptorEntry
+                                                                {
+                                                                    public CqrsRequestInvokerDescriptorEntry(Type requestType, Type responseType, CqrsRequestInvokerDescriptor descriptor)
+                                                                    {
+                                                                        RequestType = requestType;
+                                                                        ResponseType = responseType;
+                                                                        Descriptor = descriptor;
+                                                                    }
+
+                                                                    public Type RequestType { get; }
+
+                                                                    public Type ResponseType { get; }
+
+                                                                    public CqrsRequestInvokerDescriptor Descriptor { get; }
+                                                                }
+
+                                                                [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+                                                                public sealed class CqrsHandlerRegistryAttribute : Attribute
+                                                                {
+                                                                    public CqrsHandlerRegistryAttribute(Type registryType) { }
+                                                                }
+                                                            }
+
+                                                            namespace TestApp
+                                                            {
+                                                                using GFramework.Cqrs.Abstractions.Cqrs;
+
+                                                                public sealed record AlphaRequest() : IRequest<string>;
+
+                                                                public sealed record BetaRequest() : IRequest<int>;
+
+                                                                public sealed class AlphaHandler : IRequestHandler<AlphaRequest, string>
+                                                                {
+                                                                    public ValueTask<string> Handle(AlphaRequest request, CancellationToken cancellationToken)
+                                                                    {
+                                                                        return ValueTask.FromResult("alpha");
+                                                                    }
+                                                                }
+
+                                                                public sealed class Container
+                                                                {
+                                                                    private sealed class HiddenBetaHandler : IRequestHandler<BetaRequest, int>
+                                                                    {
+                                                                        public ValueTask<int> Handle(BetaRequest request, CancellationToken cancellationToken)
+                                                                        {
+                                                                            return ValueTask.FromResult(42);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            """;
+
     private const string HiddenImplementationStreamInvokerProviderSource = """
                                                                           using System;
                                                                           using System.Collections.Generic;
@@ -2107,6 +2221,122 @@ public class CqrsHandlerRegistryGeneratorTests
                                                                               }
                                                                           }
                                                                           """;
+
+    private const string MixedStreamInvokerProviderSource = """
+                                                           using System;
+                                                           using System.Collections.Generic;
+                                                           using System.Reflection;
+                                                           using System.Threading;
+                                                           using System.Threading.Tasks;
+
+                                                           namespace Microsoft.Extensions.DependencyInjection
+                                                           {
+                                                               public interface IServiceCollection { }
+
+                                                               public static class ServiceCollectionServiceExtensions
+                                                               {
+                                                                   public static void AddTransient(IServiceCollection services, Type serviceType, Type implementationType) { }
+                                                               }
+                                                           }
+
+                                                           namespace GFramework.Core.Abstractions.Logging
+                                                           {
+                                                               public interface ILogger
+                                                               {
+                                                                   void Debug(string msg);
+                                                               }
+                                                           }
+
+                                                           namespace GFramework.Cqrs.Abstractions.Cqrs
+                                                           {
+                                                               public interface IRequest<TResponse> { }
+                                                               public interface INotification { }
+                                                               public interface IStreamRequest<TResponse> { }
+
+                                                               public interface IRequestHandler<in TRequest, TResponse> where TRequest : IRequest<TResponse> { }
+                                                               public interface INotificationHandler<in TNotification> where TNotification : INotification { }
+
+                                                               public interface IStreamRequestHandler<in TRequest, out TResponse> where TRequest : IStreamRequest<TResponse>
+                                                               {
+                                                                   IAsyncEnumerable<TResponse> Handle(TRequest request, CancellationToken cancellationToken);
+                                                               }
+                                                           }
+
+                                                           namespace GFramework.Cqrs
+                                                           {
+                                                               public interface ICqrsHandlerRegistry
+                                                               {
+                                                                   void Register(Microsoft.Extensions.DependencyInjection.IServiceCollection services, GFramework.Core.Abstractions.Logging.ILogger logger);
+                                                               }
+
+                                                               public interface ICqrsStreamInvokerProvider
+                                                               {
+                                                                   bool TryGetDescriptor(Type requestType, Type responseType, out CqrsStreamInvokerDescriptor? descriptor);
+                                                               }
+
+                                                               public interface IEnumeratesCqrsStreamInvokerDescriptors
+                                                               {
+                                                                   IReadOnlyList<CqrsStreamInvokerDescriptorEntry> GetDescriptors();
+                                                               }
+
+                                                               public sealed class CqrsStreamInvokerDescriptor
+                                                               {
+                                                                   public CqrsStreamInvokerDescriptor(Type handlerType, MethodInfo invokerMethod) { }
+                                                               }
+
+                                                               public sealed class CqrsStreamInvokerDescriptorEntry
+                                                               {
+                                                                   public CqrsStreamInvokerDescriptorEntry(Type requestType, Type responseType, CqrsStreamInvokerDescriptor descriptor)
+                                                                   {
+                                                                       RequestType = requestType;
+                                                                       ResponseType = responseType;
+                                                                       Descriptor = descriptor;
+                                                                   }
+
+                                                                   public Type RequestType { get; }
+
+                                                                   public Type ResponseType { get; }
+
+                                                                   public CqrsStreamInvokerDescriptor Descriptor { get; }
+                                                               }
+
+                                                               [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+                                                               public sealed class CqrsHandlerRegistryAttribute : Attribute
+                                                               {
+                                                                   public CqrsHandlerRegistryAttribute(Type registryType) { }
+                                                               }
+                                                           }
+
+                                                           namespace TestApp
+                                                           {
+                                                               using GFramework.Cqrs.Abstractions.Cqrs;
+
+                                                               public sealed record AlphaStream() : IStreamRequest<int>;
+
+                                                               public sealed record BetaStream() : IStreamRequest<string>;
+
+                                                               public sealed class AlphaStreamHandler : IStreamRequestHandler<AlphaStream, int>
+                                                               {
+                                                                   public async IAsyncEnumerable<int> Handle(AlphaStream request, CancellationToken cancellationToken)
+                                                                   {
+                                                                       yield return 1;
+                                                                       await Task.CompletedTask;
+                                                                   }
+                                                               }
+
+                                                               public sealed class Container
+                                                               {
+                                                                   private sealed class HiddenBetaStreamHandler : IStreamRequestHandler<BetaStream, string>
+                                                                   {
+                                                                       public async IAsyncEnumerable<string> Handle(BetaStream request, CancellationToken cancellationToken)
+                                                                       {
+                                                                           yield return "beta";
+                                                                           await Task.CompletedTask;
+                                                                       }
+                                                                   }
+                                                               }
+                                                           }
+                                                           """;
 
     private const string PreciseReflectedRequestInvokerProviderBoundarySource = """
                                                                                 using System;
@@ -3053,6 +3283,40 @@ public class CqrsHandlerRegistryGeneratorTests
     }
 
     /// <summary>
+    ///     验证当同一轮生成同时包含 direct registration 与“隐藏实现类型 + 可见 handler interface”注册时，
+    ///     request invoker provider 会按稳定实现排序生成连续描述符和方法编号。
+    /// </summary>
+    [Test]
+    public void Emits_Request_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations()
+    {
+        var generatedSource = RunGenerator(MixedRequestInvokerProviderSource);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "new global::GFramework.Cqrs.CqrsRequestInvokerDescriptorEntry(typeof(global::TestApp.AlphaRequest), typeof(string), new global::GFramework.Cqrs.CqrsRequestInvokerDescriptor(typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<global::TestApp.AlphaRequest, string>), typeof(__GFrameworkGeneratedCqrsHandlerRegistry).GetMethod(nameof(InvokeRequestHandler0), global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static)!))"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "new global::GFramework.Cqrs.CqrsRequestInvokerDescriptorEntry(typeof(global::TestApp.BetaRequest), typeof(int), new global::GFramework.Cqrs.CqrsRequestInvokerDescriptor(typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<global::TestApp.BetaRequest, int>), typeof(__GFrameworkGeneratedCqrsHandlerRegistry).GetMethod(nameof(InvokeRequestHandler1), global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static)!))"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "private static global::System.Threading.Tasks.ValueTask<string> InvokeRequestHandler0(object handler, object request, global::System.Threading.CancellationToken cancellationToken)"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "private static global::System.Threading.Tasks.ValueTask<int> InvokeRequestHandler1(object handler, object request, global::System.Threading.CancellationToken cancellationToken)"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "var typedHandler = (global::GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<global::TestApp.BetaRequest, int>)handler;"));
+        });
+    }
+
+    /// <summary>
     ///     验证当 runtime 缺少 <c>ICqrsRequestInvokerProvider</c> 时，
     ///     生成器会整体跳过 request invoker provider 元数据发射，而不是输出半套 descriptor 成员。
     /// </summary>
@@ -3262,6 +3526,40 @@ public class CqrsHandlerRegistryGeneratorTests
                 generatedSource,
                 Does.Contain(
                     "var typedHandler = (global::GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<global::TestApp.VisibleStream, int>)handler;"));
+        });
+    }
+
+    /// <summary>
+    ///     验证当同一轮生成同时包含 direct registration 与“隐藏实现类型 + 可见 handler interface”注册时，
+    ///     stream invoker provider 会按稳定实现排序生成连续描述符和方法编号。
+    /// </summary>
+    [Test]
+    public void Emits_Stream_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations()
+    {
+        var generatedSource = RunGenerator(MixedStreamInvokerProviderSource);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "new global::GFramework.Cqrs.CqrsStreamInvokerDescriptorEntry(typeof(global::TestApp.AlphaStream), typeof(int), new global::GFramework.Cqrs.CqrsStreamInvokerDescriptor(typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<global::TestApp.AlphaStream, int>), typeof(__GFrameworkGeneratedCqrsHandlerRegistry).GetMethod(nameof(InvokeStreamHandler0), global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static)!))"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "new global::GFramework.Cqrs.CqrsStreamInvokerDescriptorEntry(typeof(global::TestApp.BetaStream), typeof(string), new global::GFramework.Cqrs.CqrsStreamInvokerDescriptor(typeof(global::GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<global::TestApp.BetaStream, string>), typeof(__GFrameworkGeneratedCqrsHandlerRegistry).GetMethod(nameof(InvokeStreamHandler1), global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static)!))"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "private static object InvokeStreamHandler0(object handler, object request, global::System.Threading.CancellationToken cancellationToken)"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "private static object InvokeStreamHandler1(object handler, object request, global::System.Threading.CancellationToken cancellationToken)"));
+            Assert.That(
+                generatedSource,
+                Does.Contain(
+                    "var typedHandler = (global::GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<global::TestApp.BetaStream, string>)handler;"));
         });
     }
 
