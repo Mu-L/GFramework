@@ -93,7 +93,7 @@ public class RequestInvokerBenchmarks
             configure: null,
             typeof(RequestInvokerBenchmarks),
             static candidateType => candidateType == typeof(MediatRBenchmarkRequestHandler),
-            ServiceLifetime.Singleton);
+            ServiceLifetime.Transient);
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
     }
 

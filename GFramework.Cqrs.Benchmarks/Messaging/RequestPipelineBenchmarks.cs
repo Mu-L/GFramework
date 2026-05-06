@@ -64,6 +64,7 @@ public class RequestPipelineBenchmarks
             MinLevel = LogLevel.Fatal
         };
         Fixture.Setup("RequestPipeline", handlerCount: 1, pipelineCount: PipelineCount);
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
 
         _baselineHandler = new BenchmarkRequestHandler();
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
@@ -101,6 +102,7 @@ public class RequestPipelineBenchmarks
     public void Cleanup()
     {
         _serviceProvider.Dispose();
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
     }
 
     /// <summary>
@@ -261,20 +263,28 @@ public class RequestPipelineBenchmarks
     /// <summary>
     ///     pipeline 行为槽位 1。
     /// </summary>
-    public sealed class BenchmarkPipelineBehavior1 : BenchmarkPipelineBehaviorBase;
+    public sealed class BenchmarkPipelineBehavior1 : BenchmarkPipelineBehaviorBase
+    {
+    }
 
     /// <summary>
     ///     pipeline 行为槽位 2。
     /// </summary>
-    public sealed class BenchmarkPipelineBehavior2 : BenchmarkPipelineBehaviorBase;
+    public sealed class BenchmarkPipelineBehavior2 : BenchmarkPipelineBehaviorBase
+    {
+    }
 
     /// <summary>
     ///     pipeline 行为槽位 3。
     /// </summary>
-    public sealed class BenchmarkPipelineBehavior3 : BenchmarkPipelineBehaviorBase;
+    public sealed class BenchmarkPipelineBehavior3 : BenchmarkPipelineBehaviorBase
+    {
+    }
 
     /// <summary>
     ///     pipeline 行为槽位 4。
     /// </summary>
-    public sealed class BenchmarkPipelineBehavior4 : BenchmarkPipelineBehaviorBase;
+    public sealed class BenchmarkPipelineBehavior4 : BenchmarkPipelineBehaviorBase
+    {
+    }
 }

@@ -31,10 +31,10 @@ CQRS 迁移与收敛。
 ## 当前活跃事实
 
 - 当前分支对应 `PR #326`，状态为 `OPEN`
-- latest-head review 已从 benchmark 运行级缺陷收敛到剩余文档入口与是否继续接受 benchmark 语义细化的判断
+- latest-head review 现仍有少量 open thread，但本地复核后，仍成立的问题已收敛到 benchmark 对照公平性、workflow 输入安全性与 active 文档压缩
 - benchmark 场景现统一通过 `BenchmarkHostFactory` 构建最小宿主：GFramework 侧在 runtime 分发前显式 `Freeze()` 容器，MediatR 侧只扫描当前场景需要的 handler / behavior 类型
 - `RequestStartupBenchmarks` 已恢复 `ColdStart_GFrameworkCqrs` 结果产出，不再命中 `No CQRS request handler registered`
-- 已新增手动触发的 benchmark workflow；默认只验证 benchmark 项目 Release build，只有显式提供过滤器时才执行 BenchmarkDotNet 运行
+- 已新增手动触发的 benchmark workflow；默认只验证 benchmark 项目 Release build，只有显式提供过滤器时才执行 BenchmarkDotNet 运行；过滤器输入现通过环境变量传入 shell，避免 workflow_dispatch 输入直接插值到命令行
 - 远端 `CTRF` 最新汇总为 `2274/2274` passed
 - `MegaLinter` 当前只暴露 `dotnet-format` 的 `Restore operation failed` 环境噪音，尚未提供本地仍成立的文件级格式诊断
 
@@ -50,74 +50,12 @@ CQRS 迁移与收敛。
 - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestStartupBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
   - 结果：通过
   - 备注：`ColdStart_GFrameworkCqrs` 已恢复出数，最新本地输出约 `220-292 us`，MediatR 对照约 `575-616 us`；当前仅剩 BenchmarkDotNet 对单次 cold-start 场景的 `MinIterationTime` 提示
-- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
-  - 结果：通过
-  - 备注：确认冻结后的 GFramework 最小宿主与受限扫描的 MediatR 最小宿主均可完成 steady-state request 对照
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
-  - 备注：用于验证新增手动 benchmark workflow 依赖的 benchmark 项目入口仍可在 Release 下编译
+  - 备注：用于验证本轮 request invoker / pipeline / stream invoker 调整与 benchmark workflow 改动后的 Release 编译结果
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output <temporary-json-output>`
   - 结果：通过
-  - 备注：确认当前分支对应 `PR #326`，本轮剩余 open AI feedback 主要集中在 benchmark 对照语义与 `ai-plan` 结构收敛
-- `python3 scripts/license-header.py --check`
-  - 结果：通过
-  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
-- `git diff --check`
-  - 结果：通过
-- `dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Request_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_In_Stable_Order_For_Mixed_Direct_And_Reflected_Implementations"`
-  - 结果：通过，`2/2` passed
-- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-  - 备注：先后覆盖 `StreamingBenchmarks`、`RequestPipelineBenchmarks`、`RequestStartupBenchmarks`、`RequestInvokerBenchmarks` 与 `StreamInvokerBenchmarks` 的引入后复核
-- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestStartupBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
-  - 结果：部分通过
-  - 备注：`Initialization_MediatR` 与 `ColdStart_MediatR` 已可实际运行；`ColdStart_GFrameworkCqrs` 仍因 `No CQRS request handler registered` 无法产出完整对照
-- `GIT_DIR=<worktree-git-dir> GIT_WORK_TREE=<worktree-root> python3 scripts/license-header.py --check`
-  - 结果：通过
-  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行，避免脚本内部 plain `git ls-files` 误判仓库上下文
-- `git diff --check`
-  - 结果：通过
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Enumerator|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Entry_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
-  - 结果：通过，`5/5` passed
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Descriptor_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Descriptor_Entry_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Request_Invoker_Provider_Metadata_When_Runtime_Lacks_Request_Descriptor_Enumerator"`
-  - 结果：通过，`4/4` passed
-- `dotnet build GFramework.Cqrs.SourceGenerators/GFramework.Cqrs.SourceGenerators.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-- `python3 scripts/license-header.py --check`
-  - 结果：通过
-  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行，避免脚本内部 plain `git ls-files` 误判仓库上下文
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_String_Fallback_Metadata_For_Mixed_Fallback_When_Runtime_Disallows_Multiple_Fallback_Attributes"`
-  - 结果：通过，`1/1` passed
-- `python3 scripts/license-header.py --check`
-  - 结果：通过
-  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
-- `git diff --check`
-  - 结果：通过
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Generate_Registry_When_Runtime_Lacks_Handler_Registry_Interface"`
-  - 结果：通过，`1/1` passed
-- `python3 scripts/license-header.py --check`
-  - 结果：通过
-  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
-- `git diff --check`
-  - 结果：通过
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Generate_Registry_When_Runtime_Lacks_Required_Generation_Contract"`
-  - 结果：通过，`4/4` passed
-- `python3 scripts/license-header.py --check`
-  - 结果：通过
-  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
-- `git diff --check`
-  - 结果：通过
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Generate_Registry_When_Runtime_Lacks_Required_Generation_Contract"`
-  - 结果：通过，`6/6` passed
-- `python3 scripts/license-header.py --check`
-  - 结果：通过
-  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
-- `git diff --check`
-  - 结果：通过
-- `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Generate_Registry_When_Runtime_Lacks_Required_Generation_Contract"`
-  - 结果：通过，`7/7` passed
+  - 备注：确认当前分支对应 `PR #326`，本轮剩余 open AI feedback 以 workflow 输入安全、benchmark 对照公平性与 active 文档压缩为主
 - `python3 scripts/license-header.py --check`
   - 结果：通过
   - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
@@ -126,9 +64,9 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 继续处理 `PR #326` 的剩余 review 收尾，优先保持 benchmark 对照语义与 `ai-plan` active 入口一致
-2. 决定是否继续细化 `RequestStartupBenchmarks` 的 cold-start harness，降低 `InvocationCount=1` 带来的 `MinIterationTime` 提示噪音
-3. 若需要在 CI 中手动复核 benchmark，优先使用新增 workflow 的 `benchmark_filter` 输入按场景筛选，避免默认运行整个 benchmark 矩阵
+1. 重新运行 `$gframework-pr-review`，确认本轮 workflow / benchmark / active 文档修复是否已消化当前 latest-head open threads
+2. 若 `PR #326` 仍剩基准语义类反馈，优先判断它们属于真实对照偏差还是有意保留的 benchmark 设计取舍
+3. 若需要在 CI 中手动复核 benchmark，继续使用 workflow 的 `benchmark_filter` 输入按场景筛选，避免默认运行整个 benchmark 矩阵
 
 ## 活跃文档
 

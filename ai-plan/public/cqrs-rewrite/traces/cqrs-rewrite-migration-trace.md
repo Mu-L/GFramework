@@ -44,6 +44,29 @@
   - 结果：通过
   - 备注：steady-state request 对照可正常运行，未再触发 MediatR 重复注册或 GFramework 首次解析失败
 
+### 阶段：PR #326 review 收尾补丁（CQRS-REWRITE-RP-090）
+
+- 再次使用 `$gframework-pr-review` 复核 `PR #326` latest-head open threads 后，主线程确认本轮仍成立且适合在当前 PR 内收敛的问题集中在四类：
+  - `.github/workflows/benchmark.yml` 的 `benchmark_filter` 直接插值到 shell，存在 workflow_dispatch 输入注入风险
+  - `RequestInvokerBenchmarks` 与 `StreamInvokerBenchmarks` 的 MediatR handler 生命周期仍为 `Singleton`，与 GFramework 反射 / generated 路径的 transient 语义不一致
+  - `RequestPipelineBenchmarks` 未在场景切换前后清理 dispatcher 缓存，且四个空 pipeline behavior 类型仍使用非法的分号类声明
+  - `ai-plan/public/cqrs-rewrite` active 文档仍保留旧失败结论与重复日期标题，和“active 入口只保留最新权威恢复点”的约束不一致
+- 本轮刻意未扩展处理的 review：
+  - `MicrosoftDiContainer` 的释放契约建议会扩大到核心 Ioc 接口与全仓库生命周期语义，不适合作为 benchmark review 顺手改动
+  - `RequestStartupBenchmarks` 的“手工单点注册 vs 受限程序集扫描”差异目前属于有意保留的最小宿主模型，代码注释已明确该设计边界
+- 已修改：
+  - `.github/workflows/benchmark.yml`
+  - `GFramework.Cqrs.Benchmarks/Messaging/RequestInvokerBenchmarks.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/RequestPipelineBenchmarks.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/StreamInvokerBenchmarks.cs`
+  - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md`
+  - `ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+- 预期结果：
+  - 手动 benchmark workflow 的过滤器输入不再直接参与 shell 解析
+  - request / stream invoker 三路对照的 handler 生命周期重新回到同一基线
+  - request pipeline benchmark 在 `0 / 1 / 4` 场景切换时不再复用旧 dispatcher cache
+  - active tracking / trace 更符合 boot 恢复入口所要求的“只保留最新权威结论”形状
+
 ## 2026-04-30
 
 ### 阶段：历史 PR #307 active 入口收敛（CQRS-REWRITE-RP-076）
@@ -257,7 +280,7 @@
 1. 若 review 重新触发后仍有 latest-head open thread，继续以 `PR #323` 为当前唯一 PR 恢复锚点复核
 2. 后续若继续推进代码切片，优先复核基础 generation gate 之外的 runtime contract 或 fallback selection 分支
 
-## 2026-05-06
+## 2026-05-06（RP-083 ~ RP-089）
 
 ### 阶段：mixed invoker provider 排序回归（CQRS-REWRITE-RP-083）
 

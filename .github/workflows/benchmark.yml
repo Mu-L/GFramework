@@ -53,10 +53,12 @@ jobs:
 
       - name: Run filtered benchmarks
         if: ${{ inputs.benchmark_filter != '' }}
+        env:
+          BENCHMARK_FILTER: ${{ inputs.benchmark_filter }}
         run: |
           set -euo pipefail
           dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- \
-            --filter "${{ inputs.benchmark_filter }}"
+            --filter "$BENCHMARK_FILTER"
 
       - name: Upload BenchmarkDotNet artifacts
         if: ${{ always() && inputs.benchmark_filter != '' }}

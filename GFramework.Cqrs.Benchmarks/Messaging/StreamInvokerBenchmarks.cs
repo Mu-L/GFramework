@@ -93,7 +93,7 @@ public class StreamInvokerBenchmarks
             configure: null,
             typeof(StreamInvokerBenchmarks),
             static candidateType => candidateType == typeof(MediatRBenchmarkStreamHandler),
-            ServiceLifetime.Singleton);
+            ServiceLifetime.Transient);
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
     }
 
