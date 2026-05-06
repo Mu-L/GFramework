@@ -160,6 +160,7 @@ jobs:
           rm -rf ./packages
           dotnet pack GFramework.sln \
             -c Release \
+            --no-build \
             --no-restore \
             -o ./packages \
             -p:IncludeSymbols=false

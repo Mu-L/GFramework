@@ -35,7 +35,7 @@ expected_file="$work_dir/expected-packages.txt"
 actual_file="$work_dir/actual-packages.txt"
 
 mapfile -t actual_packages < <(
-  find "$package_dir" -maxdepth 1 -type f -name '*.nupkg' -printf '%f\n' \
+  find "$package_dir" -maxdepth 1 -type f -name '*.nupkg' -exec basename {} \; \
     | sed -E 's/\.[0-9][0-9A-Za-z.-]*\.nupkg$//' \
     | sort -u
 )

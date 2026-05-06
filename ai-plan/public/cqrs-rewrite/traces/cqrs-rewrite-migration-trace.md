@@ -2,6 +2,21 @@
 
 ## 2026-05-06
 
+### 阶段：PR #331 review 收尾补丁（CQRS-REWRITE-RP-091）
+
+- 使用 `$gframework-pr-review` 拉取当前分支 `fix/package-validation-guard` 对应的 `PR #331` latest-head review 后，主线程只保留本地复核仍成立的问题：
+  - `.github/workflows/ci.yml` 的 `dotnet pack` 步骤缺少 `--no-build`，会在已完成 solution `Build` 后重复编译整仓库
+  - `scripts/validate-packed-modules.sh` 使用 GNU `find -printf`，在 macOS / BSD `find` 下无法运行
+  - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md` 的 active PR 锚点仍写成 `待创建`，与当前公开 PR 状态不一致
+- 本轮决策：
+  - `ci.yml` 的 pack 步骤显式补上 `--no-build`，使其与前置 `Build` 步骤形成单次编译链路
+  - 共享包校验脚本改为使用 `find ... -exec basename {} \;`，避免依赖 GNU-only 选项
+  - active tracking 同步到 `PR #331`，并把这轮 PR review 的剩余问题描述更新为当前已核验的真实范围
+- 预期结果：
+  - PR workflow 的 pack 阶段不再对同一 solution 重复编译
+  - `validate-packed-modules.sh` 可在 GNU / BSD `find` 环境下保持相同行为
+  - `cqrs-rewrite` active 恢复入口继续与当前公开 PR 保持一致
+
 ### 阶段：benchmark 发布面隔离与包清单校验前移（CQRS-REWRITE-RP-091）
 
 - 针对 tag 发布中出现的 `GFramework.Cqrs.Benchmarks` 异常包名单，本轮先复核 benchmark 项目与 solution pack 的本地事实：

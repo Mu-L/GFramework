@@ -9,7 +9,7 @@ CQRS 迁移与收敛。
 
 - 恢复点编号：`CQRS-REWRITE-RP-091`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`待创建`
+- 当前 PR 锚点：`PR #331`
 - 当前结论：
   - `GFramework.Cqrs` 已完成对外部 `Mediator` 的生产级替代，当前主线已从“是否可替代”转向“仓库内部收口与能力深化顺序”
   - `dispatch/invoker` 生成前移已扩展到 request / stream 路径，`RP-077` 已补齐 request invoker provider gate 与 stream gate 对称的 descriptor / descriptor entry runtime 合同回归
@@ -27,7 +27,7 @@ CQRS 迁移与收敛。
   - 当前 `RP-089` 已补齐 stream invoker reflection / generated-provider 对照，使 generated descriptor 预热收益从 request 扩展到 stream 路径
   - 当前 `RP-090` 已收敛 `PR #326` benchmark review：统一 benchmark 最小宿主构建、冻结 GFramework 容器、限制 MediatR 扫描范围，并恢复 request startup cold-start 对照
   - 当前 `RP-091` 已把 benchmark 项目发布面隔离与包清单校验前移到 PR：`GFramework.Cqrs.Benchmarks` 明确保持不可打包，`publish.yml` 与 `ci.yml` 复用同一份 packed-modules 校验脚本
-  - `ai-plan` active 入口现以 `RP-091` 为最新恢复锚点；`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+- `ai-plan` active 入口现以 `RP-091` 为最新恢复锚点；`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
@@ -70,7 +70,7 @@ CQRS 迁移与收敛。
   - 备注：用于验证本轮 request invoker / pipeline / stream invoker 调整与 benchmark workflow 改动后的 Release 编译结果
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output <temporary-json-output>`
   - 结果：通过
-  - 备注：确认当前分支对应 `PR #326`，本轮剩余 open AI feedback 以 workflow 输入安全、benchmark 对照公平性与 active 文档压缩为主
+  - 备注：确认当前分支对应 `PR #331`，本轮 latest-head open AI feedback 已收敛到 `dotnet pack --no-build`、共享包校验脚本跨平台兼容性与 active 文档 PR 锚点同步
 - `python3 scripts/license-header.py --check`
   - 结果：通过
   - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行
