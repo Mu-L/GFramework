@@ -296,3 +296,41 @@
 
 1. 继续扩展 `GFramework.Cqrs.Benchmarks`，优先补齐 pipeline、stream、cold-start 与 generated invoker provider 对照场景
 2. 当后续有具体 runtime 优化切片时，用该 benchmark 项目验证是否真正吸收到了 `Mediator` 的低开销 dispatch 设计收益
+
+### 阶段：stream request benchmark 对照（CQRS-REWRITE-RP-085）
+
+- 继续沿用 `$gframework-batch-boot 50`，当前 branch diff 相对 `origin/main` 仍明显低于阈值
+- 在 `RP-084` 已建立独立 benchmark 项目后，本轮优先补齐 `ai-libs/Mediator/benchmarks/Mediator.Benchmarks/Messaging/StreamingBenchmarks.cs` 对应的最小 stream 场景
+- 选择 stream 作为第二批 benchmark 的原因：
+  - 已有独立的 `CreateStream` runtime 路径和单独的 stream invoker provider 元数据契约
+  - 与 `Mediator` 的 messaging benchmark 分层直接对应
+  - 不需要像 pipeline / cold-start 那样先进一步澄清运行时或宿主边界
+- 本轮新增：
+  - `GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`
+  - `GFramework.Cqrs.Benchmarks/README.md` 中的 stream 场景说明
+- 设计约束：
+  - 保持与前一批一致的三路对照：`Baseline`、`GFramework.Cqrs`、`MediatR`
+  - 基准测量“完整枚举 3 个元素”的全量消费成本，而不是只测创建异步枚举器
+  - 使用最小 `ICqrsContext` marker，继续避免把完整 `ArchitectureContext` 初始化成本混入 steady-state stream dispatch
+- 结论：
+  - 当前 benchmark 项目已经覆盖 `Request`、`Notification`、`StreamRequest` 三个核心 messaging steady-state 场景
+  - 下一批更适合转向 request pipeline 数量矩阵或 cold-start / initialization，而不是继续扩同层次的 messaging 基线
+
+### 验证（RP-085）
+
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `GIT_DIR=<worktree-git-dir> GIT_WORK_TREE=<worktree-root> python3 scripts/license-header.py --check`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+
+### 当前 stop-condition 度量（RP-085）
+
+- primary metric：branch diff files vs `origin/main`
+- 当前说明：新增 stream benchmark 后仍处于 `50` 文件阈值以内，适合继续下一批 request pipeline 或 cold-start 场景
+
+### 当前下一步（RP-085）
+
+1. 继续扩展 `GFramework.Cqrs.Benchmarks`，优先补齐 request pipeline 数量矩阵，随后再评估 cold-start / initialization
+2. 当需要验证 generated invoker provider 的实际收益时，把 request benchmark 扩展为 reflection / generated provider 对照，而不是只停留在框架间对比

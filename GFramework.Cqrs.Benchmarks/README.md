@@ -18,6 +18,8 @@
   - direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/NotificationBenchmarks.cs`
   - `GFramework.Cqrs` runtime 与 `MediatR` 的单处理器 notification publish 对比
+- `Messaging/StreamingBenchmarks.cs`
+  - direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 stream request 完整枚举对比
 
 ## 最小使用方式
 
@@ -31,5 +33,4 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 - pipeline behavior 数量矩阵
 - generated invoker provider 与纯反射 dispatch 对比
-- stream request benchmark
 - cold-start 与 registration 成本对比
