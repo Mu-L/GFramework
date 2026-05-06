@@ -60,23 +60,21 @@ public class StreamingBenchmarks
         };
         Fixture.Setup("StreamRequest", handlerCount: 1, pipelineCount: 0);
 
-        _container = new MicrosoftDiContainer();
         _baselineHandler = new BenchmarkStreamHandler();
-
-        _container.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>, BenchmarkStreamHandler>();
+        _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
+        {
+            container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>>(
+                _baselineHandler);
+        });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamingBenchmarks)));
 
-        var services = new ServiceCollection();
-        services.AddLogging(static builder =>
-            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
-                builder,
-                "LuckyPennySoftware.MediatR.License",
-                Microsoft.Extensions.Logging.LogLevel.None));
-        services.AddSingleton<MediatR.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>, BenchmarkStreamHandler>();
-        services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(StreamingBenchmarks).Assembly));
-        _serviceProvider = services.BuildServiceProvider();
+        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+            configure: null,
+            typeof(StreamingBenchmarks),
+            static candidateType => candidateType == typeof(BenchmarkStreamHandler),
+            ServiceLifetime.Singleton);
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
 
         _request = new BenchmarkStreamRequest(Guid.NewGuid(), 3);

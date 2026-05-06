@@ -58,21 +58,20 @@ public class NotificationBenchmarks
         };
         Fixture.Setup("Notification", handlerCount: 1, pipelineCount: 0);
 
-        _container = new MicrosoftDiContainer();
-        _container.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.INotificationHandler<BenchmarkNotification>, BenchmarkNotificationHandler>();
+        _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
+        {
+            container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.INotificationHandler<BenchmarkNotification>>(
+                new BenchmarkNotificationHandler());
+        });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(NotificationBenchmarks)));
 
-        var services = new ServiceCollection();
-        services.AddLogging(static builder =>
-            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
-                builder,
-                "LuckyPennySoftware.MediatR.License",
-                Microsoft.Extensions.Logging.LogLevel.None));
-        services.AddSingleton<MediatR.INotificationHandler<BenchmarkNotification>, BenchmarkNotificationHandler>();
-        services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(NotificationBenchmarks).Assembly));
-        _serviceProvider = services.BuildServiceProvider();
+        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+            services => services.AddSingleton<MediatR.INotificationHandler<BenchmarkNotification>, BenchmarkNotificationHandler>(),
+            typeof(NotificationBenchmarks),
+            static candidateType => candidateType == typeof(BenchmarkNotificationHandler),
+            ServiceLifetime.Singleton);
         _publisher = _serviceProvider.GetRequiredService<IPublisher>();
 
         _notification = new BenchmarkNotification(Guid.NewGuid());

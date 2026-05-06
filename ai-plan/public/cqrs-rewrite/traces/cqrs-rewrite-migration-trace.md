@@ -1,5 +1,49 @@
 # CQRS 重写迁移追踪
 
+## 2026-05-06
+
+### 阶段：benchmark 对照宿主收敛与 startup cold-start 恢复（CQRS-REWRITE-RP-090）
+
+- 使用 `$gframework-pr-review` 拉取 `PR #326` latest-head review 后，主线程确认仍有效的 benchmark 反馈集中在三类问题：
+  - `RequestBenchmarks` 的 GFramework / MediatR handler 生命周期不对齐
+  - `RequestStartupBenchmarks` 把容器构建、程序集扫描范围和缓存清理阶段混在一起，导致 cold-start 对照不公平
+  - benchmark 工程里的 `MicrosoftDiContainer` 多处以 `ImplementationType` 方式注册 handler，但未在 runtime 分发前 `Freeze()`，首次真实解析路径存在隐藏失败风险
+- 本轮本地复核的关键根因：
+  - `MicrosoftDiContainer.Get(Type)` 在未冻结时只读取 `ImplementationInstance`，不会实例化 `ImplementationType`
+  - `ColdStart_GFrameworkCqrs` 清空 dispatcher 静态缓存后，首次发送必须走真实 handler 解析，因此会稳定触发 `No CQRS request handler registered`
+  - 多个 benchmark 同时采用“手工 MediatR 注册 + `RegisterServicesFromAssembly(...)` 全程序集扫描”，容易把无关 handler / behavior 一并纳入对照，且存在重复注册漂移
+- 本轮决策：
+  - 新增 `Messaging/BenchmarkHostFactory.cs`，统一 benchmark 最小宿主构建规则
+  - GFramework benchmark 宿主统一先注册再 `Freeze()`，保证 steady-state 与 cold-start 都走真实可解析容器
+  - MediatR benchmark 宿主统一通过 `TypeEvaluator` 限制到当前场景所需 handler / behavior 类型，保留正常 `AddMediatR` 组装路径，同时移除全程序集扫描噪音
+  - `RequestStartupBenchmarks` 采用专用 `ColdStart` job，设置 `InvocationCount=1` 与 `WithUnrollFactor(1)`，并把 dispatcher cache reset 放到 `IterationSetup`
+- 已修改的 benchmark 范围：
+  - `RequestBenchmarks`
+  - `RequestPipelineBenchmarks`
+  - `RequestStartupBenchmarks`
+  - `StreamingBenchmarks`
+  - `NotificationBenchmarks`
+  - `RequestInvokerBenchmarks`
+  - `StreamInvokerBenchmarks`
+- 结果：
+  - `ColdStart_GFrameworkCqrs` 已恢复出有效结果，不再出现 `No CQRS request handler registered`
+  - `RequestBenchmarks`、`RequestStartupBenchmarks` 在本地均可实际运行
+  - `RequestStartupBenchmarks` 目前仍会收到 BenchmarkDotNet 对单次 cold-start 场景的 `MinIterationTime` 提示；这是测量形状带来的工具提示，不再是运行级失败
+
+### 验证（RP-090）
+
+- `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/gframework-current-pr-review.json`
+  - 结果：通过
+  - 备注：确认当前分支对应 `PR #326`，仍有效的 open AI feedback 集中在 benchmark 对照语义与 active 文档收敛
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestStartupBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：`ColdStart_GFrameworkCqrs` 已恢复，最新本地输出约 `220-292 us`，`ColdStart_MediatR` 约 `575-616 us`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：steady-state request 对照可正常运行，未再触发 MediatR 重复注册或 GFramework 首次解析失败
+
 ## 2026-04-30
 
 ### 阶段：历史 PR #307 active 入口收敛（CQRS-REWRITE-RP-076）

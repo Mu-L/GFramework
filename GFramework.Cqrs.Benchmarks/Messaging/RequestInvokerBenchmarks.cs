@@ -73,27 +73,27 @@ public class RequestInvokerBenchmarks
         _generatedRequest = new GeneratedBenchmarkRequest(Guid.NewGuid());
         _mediatrRequest = new MediatRBenchmarkRequest(Guid.NewGuid());
 
-        _reflectionContainer = new MicrosoftDiContainer();
-        _reflectionContainer.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<ReflectionBenchmarkRequest, ReflectionBenchmarkResponse>, ReflectionBenchmarkRequestHandler>();
+        _reflectionContainer = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(static container =>
+        {
+            container.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<ReflectionBenchmarkRequest, ReflectionBenchmarkResponse>, ReflectionBenchmarkRequestHandler>();
+        });
         _reflectionRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _reflectionContainer,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestInvokerBenchmarks) + ".Reflection"));
 
-        _generatedContainer = new MicrosoftDiContainer();
-        _generatedContainer.RegisterCqrsHandlersFromAssembly(typeof(RequestInvokerBenchmarks).Assembly);
+        _generatedContainer = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
+        {
+            container.RegisterCqrsHandlersFromAssembly(typeof(RequestInvokerBenchmarks).Assembly);
+        });
         _generatedRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _generatedContainer,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestInvokerBenchmarks) + ".Generated"));
 
-        var services = new ServiceCollection();
-        services.AddLogging(static builder =>
-            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
-                builder,
-                "LuckyPennySoftware.MediatR.License",
-                Microsoft.Extensions.Logging.LogLevel.None));
-        services.AddSingleton<MediatR.IRequestHandler<MediatRBenchmarkRequest, MediatRBenchmarkResponse>, MediatRBenchmarkRequestHandler>();
-        services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(RequestInvokerBenchmarks).Assembly));
-        _serviceProvider = services.BuildServiceProvider();
+        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+            configure: null,
+            typeof(RequestInvokerBenchmarks),
+            static candidateType => candidateType == typeof(MediatRBenchmarkRequestHandler),
+            ServiceLifetime.Singleton);
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
     }
 

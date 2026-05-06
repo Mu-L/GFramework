@@ -65,25 +65,30 @@ public class RequestPipelineBenchmarks
         };
         Fixture.Setup("RequestPipeline", handlerCount: 1, pipelineCount: PipelineCount);
 
-        _container = new MicrosoftDiContainer();
         _baselineHandler = new BenchmarkRequestHandler();
-
-        _container.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
-        RegisterGFrameworkPipelineBehaviors(_container, PipelineCount);
+        _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
+        {
+            container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>>(
+                _baselineHandler);
+            RegisterGFrameworkPipelineBehaviors(container, PipelineCount);
+        });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestPipelineBenchmarks)));
 
-        var services = new ServiceCollection();
-        services.AddLogging(static builder =>
-            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
-                builder,
-                "LuckyPennySoftware.MediatR.License",
-                Microsoft.Extensions.Logging.LogLevel.None));
-        services.AddSingleton<MediatR.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
-        RegisterMediatRPipelineBehaviors(services, PipelineCount);
-        services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(RequestPipelineBenchmarks).Assembly));
-        _serviceProvider = services.BuildServiceProvider();
+        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+            services =>
+            {
+                RegisterMediatRPipelineBehaviors(services, PipelineCount);
+            },
+            typeof(RequestPipelineBenchmarks),
+            static candidateType =>
+                candidateType == typeof(BenchmarkRequestHandler) ||
+                candidateType == typeof(BenchmarkPipelineBehavior1) ||
+                candidateType == typeof(BenchmarkPipelineBehavior2) ||
+                candidateType == typeof(BenchmarkPipelineBehavior3) ||
+                candidateType == typeof(BenchmarkPipelineBehavior4),
+            ServiceLifetime.Singleton);
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
 
         _request = new BenchmarkRequest(Guid.NewGuid());

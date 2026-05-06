@@ -40,7 +40,10 @@ public class RequestStartupBenchmarks
     {
         public Config()
         {
-            AddJob(Job.Default);
+            AddJob(Job.Default
+                .WithId("ColdStart")
+                .WithInvocationCount(1)
+                .WithUnrollFactor(1));
             AddColumnProvider(DefaultColumnProviders.Instance);
             AddColumn(new CustomColumn("Scenario", static (_, _) => "RequestStartup"), TargetMethodColumn.Method, CategoriesColumn.Default);
             AddDiagnoser(MemoryDiagnoser.Default);
@@ -60,6 +63,19 @@ public class RequestStartupBenchmarks
         _serviceProvider = CreateMediatRServiceProvider();
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
         _runtime = CreateGFrameworkRuntime();
+    }
+
+    /// <summary>
+    ///     在每次 cold-start 迭代前清空 dispatcher 静态缓存，确保两组 benchmark 都重新命中首次绑定路径。
+    /// </summary>
+    /// <remarks>
+    ///     使用 `IterationSetup` 而不是把缓存清理写在 benchmark 方法主体中，
+    ///     可以把“清理静态缓存”留在测量边界之外，只保留宿主构建与首次发送本身。
+    /// </remarks>
+    [IterationSetup]
+    public void ResetColdStartCaches()
+    {
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
     }
 
     /// <summary>
@@ -110,21 +126,8 @@ public class RequestStartupBenchmarks
     [BenchmarkCategory("ColdStart")]
     public ValueTask<BenchmarkResponse> ColdStart_GFrameworkCqrs()
     {
-        var runtime = CreateColdStartRuntime();
+        var runtime = CreateGFrameworkRuntime();
         return runtime.SendAsync(BenchmarkContext.Instance, Request, CancellationToken.None);
-    }
-
-    /// <summary>
-    ///     为 cold-start benchmark 构建全新的 runtime，并在构建前显式清空 dispatcher 静态缓存。
-    /// </summary>
-    /// <remarks>
-    ///     这里把缓存清理与 runtime 构建绑定在同一阶段，避免把额外的反射缓存清理成本混入 benchmark 方法主体，
-    ///     只保留“新宿主 + 首次分发”的对照。
-    /// </summary>
-    private static ICqrsRuntime CreateColdStartRuntime()
-    {
-        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
-        return CreateGFrameworkRuntime();
     }
 
     /// <summary>
@@ -136,8 +139,10 @@ public class RequestStartupBenchmarks
     /// </remarks>
     private static ICqrsRuntime CreateGFrameworkRuntime()
     {
-        var container = new MicrosoftDiContainer();
-        container.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
+        var container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(static currentContainer =>
+        {
+            currentContainer.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
+        });
         return GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(container, RuntimeLogger);
     }
 
@@ -146,14 +151,11 @@ public class RequestStartupBenchmarks
     /// </summary>
     private static ServiceProvider CreateMediatRServiceProvider()
     {
-        var services = new ServiceCollection();
-        services.AddLogging(static builder =>
-            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
-                builder,
-                "LuckyPennySoftware.MediatR.License",
-                Microsoft.Extensions.Logging.LogLevel.None));
-        services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(RequestStartupBenchmarks).Assembly));
-        return services.BuildServiceProvider();
+        return BenchmarkHostFactory.CreateMediatRServiceProvider(
+            configure: null,
+            typeof(RequestStartupBenchmarks),
+            static candidateType => candidateType == typeof(BenchmarkRequestHandler),
+            ServiceLifetime.Transient);
     }
 
     /// <summary>

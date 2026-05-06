@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-089`
+- 恢复点编号：`CQRS-REWRITE-RP-090`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #326`
 - 当前结论：
@@ -25,13 +25,15 @@ CQRS 迁移与收敛。
   - `RP-087` 已补齐 request startup benchmark，把 initialization 与 cold-start 维度正式纳入 `GFramework.Cqrs.Benchmarks`
   - 当前 `RP-088` 已补齐 request invoker reflection / generated-provider 对照，开始直接量化 dispatcher 预热 generated descriptor 的收益
   - 当前 `RP-089` 已补齐 stream invoker reflection / generated-provider 对照，使 generated descriptor 预热收益从 request 扩展到 stream 路径
-  - `ai-plan` active 入口现以 `PR #326` 和 `RP-089` 为唯一权威恢复锚点；`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - 当前 `RP-090` 已收敛 `PR #326` benchmark review：统一 benchmark 最小宿主构建、冻结 GFramework 容器、限制 MediatR 扫描范围，并恢复 request startup cold-start 对照
+  - `ai-plan` active 入口现以 `PR #326` 和 `RP-090` 为唯一权威恢复锚点；`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
 - 当前分支对应 `PR #326`，状态为 `OPEN`
-- latest-head review 仍以 `ai-plan` 恢复文档收敛为主要待闭环项；代码与测试侧的本地有效问题已收敛
-- `RequestStartupBenchmarks` 已修复 baseline 分组冲突、MediatR 13 logging/license 构造失败与重复注册问题，但 `ColdStart_GFrameworkCqrs` 仍存在 `No CQRS request handler registered` 的运行级残留
+- latest-head review 已从 benchmark 运行级缺陷收敛到剩余文档入口与是否继续接受 benchmark 语义细化的判断
+- benchmark 场景现统一通过 `BenchmarkHostFactory` 构建最小宿主：GFramework 侧在 runtime 分发前显式 `Freeze()` 容器，MediatR 侧只扫描当前场景需要的 handler / behavior 类型
+- `RequestStartupBenchmarks` 已恢复 `ColdStart_GFrameworkCqrs` 结果产出，不再命中 `No CQRS request handler registered`
 - 已新增手动触发的 benchmark workflow；默认只验证 benchmark 项目 Release build，只有显式提供过滤器时才执行 BenchmarkDotNet 运行
 - 远端 `CTRF` 最新汇总为 `2274/2274` passed
 - `MegaLinter` 当前只暴露 `dotnet-format` 的 `Restore operation failed` 环境噪音，尚未提供本地仍成立的文件级格式诊断
@@ -39,12 +41,18 @@ CQRS 迁移与收敛。
 ## 当前风险
 
 - 顶层 `GFramework.sln` / `GFramework.csproj` 在 WSL 下仍可能受 Windows NuGet fallback 配置影响，完整 solution 级验证成本高于模块级验证
-- `RequestStartupBenchmarks` 的 GFramework cold-start 路径在清空 dispatcher 缓存后仍未恢复 request handler 绑定，当前无法产出完整 startup 对照数据
+- `RequestStartupBenchmarks` 为了量化真正的单次 cold-start，引入了 `InvocationCount=1` / `UnrollFactor=1` 的专用 job；该配置会触发 BenchmarkDotNet 的 `MinIterationTime` 提示，后续若要做稳定基线比较，还需要决定是否引入批量外层循环或自定义 cold-start harness
 - 仓库内部仍保留旧 `Command` / `Query` API、`LegacyICqrsRuntime` alias 与部分历史命名语义，后续若不继续分批收口，容易混淆“对外替代已完成”与“内部收口未完成”
 - 若继续扩大 generated invoker 覆盖面，需要持续区分“可静态表达的合同”与 `PreciseReflectedRegistrationSpec` 等仍需保守回退的场景
 
 ## 最近权威验证
 
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestStartupBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：`ColdStart_GFrameworkCqrs` 已恢复出数，最新本地输出约 `220-292 us`，MediatR 对照约 `575-616 us`；当前仅剩 BenchmarkDotNet 对单次 cold-start 场景的 `MinIterationTime` 提示
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：确认冻结后的 GFramework 最小宿主与受限扫描的 MediatR 最小宿主均可完成 steady-state request 对照
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
   - 备注：用于验证新增手动 benchmark workflow 依赖的 benchmark 项目入口仍可在 Release 下编译
@@ -119,8 +127,8 @@ CQRS 迁移与收敛。
 ## 下一推荐步骤
 
 1. 继续处理 `PR #326` 的剩余 review 收尾，优先保持 benchmark 对照语义与 `ai-plan` active 入口一致
-2. 优先定位 `RequestStartupBenchmarks.ColdStart_GFrameworkCqrs` 在清空 dispatcher 缓存后的 request handler 绑定缺口，再决定是调整最小宿主注册方式还是补充专用 benchmark fixture
-3. 若需要在 CI 中手动复核 benchmark，优先使用新增 workflow 的 `benchmark_filter` 输入按场景筛选，避免默认运行命中当前已知 startup 残留
+2. 决定是否继续细化 `RequestStartupBenchmarks` 的 cold-start harness，降低 `InvocationCount=1` 带来的 `MinIterationTime` 提示噪音
+3. 若需要在 CI 中手动复核 benchmark，优先使用新增 workflow 的 `benchmark_filter` 输入按场景筛选，避免默认运行整个 benchmark 矩阵
 
 ## 活跃文档
 
