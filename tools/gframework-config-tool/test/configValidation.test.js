@@ -228,6 +228,63 @@ test("parseSchemaContent should reject unsupported additionalProperties forms", 
         /unsupported 'additionalProperties' metadata/u);
 });
 
+test("parseSchemaContent should reject unsupported open-object keywords", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^dynamic-": { "type": "integer" }
+                  },
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'patternProperties' metadata/u);
+
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "propertyNames": {
+                    "pattern": "^[a-z]+$"
+                  },
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'propertyNames' metadata/u);
+
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "reward": {
+                  "type": "object",
+                  "unevaluatedProperties": false,
+                  "properties": {
+                    "itemCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'unevaluatedProperties' metadata/u);
+});
+
 test("parseSchemaContent should reject unsupported explicit schema types", () => {
     assert.throws(
         () => parseSchemaContent(`
