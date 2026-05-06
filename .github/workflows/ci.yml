@@ -155,6 +155,18 @@ jobs:
       - name: Build
         run: dotnet build GFramework.sln -c Release --no-restore
 
+      - name: Pack published modules
+        run: |
+          rm -rf ./packages
+          dotnet pack GFramework.sln \
+            -c Release \
+            --no-restore \
+            -o ./packages \
+            -p:IncludeSymbols=false
+
+      - name: Validate packed modules
+        run: bash scripts/validate-packed-modules.sh ./packages
+
       # 运行单元测试，输出TRX格式结果到TestResults目录
       # 顺序执行各测试项目，避免并发 dotnet test 进程导致“TRX 全绿但 step 仍返回失败”的假红状态
       - name: Test All Projects

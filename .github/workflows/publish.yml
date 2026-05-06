@@ -82,41 +82,7 @@ jobs:
             -p:IncludeSymbols=false
 
       - name: Validate packed modules
-        run: |
-          set -euo pipefail
-
-          expected_packages=(
-            "GeWuYou.GFramework"
-            "GeWuYou.GFramework.Core"
-            "GeWuYou.GFramework.Core.Abstractions"
-            "GeWuYou.GFramework.Core.SourceGenerators"
-            "GeWuYou.GFramework.Cqrs"
-            "GeWuYou.GFramework.Cqrs.Abstractions"
-            "GeWuYou.GFramework.Cqrs.SourceGenerators"
-            "GeWuYou.GFramework.Ecs.Arch"
-            "GeWuYou.GFramework.Ecs.Arch.Abstractions"
-            "GeWuYou.GFramework.Game"
-            "GeWuYou.GFramework.Game.Abstractions"
-            "GeWuYou.GFramework.Game.SourceGenerators"
-            "GeWuYou.GFramework.Godot"
-            "GeWuYou.GFramework.Godot.SourceGenerators"
-          )
-
-          mapfile -t actual_packages < <(
-            find ./packages -maxdepth 1 -type f -name '*.nupkg' -printf '%f\n' \
-              | sed -E 's/\.[0-9][0-9A-Za-z.-]*\.nupkg$//' \
-              | sort -u
-          )
-
-          printf '%s\n' "${expected_packages[@]}" | sort > expected-packages.txt
-          printf '%s\n' "${actual_packages[@]}" | sort > actual-packages.txt
-
-          echo "Expected packages:"
-          cat expected-packages.txt
-          echo "Actual packages:"
-          cat actual-packages.txt
-
-          diff -u expected-packages.txt actual-packages.txt
+        run: bash scripts/validate-packed-modules.sh ./packages
 
       - name: Validate runtime-generator package boundaries
         run: python3 scripts/validate-runtime-generator-boundaries.py --package-dir ./packages
