@@ -369,3 +369,33 @@
 
 1. 提交本轮 request pipeline benchmark 后，继续扩展 `GFramework.Cqrs.Benchmarks`，优先补齐 initialization / cold-start 场景
 2. 当需要验证 dispatcher 预热与 source generator 收益时，引入 generated invoker provider 对照，并评估是否同时接入 `Mediator` concrete runtime 作为更贴近设计哲学的外部参照
+
+### 阶段：request startup 基线（CQRS-REWRITE-RP-087）
+
+- 继续沿用 `$gframework-batch-boot 50`，当前 branch diff 相对 `origin/main` 仍明显低于阈值
+- 本轮目标：把 benchmark 从 steady-state dispatch 再向前推进一层，补齐与 `ai-libs/Mediator/benchmarks/Mediator.Benchmarks/Messaging/Comparison/*` 更接近的 startup 维度
+- 本轮新增：
+  - `GFramework.Cqrs.Benchmarks/Messaging/RequestStartupBenchmarks.cs`
+  - `GFramework.Cqrs.Benchmarks/README.md` 中的 startup 场景说明
+- 设计取舍：
+  - `Initialization` 只测“从已配置宿主解析/创建 runtime 句柄”的成本，不把完整架构初始化混入 benchmark
+  - `ColdStart` 只测新宿主上的首次 request send；`GFramework.Cqrs` 侧在每次 benchmark 前通过反射清空 dispatcher 静态缓存，避免把热缓存误当 first-hit
+  - `ColdStart_MediatR` 改为真正 `await` 完任务后再释放 `ServiceProvider`，以满足 `Meziantou.Analyzer` 对资源生命周期的要求，并避免 benchmark 本身含有错误宿主释放语义
+- 结论：
+  - 当前 benchmark 项目已经覆盖 `Request`、`Notification`、`StreamRequest`、`RequestPipeline`、`RequestStartup`
+  - 后续若继续贴近 `Mediator` comparison benchmark，下一批最有价值的是 generated invoker provider、registration / service lifetime 与 concrete runtime 外部对照，而不是继续只加同层 steady-state case
+
+### 验证（RP-087）
+
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+
+### 当前 stop-condition 度量（RP-087）
+
+- primary metric：branch diff files vs `origin/main`
+- 当前说明：提交前 branch diff 仍远低于 `50` 文件阈值，可继续下一批 benchmark 或低风险 runtime 对照切片
+
+### 当前下一步（RP-087）
+
+1. 提交本轮 request startup benchmark 后，继续扩展 `GFramework.Cqrs.Benchmarks`，优先评估 generated invoker provider 与 registration / service lifetime 矩阵
+2. 若要更贴近 `Mediator` 的 comparison benchmark 设计哲学，评估是否在 benchmark 项目中同时接入 `Mediator` concrete runtime 对照，而不只保留 `MediatR`
