@@ -11,6 +11,9 @@
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Keep benchmark infrastructure out of the published NuGet package set. -->
+        <IsPackable>false</IsPackable>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>

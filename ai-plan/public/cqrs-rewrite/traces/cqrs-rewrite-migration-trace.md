@@ -2,6 +2,37 @@
 
 ## 2026-05-06
 
+### 阶段：PR #331 review 收尾补丁（CQRS-REWRITE-RP-091）
+
+- 使用 `$gframework-pr-review` 拉取当前分支 `fix/package-validation-guard` 对应的 `PR #331` latest-head review 后，主线程只保留本地复核仍成立的问题：
+  - `.github/workflows/ci.yml` 的 `dotnet pack` 步骤缺少 `--no-build`，会在已完成 solution `Build` 后重复编译整仓库
+  - `scripts/validate-packed-modules.sh` 使用 GNU `find -printf`，在 macOS / BSD `find` 下无法运行
+  - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md` 的 active PR 锚点仍写成 `待创建`，与当前公开 PR 状态不一致
+- 本轮决策：
+  - `ci.yml` 的 pack 步骤显式补上 `--no-build`，使其与前置 `Build` 步骤形成单次编译链路
+  - 共享包校验脚本改为使用 `find ... -exec basename {} \;`，避免依赖 GNU-only 选项
+  - active tracking 同步到 `PR #331`，并把这轮 PR review 的剩余问题描述更新为当前已核验的真实范围
+- 预期结果：
+  - PR workflow 的 pack 阶段不再对同一 solution 重复编译
+  - `validate-packed-modules.sh` 可在 GNU / BSD `find` 环境下保持相同行为
+  - `cqrs-rewrite` active 恢复入口继续与当前公开 PR 保持一致
+
+### 阶段：benchmark 发布面隔离与包清单校验前移（CQRS-REWRITE-RP-091）
+
+- 针对 tag 发布中出现的 `GFramework.Cqrs.Benchmarks` 异常包名单，本轮先复核 benchmark 项目与 solution pack 的本地事实：
+  - `GFramework.Cqrs.Benchmarks.csproj` 已包含 `IsPackable=false` 与 `GeneratePackageOnBuild=false`
+  - 本地执行 `dotnet pack GFramework.sln -c Release --no-restore -o /tmp/gframework-sln-pack-probe -p:IncludeSymbols=false` 时，产物仅包含 14 个预期发布包
+  - 因此本轮不把 benchmark 包加入发布白名单，而是把“benchmark 永不发布”与“PR 前置完整包名单校验”同时固化
+- 本轮决策：
+  - 为 `GFramework.Cqrs.Benchmarks` 补充注释，明确其 benchmark-only 的发布边界
+  - 新增 `scripts/validate-packed-modules.sh`，集中维护预期包集合与实际 `.nupkg` diff 逻辑
+  - `publish.yml` 改为调用共享脚本，避免发布工作流与 PR 工作流各自维护一份包名单
+  - `ci.yml` 新增 solution `dotnet pack` 与 packed modules 校验，把异常发布包从 tag 发布前移到普通 PR 阶段
+- 预期结果：
+  - benchmark / example / tooling 一类新项目若意外进入发布面，会先在 PR 失败，而不是等到 tag 发布
+  - 发布与 PR 使用同一份包名单规则，减少后续名单漂移
+  - `GFramework.Cqrs.Benchmarks` 继续只服务于 benchmark workflow，不进入 NuGet / GitHub Packages
+
 ### 阶段：benchmark 对照宿主收敛与 startup cold-start 恢复（CQRS-REWRITE-RP-090）
 
 - 使用 `$gframework-pr-review` 拉取 `PR #326` latest-head review 后，主线程确认仍有效的 benchmark 反馈集中在三类问题：
