@@ -68,6 +68,11 @@ public class RequestBenchmarks
             LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestBenchmarks)));
 
         var services = new ServiceCollection();
+        services.AddLogging(static builder =>
+            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
+                builder,
+                "LuckyPennySoftware.MediatR.License",
+                Microsoft.Extensions.Logging.LogLevel.None));
         services.AddSingleton<MediatR.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
         services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(RequestBenchmarks).Assembly));
         _serviceProvider = services.BuildServiceProvider();

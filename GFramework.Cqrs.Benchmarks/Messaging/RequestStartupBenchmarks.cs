@@ -8,7 +8,6 @@ using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
 using System;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using GFramework.Core.Abstractions.Logging;
@@ -17,6 +16,7 @@ using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using ILogger = GFramework.Core.Abstractions.Logging.ILogger;
 
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
@@ -31,6 +31,7 @@ public class RequestStartupBenchmarks
 
     private ServiceProvider _serviceProvider = null!;
     private IMediator _mediatr = null!;
+    private ICqrsRuntime _runtime = null!;
 
     /// <summary>
     ///     配置 request startup benchmark 的公共输出格式。
@@ -41,8 +42,9 @@ public class RequestStartupBenchmarks
         {
             AddJob(Job.Default);
             AddColumnProvider(DefaultColumnProviders.Instance);
-            AddColumn(new CustomColumn("Scenario", static (_, _) => "RequestStartup"));
+            AddColumn(new CustomColumn("Scenario", static (_, _) => "RequestStartup"), TargetMethodColumn.Method, CategoriesColumn.Default);
             AddDiagnoser(MemoryDiagnoser.Default);
+            AddLogicalGroupRules(BenchmarkLogicalGroupRule.ByCategory);
             WithOrderer(new DefaultOrderer(SummaryOrderPolicy.FastestToSlowest, MethodOrderPolicy.Declared));
         }
     }
@@ -57,10 +59,11 @@ public class RequestStartupBenchmarks
 
         _serviceProvider = CreateMediatRServiceProvider();
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        _runtime = CreateGFrameworkRuntime();
     }
 
     /// <summary>
-    ///     释放 MediatR 对照组使用的 DI 宿主。
+    ///     释放 startup benchmark 复用的宿主对象。
     /// </summary>
     [GlobalCleanup]
     public void Cleanup()
@@ -69,23 +72,23 @@ public class RequestStartupBenchmarks
     }
 
     /// <summary>
-    ///     解析 MediatR mediator，作为 startup 句柄解析成本的 baseline。
+    ///     返回已构建宿主中的 MediatR mediator，作为 initialization 组的句柄解析 baseline。
     /// </summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Initialization")]
     public IMediator Initialization_MediatR()
     {
-        return _serviceProvider.GetRequiredService<IMediator>();
+        return _mediatr;
     }
 
     /// <summary>
-    ///     创建 GFramework.CQRS runtime，作为同层级 startup 句柄创建成本的对照。
+    ///     返回已构建宿主中的 GFramework.CQRS runtime，确保与 MediatR baseline 处于相同初始化阶段。
     /// </summary>
     [Benchmark]
     [BenchmarkCategory("Initialization")]
     public ICqrsRuntime Initialization_GFrameworkCqrs()
     {
-        return CreateGFrameworkRuntime();
+        return _runtime;
     }
 
     /// <summary>
@@ -101,20 +104,36 @@ public class RequestStartupBenchmarks
     }
 
     /// <summary>
-    ///     在清空 dispatcher 静态缓存后，于新宿主上首次发送 request，量化 GFramework.CQRS 的 first-hit 成本。
+    ///     在新 runtime 上首次发送 request，量化 GFramework.CQRS 的 first-hit 成本。
     /// </summary>
     [Benchmark]
     [BenchmarkCategory("ColdStart")]
     public ValueTask<BenchmarkResponse> ColdStart_GFrameworkCqrs()
     {
-        ClearDispatcherCaches();
-        var runtime = CreateGFrameworkRuntime();
+        var runtime = CreateColdStartRuntime();
         return runtime.SendAsync(BenchmarkContext.Instance, Request, CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     为 cold-start benchmark 构建全新的 runtime，并在构建前显式清空 dispatcher 静态缓存。
+    /// </summary>
+    /// <remarks>
+    ///     这里把缓存清理与 runtime 构建绑定在同一阶段，避免把额外的反射缓存清理成本混入 benchmark 方法主体，
+    ///     只保留“新宿主 + 首次分发”的对照。
+    /// </summary>
+    private static ICqrsRuntime CreateColdStartRuntime()
+    {
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
+        return CreateGFrameworkRuntime();
     }
 
     /// <summary>
     ///     构建只承载当前 benchmark request 的最小 GFramework.CQRS runtime。
     /// </summary>
+    /// <remarks>
+    ///     该 benchmark 故意保持与 MediatR 对照组同样的“单 handler 最小宿主”模型，
+    ///     因此这里继续使用单点手工注册，而不引入依赖完整 CQRS 注册协调器的程序集扫描路径。
+    /// </remarks>
     private static ICqrsRuntime CreateGFrameworkRuntime()
     {
         var container = new MicrosoftDiContainer();
@@ -128,7 +147,11 @@ public class RequestStartupBenchmarks
     private static ServiceProvider CreateMediatRServiceProvider()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<MediatR.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
+        services.AddLogging(static builder =>
+            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
+                builder,
+                "LuckyPennySoftware.MediatR.License",
+                Microsoft.Extensions.Logging.LogLevel.None));
         services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(RequestStartupBenchmarks).Assembly));
         return services.BuildServiceProvider();
     }
@@ -143,36 +166,6 @@ public class RequestStartupBenchmarks
             MinLevel = LogLevel.Fatal
         };
         return LoggerFactoryResolver.Provider.CreateLogger(categoryName);
-    }
-
-    /// <summary>
-    ///     清空 dispatcher 静态缓存，避免同一进程中的前一轮分发污染 cold-start 结果。
-    /// </summary>
-    private static void ClearDispatcherCaches()
-    {
-        ClearDispatcherCache("NotificationDispatchBindings");
-        ClearDispatcherCache("RequestDispatchBindings");
-        ClearDispatcherCache("StreamDispatchBindings");
-        ClearDispatcherCache("GeneratedRequestInvokers");
-        ClearDispatcherCache("GeneratedStreamInvokers");
-    }
-
-    /// <summary>
-    ///     通过反射定位并清空 dispatcher 的指定缓存字段。
-    /// </summary>
-    /// <param name="fieldName">要清理的静态缓存字段名。</param>
-    private static void ClearDispatcherCache(string fieldName)
-    {
-        var field = typeof(GFramework.Cqrs.CqrsRuntimeFactory).Assembly
-            .GetType("GFramework.Cqrs.Internal.CqrsDispatcher", throwOnError: true)!
-            .GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException($"Missing dispatcher cache field {fieldName}.");
-        var cache = field.GetValue(null)
-                    ?? throw new InvalidOperationException($"Dispatcher cache field {fieldName} returned null.");
-        var clearMethod = cache.GetType().GetMethod("Clear", BindingFlags.Public | BindingFlags.Instance)
-                          ?? throw new InvalidOperationException(
-                              $"Dispatcher cache field {fieldName} does not expose a Clear method.");
-        _ = clearMethod.Invoke(cache, null);
     }
 
     /// <summary>

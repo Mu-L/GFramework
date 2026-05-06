@@ -9,7 +9,6 @@ using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using GFramework.Core.Abstractions.Logging;
@@ -67,7 +66,7 @@ public class RequestInvokerBenchmarks
             MinLevel = LogLevel.Fatal
         };
         Fixture.Setup("RequestInvoker", handlerCount: 1, pipelineCount: 0);
-        ClearDispatcherCaches();
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
 
         _baselineHandler = new ReflectionBenchmarkRequestHandler();
         _reflectionRequest = new ReflectionBenchmarkRequest(Guid.NewGuid());
@@ -87,6 +86,11 @@ public class RequestInvokerBenchmarks
             LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestInvokerBenchmarks) + ".Generated"));
 
         var services = new ServiceCollection();
+        services.AddLogging(static builder =>
+            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
+                builder,
+                "LuckyPennySoftware.MediatR.License",
+                Microsoft.Extensions.Logging.LogLevel.None));
         services.AddSingleton<MediatR.IRequestHandler<MediatRBenchmarkRequest, MediatRBenchmarkResponse>, MediatRBenchmarkRequestHandler>();
         services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(RequestInvokerBenchmarks).Assembly));
         _serviceProvider = services.BuildServiceProvider();
@@ -100,7 +104,7 @@ public class RequestInvokerBenchmarks
     public void Cleanup()
     {
         _serviceProvider.Dispose();
-        ClearDispatcherCaches();
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
     }
 
     /// <summary>
@@ -137,36 +141,6 @@ public class RequestInvokerBenchmarks
     public Task<MediatRBenchmarkResponse> SendRequest_MediatR()
     {
         return _mediatr.Send(_mediatrRequest, CancellationToken.None);
-    }
-
-    /// <summary>
-    ///     清空 dispatcher 静态缓存，避免上一轮基准残留的 generated metadata 影响当前对照。
-    /// </summary>
-    private static void ClearDispatcherCaches()
-    {
-        ClearDispatcherCache("NotificationDispatchBindings");
-        ClearDispatcherCache("RequestDispatchBindings");
-        ClearDispatcherCache("StreamDispatchBindings");
-        ClearDispatcherCache("GeneratedRequestInvokers");
-        ClearDispatcherCache("GeneratedStreamInvokers");
-    }
-
-    /// <summary>
-    ///     通过反射定位并清空 dispatcher 的指定缓存字段。
-    /// </summary>
-    /// <param name="fieldName">要清理的静态缓存字段名。</param>
-    private static void ClearDispatcherCache(string fieldName)
-    {
-        var field = typeof(GFramework.Cqrs.CqrsRuntimeFactory).Assembly
-            .GetType("GFramework.Cqrs.Internal.CqrsDispatcher", throwOnError: true)!
-            .GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException($"Missing dispatcher cache field {fieldName}.");
-        var cache = field.GetValue(null)
-                    ?? throw new InvalidOperationException($"Dispatcher cache field {fieldName} returned null.");
-        var clearMethod = cache.GetType().GetMethod("Clear", BindingFlags.Public | BindingFlags.Instance)
-                          ?? throw new InvalidOperationException(
-                              $"Dispatcher cache field {fieldName} does not expose a Clear method.");
-        _ = clearMethod.Invoke(cache, null);
     }
 
     /// <summary>

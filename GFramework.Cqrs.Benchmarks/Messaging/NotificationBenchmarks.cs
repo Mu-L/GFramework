@@ -65,6 +65,11 @@ public class NotificationBenchmarks
             LoggerFactoryResolver.Provider.CreateLogger(nameof(NotificationBenchmarks)));
 
         var services = new ServiceCollection();
+        services.AddLogging(static builder =>
+            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
+                builder,
+                "LuckyPennySoftware.MediatR.License",
+                Microsoft.Extensions.Logging.LogLevel.None));
         services.AddSingleton<MediatR.INotificationHandler<BenchmarkNotification>, BenchmarkNotificationHandler>();
         services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(NotificationBenchmarks).Assembly));
         _serviceProvider = services.BuildServiceProvider();

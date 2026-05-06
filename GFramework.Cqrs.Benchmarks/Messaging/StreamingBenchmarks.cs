@@ -69,6 +69,11 @@ public class StreamingBenchmarks
             LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamingBenchmarks)));
 
         var services = new ServiceCollection();
+        services.AddLogging(static builder =>
+            Microsoft.Extensions.Logging.FilterLoggingBuilderExtensions.AddFilter(
+                builder,
+                "LuckyPennySoftware.MediatR.License",
+                Microsoft.Extensions.Logging.LogLevel.None));
         services.AddSingleton<MediatR.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>, BenchmarkStreamHandler>();
         services.AddMediatR(static options => options.RegisterServicesFromAssembly(typeof(StreamingBenchmarks).Assembly));
         _serviceProvider = services.BuildServiceProvider();

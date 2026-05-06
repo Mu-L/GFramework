@@ -9,7 +9,7 @@ CQRS 迁移与收敛。
 
 - 恢复点编号：`CQRS-REWRITE-RP-089`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #323`
+- 当前 PR 锚点：`PR #326`
 - 当前结论：
   - `GFramework.Cqrs` 已完成对外部 `Mediator` 的生产级替代，当前主线已从“是否可替代”转向“仓库内部收口与能力深化顺序”
   - `dispatch/invoker` 生成前移已扩展到 request / stream 路径，`RP-077` 已补齐 request invoker provider gate 与 stream gate 对称的 descriptor / descriptor entry runtime 合同回归
@@ -25,18 +25,20 @@ CQRS 迁移与收敛。
   - `RP-087` 已补齐 request startup benchmark，把 initialization 与 cold-start 维度正式纳入 `GFramework.Cqrs.Benchmarks`
   - 当前 `RP-088` 已补齐 request invoker reflection / generated-provider 对照，开始直接量化 dispatcher 预热 generated descriptor 的收益
   - 当前 `RP-089` 已补齐 stream invoker reflection / generated-provider 对照，使 generated descriptor 预热收益从 request 扩展到 stream 路径
-  - `ai-plan` active 入口现以 `PR #323` 和 `RP-082` 为唯一权威恢复锚点；`PR #307`、其他更早 PR 与阶段细节均以下方归档或说明为准
+  - `ai-plan` active 入口现以 `PR #326` 和 `RP-089` 为唯一权威恢复锚点；`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
-- 当前分支对应 `PR #323`，状态为 `OPEN`
+- 当前分支对应 `PR #326`，状态为 `OPEN`
 - latest-head review 仍以 `ai-plan` 恢复文档收敛为主要待闭环项；代码与测试侧的本地有效问题已收敛
+- `RequestStartupBenchmarks` 已修复 baseline 分组冲突、MediatR 13 logging/license 构造失败与重复注册问题，但 `ColdStart_GFrameworkCqrs` 仍存在 `No CQRS request handler registered` 的运行级残留
 - 远端 `CTRF` 最新汇总为 `2274/2274` passed
 - `MegaLinter` 当前只暴露 `dotnet-format` 的 `Restore operation failed` 环境噪音，尚未提供本地仍成立的文件级格式诊断
 
 ## 当前风险
 
 - 顶层 `GFramework.sln` / `GFramework.csproj` 在 WSL 下仍可能受 Windows NuGet fallback 配置影响，完整 solution 级验证成本高于模块级验证
+- `RequestStartupBenchmarks` 的 GFramework cold-start 路径在清空 dispatcher 缓存后仍未恢复 request handler 绑定，当前无法产出完整 startup 对照数据
 - 仓库内部仍保留旧 `Command` / `Query` API、`LegacyICqrsRuntime` alias 与部分历史命名语义，后续若不继续分批收口，容易混淆“对外替代已完成”与“内部收口未完成”
 - 若继续扩大 generated invoker 覆盖面，需要持续区分“可静态表达的合同”与 `PreciseReflectedRegistrationSpec` 等仍需保守回退的场景
 
@@ -44,7 +46,7 @@ CQRS 迁移与收敛。
 
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output <temporary-json-output>`
   - 结果：通过
-  - 备注：确认当前分支对应 `PR #323`，本轮剩余 open AI feedback 主要集中在 `ai-plan` PR 锚点收敛
+  - 备注：确认当前分支对应 `PR #326`，本轮剩余 open AI feedback 主要集中在 benchmark 对照语义与 `ai-plan` 结构收敛
 - `git diff --check`
   - 结果：通过
 - `python3 scripts/license-header.py --check`
@@ -56,27 +58,13 @@ CQRS 迁移与收敛。
   - 结果：通过，`2/2` passed
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
-- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-  - 备注：包含新增 `StreamingBenchmarks` 后再次复核通过
-- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-  - 备注：包含新增 `RequestPipelineBenchmarks` 后再次复核通过
-- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-  - 备注：包含新增 `RequestStartupBenchmarks` 后再次复核通过
-- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-  - 备注：包含新增 `RequestInvokerBenchmarks` 与 handwritten generated registry/provider 后再次复核通过
-- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
-  - 结果：通过，`0 warning / 0 error`
-  - 备注：包含新增 `StreamInvokerBenchmarks` 与 handwritten generated stream registry/provider 后再次复核通过
+  - 备注：先后覆盖 `StreamingBenchmarks`、`RequestPipelineBenchmarks`、`RequestStartupBenchmarks`、`RequestInvokerBenchmarks` 与 `StreamInvokerBenchmarks` 的引入后复核
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestStartupBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：部分通过
+  - 备注：`Initialization_MediatR` 与 `ColdStart_MediatR` 已可实际运行；`ColdStart_GFrameworkCqrs` 仍因 `No CQRS request handler registered` 无法产出完整对照
 - `GIT_DIR=<worktree-git-dir> GIT_WORK_TREE=<worktree-root> python3 scripts/license-header.py --check`
   - 结果：通过
-- `git diff --check`
-  - 结果：通过
-- `GIT_DIR=<worktree-git-dir> GIT_WORK_TREE=<worktree-root> python3 scripts/license-header.py --check`
-  - 结果：通过
+  - 备注：当前 WSL worktree 需要显式绑定 `GIT_DIR` / `GIT_WORK_TREE` 后运行，避免脚本内部 plain `git ls-files` 误判仓库上下文
 - `git diff --check`
   - 结果：通过
 - `dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Provider_Interface|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Enumerator|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Does_Not_Emit_Stream_Invoker_Provider_Metadata_When_Runtime_Lacks_Stream_Descriptor_Entry_Type|FullyQualifiedName~CqrsHandlerRegistryGeneratorTests.Emits_Stream_Invoker_Provider_Metadata_When_Runtime_Contract_Is_Available"`
@@ -126,9 +114,9 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 继续处理 `PR #323` 的剩余 review 收尾，优先保持 `ai-plan` active 入口与 trace 的单一锚点一致
-2. 若继续推进“吸收 Mediator 设计哲学”的切片，优先扩展 benchmark 场景矩阵到 registration / service lifetime、notification publish strategy 或更贴近 `Mediator` concrete runtime 的对照
-3. 在进入下一批 runtime / generator 收敛前，保持最小 Release build、targeted test 或 benchmark project build 作为权威验证
+1. 继续处理 `PR #326` 的剩余 review 收尾，优先保持 benchmark 对照语义与 `ai-plan` active 入口一致
+2. 优先定位 `RequestStartupBenchmarks.ColdStart_GFrameworkCqrs` 在清空 dispatcher 缓存后的 request handler 绑定缺口，再决定是调整最小宿主注册方式还是补充专用 benchmark fixture
+3. 若继续推进“吸收 Mediator 设计哲学”的切片，优先扩展 benchmark 场景矩阵到 registration / service lifetime、notification publish strategy 或更贴近 `Mediator` concrete runtime 的对照
 
 ## 活跃文档
 

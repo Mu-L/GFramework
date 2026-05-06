@@ -454,6 +454,7 @@
 
 1. 完成本轮 benchmark 项目 Release build、license header 检查与 diff 校验后，更新 active tracking 的权威验证列表
 2. 若 branch diff 仍明显低于 `30` 文件阈值，可继续评估 notification publish strategy 或更贴近 `Mediator` concrete runtime 的单批对照
+3. 若要继续贴近 `Mediator` 的 comparison benchmark 设计哲学，评估是否把 `Mediator` concrete runtime 本身接入 benchmark 项目，而不是长期只保留 `MediatR`
 
 ### 验证（RP-089）
 
@@ -463,4 +464,5 @@
   - 结果：通过
 - `git diff --check`
   - 结果：通过
-2. 若要继续贴近 `Mediator` 的 comparison benchmark 设计哲学，评估是否把 `Mediator` concrete runtime 本身接入 benchmark 项目，而不是长期只保留 `MediatR`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestStartupBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：部分通过；`MediatR` startup benchmark 已恢复真实测量，`ColdStart_GFrameworkCqrs` 仍因 `No CQRS request handler registered` 失败
