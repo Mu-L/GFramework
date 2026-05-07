@@ -6,11 +6,13 @@ using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Enums;
 using GFramework.Core.Abstractions.Lifecycle;
 using GFramework.Core.Abstractions.Logging;
+using GFramework.Core.Abstractions.Rule;
 using GFramework.Core.Abstractions.Model;
 using GFramework.Core.Abstractions.Systems;
 using GFramework.Core.Abstractions.Utility;
 using GFramework.Core.Architectures;
 using GFramework.Core.Logging;
+using GFramework.Core.Rule;
 
 namespace GFramework.Core.Tests.Architectures;
 
@@ -182,6 +184,80 @@ public class ArchitectureLifecycleBehaviorTests
     }
 
     /// <summary>
+    ///     验证架构销毁后会解除全局 GameContext 绑定。
+    ///     该回归测试用于防止已销毁架构继续充当默认上下文回退入口。
+    /// </summary>
+    [Test]
+    public async Task DestroyAsync_Should_Unbind_Context_From_GameContext()
+    {
+        var architecture = new PhaseTrackingArchitecture();
+
+        await architecture.InitializeAsync();
+
+        Assert.That(GameContext.GetByType(architecture.GetType()), Is.SameAs(architecture.Context));
+
+        await architecture.DestroyAsync();
+
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetByType(architecture.GetType()));
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetFirstArchitectureContext());
+    }
+
+    /// <summary>
+    ///     验证失败初始化后的销毁同样会解除全局上下文绑定。
+    /// </summary>
+    [Test]
+    public async Task DestroyAsync_After_FailedInitialization_Should_Unbind_Context_From_GameContext()
+    {
+        var destroyOrder = new List<string>();
+        var architecture = new FailingInitializationArchitecture(destroyOrder);
+
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(() => architecture.InitializeAsync());
+        Assert.That(exception, Is.Not.Null);
+        Assert.That(GameContext.GetByType(architecture.GetType()), Is.SameAs(architecture.Context));
+
+        await architecture.DestroyAsync();
+
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetByType(architecture.GetType()));
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetFirstArchitectureContext());
+    }
+
+    /// <summary>
+    ///     验证销毁后的新 ContextAware 实例不会再通过全局回退命中过期上下文。
+    /// </summary>
+    [Test]
+    public async Task DestroyAsync_Should_Prevent_New_ContextAware_Fallback_From_Using_Destroyed_Context()
+    {
+        var architecture = new PhaseTrackingArchitecture();
+
+        await architecture.InitializeAsync();
+        await architecture.DestroyAsync();
+
+        IContextAware probe = new LifecycleContextAwareProbe();
+
+        Assert.Throws<InvalidOperationException>(() => probe.GetContext());
+    }
+
+    /// <summary>
+    ///     验证同步兼容销毁入口同样会解除全局 GameContext 绑定。
+    /// </summary>
+    [Test]
+    public async Task Destroy_Should_Unbind_Context_From_GameContext()
+    {
+        var architecture = new PhaseTrackingArchitecture();
+
+        await architecture.InitializeAsync();
+
+        Assert.That(GameContext.GetByType(architecture.GetType()), Is.SameAs(architecture.Context));
+
+#pragma warning disable CS0618
+        architecture.Destroy();
+#pragma warning restore CS0618
+
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetByType(architecture.GetType()));
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetFirstArchitectureContext());
+    }
+
+    /// <summary>
     ///     验证启用 AllowLateRegistration 时，生命周期层会立即初始化后注册的组件，而不是继续沿用初始化期的拒绝策略。
     ///     由于公共架构 API 在 Ready 之后会先触发容器限制，此回归测试直接覆盖生命周期协作者的对齐逻辑。
     /// </summary>
@@ -230,6 +306,13 @@ public class ArchitectureLifecycleBehaviorTests
         {
             _onInitializeAction?.Invoke();
         }
+    }
+
+    /// <summary>
+    ///     仅用于验证销毁后全局上下文回退是否仍然泄漏的最小 ContextAware 探针。
+    /// </summary>
+    private sealed class LifecycleContextAwareProbe : ContextAwareBase
+    {
     }
 
     /// <summary>

@@ -651,7 +651,7 @@ public partial class GameController
 
 - 运行时条件分支控制的注册
 - 反射、配置驱动或外部程序集动态注册
-- 无法唯一判定组件归属架构的多架构场景
+- 需要自定义 provider 或外部切换逻辑才能判定上下文来源的场景
 
 ## 高级场景
 
@@ -685,9 +685,9 @@ public partial class Controller
 }
 ```
 
-### 多架构场景
+### 自定义上下文来源
 
-在多架构场景中，可以通过 `SetContextProvider` 切换架构：
+当默认的当前活动上下文不适用时，可以通过 `SetContextProvider` 显式切换上下文来源：
 
 ```csharp
 [ContextAware]
@@ -698,7 +698,7 @@ public partial class GameController
 
     public static void SetArchitecture(IArchitecture architecture)
     {
-        // 切换架构提供者
+        // 显式切换当前类型使用的上下文来源
         SetContextProvider(new CustomContextProvider(architecture));
     }
 }
