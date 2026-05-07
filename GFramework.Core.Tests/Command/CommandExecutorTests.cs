@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using GFramework.Core.Command;
+using GFramework.Core.Rule;
 using GFramework.Core.Tests.Architectures;
 
 namespace GFramework.Core.Tests.Command;
@@ -74,6 +75,41 @@ public class CommandExecutorTests
     public void Send_WithResult_AndNullCommand_Should_ThrowArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() => _commandExecutor.Send<int>(null!));
+    }
+
+    /// <summary>
+    ///     验证当 legacy 命令没有可用上下文时，会安全回退到本地直接执行路径。
+    /// </summary>
+    [Test]
+    public void Send_Should_Fall_Back_To_Legacy_Execution_When_Context_IsMissing()
+    {
+        var runtime = new RecordingCqrsRuntime();
+        var executor = new CommandExecutor(runtime);
+        var command = new MissingContextLegacyCommand();
+
+        executor.Send(command);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(command.Executed, Is.True);
+            Assert.That(runtime.LastRequest, Is.Null);
+        });
+    }
+
+    /// <summary>
+    ///     验证非“缺上下文”类型的 <see cref="InvalidOperationException" /> 不会被 bridge 回退逻辑误吞掉。
+    /// </summary>
+    [Test]
+    public void Send_Should_Propagate_InvalidOperationException_When_ContextAware_Target_Throws_Unexpected_Error()
+    {
+        var runtime = new RecordingCqrsRuntime();
+        var executor = new CommandExecutor(runtime);
+        var command = new ThrowingLegacyCommand();
+
+        Assert.That(
+            () => executor.Send(command),
+            Throws.InvalidOperationException.With.Message.EqualTo(ThrowingLegacyCommand.ExceptionMessage));
+        Assert.That(runtime.LastRequest, Is.Null);
     }
 
     /// <summary>
@@ -183,5 +219,59 @@ public class CommandExecutorTests
     /// </summary>
     private sealed class TestArchitectureContextBaseStub : TestArchitectureContextBase
     {
+    }
+
+    /// <summary>
+    ///     用于验证缺少上下文时仍会走本地 fallback 的测试命令。
+    /// </summary>
+    private sealed class MissingContextLegacyCommand : GFramework.Core.Abstractions.Rule.IContextAware, GFramework.Core.Abstractions.Command.ICommand
+    {
+        /// <summary>
+        ///     获取命令是否已经执行。
+        /// </summary>
+        public bool Executed { get; private set; }
+
+        /// <inheritdoc />
+        public void SetContext(GFramework.Core.Abstractions.Architectures.IArchitectureContext context)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+        }
+
+        /// <inheritdoc />
+        public GFramework.Core.Abstractions.Architectures.IArchitectureContext GetContext()
+        {
+            throw new InvalidOperationException("Architecture context has not been set. Call SetContext before accessing the context.");
+        }
+
+        /// <inheritdoc />
+        public void Execute()
+        {
+            Executed = true;
+        }
+    }
+
+    /// <summary>
+    ///     用于验证 bridge 上下文解析不会吞掉意外运行时错误的测试命令。
+    /// </summary>
+    private sealed class ThrowingLegacyCommand : GFramework.Core.Abstractions.Rule.IContextAware, GFramework.Core.Abstractions.Command.ICommand
+    {
+        internal const string ExceptionMessage = "Unexpected context failure.";
+
+        /// <inheritdoc />
+        public void SetContext(GFramework.Core.Abstractions.Architectures.IArchitectureContext context)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+        }
+
+        /// <inheritdoc />
+        public GFramework.Core.Abstractions.Architectures.IArchitectureContext GetContext()
+        {
+            throw new InvalidOperationException(ExceptionMessage);
+        }
+
+        /// <inheritdoc />
+        public void Execute()
+        {
+        }
     }
 }

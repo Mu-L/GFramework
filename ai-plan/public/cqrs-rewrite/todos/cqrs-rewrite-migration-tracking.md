@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-097`
+- 恢复点编号：`CQRS-REWRITE-RP-098`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #334`
 - 当前结论：
@@ -32,8 +32,9 @@ CQRS 迁移与收敛。
   - `RP-094` 已按 `PR #334` latest-head review 收口 legacy bridge 的测试注册方式、模块运行时依赖契约、异步取消语义、XML 文档缺口与兼容文档回退边界
   - `RP-095` 已继续收口 `PR #334` 剩余 review：把 legacy 同步 bridge 的阻塞等待统一切到线程池隔离 helper、补齐 `ArchitectureContext` / executor 共享 dispatch helper、修正 bridge fixture 的并行与容器释放约束，并为 runtime bridge 与 async void command cancellation 增补回归测试
   - `RP-096` 已再次使用 `$gframework-pr-review` 复核 `PR #334` latest-head review，确认仍显示为 open 的 AI threads 在本地代码中已无新增仍成立的运行时 / 测试 / 文档缺陷，剩余差异主要是 GitHub thread 未 resolve 的状态滞后
-  - 当前 `RP-097` 已继续收口 `PR #334` latest-head nitpick：为 `AsyncQueryExecutorTests` / `CommandExecutorTests` 补齐可观察的上下文保留断言，并让 `RecordingCqrsRuntime` 在测试替身返回错误响应类型时抛出带请求/类型信息的诊断异常
-- `ai-plan` active 入口现以 `RP-097` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - `RP-097` 已继续收口 `PR #334` latest-head nitpick：为 `AsyncQueryExecutorTests` / `CommandExecutorTests` 补齐可观察的上下文保留断言，并让 `RecordingCqrsRuntime` 在测试替身返回错误响应类型时抛出带请求/类型信息的诊断异常
+  - 当前 `RP-098` 已再次使用 `$gframework-pr-review` 复核 `PR #334` latest-head review，并收口 `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)` 过宽吞掉 `InvalidOperationException` 的真实运行时诊断退化问题；现在仅把“上下文尚未就绪”视为允许 fallback 的信号，并为 fallback / 异常冒泡分别补齐回归测试
+- `ai-plan` active 入口现以 `RP-098` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
@@ -55,13 +56,15 @@ CQRS 迁移与收敛。
 - 相对 `ai-libs/Mediator`，当前仍未完全吸收的能力集中在六类：facade 公开入口、telemetry、stream pipeline、notification publisher 策略、生成器配置与诊断、生命周期/缓存公开配置面
 - 发布工作流已有 packed modules 校验，但 PR 工作流此前没有等价的 solution pack 产物名单校验
 - 本地 `dotnet pack GFramework.sln -c Release --no-restore -o <temp-dir>` 当前只产出 14 个预期包，未复现 benchmark `.nupkg`
-- `PR #334` 在 `2026-05-07` 的 latest-head review 仍显示 `CodeRabbit 10` / `Greptile 3` 个 open thread，但本地逐项复核后未发现新的仍成立代码或文档缺陷；当前差异主要来自已实质修复但尚未 resolve 的 thread 状态
+- `PR #334` 在 `2026-05-07` 的 latest-head review 当前显示 `CodeRabbit 10` / `Greptile 5` 个 open thread；本轮再次复核后确认其中大部分仍是已实质修复但未 resolve 的 stale thread，仅 `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)` 的异常边界仍需要继续收口
 - benchmark 场景现统一通过 `BenchmarkHostFactory` 构建最小宿主：GFramework 侧在 runtime 分发前显式 `Freeze()` 容器，MediatR 侧只扫描当前场景需要的 handler / behavior 类型
 - `RequestStartupBenchmarks` 已恢复 `ColdStart_GFrameworkCqrs` 结果产出，不再命中 `No CQRS request handler registered`
 - `BenchmarkDotNet` 在当前 agent 沙箱里会因自动生成的 bootstrap 脚本异常失败；同一 `dotnet run --no-build` 命令在沙箱外执行通过，因此本轮以沙箱外结果作为 benchmark 权威验证
 - 已新增手动触发的 benchmark workflow；默认只验证 benchmark 项目 Release build，只有显式提供过滤器时才执行 BenchmarkDotNet 运行；过滤器输入现通过环境变量传入 shell，避免 workflow_dispatch 输入直接插值到命令行
 - 远端 `CTRF` 最新汇总为 `2311/2311` passed（run `#1079`, 2026-05-07）
 - `MegaLinter` 当前只暴露 `dotnet-format` 的 `Restore operation failed` 环境噪音，尚未提供本地仍成立的文件级格式诊断
+- `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)` 现在只会把“Context 尚未设置”或“当前没有活动上下文”识别为可安全 fallback 的缺上下文信号；其他 `InvalidOperationException` 将继续向上传播，避免把真实运行时故障误判成 legacy 直执行场景
+- `CommandExecutorTests` 已新增“缺上下文继续 fallback”和“意外 `InvalidOperationException` 必须冒泡”的回归，防止后续再次放宽该异常过滤面
 - `PR #334` 当前 latest-head open AI feedback 经过本轮本地复核与修复后，应主要剩余待 GitHub 重新索引的状态差异或已实质关闭但未 resolve 的 thread
 - `GFramework.Core.Tests` 中 legacy bridge 的“保留上下文”回归现在同时断言 bridge request 类型与目标对象执行期观察到的 `IArchitectureContext`
 - `RecordingCqrsRuntime` 对非 `Unit` 响应已显式校验返回值类型；若测试工厂返回了 `null` 或错误装箱类型，异常会直接指出 request 类型与期望/实际响应类型
@@ -104,6 +107,19 @@ CQRS 迁移与收敛。
   - 结果：通过，`0 warning / 0 error`
 - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~CommandExecutorTests|FullyQualifiedName~AsyncQueryExecutorTests"`
   - 结果：通过，`19/19` passed
+- `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过
+  - 备注：确认当前分支对应 `PR #334`；最新 review 仍为 `CodeRabbit APPROVED (2026-05-07T12:20:24Z)`，latest-head 显示 `CodeRabbit 10` / `Greptile 5` open thread；本轮接受并修复的仍成立问题收敛到 `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)` 的过宽异常吞掉逻辑
+- `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CommandExecutorTests|FullyQualifiedName~QueryExecutorTests"`
+  - 结果：通过，`25/25` passed
+- `python3 scripts/license-header.py --check`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
 - `python3 scripts/license-header.py --check`
   - 结果：通过
 - `git diff --check`
@@ -159,7 +175,7 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 在 GitHub 上 resolve / reply 已被当前分支实质吸收的 `PR #334` stale review threads，或等待下一次 head 更新后再次用 `$gframework-pr-review` 复核状态是否自动收敛
+1. 在 GitHub 上 resolve / reply 已被当前分支实质吸收的 `PR #334` stale review threads，尤其是仍停留在旧 head 上的 CodeRabbit / Greptile open thread；若 head 更新后线程数量继续变化，再用 `$gframework-pr-review` 复核
 2. 若继续沿用 `$gframework-batch-boot 50` 且优先处理 `Mediator` 能力吸收，下一批建议从 `stream pipeline` 或 `notification publisher` 策略中选择一个独立切片推进
 3. 若继续收敛 legacy Core CQRS，可评估是否补一个 `IMediator` 风格 facade，而不是继续扩大 `ArchitectureContext` 兼容入口的职责
 

@@ -2,6 +2,34 @@
 
 ## 2026-05-07
 
+### 阶段：PR #334 latest-head helper 异常边界收口（CQRS-REWRITE-RP-098）
+
+- 再次使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 对应的 `PR #334` latest-head review，并重新核对 `/tmp/current-pr-review.json` 中最新 open thread：
+  - 当前公开 PR 仍为 `PR #334`
+  - `CodeRabbit` 最新 review 在 `2026-05-07T12:20:24Z` 为 `APPROVED`
+  - latest-head 当前显示 `CodeRabbit 10` / `Greptile 5` 个 open thread
+- 本轮逐条回到本地代码后，确认大多数 open thread 仍是 stale 状态；唯一继续成立的问题集中在 `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)`：
+  - 该 helper 之前会把 `IContextAware.GetContext()` 抛出的任意 `InvalidOperationException` 都吞掉并回退到 legacy 直执行
+  - 这会把真实运行时故障误判为“上下文未就绪”，导致 bridge 路径悄悄绕过统一 runtime，退化为难以诊断的行为差异
+- 本轮主线程决策：
+  - 将异常过滤收窄为只接受两类缺上下文信号：`Architecture context has not been set...` 与 `No active architecture context is currently bound.`
+  - 其他 `InvalidOperationException` 一律继续向上传播，避免掩盖容器、生命周期或自定义 `GetContext()` 内的真实错误
+  - 在 `CommandExecutorTests` 中新增两条回归：一条验证缺上下文时仍会 fallback 到 legacy 直执行；一条验证意外 `InvalidOperationException` 不会被 bridge 逻辑静默吞掉
+  - 同步刷新 `cqrs-rewrite` active tracking，把本轮修复记录为新的恢复锚点 `RP-098`
+- 本轮权威验证：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+    - 结果：通过
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CommandExecutorTests|FullyQualifiedName~QueryExecutorTests"`
+    - 结果：通过，`25/25` passed
+  - `python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+
 ### 阶段：PR #334 nitpick 测试收尾（CQRS-REWRITE-RP-097）
 
 - 继续处理 `PR #334` latest-head review 中仍值得本地吸收的轻量 nitpick，范围限定在 legacy bridge 测试可观察性与测试替身诊断质量：

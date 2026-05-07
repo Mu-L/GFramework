@@ -48,10 +48,32 @@ internal static class LegacyCqrsDispatchHelper
             context = contextAware.GetContext();
             return true;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException exception) when (IsMissingContextException(exception))
         {
             return false;
         }
+    }
+
+    /// <summary>
+    ///     判断当前 <see cref="InvalidOperationException" /> 是否表示 legacy 目标尚未具备可桥接的架构上下文。
+    /// </summary>
+    /// <param name="exception">由 <see cref="IContextAware.GetContext" /> 抛出的异常。</param>
+    /// <returns>
+    ///     仅当异常明确表示“上下文尚未设置”或“当前没有活动上下文”时返回 <see langword="true" />；
+    ///     其他运行时错误必须继续向上传播，避免把真实故障误判为可安全回退。
+    /// </returns>
+    private static bool IsMissingContextException(InvalidOperationException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        return string.Equals(
+                   exception.Message,
+                   "Architecture context has not been set. Call SetContext before accessing the context.",
+                   StringComparison.Ordinal)
+               || string.Equals(
+                   exception.Message,
+                   "No active architecture context is currently bound.",
+                   StringComparison.Ordinal);
     }
 
     /// <summary>
