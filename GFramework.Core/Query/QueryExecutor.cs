@@ -1,9 +1,7 @@
 ﻿// Copyright (c) 2025-2026 GeWuYou
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Diagnostics.CodeAnalysis;
 using GFramework.Core.Abstractions.Query;
-using GFramework.Core.Abstractions.Rule;
 using GFramework.Core.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
 
@@ -31,53 +29,30 @@ public sealed class QueryExecutor(ICqrsRuntime? runtime = null) : IQueryExecutor
     /// </summary>
     /// <typeparam name="TResult">查询结果的类型。</typeparam>
     /// <param name="query">要执行的查询对象，必须实现 IQuery&lt;TResult&gt; 接口。</param>
-    /// <returns>查询执行的结果，类型为 TResult。</returns>
+    /// <returns>查询执行成功后还原出的 <typeparamref name="TResult" /> 结果。</returns>
+    /// <exception cref="NullReferenceException">
+    ///     统一 CQRS runtime 返回 <see langword="null" />，但 <typeparamref name="TResult" /> 为值类型。
+    /// </exception>
+    /// <exception cref="InvalidCastException">
+    ///     统一 CQRS runtime 返回的装箱结果无法转换为 <typeparamref name="TResult" />。
+    /// </exception>
     public TResult Send<TResult>(IQuery<TResult> query)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        if (TryResolveDispatchContext(query, out var context))
+        var cqrsRuntime = _runtime;
+
+        if (LegacyCqrsDispatchHelper.TryResolveDispatchContext(cqrsRuntime, query, out var context))
         {
-            var boxedResult = _runtime.SendAsync(
-                    context,
-                    new LegacyQueryDispatchRequest(
-                        query,
-                        () => query.Do()))
-                .AsTask()
-                .GetAwaiter()
-                .GetResult();
+            var boxedResult = LegacyCqrsDispatchHelper.SendSynchronously(
+                cqrsRuntime,
+                context,
+                new LegacyQueryDispatchRequest(
+                    query,
+                    () => query.Do()));
             return (TResult)boxedResult!;
         }
 
         return query.Do();
-    }
-
-    /// <summary>
-    ///     解析当前 legacy 查询应该绑定到哪个架构上下文。
-    /// </summary>
-    /// <param name="query">即将执行的 legacy 查询对象。</param>
-    /// <param name="context">命中时返回可用于 CQRS runtime 的架构上下文。</param>
-    /// <returns>如果既接入了 runtime 且查询对象提供了上下文，则返回 <see langword="true" />。</returns>
-    [MemberNotNullWhen(true, nameof(_runtime))]
-    private bool TryResolveDispatchContext(
-        object query,
-        out GFramework.Core.Abstractions.Architectures.IArchitectureContext context)
-    {
-        context = null!;
-
-        if (_runtime is null || query is not IContextAware contextAware)
-        {
-            return false;
-        }
-
-        try
-        {
-            context = contextAware.GetContext();
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
     }
 }

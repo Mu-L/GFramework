@@ -2,6 +2,28 @@
 
 ## 2026-05-07
 
+### 阶段：PR #334 legacy bridge sync follow-up（CQRS-REWRITE-RP-095）
+
+- 再次使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 对应的 `PR #334` latest-head review，并只保留本地复核后仍成立的问题：
+  - `QueryExecutor` / `CommandExecutor` 新增的同步 bridge 仍直接阻塞 `ICqrsRuntime.SendAsync(...)`，在调用方存在 `SynchronizationContext` 时容易放大 sync-over-async 死锁面
+  - `QueryExecutor` / `CommandExecutor` / `AsyncQueryExecutor` 各自保留一份相同的 dispatch-context 解析逻辑，仍有漂移风险
+  - `ArchitectureContextTests` 的 bridge fixture 依然共享静态 tracker 且未显式声明非并行；冻结容器所有权也未交还给调用方释放
+  - `LegacyAsyncCommandDispatchRequestHandler` 仍未沿用另两个 async bridge handler 的取消可见性模式
+- 本轮主线程决策：
+  - 新增 `GFramework.Core/Cqrs/LegacyCqrsDispatchHelper.cs`，统一收口 legacy bridge 的 dispatch-context 解析，以及同步 bridge 对 `ICqrsRuntime.SendAsync(...)` 的线程池隔离等待
+  - 将 `QueryExecutor`、`CommandExecutor`、`AsyncQueryExecutor` 的重复 helper 改为复用共享 helper，并把 `ArchitectureContext` 的同步 CQRS 包装入口一并切换到同一阻塞策略，避免留下半修状态
+  - 为 `ICqrsRuntime.SendAsync(...)` 补充 `<remarks>`，显式说明 legacy 同步入口会在后台线程上等待该异步契约，处理链路不应依赖调用方 `SynchronizationContext`
+  - 把 `ArchitectureContextTests`、`ArchitectureModulesBehaviorTests` 标记为 `NonParallelizable`，并让 `CreateFrozenBridgeContext(...)` 把冻结容器通过 `out` 参数返还给每个测试在 `finally` 中释放
+  - 为 `LegacyAsyncCommandDispatchRequestHandler` 增补 `ThrowIfCancellationRequested()` + `WaitAsync(cancellationToken)`，与另外两个 async bridge handler 保持一致
+  - 新增回归测试覆盖同步 bridge 的 `SynchronizationContext` 隔离、legacy async command handler 的取消语义，以及 async/sync bridge request 的 request-type 命中
+- 本轮权威验证：
+  - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureContextTests|FullyQualifiedName~ArchitectureModulesBehaviorTests|FullyQualifiedName~CommandExecutorTests|FullyQualifiedName~QueryExecutorTests|FullyQualifiedName~AsyncQueryExecutorTests|FullyQualifiedName~LegacyAsyncCommandDispatchRequestHandlerTests"`
+    - 结果：通过，`54/54` passed
+
 ### 阶段：PR #334 legacy bridge / 文档 review 收尾（CQRS-REWRITE-RP-094）
 
 - 使用 `$gframework-pr-review` 抓取当前分支公开 PR，确认 `feat/cqrs-optimization` 当前对应 `PR #334`

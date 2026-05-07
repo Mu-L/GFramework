@@ -43,6 +43,7 @@ namespace GFramework.Core.Tests.Architectures;
 ///     - GetUtility方法 - 获取未注册工具时抛出异常
 ///     - GetEnvironment方法 - 获取环境对象
 /// </summary>
+[NonParallelizable]
 [TestFixture]
 public class ArchitectureContextTests
 {
@@ -150,13 +151,20 @@ public class ArchitectureContextTests
     {
         LegacyBridgePipelineTracker.Reset();
         var testQuery = new LegacyArchitectureBridgeQuery();
-        var bridgeContext = CreateFrozenBridgeContext();
+        var bridgeContext = CreateFrozenBridgeContext(out var bridgeContainer);
 
-        var result = bridgeContext.SendQuery(testQuery);
+        try
+        {
+            var result = bridgeContext.SendQuery(testQuery);
 
-        Assert.That(result, Is.EqualTo(24));
-        Assert.That(testQuery.ObservedContext, Is.SameAs(bridgeContext));
-        Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+            Assert.That(result, Is.EqualTo(24));
+            Assert.That(testQuery.ObservedContext, Is.SameAs(bridgeContext));
+            Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            bridgeContainer.Dispose();
+        }
     }
 
     /// <summary>
@@ -190,13 +198,20 @@ public class ArchitectureContextTests
     {
         LegacyBridgePipelineTracker.Reset();
         var testCommand = new LegacyArchitectureBridgeCommand();
-        var bridgeContext = CreateFrozenBridgeContext();
+        var bridgeContext = CreateFrozenBridgeContext(out var bridgeContainer);
 
-        bridgeContext.SendCommand(testCommand);
+        try
+        {
+            bridgeContext.SendCommand(testCommand);
 
-        Assert.That(testCommand.Executed, Is.True);
-        Assert.That(testCommand.ObservedContext, Is.SameAs(bridgeContext));
-        Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+            Assert.That(testCommand.Executed, Is.True);
+            Assert.That(testCommand.ObservedContext, Is.SameAs(bridgeContext));
+            Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            bridgeContainer.Dispose();
+        }
     }
 
     /// <summary>
@@ -230,13 +245,20 @@ public class ArchitectureContextTests
     {
         LegacyBridgePipelineTracker.Reset();
         var testCommand = new LegacyArchitectureBridgeCommandWithResult();
-        var bridgeContext = CreateFrozenBridgeContext();
+        var bridgeContext = CreateFrozenBridgeContext(out var bridgeContainer);
 
-        var result = bridgeContext.SendCommand(testCommand);
+        try
+        {
+            var result = bridgeContext.SendCommand(testCommand);
 
-        Assert.That(result, Is.EqualTo(42));
-        Assert.That(testCommand.ObservedContext, Is.SameAs(bridgeContext));
-        Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+            Assert.That(result, Is.EqualTo(42));
+            Assert.That(testCommand.ObservedContext, Is.SameAs(bridgeContext));
+            Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            bridgeContainer.Dispose();
+        }
     }
 
     /// <summary>
@@ -247,22 +269,30 @@ public class ArchitectureContextTests
     {
         LegacyBridgePipelineTracker.Reset();
         var testQuery = new LegacyArchitectureBridgeAsyncQuery();
-        var bridgeContext = CreateFrozenBridgeContext();
+        var bridgeContext = CreateFrozenBridgeContext(out var bridgeContainer);
 
-        var result = await bridgeContext.SendQueryAsync(testQuery).ConfigureAwait(false);
+        try
+        {
+            var result = await bridgeContext.SendQueryAsync(testQuery).ConfigureAwait(false);
 
-        Assert.That(result, Is.EqualTo(64));
-        Assert.That(testQuery.ObservedContext, Is.SameAs(bridgeContext));
-        Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+            Assert.That(result, Is.EqualTo(64));
+            Assert.That(testQuery.ObservedContext, Is.SameAs(bridgeContext));
+            Assert.That(LegacyBridgePipelineTracker.InvocationCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            bridgeContainer.Dispose();
+        }
     }
 
     /// <summary>
     ///     为需要验证统一 CQRS pipeline 的用例创建一个已冻结的最小 bridge 上下文。
     /// </summary>
+    /// <param name="container">返回承载当前 bridge 上下文的冻结容器，供测试在 finally 中显式释放。</param>
     /// <returns>能够执行 legacy bridge request 且会 materialize open-generic pipeline behavior 的上下文。</returns>
-    private static ArchitectureContext CreateFrozenBridgeContext()
+    private static ArchitectureContext CreateFrozenBridgeContext(out MicrosoftDiContainer container)
     {
-        var container = new MicrosoftDiContainer();
+        container = new MicrosoftDiContainer();
         RegisterLegacyBridgeHandlers(container);
         new CqrsRuntimeModule().Register(container);
         container.ExecuteServicesHook(services =>

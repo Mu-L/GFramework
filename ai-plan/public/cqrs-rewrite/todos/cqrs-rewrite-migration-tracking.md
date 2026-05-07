@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-094`
+- 恢复点编号：`CQRS-REWRITE-RP-095`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #334`
 - 当前结论：
@@ -29,8 +29,9 @@ CQRS 迁移与收敛。
   - 当前 `RP-091` 已把 benchmark 项目发布面隔离与包清单校验前移到 PR：`GFramework.Cqrs.Benchmarks` 明确保持不可打包，`publish.yml` 与 `ci.yml` 复用同一份 packed-modules 校验脚本
   - `RP-092` 已补齐 request handler `Singleton / Transient` 生命周期矩阵 benchmark，并明确把 `Scoped` 对照留到具备真实显式作用域边界的宿主模型后再评估
   - `RP-093` 已把 `GFramework.Core` 的 legacy `SendCommand` / `SendQuery` 兼容入口收敛到底层统一 `GFramework.Cqrs` runtime，同时补充 `Mediator` 未吸收能力差距复核
-  - 当前 `RP-094` 已按 `PR #334` latest-head review 收口 legacy bridge 的测试注册方式、模块运行时依赖契约、异步取消语义、XML 文档缺口与兼容文档回退边界
-- `ai-plan` active 入口现以 `RP-094` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - `RP-094` 已按 `PR #334` latest-head review 收口 legacy bridge 的测试注册方式、模块运行时依赖契约、异步取消语义、XML 文档缺口与兼容文档回退边界
+  - 当前 `RP-095` 已继续收口 `PR #334` 剩余 review：把 legacy 同步 bridge 的阻塞等待统一切到线程池隔离 helper、补齐 `ArchitectureContext` / executor 共享 dispatch helper、修正 bridge fixture 的并行与容器释放约束，并为 runtime bridge 与 async void command cancellation 增补回归测试
+- `ai-plan` active 入口现以 `RP-095` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
@@ -42,9 +43,13 @@ CQRS 迁移与收敛。
 - `GFramework.Core` 当前已通过内部 bridge request / handler 把 legacy `ICommand`、`IAsyncCommand`、`IQuery`、`IAsyncQuery` 接到统一 `ICqrsRuntime`
 - 标准 `Architecture` 初始化路径会自动扫描 `GFramework.Core` 程序集中的 legacy bridge handler，因此旧 `SendCommand(...)` / `SendQuery(...)` 无需改变用法即可进入统一 pipeline
 - `CommandExecutor`、`QueryExecutor`、`AsyncQueryExecutor` 仍保留“无 runtime 时直接执行”的回退路径，用于不依赖容器的隔离单元测试
+- `LegacyCqrsDispatchHelper` 现统一负责 runtime dispatch context 解析，以及 legacy 同步 bridge 对 `ICqrsRuntime.SendAsync(...)` 的线程池隔离等待
+- `ArchitectureContext`、`CommandExecutor`、`QueryExecutor` 的同步 CQRS/legacy bridge 入口不再直接在调用线程上阻塞 `SendAsync(...).GetAwaiter().GetResult()`
 - `GFramework.Core.Tests` 现通过 `InternalsVisibleTo("GFramework.Core.Tests")` 直接实例化内部 bridge handler，不再依赖字符串反射装配测试桥接注册
+- 使用 `LegacyBridgePipelineTracker` 的 `ArchitectureContextTests` 与 `ArchitectureModulesBehaviorTests` 现都显式标记为 `NonParallelizable`
+- `ArchitectureContextTests.CreateFrozenBridgeContext(...)` 现把冻结容器所有权显式交回调用方，并在每个 bridge 用例的 `finally` 中释放
 - `CommandExecutorModule`、`QueryExecutorModule`、`AsyncQueryExecutorModule` 现改为 `GetRequired<ICqrsRuntime>()` 并在 XML 文档里显式声明注册顺序契约，避免 runtime 缺失时静默回退
-- `LegacyAsyncQueryDispatchRequestHandler` 与 `LegacyAsyncCommandResultDispatchRequestHandler` 现通过 `ThrowIfCancellationRequested()` + `WaitAsync(cancellationToken)` 显式保留调用方取消可见性
+- `LegacyAsyncQueryDispatchRequestHandler`、`LegacyAsyncCommandResultDispatchRequestHandler`、`LegacyAsyncCommandDispatchRequestHandler` 现都通过 `ThrowIfCancellationRequested()` + `WaitAsync(cancellationToken)` 显式保留调用方取消可见性
 - 相对 `ai-libs/Mediator`，当前仍未完全吸收的能力集中在六类：facade 公开入口、telemetry、stream pipeline、notification publisher 策略、生成器配置与诊断、生命周期/缓存公开配置面
 - 发布工作流已有 packed modules 校验，但 PR 工作流此前没有等价的 solution pack 产物名单校验
 - 本地 `dotnet pack GFramework.sln -c Release --no-restore -o <temp-dir>` 当前只产出 14 个预期包，未复现 benchmark `.nupkg`
@@ -55,7 +60,7 @@ CQRS 迁移与收敛。
 - 已新增手动触发的 benchmark workflow；默认只验证 benchmark 项目 Release build，只有显式提供过滤器时才执行 BenchmarkDotNet 运行；过滤器输入现通过环境变量传入 shell，避免 workflow_dispatch 输入直接插值到命令行
 - 远端 `CTRF` 最新汇总为 `2274/2274` passed
 - `MegaLinter` 当前只暴露 `dotnet-format` 的 `Restore operation failed` 环境噪音，尚未提供本地仍成立的文件级格式诊断
-- `PR #334` 当前 latest-head open AI feedback 已集中到 legacy bridge / 文档收尾；本轮本地修复后，剩余 thread 应主要是待 GitHub 重新索引的状态差异或低价值建议
+- `PR #334` 当前 latest-head open AI feedback 经过本轮本地复核与修复后，应主要剩余待 GitHub 重新索引的状态差异或已实质关闭但未 resolve 的 thread
 
 ## 当前风险
 
@@ -126,6 +131,13 @@ CQRS 迁移与收敛。
 - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
   - 结果：通过
 - `git diff --check`
+  - 结果：通过
+- `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureContextTests|FullyQualifiedName~ArchitectureModulesBehaviorTests|FullyQualifiedName~CommandExecutorTests|FullyQualifiedName~QueryExecutorTests|FullyQualifiedName~AsyncQueryExecutorTests|FullyQualifiedName~LegacyAsyncCommandDispatchRequestHandlerTests"`
+  - 结果：通过，`54/54` passed
+  - 备注：覆盖 legacy 同步 bridge 的同步上下文隔离、bridge fixture 容器释放，以及 async void command cancellation 可见性
+- `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
   - 结果：通过
 
 ## 下一推荐步骤

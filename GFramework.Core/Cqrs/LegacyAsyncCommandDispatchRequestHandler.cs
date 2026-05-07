@@ -17,8 +17,10 @@ internal sealed class LegacyAsyncCommandDispatchRequestHandler
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        // Legacy ExecuteAsync contract does not accept CancellationToken; use WaitAsync so the caller can still observe cancellation promptly.
+        cancellationToken.ThrowIfCancellationRequested();
         PrepareTarget(request.Command);
-        await request.Command.ExecuteAsync().ConfigureAwait(false);
+        await request.Command.ExecuteAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
         return Unit.Value;
     }
 }

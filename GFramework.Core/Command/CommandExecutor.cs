@@ -1,9 +1,7 @@
 // Copyright (c) 2025-2026 GeWuYou
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Diagnostics.CodeAnalysis;
 using GFramework.Core.Abstractions.Command;
-using GFramework.Core.Abstractions.Rule;
 using GFramework.Core.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using IAsyncCommand = GFramework.Core.Abstractions.Command.IAsyncCommand;
@@ -78,9 +76,11 @@ public sealed class CommandExecutor(ICqrsRuntime? runtime = null) : ICommandExec
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (TryResolveDispatchContext(command, out var context))
+        var cqrsRuntime = _runtime;
+
+        if (LegacyCqrsDispatchHelper.TryResolveDispatchContext(cqrsRuntime, command, out var context))
         {
-            return _runtime.SendAsync(context, new LegacyAsyncCommandDispatchRequest(command)).AsTask();
+            return cqrsRuntime.SendAsync(context, new LegacyAsyncCommandDispatchRequest(command)).AsTask();
         }
 
         return command.ExecuteAsync();
@@ -97,9 +97,11 @@ public sealed class CommandExecutor(ICqrsRuntime? runtime = null) : ICommandExec
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (TryResolveDispatchContext(command, out var context))
+        var cqrsRuntime = _runtime;
+
+        if (LegacyCqrsDispatchHelper.TryResolveDispatchContext(cqrsRuntime, command, out var context))
         {
-            return BridgeAsyncCommandWithResultAsync(_runtime, context, command);
+            return BridgeAsyncCommandWithResultAsync(cqrsRuntime, context, command);
         }
 
         return command.ExecuteAsync();
@@ -119,12 +121,14 @@ public sealed class CommandExecutor(ICqrsRuntime? runtime = null) : ICommandExec
         where TTarget : class
         where TRequest : IRequest<Unit>
     {
-        if (!TryResolveDispatchContext(target, out var context))
+        var cqrsRuntime = _runtime;
+
+        if (!LegacyCqrsDispatchHelper.TryResolveDispatchContext(cqrsRuntime, target, out var context))
         {
             return false;
         }
 
-        _runtime.SendAsync(context, requestFactory(target)).AsTask().GetAwaiter().GetResult();
+        LegacyCqrsDispatchHelper.SendSynchronously(cqrsRuntime, context, requestFactory(target));
         return true;
     }
 
@@ -145,13 +149,15 @@ public sealed class CommandExecutor(ICqrsRuntime? runtime = null) : ICommandExec
         where TTarget : class
         where TRequest : IRequest<object?>
     {
-        if (!TryResolveDispatchContext(target, out var context))
+        var cqrsRuntime = _runtime;
+
+        if (!LegacyCqrsDispatchHelper.TryResolveDispatchContext(cqrsRuntime, target, out var context))
         {
             result = default;
             return false;
         }
 
-        var boxedResult = _runtime.SendAsync(context, requestFactory(target)).AsTask().GetAwaiter().GetResult();
+        var boxedResult = LegacyCqrsDispatchHelper.SendSynchronously(cqrsRuntime, context, requestFactory(target));
         result = (TResult)boxedResult!;
         return true;
     }
@@ -176,34 +182,5 @@ public sealed class CommandExecutor(ICqrsRuntime? runtime = null) : ICommandExec
                     async () => await command.ExecuteAsync().ConfigureAwait(false)))
             .ConfigureAwait(false);
         return (TResult)boxedResult!;
-    }
-
-    /// <summary>
-    ///     解析当前 legacy 目标对象应该绑定到哪个架构上下文。
-    /// </summary>
-    /// <param name="target">即将执行的 legacy 目标对象。</param>
-    /// <param name="context">命中时返回可用于 CQRS runtime 的架构上下文。</param>
-    /// <returns>如果既接入了 runtime 且目标对象提供了上下文，则返回 <see langword="true" />。</returns>
-    [MemberNotNullWhen(true, nameof(_runtime))]
-    private bool TryResolveDispatchContext(
-        object target,
-        out GFramework.Core.Abstractions.Architectures.IArchitectureContext context)
-    {
-        context = null!;
-
-        if (_runtime is null || target is not IContextAware contextAware)
-        {
-            return false;
-        }
-
-        try
-        {
-            context = contextAware.GetContext();
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
     }
 }

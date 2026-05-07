@@ -112,7 +112,8 @@ public class ArchitectureContext : IArchitectureContext
     /// <returns>响应结果</returns>
     public TResponse SendRequest<TResponse>(IRequest<TResponse> request)
     {
-        return SendRequestAsync(request).AsTask().GetAwaiter().GetResult();
+        ArgumentNullException.ThrowIfNull(request);
+        return LegacyCqrsDispatchHelper.SendSynchronously(CqrsRuntime, this, request);
     }
 
     /// <summary>
@@ -197,7 +198,8 @@ public class ArchitectureContext : IArchitectureContext
     /// <returns>查询结果</returns>
     public TResponse SendQuery<TResponse>(global::GFramework.Cqrs.Abstractions.Cqrs.Query.IQuery<TResponse> query)
     {
-        return SendQueryAsync(query).AsTask().GetAwaiter().GetResult();
+        ArgumentNullException.ThrowIfNull(query);
+        return LegacyCqrsDispatchHelper.SendSynchronously(CqrsRuntime, this, query);
     }
 
     /// <summary>
@@ -403,7 +405,8 @@ public class ArchitectureContext : IArchitectureContext
     /// <returns>命令执行结果</returns>
     public TResponse SendCommand<TResponse>(global::GFramework.Cqrs.Abstractions.Cqrs.Command.ICommand<TResponse> command)
     {
-        return SendCommandAsync(command).AsTask().GetAwaiter().GetResult();
+        ArgumentNullException.ThrowIfNull(command);
+        return LegacyCqrsDispatchHelper.SendSynchronously(CqrsRuntime, this, command);
     }
 
     /// <summary>

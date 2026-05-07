@@ -15,6 +15,7 @@ namespace GFramework.Core.Tests.Architectures;
 ///     验证 Architecture 通过 <c>ArchitectureModules</c> 暴露出的模块安装与 CQRS 行为注册能力。
 ///     这些测试覆盖模块安装回调和请求管道行为接入，确保模块管理器仍然保持可观察行为不变。
 /// </summary>
+[NonParallelizable]
 [TestFixture]
 public class ArchitectureModulesBehaviorTests
 {

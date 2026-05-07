@@ -1,9 +1,7 @@
 ﻿// Copyright (c) 2025-2026 GeWuYou
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Diagnostics.CodeAnalysis;
 using GFramework.Core.Abstractions.Query;
-using GFramework.Core.Abstractions.Rule;
 using GFramework.Core.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
 
@@ -31,9 +29,11 @@ public sealed class AsyncQueryExecutor(ICqrsRuntime? runtime = null) : IAsyncQue
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        if (TryResolveDispatchContext(query, out var context))
+        var cqrsRuntime = _runtime;
+
+        if (LegacyCqrsDispatchHelper.TryResolveDispatchContext(cqrsRuntime, query, out var context))
         {
-            return BridgeAsyncQueryAsync(_runtime, context, query);
+            return BridgeAsyncQueryAsync(cqrsRuntime, context, query);
         }
 
         return query.DoAsync();
@@ -61,32 +61,4 @@ public sealed class AsyncQueryExecutor(ICqrsRuntime? runtime = null) : IAsyncQue
         return (TResult)boxedResult!;
     }
 
-    /// <summary>
-    ///     解析当前 legacy 查询应该绑定到哪个架构上下文。
-    /// </summary>
-    /// <param name="query">即将执行的 legacy 查询对象。</param>
-    /// <param name="context">命中时返回可用于 CQRS runtime 的架构上下文。</param>
-    /// <returns>如果既接入了 runtime 且查询对象提供了上下文，则返回 <see langword="true" />。</returns>
-    [MemberNotNullWhen(true, nameof(_runtime))]
-    private bool TryResolveDispatchContext(
-        object query,
-        out GFramework.Core.Abstractions.Architectures.IArchitectureContext context)
-    {
-        context = null!;
-
-        if (_runtime is null || query is not IContextAware contextAware)
-        {
-            return false;
-        }
-
-        try
-        {
-            context = contextAware.GetContext();
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
-    }
 }
