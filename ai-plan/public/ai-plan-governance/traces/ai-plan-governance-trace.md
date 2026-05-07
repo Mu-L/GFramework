@@ -117,3 +117,17 @@
 
 1. 后续若再遇到“单文件同时承担 tracking / trace”的更早期计划，继续按同一模式迁入 topic archive，并显式标注来源边界
 2. 保持新 topic 的 active 入口精简，避免把拆分后的公共目录重新写回旧式混合日志
+
+### 阶段：完成主题归档校正（RP-005）
+
+- 复核 `ai-plan/public/README.md` 与当前 worktree 后确认：`single-context-priority` 虽已完成并合入 `origin/main`，但仍残留在 active topics 与 branch map，导致 boot 会把已完成主题误判为活跃入口
+- 按治理规则将 `ai-plan/public/single-context-priority/` 整体迁入 `ai-plan/public/archive/single-context-priority/`
+- 同步从 `ai-plan/public/README.md` 中移除该主题的 active topics 条目与 `refactor/single-context-priority` 分支映射，确保公共索引只保留仍应默认进入的 topic
+- 本轮额外验证目标：
+  - `find ai-plan/public/archive/single-context-priority -maxdepth 3 -type f | sort`
+  - `dotnet build GFramework.Core.Abstractions/GFramework.Core.Abstractions.csproj -c Release`
+
+### 下一步 — 完成主题归档
+
+1. 后续只要发现某个 topic 已整体完成且默认 boot 不应再落入，就在同一变更里同时完成主题归档与 public index 清理
+2. 继续把 `ai-plan/public/README.md` 视为严格的 active-only 索引，而不是“做过的 topic 列表”

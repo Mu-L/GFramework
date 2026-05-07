@@ -32,6 +32,9 @@
 
 ## 已完成
 
+- 已将已完成的 `single-context-priority` 主题整体迁入：
+  - `ai-plan/public/archive/single-context-priority/`
+  - 并同步从 `ai-plan/public/README.md` 的 active topics 与 branch map 中移除
 - 已为活跃主题建立并使用主题内归档目录：
   - `ai-plan/public/ai-plan-governance/archive/todos/`
   - `ai-plan/public/ai-plan-governance/archive/traces/`
@@ -89,6 +92,9 @@
 - `find ai-plan/public/data-repository-persistence -maxdepth 3 -type f | sort`
   - 结果：通过
   - 备注：只有单文件且混合承担 todo / trace 的 legacy `local-plan` 也已按治理规则拆分为 active 入口与主题内 archive
+- `find ai-plan/public/archive/single-context-priority -maxdepth 3 -type f | sort`
+  - 结果：通过
+  - 备注：确认已完成 topic 已整体迁入主题级 archive，且 active boot 入口不再引用它
 - `test ! -e local-plan`
   - 结果：通过
   - 备注：当前工作树根目录已不再保留 legacy `local-plan/`
@@ -105,4 +111,4 @@
 
 1. 继续扫描是否还有遗留的 `local-plan` 或其他非 `ai-plan` 的 durable recovery 文档目录，尤其关注单文件混合 tracking/trace 或只有 todo 没有 trace 的更早期计划
 2. 后续只要某个 active 主题积累了多个已完成且已验证阶段，就在同一变更里将其细节迁入该主题自己的 `archive/`
-3. 若某个主题整体完成，再将整个主题目录移入 `ai-plan/public/archive/<topic>/`
+3. 若某个主题整体完成，再将整个主题目录移入 `ai-plan/public/archive/<topic>/`，并同步清理 `ai-plan/public/README.md` 的 active topics 与 branch map
