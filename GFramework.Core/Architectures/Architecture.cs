@@ -361,7 +361,16 @@ public abstract class Architecture : IArchitecture
     /// </summary>
     public virtual async ValueTask DestroyAsync()
     {
-        await _lifecycle.DestroyAsync().ConfigureAwait(false);
+        try
+        {
+            await _lifecycle.DestroyAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            // 架构初始化时会把当前实例绑定到 GameContext；销毁后必须解除该全局回退入口，
+            // 避免后续惰性 ContextAware 调用继续命中过期的运行时上下文。
+            GameContext.Unbind(GetType());
+        }
     }
 
     /// <summary>

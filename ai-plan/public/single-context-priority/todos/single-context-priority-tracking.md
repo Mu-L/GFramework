@@ -16,6 +16,7 @@
   - `GameContext` 已从“字典首个枚举值即默认上下文”收敛为“单活动上下文 + 类型别名兼容查找”；同一全局上下文表不再允许并存两个不同上下文实例
   - `MicrosoftDiContainer` 的预冻结 `Get<T>()` / `Get(Type)` 已改为复用实例可见性收集逻辑，和 `GetAll*` 的实例暴露规则保持一致
   - `IIocContainer` XML 文档已明确预冻结查询与 `Contains<T>()` 的契约边界，避免把注册阶段查询误读为完整 DI 激活语义
+  - `Architecture.DestroyAsync()` 现会在生命周期销毁完成后显式解除 `GameContext` 绑定，防止已销毁架构继续充当默认上下文回退入口
   - 当前分支从 `main` 创建，已完成 `git pull --ff-only origin main`
 
 ## 当前活跃事实
@@ -33,6 +34,7 @@
 - `GameContext` 是公开静态入口，任何“允许多个不同上下文并存”的现有测试都需要按单活动上下文语义重写
 - `Contains<T>()` 在预冻结阶段目前更接近“是否存在注册”，不等同于“是否能立即解析实例”；本轮若不改其行为，需要在文档和测试中明确这一点
 - `ResolveCqrsRegistrationService()` 仍要求注册阶段对 `ICqrsRegistrationService` 可见的是实例绑定；若后续改成工厂或实现类型注册，需要额外设计注册阶段激活 helper
+- 现有解绑逻辑通过 `Architecture.GetType()` 移除初始化期绑定；若后续引入更多显式上下文别名，需同步评估是否要在销毁时额外移除这些别名
 
 ## 最近权威验证
 
@@ -46,8 +48,12 @@
   - 结果：通过，`92/92` passed
 - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureLifecycleBehaviorTests|FullyQualifiedName~SyncArchitectureTests|FullyQualifiedName~AsyncArchitectureTests|FullyQualifiedName~ArchitectureInitializationPipelineTests|FullyQualifiedName~ContextAwareTests"`
+  - 结果：通过，`32/32` passed
+- `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+  - 结果：再次通过，`0 warning / 0 error`
 
 ## 下一推荐步骤
 
-1. 若后续继续推进，可评估 `Architecture` 销毁阶段是否要显式解绑 `GameContext` 当前活动上下文
+1. 若后续继续推进，可评估是否要把 `GameContext.ArchitectureReadOnlyDictionary` 标记为兼容层，并收口其公开使用面
 2. 若 CQRS runtime seam 计划改成工厂式注册，再单独补“注册阶段激活 helper”的设计与测试

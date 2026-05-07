@@ -27,6 +27,18 @@
   - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~GameContextTests|FullyQualifiedName~ContextProviderTests|FullyQualifiedName~ContextAwareTests|FullyQualifiedName~MicrosoftDiContainerTests|FullyQualifiedName~IocContainerLifetimeTests|FullyQualifiedName~ArchitectureInitializationPipelineTests"` 通过，`92/92` passed
   - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release` 通过，`0 warning / 0 error`
 
+### 阶段：销毁闭环与文档收口完成（SINGLE-CONTEXT-PRIORITY-RP-002）
+
+- 实现摘要：
+  - `Architecture.DestroyAsync()` 新增 `finally` 解绑，确保销毁完成后自动从 `GameContext` 移除当前架构类型绑定
+  - `ArchitectureLifecycleBehaviorTests` 新增销毁解绑、失败初始化后解绑、以及销毁后新 `ContextAwareBase` 实例不再回退到过期上下文的回归测试
+  - `docs/zh-CN/source-generators/context-get-generator.md` 已把“多架构场景”改写为“自定义上下文来源”，收口对全局多架构并存的暗示
+- 测试与验证：
+  - `python3 scripts/license-header.py --check` 通过
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~ArchitectureLifecycleBehaviorTests|FullyQualifiedName~SyncArchitectureTests|FullyQualifiedName~AsyncArchitectureTests|FullyQualifiedName~ArchitectureInitializationPipelineTests|FullyQualifiedName~ContextAwareTests"` 通过，`32/32` passed
+  - 首次并发执行 `dotnet test` 与 `dotnet build` 时出现 `bin/Release` 文件占用导致的 MSBuild copy 冲突；按仓库规则改为单独重跑直接命令后结果通过
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release` 单独重跑通过，`0 warning / 0 error`
+
 ### 当前下一步
 
-1. 若后续要进一步彻底移除全局回退，可单独评估 `Architecture` 销毁解绑与 `GameContext` 公开别名字典的收口策略
+1. 若后续要进一步彻底移除全局回退，可单独评估 `GameContext` 公开别名字典的收口策略与生成器默认 provider 的进一步简化空间
