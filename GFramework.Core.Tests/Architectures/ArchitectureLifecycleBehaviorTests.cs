@@ -238,6 +238,26 @@ public class ArchitectureLifecycleBehaviorTests
     }
 
     /// <summary>
+    ///     验证同步兼容销毁入口同样会解除全局 GameContext 绑定。
+    /// </summary>
+    [Test]
+    public async Task Destroy_Should_Unbind_Context_From_GameContext()
+    {
+        var architecture = new PhaseTrackingArchitecture();
+
+        await architecture.InitializeAsync();
+
+        Assert.That(GameContext.GetByType(architecture.GetType()), Is.SameAs(architecture.Context));
+
+#pragma warning disable CS0618
+        architecture.Destroy();
+#pragma warning restore CS0618
+
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetByType(architecture.GetType()));
+        Assert.Throws<InvalidOperationException>(() => GameContext.GetFirstArchitectureContext());
+    }
+
+    /// <summary>
     ///     验证启用 AllowLateRegistration 时，生命周期层会立即初始化后注册的组件，而不是继续沿用初始化期的拒绝策略。
     ///     由于公共架构 API 在 Ready 之后会先触发容器限制，此回归测试直接覆盖生命周期协作者的对齐逻辑。
     /// </summary>

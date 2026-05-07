@@ -15,6 +15,7 @@ public sealed class GameContextProvider : IArchitectureContextProvider
     /// 获取当前的架构上下文。
     /// </summary>
     /// <returns>架构上下文实例</returns>
+    /// <exception cref="InvalidOperationException">当前没有已绑定的活动架构上下文时抛出。</exception>
     public IArchitectureContext GetContext()
     {
         return GameContext.GetFirstArchitectureContext();

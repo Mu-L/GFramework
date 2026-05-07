@@ -359,6 +359,11 @@ public abstract class Architecture : IArchitecture
     /// <summary>
     ///     异步销毁架构及所有组件
     /// </summary>
+    /// <remarks>
+    ///     无论 <c>_lifecycle.DestroyAsync()</c> 是否抛出异常，该方法都会在 <see langword="finally" /> 中调用
+    ///     <see cref="GameContext.Unbind" />(<see cref="object.GetType" />())，移除当前架构类型在全局上下文表中的绑定。
+    ///     这样可以阻止新的惰性上下文回退命中已销毁实例；但已经缓存上下文的对象不会被自动重置。
+    /// </remarks>
     public virtual async ValueTask DestroyAsync()
     {
         try
@@ -376,10 +381,22 @@ public abstract class Architecture : IArchitecture
     /// <summary>
     ///     销毁架构并清理所有组件资源（同步方法，保留用于向后兼容）
     /// </summary>
+    /// <remarks>
+    ///     该同步兼容入口会与 <see cref="DestroyAsync" /> 保持相同的全局解绑语义；即使销毁过程抛出异常，
+    ///     也会在 <see langword="finally" /> 中调用 <see cref="GameContext.Unbind" />(<see cref="object.GetType" />())。
+    /// </remarks>
     [Obsolete("建议使用 DestroyAsync() 以支持异步清理")]
     public virtual void Destroy()
     {
-        _lifecycle.Destroy();
+        try
+        {
+            _lifecycle.Destroy();
+        }
+        finally
+        {
+            // 同步销毁同样需要解除全局回退入口，避免兼容调用路径保留过期上下文。
+            GameContext.Unbind(GetType());
+        }
     }
 
     #endregion

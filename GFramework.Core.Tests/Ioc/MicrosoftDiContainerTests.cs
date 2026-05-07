@@ -494,6 +494,11 @@ public class MicrosoftDiContainerTests
     {
         Assert.DoesNotThrow(() =>
             _container.RegisterCqrsHandlersFromAssemblies([typeof(DeterministicOrderNotification).Assembly]));
+
+        Assert.That(
+            _container.GetServicesUnsafe.Any(static descriptor =>
+                descriptor.ServiceType == typeof(INotificationHandler<DeterministicOrderNotification>)),
+            Is.True);
     }
 
     /// <summary>

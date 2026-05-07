@@ -42,3 +42,25 @@
 ### 当前下一步
 
 1. 若后续要进一步彻底移除全局回退，可单独评估 `GameContext` 公开别名字典的收口策略与生成器默认 provider 的进一步简化空间
+
+### 阶段：PR review 跟进修复（SINGLE-CONTEXT-PRIORITY-RP-003）
+
+- Review 来源：
+  - PR `#332`（`refactor/single-context-priority`）上的 CodeRabbit unresolved outside-diff / nitpick comments
+  - PR `#332` 上 Greptile 的两个 latest-head open threads
+- 本轮确认并接受的结论：
+  - `Architecture.Destroy()` 与 `DestroyAsync()` 存在语义漂移，前者缺少 `GameContext.Unbind(GetType())` 清理，仍然会泄漏过期全局回退入口
+  - `GameContext` 仅靠 `ConcurrentDictionary` + `_currentArchitectureContext` 的分离更新无法保证组合状态一致；`Bind` / `Unbind` / `Clear` 与读取路径需要统一同步边界
+  - `GameContextProvider.GetContext()`、`ContextAwareBase.GetContext()`、`Architecture.DestroyAsync()` 等处的 XML 文档仍未完全反映最新生命周期语义
+  - `RegisterCqrsHandlersFromAssemblies_Should_Resolve_Registration_Service_When_Registered_As_Instance` 需要从“仅不抛异常”加强为“确实注册了 handler”
+- 本轮实现摘要：
+  - 为 `GameContext` 新增统一临界区，保证别名字典与当前活动上下文指针的状态切换一致
+  - 为 `Architecture.Destroy()` 增加 `finally` 解绑，和异步销毁路径对齐
+  - 补充 `GameContextProvider`、`ContextAwareBase`、`Architecture`、`GameContext` 的 XML 文档说明
+  - 新增同步 `Destroy()` 解绑回归测试，并加强 CQRS 注册断言
+- 验证与环境备注：
+  - `python3 scripts/license-header.py --check` 通过
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~GameContextTests|FullyQualifiedName~ContextProviderTests|FullyQualifiedName~ContextAwareTests|FullyQualifiedName~ArchitectureLifecycleBehaviorTests|FullyQualifiedName~MicrosoftDiContainerTests"` 通过，`87/87` passed
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release` 通过，`0 warning / 0 error`
+  - 中途尝试把 `dotnet test` 与 `dotnet build` 并行执行时再次触发 `GFramework.Core.pdb` 占用重试；按仓库规则改为串行直跑后结果稳定通过
+  - `System.Threading.Lock` 在 `net8.0` 目标下不可用，因此最终采用 `#if NET9_0_OR_GREATER` 条件锁声明，同时保留 `net8.0` 的 `object` 锁兼容实现
