@@ -12,10 +12,6 @@ help the current worktree land on the right recovery documents without scanning 
 
 ## Active Topics
 
-- `ai-plan-governance`
-  - Purpose: govern the `ai-plan/` directory model, startup index, and archive policy.
-  - Tracking: `ai-plan/public/ai-plan-governance/todos/ai-plan-governance-tracking.md`
-  - Trace: `ai-plan/public/ai-plan-governance/traces/ai-plan-governance-trace.md`
 - `ai-first-config-system`
   - Purpose: continue the AI-First config runtime, generator, and consumer DX work for `GFramework.Game`.
   - Tracking: `ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md`
@@ -38,10 +34,6 @@ help the current worktree land on the right recovery documents without scanning 
   - Purpose: continue the data repository persistence hardening plus the settings / serialization follow-up backlog.
   - Tracking: `ai-plan/public/data-repository-persistence/todos/data-repository-persistence-tracking.md`
   - Trace: `ai-plan/public/data-repository-persistence/traces/data-repository-persistence-trace.md`
-- `microsoft-di-container-disposal`
-  - Purpose: track `PR #330` disposal-contract fixes for `MicrosoftDiContainer`, related benchmark cleanup hardening, and review follow-up.
-  - Tracking: `ai-plan/public/microsoft-di-container-disposal/todos/microsoft-di-container-disposal-tracking.md`
-  - Trace: `ai-plan/public/microsoft-di-container-disposal/traces/microsoft-di-container-disposal-trace.md`
 
 ## Worktree To Active Topic Map
 
