@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-095`
+- 恢复点编号：`CQRS-REWRITE-RP-096`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #334`
 - 当前结论：
@@ -30,8 +30,9 @@ CQRS 迁移与收敛。
   - `RP-092` 已补齐 request handler `Singleton / Transient` 生命周期矩阵 benchmark，并明确把 `Scoped` 对照留到具备真实显式作用域边界的宿主模型后再评估
   - `RP-093` 已把 `GFramework.Core` 的 legacy `SendCommand` / `SendQuery` 兼容入口收敛到底层统一 `GFramework.Cqrs` runtime，同时补充 `Mediator` 未吸收能力差距复核
   - `RP-094` 已按 `PR #334` latest-head review 收口 legacy bridge 的测试注册方式、模块运行时依赖契约、异步取消语义、XML 文档缺口与兼容文档回退边界
-  - 当前 `RP-095` 已继续收口 `PR #334` 剩余 review：把 legacy 同步 bridge 的阻塞等待统一切到线程池隔离 helper、补齐 `ArchitectureContext` / executor 共享 dispatch helper、修正 bridge fixture 的并行与容器释放约束，并为 runtime bridge 与 async void command cancellation 增补回归测试
-- `ai-plan` active 入口现以 `RP-095` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - `RP-095` 已继续收口 `PR #334` 剩余 review：把 legacy 同步 bridge 的阻塞等待统一切到线程池隔离 helper、补齐 `ArchitectureContext` / executor 共享 dispatch helper、修正 bridge fixture 的并行与容器释放约束，并为 runtime bridge 与 async void command cancellation 增补回归测试
+  - 当前 `RP-096` 已再次使用 `$gframework-pr-review` 复核 `PR #334` latest-head review，确认仍显示为 open 的 AI threads 在本地代码中已无新增仍成立的运行时 / 测试 / 文档缺陷，剩余差异主要是 GitHub thread 未 resolve 的状态滞后
+- `ai-plan` active 入口现以 `RP-096` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
@@ -53,12 +54,12 @@ CQRS 迁移与收敛。
 - 相对 `ai-libs/Mediator`，当前仍未完全吸收的能力集中在六类：facade 公开入口、telemetry、stream pipeline、notification publisher 策略、生成器配置与诊断、生命周期/缓存公开配置面
 - 发布工作流已有 packed modules 校验，但 PR 工作流此前没有等价的 solution pack 产物名单校验
 - 本地 `dotnet pack GFramework.sln -c Release --no-restore -o <temp-dir>` 当前只产出 14 个预期包，未复现 benchmark `.nupkg`
-- latest-head review 现仍有少量 open thread，但本地复核后，仍成立的问题已收敛到 benchmark 对照公平性、workflow 输入安全性与 active 文档压缩
+- `PR #334` 在 `2026-05-07` 的 latest-head review 仍显示 `CodeRabbit 10` / `Greptile 3` 个 open thread，但本地逐项复核后未发现新的仍成立代码或文档缺陷；当前差异主要来自已实质修复但尚未 resolve 的 thread 状态
 - benchmark 场景现统一通过 `BenchmarkHostFactory` 构建最小宿主：GFramework 侧在 runtime 分发前显式 `Freeze()` 容器，MediatR 侧只扫描当前场景需要的 handler / behavior 类型
 - `RequestStartupBenchmarks` 已恢复 `ColdStart_GFrameworkCqrs` 结果产出，不再命中 `No CQRS request handler registered`
 - `BenchmarkDotNet` 在当前 agent 沙箱里会因自动生成的 bootstrap 脚本异常失败；同一 `dotnet run --no-build` 命令在沙箱外执行通过，因此本轮以沙箱外结果作为 benchmark 权威验证
 - 已新增手动触发的 benchmark workflow；默认只验证 benchmark 项目 Release build，只有显式提供过滤器时才执行 BenchmarkDotNet 运行；过滤器输入现通过环境变量传入 shell，避免 workflow_dispatch 输入直接插值到命令行
-- 远端 `CTRF` 最新汇总为 `2274/2274` passed
+- 远端 `CTRF` 最新汇总为 `2311/2311` passed（run `#1079`, 2026-05-07）
 - `MegaLinter` 当前只暴露 `dotnet-format` 的 `Restore operation failed` 环境噪音，尚未提供本地仍成立的文件级格式诊断
 - `PR #334` 当前 latest-head open AI feedback 经过本轮本地复核与修复后，应主要剩余待 GitHub 重新索引的状态差异或已实质关闭但未 resolve 的 thread
 
@@ -91,6 +92,11 @@ CQRS 迁移与收敛。
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
   - 备注：用于验证本轮 request invoker / pipeline / stream invoker 调整与 benchmark workflow 改动后的 Release 编译结果
+- `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
+  - 结果：通过
+  - 备注：确认当前分支对应 `PR #334`；`CodeRabbit` latest review 已 `APPROVED`，但 latest-head 仍显示 `10` 个 open thread、`Greptile` 仍显示 `3` 个 open thread；本地逐项复核后未发现新的仍成立缺陷，最新 CI 测试汇总为 `2311/2311` passed，`MegaLinter` 仅剩 `dotnet-format` restore 环境噪音
+- `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output <temporary-json-output>`
   - 结果：通过
   - 备注：确认当前分支对应 `PR #331`，本轮 latest-head open AI feedback 已收敛到 `dotnet pack --no-build`、共享包校验脚本跨平台兼容性与 active 文档 PR 锚点同步
@@ -142,7 +148,7 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 先用新提交和最新 CI 再跑一次 `$gframework-pr-review`，确认 `PR #334` 的 latest-head open threads 是否已实质清空
+1. 在 GitHub 上 resolve / reply 已被当前分支实质吸收的 `PR #334` stale review threads，或等待下一次 head 更新后再次用 `$gframework-pr-review` 复核状态是否自动收敛
 2. 若继续沿用 `$gframework-batch-boot 50` 且优先处理 `Mediator` 能力吸收，下一批建议从 `stream pipeline` 或 `notification publisher` 策略中选择一个独立切片推进
 3. 若继续收敛 legacy Core CQRS，可评估是否补一个 `IMediator` 风格 facade，而不是继续扩大 `ArchitectureContext` 兼容入口的职责
 

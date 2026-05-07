@@ -2,6 +2,23 @@
 
 ## 2026-05-07
 
+### 阶段：PR #334 latest-head review 复核（CQRS-REWRITE-RP-096）
+
+- 再次使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 对应的 `PR #334` latest-head review，并读取 `/tmp/current-pr-review.json` 中的 `review_agents`、`latest_commit_review`、`megalinter_report` 与 `test_reports`
+- 本轮复核结论：
+  - 当前公开 PR 为 `PR #334`，head commit 为 `dc3bd3744e2ceaa557ef03bc991fc88daedb460b`
+  - `CodeRabbit` latest review 在 `2026-05-07T11:46:42Z` 已是 `APPROVED`，但 latest-head 仍显示 `10` 个 open thread；`Greptile` 仍显示 `3` 个 open thread
+  - 逐条回到本地代码后，相关修复已在当前分支落地：`ArchitectureBootstrapper` 已自动扫描 `typeof(ArchitectureContext).Assembly`；`ArchitectureContextTests` / `ArchitectureModulesBehaviorTests` 已标注 `NonParallelizable` 并保证资源释放；`LegacyAsync*DispatchRequestHandler` 已统一补 `ThrowIfCancellationRequested()` + `WaitAsync(cancellationToken)`；`QueryExecutor` / legacy bridge request XML 文档与 `docs/zh-CN/core/command.md` fallback 说明也已齐备
+  - 远端 CTRF 最新测试汇总为 `2311/2311 passed`（run `#1079`），`MegaLinter` 仅剩 `dotnet-format` restore failed 的环境噪音，没有新的文件级诊断
+- 主线程决策：
+  - 不再为这些 stale open thread 追加新的本地代码改动，避免重复修补已吸收的问题
+  - 仅更新 `cqrs-rewrite` active tracking/trace，把“当前剩余差异主要是 GitHub thread 状态滞后”记录为最新权威事实
+- 本轮权威验证：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
+    - 结果：通过
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+
 ### 阶段：PR #334 legacy bridge sync follow-up（CQRS-REWRITE-RP-095）
 
 - 再次使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 对应的 `PR #334` latest-head review，并只保留本地复核后仍成立的问题：
