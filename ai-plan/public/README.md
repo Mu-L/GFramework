@@ -54,5 +54,3 @@ help the current worktree land on the right recovery documents without scanning 
 - Branch: `docs/sdk-update-documentation`
   - Worktree hint: `GFramework-update-documentation`
   - Priority 1: `documentation-full-coverage-governance`
-- Branch: `fix/microsoft-di-container-disposal`
-  - Priority 1: `microsoft-di-container-disposal`
