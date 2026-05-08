@@ -129,12 +129,15 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
 - 流式请求
   - 通过 `IStreamRequest<TResponse>` 和 `IStreamRequestHandler<,>` 返回 `IAsyncEnumerable<TResponse>`。
   - 当消费端程序集提供 generated stream invoker provider / descriptor 后，runtime 会优先消费这组 stream invoker 元数据；未命中时仍回退到既有反射 stream binding 创建路径。
+  - 所有已注册 `IStreamPipelineBehavior<TRequest, TResponse>` 会在建流阶段包裹对应 stream handler；默认实现不拦截每个元素，而是围绕单次 `CreateStream(...)` 调用编排行为链。
 - 上下文注入
   - 处理器基类继承 `CqrsContextAwareHandlerBase`，runtime 会在分发前注入当前 `IArchitectureContext`。
   - 如果处理器或行为需要上下文注入，而当前 `ICqrsContext` 不是 `IArchitectureContext`，默认实现会抛出异常。
 - 管道行为
   - 所有已注册 `IPipelineBehavior<TRequest, TResponse>` 会包裹请求处理器执行。
-  - 当前包内提供了 `LoggingBehavior` 和 `PerformanceBehavior` 两个可复用行为。
+  - 所有已注册 `IStreamPipelineBehavior<TRequest, TResponse>` 会包裹流式请求处理器执行。
+  - 注册入口分别为 `RegisterCqrsPipelineBehavior<TBehavior>()` 与 `RegisterCqrsStreamPipelineBehavior<TBehavior>()`。
+  - 当前包内提供了 `LoggingBehavior` 和 `PerformanceBehavior` 两个可复用 request 行为；stream 行为需要按业务需求自行实现。
 
 ## 处理器注册与程序集接入
 

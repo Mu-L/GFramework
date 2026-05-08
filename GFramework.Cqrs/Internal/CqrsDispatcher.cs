@@ -58,6 +58,9 @@ internal sealed class CqrsDispatcher(
     private static readonly MethodInfo StreamHandlerInvokerMethodDefinition = typeof(CqrsDispatcher)
         .GetMethod(nameof(InvokeStreamHandler), BindingFlags.NonPublic | BindingFlags.Static)!;
 
+    private static readonly MethodInfo StreamPipelineInvokerMethodDefinition = typeof(CqrsDispatcher)
+        .GetMethod(nameof(InvokeStreamPipelineExecutor), BindingFlags.NonPublic | BindingFlags.Static)!;
+
     private readonly INotificationPublisher _notificationPublisher = notificationPublisher
                                                                      ?? throw new ArgumentNullException(
                                                                          nameof(notificationPublisher));
@@ -156,8 +159,16 @@ internal sealed class CqrsDispatcher(
                           $"No CQRS stream handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
+        var behaviors = container.GetAll(dispatchBinding.BehaviorType);
 
-        return (IAsyncEnumerable<TResponse>)dispatchBinding.Invoker(handler, request, cancellationToken);
+        foreach (var behavior in behaviors)
+            PrepareHandler(behavior, context);
+
+        if (behaviors.Count == 0)
+            return (IAsyncEnumerable<TResponse>)dispatchBinding.StreamInvoker(handler, request, cancellationToken);
+
+        return (IAsyncEnumerable<TResponse>)dispatchBinding.GetPipelineExecutor(behaviors.Count)
+            .Invoke(handler, behaviors, dispatchBinding.StreamInvoker, request, cancellationToken);
     }
 
     /// <summary>
@@ -299,11 +310,17 @@ internal sealed class CqrsDispatcher(
             var resolvedGeneratedDescriptor = generatedDescriptor.Value;
             return new StreamDispatchBinding(
                 resolvedGeneratedDescriptor.HandlerType,
+                typeof(IStreamPipelineBehavior<,>).MakeGenericType(requestType, responseType),
+                requestType,
+                responseType,
                 resolvedGeneratedDescriptor.Invoker);
         }
 
         return new StreamDispatchBinding(
             typeof(IStreamRequestHandler<,>).MakeGenericType(requestType, responseType),
+            typeof(IStreamPipelineBehavior<,>).MakeGenericType(requestType, responseType),
+            requestType,
+            responseType,
             CreateStreamInvoker(requestType, responseType));
     }
 
@@ -491,6 +508,25 @@ internal sealed class CqrsDispatcher(
         return typedHandler.Handle(typedRequest, cancellationToken);
     }
 
+    /// <summary>
+    ///     执行指定行为数量的强类型 stream pipeline executor。
+    ///     该入口本身是缓存的固定 executor 形状；每次建流只绑定当前 handler 与 behaviors 实例。
+    /// </summary>
+    private static object InvokeStreamPipelineExecutor<TRequest, TResponse>(
+        object handler,
+        IReadOnlyList<object> behaviors,
+        StreamInvoker streamInvoker,
+        object request,
+        CancellationToken cancellationToken)
+        where TRequest : IStreamRequest<TResponse>
+    {
+        var invocation = new StreamPipelineInvocation<TRequest, TResponse>(
+            (IStreamRequestHandler<TRequest, TResponse>)handler,
+            streamInvoker,
+            behaviors);
+        return invocation.Invoke((TRequest)request, cancellationToken);
+    }
+
     private delegate ValueTask<TResponse> RequestInvoker<TResponse>(
         object handler,
         object request,
@@ -506,6 +542,13 @@ internal sealed class CqrsDispatcher(
         CancellationToken cancellationToken);
 
     private delegate object StreamInvoker(object handler, object request, CancellationToken cancellationToken);
+
+    private delegate object StreamPipelineInvoker(
+        object handler,
+        IReadOnlyList<object> behaviors,
+        StreamInvoker streamInvoker,
+        object request,
+        CancellationToken cancellationToken);
 
     /// <summary>
     ///     将不同响应类型的 request dispatch binding 包装到统一弱缓存值中，
@@ -582,17 +625,54 @@ internal sealed class CqrsDispatcher(
     ///     保存流式请求分发路径所需的服务类型与调用委托。
     ///     该绑定让建流热路径只需一次缓存命中即可获得解析与调用所需元数据。
     /// </summary>
-    private sealed class StreamDispatchBinding(Type handlerType, StreamInvoker invoker)
+    private sealed class StreamDispatchBinding(
+        Type handlerType,
+        Type behaviorType,
+        Type requestType,
+        Type responseType,
+        StreamInvoker streamInvoker)
     {
+        // 线程安全：该缓存按 behaviorCount 复用 stream pipeline executor 形状，缓存项只保存委托与数量信息，
+        // 不会跨建流缓存 handler 或 behavior 实例。若不同请求持续出现新的行为数量组合，字典会随之增长。
+        private readonly ConcurrentDictionary<int, StreamPipelineExecutor> _pipelineExecutors = new();
+        private readonly StreamPipelineInvoker _pipelineInvoker = CreateStreamPipelineInvoker(requestType, responseType);
+
         /// <summary>
         ///     获取流式请求处理器在容器中的服务类型。
         /// </summary>
         public Type HandlerType { get; } = handlerType;
 
         /// <summary>
+        ///     获取 stream pipeline 行为在容器中的服务类型。
+        /// </summary>
+        public Type BehaviorType { get; } = behaviorType;
+
+        /// <summary>
         ///     获取执行流式请求处理器的调用委托。
         /// </summary>
-        public StreamInvoker Invoker { get; } = invoker;
+        public StreamInvoker StreamInvoker { get; } = streamInvoker;
+
+        /// <summary>
+        ///     获取指定行为数量对应的 stream pipeline executor。
+        ///     executor 形状会按行为数量缓存，但不会缓存 handler 或 behavior 实例。
+        /// </summary>
+        public StreamPipelineExecutor GetPipelineExecutor(int behaviorCount)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(behaviorCount);
+            return _pipelineExecutors.GetOrAdd(
+                behaviorCount,
+                static (count, state) => new StreamPipelineExecutor(count, state.PipelineInvoker),
+                new StreamPipelineExecutorFactoryState(_pipelineInvoker));
+        }
+
+        /// <summary>
+        ///     仅供测试读取指定行为数量是否已存在缓存 executor。
+        /// </summary>
+        public object? GetPipelineExecutorForTesting(int behaviorCount)
+        {
+            _pipelineExecutors.TryGetValue(behaviorCount, out var executor);
+            return executor;
+        }
     }
 
     /// <summary>
@@ -750,6 +830,55 @@ internal sealed class CqrsDispatcher(
         StreamInvoker Invoker);
 
     /// <summary>
+    ///     为指定流式请求类型创建可跨多个 behaviorCount 复用的 typed pipeline invoker。
+    /// </summary>
+    private static StreamPipelineInvoker CreateStreamPipelineInvoker(Type requestType, Type responseType)
+    {
+        var method = StreamPipelineInvokerMethodDefinition
+            .MakeGenericMethod(requestType, responseType);
+        return (StreamPipelineInvoker)Delegate.CreateDelegate(typeof(StreamPipelineInvoker), method);
+    }
+
+    /// <summary>
+    ///     保存固定行为数量下的 typed stream pipeline executor 形状。
+    ///     该对象自身可跨建流复用，但每次调用都只绑定当前 handler 与 behavior 实例。
+    /// </summary>
+    private sealed class StreamPipelineExecutor(
+        int behaviorCount,
+        StreamPipelineInvoker invoker)
+    {
+        /// <summary>
+        ///     获取此 executor 预期处理的行为数量。
+        /// </summary>
+        public int BehaviorCount { get; } = behaviorCount;
+
+        /// <summary>
+        ///     使用当前 handler / behaviors / request 执行缓存的 pipeline 形状。
+        /// </summary>
+        public object Invoke(
+            object handler,
+            IReadOnlyList<object> behaviors,
+            StreamInvoker streamInvoker,
+            object request,
+            CancellationToken cancellationToken)
+        {
+            if (behaviors.Count != BehaviorCount)
+            {
+                throw new InvalidOperationException(
+                    $"Cached stream pipeline executor expected {BehaviorCount} behaviors, but received {behaviors.Count}.");
+            }
+
+            return invoker(handler, behaviors, streamInvoker, request, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    ///     为 stream pipeline executor 缓存携带 typed pipeline invoker，避免按行为数量建缓存时创建闭包。
+    /// </summary>
+    private readonly record struct StreamPipelineExecutorFactoryState(
+        StreamPipelineInvoker PipelineInvoker);
+
+    /// <summary>
     ///     供 registrar 在 generated registry 激活后登记 request invoker 元数据。
     /// </summary>
     /// <param name="requestType">请求运行时类型。</param>
@@ -875,6 +1004,92 @@ internal sealed class CqrsDispatcher(
                 CancellationToken cancellationToken)
             {
                 return invocation.InvokeBehaviorAsync(index, request, cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     保存单次 stream pipeline 分发所需的当前 handler、behavior 列表和 continuation 缓存。
+    ///     该对象只存在于本次建流，不会跨请求保留容器解析出的实例。
+    /// </summary>
+    private sealed class StreamPipelineInvocation<TRequest, TResponse>(
+        IStreamRequestHandler<TRequest, TResponse> handler,
+        StreamInvoker streamInvoker,
+        IReadOnlyList<object> behaviors)
+        where TRequest : IStreamRequest<TResponse>
+    {
+        private readonly IStreamRequestHandler<TRequest, TResponse> _handler = handler;
+        private readonly StreamInvoker _streamInvoker = streamInvoker;
+        private readonly IReadOnlyList<object> _behaviors = behaviors;
+        private readonly StreamMessageHandlerDelegate<TRequest, TResponse>?[] _continuations =
+            new StreamMessageHandlerDelegate<TRequest, TResponse>?[behaviors.Count + 1];
+
+        /// <summary>
+        ///     从 stream pipeline 起点开始创建异步响应序列。
+        /// </summary>
+        public IAsyncEnumerable<TResponse> Invoke(TRequest request, CancellationToken cancellationToken)
+        {
+            return GetContinuation(0)(request, cancellationToken);
+        }
+
+        /// <summary>
+        ///     获取指定阶段的 continuation，并在首次请求时为该阶段绑定一次不可变调用入口。
+        ///     同一行为多次调用 <c>next</c> 时会命中相同 continuation，保持与 request pipeline 一致的链式语义。
+        ///     线程模型上，该缓存仅假定单次建流链按顺序推进；若某个 behavior 并发调用多个 <c>next</c>，
+        ///     这里可能重复创建等价 continuation，但不会跨建流共享，也不会缓存容器解析出的实例。
+        /// </summary>
+        private StreamMessageHandlerDelegate<TRequest, TResponse> GetContinuation(int index)
+        {
+            var continuation = _continuations[index];
+            if (continuation is not null)
+            {
+                return continuation;
+            }
+
+            continuation = index == _behaviors.Count
+                ? InvokeHandler
+                : new StreamPipelineContinuation<TRequest, TResponse>(this, index).Invoke;
+            _continuations[index] = continuation;
+            return continuation;
+        }
+
+        /// <summary>
+        ///     执行指定索引的 stream pipeline behavior。
+        /// </summary>
+        private IAsyncEnumerable<TResponse> InvokeBehavior(
+            int index,
+            TRequest request,
+            CancellationToken cancellationToken)
+        {
+            var behavior = (IStreamPipelineBehavior<TRequest, TResponse>)_behaviors[index];
+            return behavior.Handle(request, GetContinuation(index + 1), cancellationToken);
+        }
+
+        /// <summary>
+        ///     调用最终流式请求处理器。
+        /// </summary>
+        private IAsyncEnumerable<TResponse> InvokeHandler(TRequest request, CancellationToken cancellationToken)
+        {
+            return (IAsyncEnumerable<TResponse>)_streamInvoker(_handler, request, cancellationToken);
+        }
+
+        /// <summary>
+        ///     将固定阶段索引绑定为标准 <see cref="StreamMessageHandlerDelegate{TRequest,TResponse}" />。
+        ///     该包装只在单次建流生命周期内存在，用于把缓存 shape 套入当前实例。
+        /// </summary>
+        private sealed class StreamPipelineContinuation<TCurrentRequest, TCurrentResponse>(
+            StreamPipelineInvocation<TCurrentRequest, TCurrentResponse> invocation,
+            int index)
+            where TCurrentRequest : IStreamRequest<TCurrentResponse>
+        {
+            /// <summary>
+            ///     执行当前阶段并跳转到下一个 continuation。
+            /// </summary>
+            public IAsyncEnumerable<TCurrentResponse> Invoke(
+                TCurrentRequest request,
+                CancellationToken cancellationToken)
+            {
+                return invocation.InvokeBehavior(index, request, cancellationToken);
             }
         }
     }

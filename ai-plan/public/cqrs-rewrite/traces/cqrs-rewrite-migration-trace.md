@@ -2,6 +2,84 @@
 
 ## 2026-05-07
 
+### 阶段：PR #339 stream pipeline seam review 收口（CQRS-REWRITE-RP-100）
+
+- 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认已从历史 `PR #334` 进入新的 `PR #339`
+- 本轮 latest-head review 结论：
+  - `CodeRabbit` 当前显示 `2` 个 open thread 与 `2` 个 nitpick，失败检查为 `0`，GitHub Test Reporter 汇总仍为全绿
+  - `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs` 的 test-name 拼写 thread 已在当前 head 失效，本地代码已经是 `Per_Behavior_Count`
+  - `GFramework.Core.Abstractions/Ioc/IIocContainer.cs` 的 `RegisterCqrsStreamPipelineBehavior<TBehavior>()` 仍缺 `<exception>` / `<remarks>` 契约说明，属于仍成立的文档缺口
+  - `GFramework.Cqrs/Internal/CqrsDispatcher.cs` 的 `StreamPipelineInvocation.GetContinuation(...)` 缺少 request 对称路径已有的线程模型说明，属于仍成立的并发语义文档缺口
+  - `GFramework.Core/Ioc/MicrosoftDiContainer.cs` 的 request / stream CQRS 行为注册逻辑完全重复，属于仍成立的维护性问题
+- 本轮主线程决策：
+  - 在 `IIocContainer` 补齐流式行为注册入口的 `<exception>` / `<remarks>`，并把相同契约补到 `IArchitecture`、`Architecture` 与 `ArchitectureModules`，避免公开入口文档漂移
+  - 为 `StreamPipelineInvocation.GetContinuation(...)` 补齐“仅假定单次建流链顺序推进；并发 `next()` 时可能重复创建等价 continuation，但不会跨建流共享实例”的说明
+  - 在 `MicrosoftDiContainer` 抽取 `RegisterCqrsPipelineBehaviorCore(...)`，统一 request / stream 行为注册的开放泛型、封闭接口枚举、错误消息与日志路径
+  - 顺手修复 `dotnet format` 在当前 branch diff 内实际命中的 `GFramework.Cqrs/ICqrsRequestInvokerProvider.cs` XML 缩进问题；不处理未触达历史文件上的 `CHARSET` 提示
+- 本轮权威验证：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+    - 结果：通过
+  - `dotnet format GFramework.Cqrs/GFramework.Cqrs.csproj --verify-no-changes`
+    - 结果：发现当前 diff 内 `GFramework.Cqrs/ICqrsRequestInvokerProvider.cs` 的空白格式问题；其余 `CHARSET` 提示集中在未触达的历史文件
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core.Abstractions/GFramework.Core.Abstractions.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherCacheTests"`
+    - 结果：通过，`10/10` passed
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ArchitectureModulesBehaviorTests"`
+    - 结果：通过，`4/4` passed
+  - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+
+### 阶段：stream pipeline seam 收口（CQRS-REWRITE-RP-099）
+
+- 延续 `$gframework-batch-boot 50`，主线程先按 `origin/main` 评估 branch diff 容量，并在 `stream pipeline` 与 `notification publisher` 两个独立切片中选择更贴近 active gap 的下一批目标
+- 只读 subagent 结论已被接受：
+  - `notification publisher` 已有稳定 seam、默认顺序实现与专门回归，缺口主要在“更多内置策略”
+  - `stream pipeline` 仍缺独立 contract、注册入口与 runtime executor，对应缺口在 public docs 与 active tracking 中都已显式列出
+- 本轮主线程决策：
+  - 为 `GFramework.Cqrs.Abstractions` 新增 `IStreamPipelineBehavior<,>` 与 `StreamMessageHandlerDelegate<,>`
+  - 为 `IIocContainer`、`IArchitecture`、`Architecture`、`ArchitectureModules` 与 `MicrosoftDiContainer` 新增 `RegisterCqrsStreamPipelineBehavior<TBehavior>()`
+  - 为 `CqrsDispatcher` 的 `CreateStream(...)` 路径补齐 stream behavior 解析、上下文注入，以及按 behaviorCount 缓存的 stream pipeline executor 形状
+  - 保持语义边界清晰：本轮 stream pipeline 只包裹单次 `CreateStream(...)` 建流，不扩展到每个元素的逐项 middleware 语义
+  - 让 generated stream invoker provider 与 stream pipeline seam 共存，并补齐“generated invoker 仍命中、行为链仍生效”的回归
+- 本轮新增 / 更新的测试方向：
+  - `CqrsDispatcherCacheTests`：stream pipeline executor 缓存、顺序稳定性、上下文重新注入
+  - `CqrsDispatcherContextValidationTests`：stream behavior 需要 `IArchitectureContext` 时的显式失败语义
+  - `CqrsGeneratedRequestInvokerProviderTests`：generated stream invoker 与 stream behavior 并存时仍优先消费 generated descriptor
+  - `ArchitectureModulesBehaviorTests`：公开 `RegisterCqrsStreamPipelineBehavior<TBehavior>()` 冒烟回归
+- 文档收口：
+  - `GFramework.Cqrs/README.md` 现在显式说明 stream behavior 的建流级作用域
+  - `docs/zh-CN/core/cqrs.md` 现在区分 request pipeline 与 stream pipeline 两个注册入口，并从“仍缺 stream pipeline seam”的能力差距列表中移除该项
+- 当前立即下一步：
+  - 运行 `GFramework.Cqrs` / `GFramework.Cqrs.Tests` / `GFramework.Core.Tests` 的 Release build 与 targeted tests
+  - 刷新 `origin/main...HEAD` 的 branch diff files / lines 指标
+  - 若验证通过，再补 license / diff check 与自动提交
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherCacheTests|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests|FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`31/31` passed
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ArchitectureModulesBehaviorTests"`
+    - 结果：通过，`4/4` passed
+  - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `origin/main...HEAD`
+    - 结果：`0 files / 0 lines`
+
 ### 阶段：PR #334 latest-head helper 异常边界收口（CQRS-REWRITE-RP-098）
 
 - 再次使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 对应的 `PR #334` latest-head review，并重新核对 `/tmp/current-pr-review.json` 中最新 open thread：

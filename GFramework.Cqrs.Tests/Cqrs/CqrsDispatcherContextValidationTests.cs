@@ -73,6 +73,33 @@ internal sealed class CqrsDispatcherContextValidationTests
                 container
                     .Setup(currentContainer => currentContainer.Get(typeof(IStreamRequestHandler<ContextAwareStreamRequest, int>)))
                     .Returns(new ContextAwareStreamHandler());
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(IStreamPipelineBehavior<ContextAwareStreamRequest, int>)))
+                    .Returns(Array.Empty<object>());
+            });
+
+        Assert.That(
+            () => runtime.CreateStream(new FakeCqrsContext(), new ContextAwareStreamRequest()),
+            Throws.InvalidOperationException.With.Message.Contains("does not implement IArchitectureContext"));
+    }
+
+    /// <summary>
+    ///     验证当 stream pipeline behavior 需要上下文注入、但当前 CQRS 上下文不实现
+    ///     <see cref="GFramework.Core.Abstractions.Architectures.IArchitectureContext" /> 时，
+    ///     dispatcher 会在建流前显式失败。
+    /// </summary>
+    [Test]
+    public void CreateStream_Should_Throw_When_Stream_Pipeline_Behavior_Context_Does_Not_Implement_IArchitectureContext()
+    {
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.Get(typeof(IStreamRequestHandler<ContextAwareStreamRequest, int>)))
+                    .Returns(new PassthroughStreamHandler());
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(IStreamPipelineBehavior<ContextAwareStreamRequest, int>)))
+                    .Returns([new ContextAwareStreamBehavior()]);
             });
 
         Assert.That(
@@ -172,6 +199,49 @@ internal sealed class CqrsDispatcherContextValidationTests
         {
             yield return 1;
             await ValueTask.CompletedTask.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     为 stream behavior 上下文校验提供不依赖上下文注入的最小 handler。
+    /// </summary>
+    private sealed class PassthroughStreamHandler : IStreamRequestHandler<ContextAwareStreamRequest, int>
+    {
+        /// <summary>
+        ///     返回一个最小流；当前测试只关心 behavior 注入前的上下文校验。
+        /// </summary>
+        /// <param name="request">当前流请求。</param>
+        /// <param name="cancellationToken">取消枚举时使用的取消令牌。</param>
+        /// <returns>包含单个固定元素的异步流。</returns>
+        public async IAsyncEnumerable<int> Handle(
+            ContextAwareStreamRequest request,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return 1;
+            await ValueTask.CompletedTask.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     为 stream behavior 上下文校验提供需要注入架构上下文的最小 behavior。
+    /// </summary>
+    private sealed class ContextAwareStreamBehavior
+        : CqrsContextAwareHandlerBase,
+            IStreamPipelineBehavior<ContextAwareStreamRequest, int>
+    {
+        /// <summary>
+        ///     直接转发到下一个处理阶段；当前测试只关心调用前的上下文校验。
+        /// </summary>
+        /// <param name="message">当前流式请求。</param>
+        /// <param name="next">下一个处理阶段。</param>
+        /// <param name="cancellationToken">取消令牌。</param>
+        /// <returns>下游处理阶段返回的异步流。</returns>
+        public IAsyncEnumerable<int> Handle(
+            ContextAwareStreamRequest message,
+            StreamMessageHandlerDelegate<ContextAwareStreamRequest, int> next,
+            CancellationToken cancellationToken)
+        {
+            return next(message, cancellationToken);
         }
     }
 }

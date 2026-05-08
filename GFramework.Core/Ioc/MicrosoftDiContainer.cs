@@ -485,41 +485,85 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         try
         {
             ThrowIfFrozen();
-
-            var behaviorType = typeof(TBehavior);
-
-            if (behaviorType.IsGenericTypeDefinition)
-            {
-                GetServicesUnsafe.AddSingleton(typeof(IPipelineBehavior<,>), behaviorType);
-            }
-            else
-            {
-                var pipelineInterfaces = behaviorType
-                    .GetInterfaces()
-                    .Where(type => type.IsGenericType &&
-                                   type.GetGenericTypeDefinition() == typeof(IPipelineBehavior<,>))
-                    .ToList();
-
-                if (pipelineInterfaces.Count == 0)
-                {
-                    var errorMessage = $"{behaviorType.Name} does not implement IPipelineBehavior<,>";
-                    _logger.Error(errorMessage);
-                    throw new InvalidOperationException(errorMessage);
-                }
-
-                // 为每个已闭合的管道接口建立显式映射，支持针对特定请求/响应的专用行为。
-                foreach (var pipelineInterface in pipelineInterfaces)
-                {
-                    GetServicesUnsafe.AddSingleton(pipelineInterface, behaviorType);
-                }
-            }
-
-            _logger.Debug($"CQRS pipeline behavior registered: {behaviorType.Name}");
+            RegisterCqrsPipelineBehaviorCore(
+                typeof(TBehavior),
+                typeof(IPipelineBehavior<,>),
+                "IPipelineBehavior<,>",
+                "pipeline behavior");
         }
         finally
         {
             _lock.ExitWriteLock();
         }
+    }
+
+    /// <summary>
+    ///     注册 CQRS 流式请求管道行为。
+    ///     同时支持开放泛型行为类型和已闭合的具体行为类型，
+    ///     以兼容通用行为和针对单一流式请求的专用行为两种注册方式。
+    /// </summary>
+    /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    public void RegisterCqrsStreamPipelineBehavior<TBehavior>() where TBehavior : class
+    {
+        ThrowIfDisposed();
+        EnterWriteLockOrThrowDisposed();
+        try
+        {
+            ThrowIfFrozen();
+            RegisterCqrsPipelineBehaviorCore(
+                typeof(TBehavior),
+                typeof(IStreamPipelineBehavior<,>),
+                "IStreamPipelineBehavior<,>",
+                "stream pipeline behavior");
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    /// <summary>
+    ///     复用 CQRS 行为注册的开放泛型/封闭接口校验逻辑，
+    ///     让 request 与 stream 两条入口保持一致的容器注册语义。
+    /// </summary>
+    /// <param name="behaviorType">待注册的行为运行时类型。</param>
+    /// <param name="openGenericInterfaceType">行为必须实现的开放泛型接口类型。</param>
+    /// <param name="interfaceTypeDisplayName">用于日志与异常的接口显示名称。</param>
+    /// <param name="registrationLabel">用于日志的注册类别名称。</param>
+    /// <exception cref="InvalidOperationException"><paramref name="behaviorType" /> 未实现目标行为接口。</exception>
+    private void RegisterCqrsPipelineBehaviorCore(
+        Type behaviorType,
+        Type openGenericInterfaceType,
+        string interfaceTypeDisplayName,
+        string registrationLabel)
+    {
+        if (behaviorType.IsGenericTypeDefinition)
+        {
+            GetServicesUnsafe.AddSingleton(openGenericInterfaceType, behaviorType);
+        }
+        else
+        {
+            var pipelineInterfaces = behaviorType
+                .GetInterfaces()
+                .Where(type => type.IsGenericType &&
+                               type.GetGenericTypeDefinition() == openGenericInterfaceType)
+                .ToList();
+
+            if (pipelineInterfaces.Count == 0)
+            {
+                var errorMessage = $"{behaviorType.Name} does not implement {interfaceTypeDisplayName}";
+                _logger.Error(errorMessage);
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            // 为每个已闭合的行为接口建立显式映射，支持针对特定请求/响应对的专用行为。
+            foreach (var pipelineInterface in pipelineInterfaces)
+            {
+                GetServicesUnsafe.AddSingleton(pipelineInterface, behaviorType);
+            }
+        }
+
+        _logger.Debug($"CQRS {registrationLabel} registered: {behaviorType.Name}");
     }
 
     /// <summary>
