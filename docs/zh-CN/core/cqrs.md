@@ -119,6 +119,25 @@ var playerId = await architecture.Context.SendRequestAsync(
 - 首个处理器抛出异常时立即停止后续分发
 - 如果容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置顺序发布器
 
+如果你需要等待所有通知处理器并行完成，而不是沿用默认顺序语义，可以显式切换到内置
+`TaskWhenAllNotificationPublisher`：
+
+```csharp
+using GFramework.Cqrs;
+using GFramework.Cqrs.Notification;
+
+var runtime = CqrsRuntimeFactory.CreateRuntime(
+    container,
+    logger,
+    new TaskWhenAllNotificationPublisher());
+```
+
+这条策略的边界也需要明确：
+
+- 不保证处理器执行顺序
+- 不会在首个处理器失败时立即停止其余处理器
+- 会在全部处理器结束后统一暴露异常或取消结果
+
 ## Request 与流式变体
 
 除了最常见的 `Command` / `Query` / `Notification`，当前公开面还覆盖两类容易被忽略的入口：

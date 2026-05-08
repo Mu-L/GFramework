@@ -92,6 +92,41 @@ internal sealed class CqrsNotificationPublisherTests
     }
 
     /// <summary>
+    ///     验证内置 `TaskWhenAll` 发布器会继续调度所有处理器，而不是沿用默认顺序发布器的失败即停语义。
+    /// </summary>
+    [Test]
+    public async Task PublishAsync_Should_Invoke_All_Handlers_When_Using_TaskWhenAll_NotificationPublisher()
+    {
+        var trailingHandler = new RecordingNotificationHandler("second", []);
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationHandler<PublisherNotification>)))
+                    .Returns(
+                    [
+                        new ThrowingNotificationHandler(),
+                        trailingHandler
+                    ]);
+            },
+            new TaskWhenAllNotificationPublisher());
+
+        var publishTask = runtime.PublishAsync(new FakeCqrsContext(), new PublisherNotification()).AsTask();
+
+        try
+        {
+            await publishTask.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // 并行发布会把处理器失败收敛到返回任务；这里仅消费异常并继续验证所有处理器都已被触发。
+        }
+
+        Assert.That(trailingHandler.Invoked, Is.True);
+        Assert.That(publishTask.Exception, Is.Not.Null);
+    }
+
+    /// <summary>
     ///     验证默认通知发布器在零处理器场景下会保持静默完成。
     /// </summary>
     [Test]

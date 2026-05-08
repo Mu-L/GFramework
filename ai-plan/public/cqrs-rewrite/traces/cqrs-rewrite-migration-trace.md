@@ -2,6 +2,29 @@
 
 ## 2026-05-08
 
+### 阶段：内置 `TaskWhenAll` notification publisher（CQRS-REWRITE-RP-113）
+
+- 延续 `$gframework-batch-boot 50`，本轮不再继续堆 notification benchmark 维度，而是直接把上一批已经量化清楚的 capability gap 收口到 runtime：
+  - `RP-111` / `RP-112` 已证明当前 notification publish 无论单处理器还是固定 fan-out，都和 `Mediator` 的 publish strategy 能力差距相关，而不只是“缺 benchmark”
+  - 当前分支相对 `origin/main` 的累计 branch diff 仍明显低于 `50` 文件阈值，因此适合用一个单模块、可回归、可文档化的能力切片继续自动推进
+- 本轮主线程决策：
+  - 新增 `GFramework.Cqrs/Notification/TaskWhenAllNotificationPublisher.cs`，提供公开内置并行 notification publisher，并把“同步抛出的处理器异常也收敛到返回任务中”作为实现约束
+  - 在 `GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs` 补齐针对新策略的回归，确认它不会像默认顺序发布器那样在首个失败处停止其余处理器
+  - 更新 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md`，写明切换方式，以及“不保证顺序 / 等待全部处理器完成 / 统一暴露异常或取消结果”的采用边界
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsNotificationPublisherTests"`
+    - 结果：通过
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Notification/TaskWhenAllNotificationPublisher.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - `GFramework.Cqrs` 现在不再只有“自定义 seam”这一种 notification publisher 扩展方式，而是先提供了一个仓库维护的内置并行策略，开始实质缩小和 `Mediator` 在 publisher strategy 上的能力差距
+  - 这批改动保持默认顺序语义不变，因此风险主要落在“新策略的异常聚合和用户理解边界”，已通过测试和文档同步收口
+  - 当前可以继续自动推进，但更合理的下一批应优先补新策略的 benchmark 或继续评估 notification publisher 配置面，而不是回头重复扩更多 fan-out benchmark
+
 ### 阶段：notification fan-out publish benchmark（CQRS-REWRITE-RP-112）
 
 - 延续 `$gframework-batch-boot 50`，本轮没有直接切入 notification runtime 或 publisher strategy，而是先补齐固定 `4 handler` 的 fan-out publish 对照：

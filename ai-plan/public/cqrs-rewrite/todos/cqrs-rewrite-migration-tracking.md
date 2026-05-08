@@ -7,10 +7,14 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-112`
+- 恢复点编号：`CQRS-REWRITE-RP-113`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #341`
 - 当前结论：
+  - 当前 `RP-113` 已继续沿用 `$gframework-batch-boot 50`，并把 notification 线从 benchmark 对照推进到实际 runtime 能力：新增公开内置 `TaskWhenAllNotificationPublisher`，让 `GFramework.Cqrs` 在保留默认顺序发布器的同时，提供与 `Mediator` `TaskWhenAllPublisher` 对齐的并行 notification publish 策略
+  - `TaskWhenAllNotificationPublisher` 当前语义明确为：零处理器静默完成，单处理器直接透传，多处理器并行启动并等待全部结束；它不保留默认顺序发布器的“首个异常立即停止”语义，而是把全部处理器的失败/取消结果收敛到同一个返回任务
+  - 本轮同时补齐 `CqrsNotificationPublisherTests` 对新内置策略的回归，并更新 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md`，把切换方式和语义边界写回用户可见文档；当前已提交 branch diff 仍明显低于 `$gframework-batch-boot 50` 的停止阈值
+  - 这一批选择真正落一个内置 publisher strategy，而不是继续加 notification benchmark 维度；原因是 `RP-111` / `RP-112` 已经把 notification gap 量化清楚，下一步更高价值的是开始收口“能力差距”而不是继续重复建立对照数据
   - 当前 `RP-112` 已继续沿用 `$gframework-batch-boot 50`，并在 `RP-111` 的单处理器 notification 对照基础上补齐固定 `4 handler` 的 fan-out publish benchmark：新增 `NotificationFanOutBenchmarks`，对比 baseline、`GFramework.Cqrs`、NuGet `Mediator` concrete runtime 与 `MediatR`
   - `NotificationFanOutBenchmarks` 当前 short-job 基线约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`；这说明 notification fan-out 的差距已经不只体现在单处理器 publish，而是在固定 4 处理器场景下依然保持相近量级
   - 本轮仍然只扩 benchmark 对照口径，没有直接修改 notification runtime 或 publisher 策略语义；原因是当前更高价值的事实是先量化“单处理器”和“固定 fan-out”两条 notification 路径的外部差距，再决定下一批是否值得切进 publisher strategy 或 runtime 热点
@@ -361,8 +365,8 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 当前 turn 仍可继续自动推进；若下一批继续沿用 `$gframework-batch-boot` 且优先处理 notification 线，先评估 publisher strategy 或异常/取消语义的对照，而不是继续机械扩充更多同层级 fan-out benchmark
-2. 若下一轮要切回更高价值热点，优先重新审视 request dispatch 常量开销或 notification publisher strategy，而不是新增 generated notification invoker/provider 这一类 steady-state 收益信号偏弱的 runtime seam
+1. 当前 turn 仍可继续自动推进；若下一批继续沿用 `$gframework-batch-boot 50` 且仍留在 notification 线，优先补 `TaskWhenAllNotificationPublisher` 的 benchmark / 异常聚合文档细化，或继续评估是否需要第二个内置 publisher strategy，而不是回头再加同层级 fan-out 对照
+2. 若下一轮要切回更高价值热点，优先重新审视 request dispatch 常量开销或 notification publisher 策略配置面，而不是新增 generated notification invoker/provider 这一类 steady-state 收益信号偏弱的 runtime seam
 3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档

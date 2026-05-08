@@ -50,6 +50,7 @@
   - `CqrsRuntimeFactory.cs`
   - `Internal/CqrsDispatcher.cs`
   - `Notification/INotificationPublisher.cs`
+  - `Notification/TaskWhenAllNotificationPublisher.cs`
   - `Internal/CqrsHandlerRegistrar.cs`
   - `Internal/DefaultCqrsHandlerRegistrar.cs`
   - `Internal/DefaultCqrsRegistrationService.cs`
@@ -125,7 +126,22 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
 - 通知分发
   - 通知会分发给所有已注册 `INotificationHandler<>`；零处理器时默认静默完成。
   - 默认通知发布器会按容器解析顺序逐个执行处理器，并在首个处理器抛出异常时立即停止后续分发。
+  - 若需要等待所有处理器并行完成，可以在创建 runtime 时显式传入 `TaskWhenAllNotificationPublisher`；该策略不保证执行顺序，并会在全部处理器结束后聚合异常或取消结果。
   - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置顺序发布器。
+
+如果你需要切换到内置并行 notification publisher，可以在组合根里显式选择它：
+
+```csharp
+using GFramework.Cqrs;
+using GFramework.Cqrs.Notification;
+
+var runtime = CqrsRuntimeFactory.CreateRuntime(
+    container,
+    logger,
+    new TaskWhenAllNotificationPublisher());
+```
+
+对于走标准 `GFramework.Core` 启动路径的架构，也可以在 runtime 创建前预先向容器注册 `INotificationPublisher`，让默认基础设施复用同一策略。
 - 流式请求
   - 通过 `IStreamRequest<TResponse>` 和 `IStreamRequestHandler<,>` 返回 `IAsyncEnumerable<TResponse>`。
   - 当消费端程序集提供 generated stream invoker provider / descriptor 后，runtime 会优先消费这组 stream invoker 元数据；未命中时仍回退到既有反射 stream binding 创建路径。
