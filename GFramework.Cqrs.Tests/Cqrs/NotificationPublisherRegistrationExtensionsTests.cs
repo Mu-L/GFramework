@@ -51,6 +51,32 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
     }
 
     /// <summary>
+    ///     验证显式注册内置 <see cref="SequentialNotificationPublisher" /> 后，
+    ///     默认 runtime 基础设施会保留“首个失败立即停止后续处理器”的顺序语义。
+    /// </summary>
+    [Test]
+    public void UseSequentialNotificationPublisher_Should_Preserve_Stop_On_First_Failure_Semantics()
+    {
+        LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
+
+        var trailingHandler = new RecordingNotificationHandler();
+        var container = new MicrosoftDiContainer();
+        container.UseSequentialNotificationPublisher();
+        container.Register<INotificationHandler<TestNotification>>(new ThrowingNotificationHandler());
+        container.Register<INotificationHandler<TestNotification>>(trailingHandler);
+        CqrsTestRuntime.RegisterInfrastructure(container);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+
+        Assert.That(
+            async () => await context.PublishAsync(new TestNotification()).ConfigureAwait(false),
+            Throws.InvalidOperationException.With.Message.EqualTo("boom"));
+        Assert.That(trailingHandler.WasInvoked, Is.False);
+        Assert.That(container.GetRequired<INotificationPublisher>(), Is.TypeOf<SequentialNotificationPublisher>());
+    }
+
+    /// <summary>
     ///     验证显式传入实例的组合根注册入口会把同一个 publisher 实例绑定到容器。
     /// </summary>
     [Test]

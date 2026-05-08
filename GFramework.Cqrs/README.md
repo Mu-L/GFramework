@@ -127,8 +127,16 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
   - 通知会分发给所有已注册 `INotificationHandler<>`；零处理器时默认静默完成。
   - 默认通知发布器会按容器解析顺序逐个执行处理器，并在首个处理器抛出异常时立即停止后续分发。
   - 若需要等待所有处理器并行完成，可以在创建 runtime 时显式传入 `TaskWhenAllNotificationPublisher`；该策略不保证执行顺序，并会在全部处理器结束后聚合异常或取消结果。
-  - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置顺序发布器。
+  - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`。
   - 若只是为了降低 fixed fan-out publish 的 steady-state 成本，当前 benchmark 并不表明 `TaskWhenAllNotificationPublisher` 会优于默认顺序发布器；它更适合你需要“等待全部处理器完成并统一观察失败”的场景。
+
+如果你需要显式保留默认顺序语义，也可以在组合根里直接声明：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseSequentialNotificationPublisher();
+```
 
 如果你需要切换到内置并行 notification publisher，推荐在组合根里显式声明这条策略：
 

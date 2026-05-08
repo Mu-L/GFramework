@@ -117,7 +117,15 @@ var playerId = await architecture.Context.SendRequestAsync(
 - 零处理器时静默完成
 - 已解析处理器按容器顺序逐个执行
 - 首个处理器抛出异常时立即停止后续分发
-- 如果容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置顺序发布器
+- 如果容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`
+
+如果你想在组合根里显式保留默认顺序语义，也可以直接写成：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseSequentialNotificationPublisher();
+```
 
 如果你需要等待所有通知处理器并行完成，而不是沿用默认顺序语义，可以显式切换到内置
 `TaskWhenAllNotificationPublisher`：

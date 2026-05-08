@@ -7,10 +7,13 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-115`
+- 恢复点编号：`CQRS-REWRITE-RP-116`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #341`
 - 当前结论：
+  - 当前 `RP-116` 已继续沿用 `$gframework-batch-boot 50`，并把刚收口的 notification publisher 配置面补成对称的内置策略集合：`SequentialNotificationPublisher` 现在作为公开类型提供，组合根新增 `UseSequentialNotificationPublisher()`，不再只存在“一个显式并行策略 + 一个隐式默认回退”
+  - 这一批让用户能够在文档、配置和测试里显式表达“我要顺序失败即停”与“我要并行等待全部完成”这两条内置语义，而不需要把默认顺序策略理解成 runtime 内部细节；这进一步降低了 notification publisher seam 的心智负担
+  - 当前分支相对 `origin/main` 的累计 branch diff 提交 `RP-115` 后约为 `11 files`，仍明显低于 `$gframework-batch-boot 50` 的停止阈值；因此这批继续保持 notification 配置面内的低风险、可评审切片
   - 当前 `RP-115` 已继续沿用 `$gframework-batch-boot 50`，并把 notification publisher 线从“已具备 seam + benchmark 事实”继续收口到组合根配置面：新增 `GFramework.Cqrs.Extensions.NotificationPublisherRegistrationExtensions`，提供 `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` / `UseTaskWhenAllNotificationPublisher()` 三个显式入口，避免用户再手写 `Register<INotificationPublisher>(new ...)`
   - 这一批同时把重复策略注册前移到组合根阶段显式阻止，并在回归里确认 `UseTaskWhenAllNotificationPublisher()` 经过默认 runtime 基础设施后仍会命中“失败不阻断其余 handler”的并行语义；这让 notification publisher 的采用路径从“知道内部 seam 如何接线”收口为“知道该在容器里选哪条策略”
   - 用户文档现同步写明 `TaskWhenAllNotificationPublisher` 更适合“并行完成 + 统一观察失败”的语义诉求，而不是 fixed fan-out steady-state publish 优化；这与 `RP-114` 的 benchmark 结论保持一致，减少使用者把它误解成默认的性能升级开关
@@ -372,7 +375,7 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 既然 `RP-115` 已把 notification publisher 选择面收口到显式组合根扩展，下一轮若继续留在 notification 线，优先评估是否需要补第二个内置策略或更细的配置文档，而不是再让用户直接依赖裸 `INotificationPublisher` 注册细节
+1. 既然 `RP-116` 已把顺序 / 并行两条内置策略都收口成显式组合根入口，下一轮若继续留在 notification 线，优先评估是否需要补更细的采用文档或第三种策略，而不是再让用户直接依赖裸 `INotificationPublisher` 注册细节
 2. 当前 benchmark 已证明 `TaskWhenAllNotificationPublisher` 的价值主要在并行完成与异常聚合语义，而不是吞吐收益；若 notification 配置面已经足够，下一轮优先回到 request dispatch 常量开销，而不是新增 generated notification invoker/provider 这类 steady-state 收益信号偏弱的 runtime seam
 3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 

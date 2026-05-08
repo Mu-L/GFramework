@@ -2,6 +2,28 @@
 
 ## 2026-05-08
 
+### 阶段：公开顺序 notification publisher 策略（CQRS-REWRITE-RP-116）
+
+- 延续 `$gframework-batch-boot 50`，本轮继续留在 notification publisher 配置面，但不再新增第三方 benchmark 或 runtime seam：
+  - 当前分支相对 `origin/main`（`7ca21af9`, `2026-05-08 16:12:20 +0800`）的累计 branch diff 在 `RP-115` 提交后约为 `11 files`，明显低于 `50` 文件阈值
+  - `RP-115` 已把采用路径收口到显式组合根扩展，但当前仍只有 `TaskWhenAllNotificationPublisher` 是公开内置策略；默认顺序语义仍主要靠“未注册时的隐式回退”表达
+- 本轮主线程决策：
+  - 新增公开 `GFramework.Cqrs/Notification/SequentialNotificationPublisher.cs`，并让 `CqrsRuntimeFactory` 默认回退直接使用这条公开顺序策略
+  - 删除 `GFramework.Cqrs/Internal/SequentialNotificationPublisher.cs` 的内部副本，避免默认顺序语义同时存在“内部实现”和“公开实现”两套类型来源
+  - 为 `NotificationPublisherRegistrationExtensions` 增加 `UseSequentialNotificationPublisher()`，并在回归与用户文档中把“显式顺序策略”与“显式并行策略”作为对称选择面呈现
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests|FullyQualifiedName~CqrsNotificationPublisherTests"`
+    - 结果：通过，`10/10` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Notification/SequentialNotificationPublisher.cs GFramework.Cqrs/CqrsRuntimeFactory.cs GFramework.Cqrs/Extensions/NotificationPublisherRegistrationExtensions.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - notification publisher 的公开配置面现已从“一个显式策略 + 一个隐式默认回退”收口成两条对称的内置策略选择：`UseSequentialNotificationPublisher()` 与 `UseTaskWhenAllNotificationPublisher()`
+  - 若后续继续 notification 线，更合理的下一刀会是补更细的采用文档或新的策略语义，而不是继续让顺序 / 并行这两条基础选择停留在隐式约定上
+
 ### 阶段：notification publisher 组合根配置面（CQRS-REWRITE-RP-115）
 
 - 延续 `$gframework-batch-boot 50`，本轮不再回到 benchmark 宿主，而是沿着 `RP-114` 已明确的性能/语义事实继续收口用户接入缺口：

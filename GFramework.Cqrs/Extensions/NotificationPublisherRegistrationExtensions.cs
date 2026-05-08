@@ -78,6 +78,23 @@ public static class NotificationPublisherRegistrationExtensions
     }
 
     /// <summary>
+    ///     将内置 <see cref="SequentialNotificationPublisher" /> 注册为当前容器唯一的 notification publisher 策略。
+    /// </summary>
+    /// <param name="container">目标依赖注入容器。</param>
+    /// <returns>同一个 <paramref name="container" />，便于在组合根中继续链式配置。</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="container" /> 为 <see langword="null" />。</exception>
+    /// <exception cref="InvalidOperationException">
+    ///     当前容器已存在 <see cref="INotificationPublisher" /> 注册，无法再切换为另一个策略。
+    /// </exception>
+    /// <remarks>
+    ///     该策略适合处理器之间存在顺序依赖，或调用方希望在首个失败处立即停止后续分发的场景。
+    /// </remarks>
+    public static IIocContainer UseSequentialNotificationPublisher(this IIocContainer container)
+    {
+        return UseNotificationPublisher(container, new SequentialNotificationPublisher());
+    }
+
+    /// <summary>
     ///     在组合根阶段阻止多个 notification publisher 策略同时注册，避免 runtime 创建时出现歧义。
     /// </summary>
     /// <param name="container">当前正在配置的依赖注入容器。</param>
