@@ -2,6 +2,45 @@
 
 ## 2026-05-08
 
+### 阶段：request pipeline benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-106）
+
+- 延续 `$gframework-batch-boot 50`，本轮基于 `RP-105` 已验证的默认 request 宿主接线继续推进，并先复核 branch diff 基线：
+  - `origin/main` = `4d6dbba6`，提交时间 `2026-05-08 11:13:33 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 为 `8 files / 358 lines`
+  - 当前工作树待提交改动只集中在 `RequestPipelineBenchmarks`、对应 handwritten generated registry 与 benchmark `README`，因此继续自动推进下一批 pipeline 宿主收口
+- 本轮接受的只读探索结论：
+  - `RP-105` 已证明“让默认 request 宿主真实接上 generated request invoker provider”能稳定压低 steady-state request，因此 pipeline benchmark 仍保留旧的“直接注册单个 handler”路径会让口径不对齐
+  - 之前已被 benchmark 否决的“总是 `GetAll(Type)` 做零 pipeline 探测”不应回头重试；下一刀更合理的是把 pipeline benchmark 也切到真实程序集注册入口
+  - `RequestPipelineBenchmarks` 只需要补一份与 `RequestBenchmarks` 对称的 handwritten generated registry，就能最小化改动并保持 runtime 语义不变
+- 本轮主线程决策：
+  - 新增 `GeneratedRequestPipelineBenchmarkRegistry`，用 handwritten generated registry + `ICqrsRequestInvokerProvider` + `IEnumeratesCqrsRequestInvokerDescriptors` 为 `RequestPipelineBenchmarks.BenchmarkRequest` 提供真实的 generated request invoker descriptor
+  - 让 `RequestPipelineBenchmarks` 改用 `RegisterCqrsHandlersFromAssembly(typeof(RequestPipelineBenchmarks).Assembly)` 建容器，只把 pipeline 行为数量矩阵保留在 benchmark 自己的显式注册里
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md`，明确 request pipeline benchmark 也已接上 handwritten generated request invoker provider
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedRequestPipelineBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/RequestPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.680 ns / 32 B`、`Mediator` `6.565 ns / 32 B`、`MediatR` `54.737 ns / 232 B`、`GFramework.Cqrs` `63.644 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 `GFramework.Cqrs` / `MediatR` 约 `69.896 ns / 32 B` vs `57.469 ns / 232 B`；`Transient` 下约 `72.880 ns / 56 B` vs `55.106 ns / 232 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestPipelineBenchmarks.SendRequest_GFrameworkCqrs*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：第一次短跑为 `PipelineCount=0` `64.928 ns / 32 B`、`PipelineCount=1` `366.468 ns / 536 B`、`PipelineCount=4` `547.800 ns / 896 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestPipelineBenchmarks.SendRequest_GFrameworkCqrs*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：复跑确认后为 `PipelineCount=0` `64.755 ns / 32 B`、`PipelineCount=1` `353.141 ns / 536 B`、`PipelineCount=4` `555.083 ns / 896 B`
+- 本轮结论：
+  - request pipeline benchmark 现在已与默认 request steady-state 使用同一条 generated-provider 宿主接线路径，后续再看 `0 / 1 / 4` 行为矩阵时不再混入“默认 request 已吸收 generated invoker，而 pipeline 还停在纯反射宿主”的口径偏差
+  - `0 pipeline` steady-state 继续下探到约 `64.755 ns / 32 B`，与 `RP-105` 的默认 request benchmark 收敛方向一致，说明这条宿主接线收益能稳定复用到 pipeline benchmark
+  - `1 pipeline` 与 `4 pipeline` 结果在当前 short job 配置下存在噪音，但没有出现清晰的新增分配或显著退化；因此本轮适合作为低风险宿主收口批次接受
+  - 下一批若继续沿用 `$gframework-batch-boot 50`，应优先查看 request lifetime、stream 或 notification benchmark 中是否还存在未吸收 generated-provider 宿主收益的对称切片，而不是回头重试已被 benchmark 否决的 runtime 微优化
+
 ### 阶段：默认 request benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-105）
 
 - 延续 `$gframework-batch-boot 50`，本轮先确认失败试验已手工回退回 `RP-104` 的已验证状态，再重新评估“默认 request 路径继续逼近 source-generated `Mediator`”的下一刀

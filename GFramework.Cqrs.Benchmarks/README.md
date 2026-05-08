@@ -19,7 +19,7 @@
 - `Messaging/RequestLifetimeBenchmarks.cs`
   - `Singleton / Transient` 两类 handler 生命周期下，direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestPipelineBenchmarks.cs`
-  - `0 / 1 / 4` 个 pipeline 行为下，direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
+  - `0 / 1 / 4` 个 pipeline 行为下，direct handler、已接上 handwritten generated request invoker provider 的 `GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestStartupBenchmarks.cs`
   - `Initialization` 与 `ColdStart` 两组 request startup 成本对比，补齐与 `Mediator` comparison benchmark 更接近的 startup 维度
 - `Messaging/RequestInvokerBenchmarks.cs`
