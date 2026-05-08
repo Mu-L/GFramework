@@ -2,6 +2,35 @@
 
 ## 2026-05-08
 
+### 阶段：notification publisher 采用矩阵文档收口（CQRS-REWRITE-RP-117）
+
+- 延续 `$gframework-batch-boot 50`，本轮没有继续把自动批处理推到新的 runtime seam，而是先按 tracking 建议复核“notification 线是否还缺采用边界文档”：
+  - 当前分支相对 `origin/main`（`7ca21af9`, `2026-05-08 16:12:20 +0800`）的累计 branch diff 约为 `12 files`，仍明显低于 `50` 文件阈值
+  - 主线程先短试了一刀 request dispatch 热路径微优化：把 dispatcher 中“运行时类型是否实现 `IContextAware`”改成弱键缓存，并按性能治理规则复跑 `RequestBenchmarks` 与 `RequestLifetimeBenchmarks`
+  - 复跑结果表明这条假设没有正收益：默认 steady-state request 回到约 `71.824 ns / 32 B`，`Singleton / Transient` lifetime 约为 `73.191 ns / 32 B` 与 `80.468 ns / 56 B`，因此本轮在同一提交前已完全撤回该运行时代码实验，不把负收益热点带进后续恢复点
+- 本轮主线程决策：
+  - 保持 `GFramework.Cqrs` runtime 与测试代码不变，只更新 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md`
+  - 把 `SequentialNotificationPublisher`、`TaskWhenAllNotificationPublisher` 与 `UseNotificationPublisher(...)` 自定义实例三条路径收口到同一张策略矩阵
+  - 在用户文档里明确 `TaskWhenAllNotificationPublisher` 是“并行完成 + 聚合失败”语义策略，而不是 fixed fan-out publish 的性能开关
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherCacheTests|FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`17/17` passed
+    - 备注：首轮与 build 并行触发时出现 `MSB3026` 单次复制重试告警，但同一命令最终稳定通过，未形成代码失败
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：用于否决本轮已撤回的热点假设；默认 steady-state request 对照约为 baseline `5.853 ns / 32 B`、`Mediator` `6.256 ns / 32 B`、`MediatR` `53.401 ns / 232 B`、`GFramework.Cqrs` `71.824 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：用于否决本轮已撤回的热点假设；`Singleton` 下 baseline / `MediatR` / `GFramework.Cqrs` 约 `5.259 ns / 58.415 ns / 73.191 ns`，`Transient` 下约 `4.914 ns / 57.150 ns / 80.468 ns`
+- 本轮结论：
+  - notification publisher 公开入口现在不仅有显式顺序 / 并行 API，也有更直接的策略选择矩阵；读者不再需要从分散段落里拼装“什么时候该选哪条策略”
+  - request dispatch 热路径的下一轮探索应显式绕开“类型级 `IContextAware` 判定缓存”这一条已验证无收益的方向，把 context budget 留给更可能影响 steady-state 的热点
+  - 当前仍可继续自动推进，但若再开一批 runtime 性能实验，应放在新的自然批次里，避免把已否决假设和新热点混在同一评审单元中
+
 ### 阶段：公开顺序 notification publisher 策略（CQRS-REWRITE-RP-116）
 
 - 延续 `$gframework-batch-boot 50`，本轮继续留在 notification publisher 配置面，但不再新增第三方 benchmark 或 runtime seam：

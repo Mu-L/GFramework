@@ -119,6 +119,14 @@ var playerId = await architecture.Context.SendRequestAsync(
 - 首个处理器抛出异常时立即停止后续分发
 - 如果容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`
 
+如果你需要在组合根里明确表达“为什么选这条策略”，可以按下面的矩阵判断：
+
+| 策略 | 适用场景 | 顺序语义 | 失败语义 | 备注 |
+| --- | --- | --- | --- | --- |
+| `UseSequentialNotificationPublisher()` | 需要保持容器顺序，且希望首个失败立即停止 | 保证按容器顺序执行 | 首个处理器异常会中断后续处理器 | 这也是默认回退策略 |
+| `UseTaskWhenAllNotificationPublisher()` | 需要让全部处理器并行完成，再统一观察异常或取消 | 不保证顺序 | 不会在首个失败时中断其余处理器；全部结束后统一暴露结果 | 更适合语义补齐，不是性能优化开关 |
+| `UseNotificationPublisher(...)` | 需要接入自定义或第三方 publisher 策略 | 取决于实现 | 取决于实现 | 仅在内置顺序 / 并行策略都不满足时使用 |
+
 如果你想在组合根里显式保留默认顺序语义，也可以直接写成：
 
 ```csharp
