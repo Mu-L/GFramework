@@ -15,7 +15,7 @@
 - `Messaging/Fixture.cs`
   - 运行前输出并校验场景配置
 - `Messaging/RequestBenchmarks.cs`
-  - direct handler、`GFramework.Cqrs` runtime、`ai-libs/Mediator` source-generated concrete path 与 `MediatR` 的 request steady-state dispatch 对比
+  - direct handler、NuGet `Mediator` source-generated concrete path、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestLifetimeBenchmarks.cs`
   - `Singleton / Transient` 两类 handler 生命周期下，direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestPipelineBenchmarks.cs`
@@ -39,10 +39,18 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 也可以通过 `BenchmarkDotNet` 过滤器只运行某一类场景。
 
+## 当前约束
+
+- `BenchmarkDotNet.Artifacts/` 属于本地生成输出，默认加入仓库忽略，不作为常规提交内容
+- 只要变更影响 `GFramework.Cqrs` request dispatch、DI 解析热路径、invoker/provider、pipeline 或 benchmark 宿主，就必须至少复跑：
+  - `RequestBenchmarks.SendRequest_*`
+  - `RequestLifetimeBenchmarks.SendRequest_*`
+- 当前性能目标不是超过 source-generated `Mediator`，而是让默认 request steady-state 路径尽量接近它，并至少稳定快于基于反射 / 扫描的 `MediatR`
+
 ## 后续扩展方向
 
 - request / stream 的真实 source-generator 产物与 handwritten generated provider 对照
-- `ai-libs/Mediator` 的 transient / scoped compile-time lifetime 矩阵对照
+- `Mediator` 的 transient / scoped compile-time lifetime 矩阵对照
 - stream handler 生命周期矩阵
 - 带真实显式作用域边界的 scoped host 对照
 - generated invoker provider 与纯反射 dispatch / 建流对比继续扩展到更多场景

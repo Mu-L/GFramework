@@ -2,6 +2,31 @@
 
 ## 2026-05-08
 
+### 阶段：性能回归门槛收紧与 benchmark 产物忽略收口（CQRS-REWRITE-RP-102）
+
+- 延续 `RP-101` 后的 benchmark 基线，本轮没有继续改 runtime 热路径，而是先把性能治理规则补齐，避免后续优化波次出现“功能通过但 steady-state request 变慢”的回退
+- 本轮主线程决策：
+  - 将 `BenchmarkDotNet.Artifacts/` 加入仓库 `.gitignore`，避免本地 benchmark 生成目录反复污染工作树
+  - 在 `GFramework.Cqrs.Benchmarks/README.md` 明确写下新的默认回归门槛：只要改动触达 request dispatch、DI 热路径、invoker/provider、pipeline 或 benchmark 宿主，就必须至少复跑 `RequestBenchmarks.SendRequest_*` 与 `RequestLifetimeBenchmarks.SendRequest_*`
+  - 在 `cqrs-rewrite` active tracking 中把当前阶段目标升级为“持续逼近 source-generated `Mediator`，并至少稳定超过反射版 `MediatR`”，不再只把 benchmark 当成观察工具，而是作为性能收口阶段的验收门槛
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：按新门槛复跑后，steady-state request 对照约为 baseline `5.300 ns / 32 B`、`Mediator` `4.964 ns / 32 B`、`MediatR` `57.993 ns / 232 B`、`GFramework.Cqrs` `83.823 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：按新门槛复跑后，`Singleton` 下 `GFramework.Cqrs` / `MediatR` 约 `83.183 ns / 32 B` vs `60.915 ns / 232 B`；`Transient` 下约 `86.243 ns / 56 B` vs `59.644 ns / 232 B`
+  - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - `BenchmarkDotNet.Artifacts/` 现在不再是工作树噪音源
+  - request benchmark 已从“偶尔人工观察”升级为 CQRS 性能波次的默认回归门槛
+  - 当前离“至少超过反射版 `MediatR`”还有明确差距，所以下一批优化必须围绕 request steady-state 常量开销继续下钻，而不是只增加更多 benchmark 维度
+
 ### 阶段：request 热路径 benchmark 收口与 NuGet `Mediator` 对照补齐（CQRS-REWRITE-RP-101）
 
 - 延续 `$gframework-batch-boot 50`，本轮先按 `origin/main` 复核 branch diff 基线：
