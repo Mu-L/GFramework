@@ -29,7 +29,7 @@
 - `Messaging/NotificationBenchmarks.cs`
   - `GFramework.Cqrs` runtime 与 `MediatR` 的单处理器 notification publish 对比
 - `Messaging/StreamingBenchmarks.cs`
-  - direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 stream request 完整枚举对比
+  - direct handler、已接上 handwritten generated stream invoker provider 的 `GFramework.Cqrs` runtime 与 `MediatR` 的 stream request 完整枚举对比
 
 ## 最小使用方式
 

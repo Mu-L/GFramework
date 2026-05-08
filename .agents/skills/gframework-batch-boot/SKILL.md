@@ -12,6 +12,10 @@ batches until a clear stop condition is met.
 
 Treat `AGENTS.md` as the source of truth. This skill extends `gframework-boot`; it does not replace it.
 
+Context budget is a first-class stop signal. Do not keep batching merely because a file-count threshold still has
+headroom if the active conversation, loaded repo artifacts, validation output, and pending recovery updates suggest the
+agent is approaching its safe working-context limit.
+
 ## Startup Workflow
 
 1. Execute the normal `gframework-boot` startup sequence first:
@@ -28,6 +32,11 @@ Treat `AGENTS.md` as the source of truth. This skill extends `gframework-boot`; 
    - repeated test refactor pattern
    - module-by-module documentation refresh
    - other repetitive multi-file cleanup
+4. Before the first implementation batch, estimate whether the current task is likely to stay below roughly 80% of the
+   agent's safe working-context budget through one more full batch cycle:
+   - include already loaded `AGENTS.md`, skills, `ai-plan` files, recent command output, active diffs, and expected validation output
+   - if another batch would probably push the conversation near the limit, plan to stop after the current batch even if
+     branch-size thresholds still have room
 
 ## Baseline Selection
 
@@ -67,14 +76,24 @@ For shorthand numeric thresholds, use a fixed default baseline:
 
 Choose one primary stop condition before the first batch and restate it to the user.
 
+When the user does not explicitly override the priority order, use:
+
+1. context-budget safety
+2. semantic batch boundary / reviewability
+3. the user-requested local metric such as files, lines, warnings, or time
+
 Common stop conditions:
 
+- the next batch would likely push the agent above roughly 80% of its safe working-context budget
 - branch diff vs baseline approaches a file-count threshold
 - warnings-only build reaches a target count
 - a specific hotspot list is exhausted
 - a timebox or validation budget is reached
 
 If multiple stop conditions exist, rank them and treat one as primary.
+
+Treat file-count or line-count thresholds as coarse repository-scope signals, not as a proxy for AI context health.
+When they disagree with context-budget safety, context-budget safety wins.
 
 ## Shorthand Stop-Condition Syntax
 
@@ -108,6 +127,7 @@ When shorthand is used:
    - current branch and active topic
    - selected baseline
    - current stop-condition metric
+   - current context-budget posture and whether one more batch is safe
    - next candidate slices
 2. Keep the critical path local.
 3. Delegate only bounded slices with explicit ownership:
@@ -127,7 +147,8 @@ When shorthand is used:
 6. After each completed batch:
    - integrate or verify the result
    - rerun the required validation
-   - recompute the primary stop-condition metric
+    - recompute the primary stop-condition metric
+   - reassess whether one more batch would likely push the agent near or beyond roughly 80% context usage
    - decide immediately whether to continue or stop
 7. Do not require the user to manually trigger every round unless:
    - the next slice is ambiguous
@@ -158,6 +179,7 @@ For multi-batch work, keep recovery artifacts current.
 
 Stop the loop when any of the following becomes true:
 
+- the next batch would likely push the agent near or beyond roughly 80% of its safe working-context budget
 - the primary stop condition has been reached or exceeded
 - the remaining slices are no longer low-risk
 - validation failures indicate the task is no longer repetitive
@@ -165,6 +187,7 @@ Stop the loop when any of the following becomes true:
 
 When stopping, report:
 
+- whether context budget was the deciding factor
 - which baseline was used
 - the exact metric value at stop time
 - completed batches

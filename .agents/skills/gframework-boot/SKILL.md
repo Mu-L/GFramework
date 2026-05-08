@@ -36,14 +36,18 @@ Treat `AGENTS.md` as the source of truth. Use this skill to enforce a startup se
    - `simple`: one concern, one file or module, no parallel discovery required
    - `medium`: a small number of modules, some read-only exploration helpful, critical path still easy to keep local
    - `complex`: cross-module design, migration, large refactor, or work likely to exceed one context window
-11. Apply the delegation policy from `AGENTS.md`:
+11. Estimate the current context-budget posture before substantive execution:
+   - account for loaded startup artifacts, active `ai-plan` files, visible diffs, open validation output, and likely next-step output volume
+   - if the task already appears near roughly 80% of a safe working-context budget, prefer closing the current batch,
+     refreshing recovery artifacts, and stopping at the next natural semantic boundary instead of starting a fresh broad slice
+12. Apply the delegation policy from `AGENTS.md`:
    - Keep the critical path local
    - Use `explorer` with `gpt-5.1-codex-mini` for narrow read-only questions, tracing, inventory, and comparisons
    - Use `worker` with `gpt-5.4` only for bounded implementation tasks with explicit ownership
    - Do not delegate purely for ceremony; delegate only when it materially shortens the task or controls context growth
-12. Before editing files, tell the user what you read, how you classified the task, whether subagents will be used,
+13. Before editing files, tell the user what you read, how you classified the task, whether subagents will be used,
     and the first implementation step.
-13. Proceed with execution, validation, and documentation updates required by `AGENTS.md`.
+14. Proceed with execution, validation, and documentation updates required by `AGENTS.md`.
 
 ## Task Tracking
 
@@ -69,6 +73,8 @@ For multi-step, cross-module, or interruption-prone work, maintain the repositor
   first, then search the mapped active topics before scanning the broader public area.
 - If the current branch and the mapped active topics describe the same feature area, prefer resuming those topics first.
 - If the repository state suggests in-flight work but no recovery document matches, reconstruct the safest next step from code, tests, and Git state before asking the user for clarification.
+- If the current turn already carries heavy recovery context, broad diffs, or long validation output, prefer a
+  recovery-point update and a clean stop over starting another large slice just because the code task itself remains open.
 
 ## Example Triggers
 

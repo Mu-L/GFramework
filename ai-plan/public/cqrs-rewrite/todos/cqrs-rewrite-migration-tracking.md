@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-106`
+- 恢复点编号：`CQRS-REWRITE-RP-107`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #340`
 - 当前结论：
@@ -43,20 +43,23 @@ CQRS 迁移与收敛。
   - 当前 `RP-104` 已继续沿用 `$gframework-batch-boot 50` 压 request 热路径：先把 `CqrsDispatcher.SendAsync(...)` 改成 direct-return `ValueTask`，移除 dispatcher 自身的 `async/await` 状态机；再让 `MicrosoftDiContainer.HasRegistration(Type)` 在冻结后复用预构建的服务键索引，避免每次命中零 pipeline request 都线性扫描全部描述符；本轮 benchmark 表明第一刀显著压低 steady-state / lifetime request，第二刀在当前短跑下主要确认“无回退、收益不明显”
   - 当前 `RP-105` 已继续沿用 `$gframework-batch-boot 50` 压默认 request steady-state：为 benchmark 最小宿主补齐 CQRS runtime / registrar / registration service 基础设施，让 `RequestBenchmarks` 不再只测反射路径，而是通过 handwritten generated registry + `RegisterCqrsHandlersFromAssembly(...)` 真实接上 generated request invoker provider；本轮 benchmark 表明默认 request 路径进一步从约 `70.298 ns / 32 B` 压到约 `65.296 ns / 32 B`，`Singleton / Transient` lifetime 也同步收敛到约 `68.772 ns / 32 B` 与 `73.157 ns / 56 B`
   - 当前 `RP-106` 已把同一套 generated-provider 宿主收口扩展到 `RequestPipelineBenchmarks`：新增 handwritten `GeneratedRequestPipelineBenchmarkRegistry`，并让 `RequestPipelineBenchmarks` 改走 `RegisterCqrsHandlersFromAssembly(...)` + benchmark CQRS 基础设施预接线；本轮 benchmark 表明 `0 pipeline` steady-state 进一步收敛到约 `64.755 ns / 32 B`，`1 pipeline` 约 `353.141 ns / 536 B`，`4 pipeline` 在短跑噪音下维持约 `555.083 ns / 896 B`
-- `ai-plan` active 入口现以 `RP-106` 为最新恢复锚点；`PR #340`、`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - 当前 `RP-107` 已把默认 stream steady-state 宿主也切到 generated-provider 路径：新增 handwritten `GeneratedDefaultStreamingBenchmarkRegistry`，让 `StreamingBenchmarks` 改走 `RegisterCqrsHandlersFromAssembly(...)` 并在 setup/cleanup 清理 dispatcher cache；同时将 `gframework-boot` / `gframework-batch-boot` 的默认停止规则改为“AI 上下文预算优先，建议在预计接近约 80% 安全上下文占用前收口”，不再把 changed files 误当作唯一阈值
+- `ai-plan` active 入口现以 `RP-107` 为最新恢复锚点；`PR #340`、`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
 - 当前分支为 `feat/cqrs-optimization`
 - 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`4d6dbba6`, 2026-05-08 11:13:33 +0800) 为基线；本地 `main` 仍落后，不作为 branch diff 基线
-- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `8 files / 358 lines`
-- 本批待提交工作树集中在 `GFramework.Cqrs.Benchmarks/Messaging/RequestPipelineBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/Messaging/GeneratedRequestPipelineBenchmarkRegistry.cs` 与 `GFramework.Cqrs.Benchmarks/README.md`，新增 generated-provider pipeline 宿主接线后仍明显低于 `$gframework-batch-boot 50` 的文件阈值
+- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `10 files / 507 lines`
+- 本批待提交工作树集中在 `GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/Messaging/GeneratedDefaultStreamingBenchmarkRegistry.cs`、`GFramework.Cqrs.Benchmarks/README.md`、`.agents/skills/gframework-batch-boot/SKILL.md` 与 `.agents/skills/gframework-boot/SKILL.md`
+- 当前批次后的默认停止依据已改为 AI 上下文预算：若下一轮预计会让活动对话、已加载 recovery 文档、验证输出与当前 diff 接近约 `80%` 安全上下文占用，应在当前自然批次边界停止，即使 branch diff 仍有余量
 - `GFramework.Cqrs.Benchmarks` 作为 benchmark 基础设施项目，必须持续排除在 NuGet / GitHub Packages 发布集合之外
 - `GFramework.Cqrs.Benchmarks` 现已覆盖 request steady-state、pipeline 数量矩阵、startup、request/stream generated invoker，以及 request handler `Singleton / Transient` 生命周期矩阵
 - `GFramework.Cqrs.Benchmarks` 当前以 NuGet 方式引用 `Mediator.Abstractions` / `Mediator.SourceGenerator` `3.0.2`；`ai-libs/Mediator` 只保留为本地源码/README 对照资料，不再参与 benchmark 项目编译
-- 当前 request steady-state benchmark 已形成 baseline / `Mediator` / `MediatR` / `GFramework.Cqrs` 四方对照：最新约 `5.680 ns / 32 B`、`6.565 ns / 32 B`、`54.737 ns / 232 B`、`63.644 ns / 32 B`
-- 当前 request lifetime benchmark 已继续收敛：`Singleton` 下 `GFramework.Cqrs` 最新约 `69.896 ns / 32 B`，`Transient` 下约 `72.880 ns / 56 B`；相较 `RP-104` 前的 `73.005 ns / 32 B` 与 `74.757 ns / 56 B` 已继续下降
+- 当前 request steady-state benchmark 已形成 baseline / `Mediator` / `MediatR` / `GFramework.Cqrs` 四方对照：最新约 `5.608 ns / 32 B`、`5.445 ns / 32 B`、`57.071 ns / 232 B`、`64.825 ns / 32 B`
+- 当前 request lifetime benchmark 已继续收敛：`Singleton` 下 `GFramework.Cqrs` 最新约 `69.275 ns / 32 B`，`Transient` 下约 `74.301 ns / 56 B`；相较 `RP-104` 前的 `73.005 ns / 32 B` 与 `74.757 ns / 56 B` 仍维持同一收敛区间
 - 当前 request pipeline benchmark 已改为与默认 request steady-state 相同的 generated-provider 宿主接线路径：`0 pipeline` 约 `64.755 ns / 32 B`，`1 pipeline` 约 `353.141 ns / 536 B`，`4 pipeline` 约 `555.083 ns / 896 B`
+- 当前 stream steady-state benchmark 也已切到 generated-provider 宿主接线路径：baseline 约 `5.535 ns / 32 B`、`MediatR` 约 `59.499 ns / 232 B`、`GFramework.Cqrs` 约 `66.778 ns / 32 B`
 - 本轮已验证旧 benchmark 劣化的两个主热点：`0 pipeline` 场景下仍解析空行为列表，以及容器查询热路径在 debug 禁用时仍构造日志字符串；两者收口后，`GFramework.Cqrs` request 路径不再出现额外数百字节分配
 - `HasRegistration(Type)` 现在只把“同一服务键已注册”或“开放泛型服务键可闭合到目标类型”视为命中，不再把“仅以具体实现类型自注册”的行为误判为接口服务已注册；该语义与 `Get(Type)` / `GetAll(Type)` 已重新对齐
 - `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs` 已同步适配 `HasRegistration(Type)` fast-path，避免 strict mock 因缺少新调用配置而在上下文失败语义断言前提前抛出 `Moq.MockException`
@@ -64,7 +67,8 @@ CQRS 迁移与收敛。
 - 当前 request steady-state 仍落后于 source-generated `Mediator` 与 `MediatR`，但差距已从“额外数百字节分配 + 近 300ns”收敛到“零 pipeline fast-path 仍慢约 `31ns` / `3.6x` 于 `Mediator`”；下一批若继续压 request dispatch，应优先评估默认路径吸收 generated invoker/provider 的空间
 - 本轮 `SendAsync(...)` 的 direct-return `ValueTask` 改动已证明确实是有效热点：同样的短跑配置下，`GFramework.Cqrs` steady-state request 从约 `83.823 ns` 下探到 `69-70 ns` 区间
 - 冻结后 `HasRegistration(Type)` 服务键索引化在当前短跑下没有带来同等量级的可见收益，但也没有引入功能回退或额外分配；后续若继续压零 pipeline request，应优先重新评估“默认 request 路径进一步吸收 generated invoker/provider”而不是继续堆叠同层级微优化
-- 默认 `RequestBenchmarks` 与 `RequestPipelineBenchmarks` 现在都已通过 handwritten generated registry + 真实 `RegisterCqrsHandlersFromAssembly(...)` 宿主接线命中 generated request invoker provider，不再只代表纯反射 request binding 路径
+- 默认 `RequestBenchmarks`、`RequestPipelineBenchmarks` 与 `StreamingBenchmarks` 现在都已通过 handwritten generated registry + 真实 `RegisterCqrsHandlersFromAssembly(...)` 宿主接线命中 generated invoker provider，不再只代表纯反射 binding 路径
+- `gframework-boot` 与 `gframework-batch-boot` 现明确把“上下文预算接近约 80%”视为默认优先停止信号，branch diff files / lines 仅保留为次级仓库范围指标
 - 当前性能回归门槛已收紧为：只要改动触达 `GFramework.Cqrs` request dispatch、DI 热路径、invoker/provider、pipeline 或 benchmark 宿主，就必须至少复跑 `RequestBenchmarks.SendRequest_*` 与 `RequestLifetimeBenchmarks.SendRequest_*`
 - 当前阶段的性能验收目标已明确为：默认 request steady-state 路径不要求超过 source-generated `Mediator`，但必须持续逼近它，并至少稳定快于基于反射 / 扫描的 `MediatR`
 - `GFramework.Core` 当前已通过内部 bridge request / handler 把 legacy `ICommand`、`IAsyncCommand`、`IQuery`、`IAsyncQuery` 接到统一 `ICqrsRuntime`
@@ -297,8 +301,8 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 若继续沿用 `$gframework-batch-boot 50` 且优先处理性能，下一批先查看 `RequestLifetimeBenchmarks` 与 stream/notification 对照里是否还有未吸收 generated-provider 宿主收益的低风险切片
-2. 若要把“至少超过反射版 `MediatR`”变成可执行目标，下一批应继续围绕 request dispatch / pipeline 路径的剩余常量开销下钻，并在每次改动后立即复跑 `RequestBenchmarks`、`RequestLifetimeBenchmarks` 与 `RequestPipelineBenchmarks`
+1. 当前 turn 已接近默认的上下文预算停止线；本次提交后应停止，并在新的 turn 里从 `RP-107` 恢复点继续，而不是在本轮继续启动新的 benchmark 宿主或 runtime 热点切片
+2. 若下一轮继续沿用 `$gframework-batch-boot` 且优先处理性能，先看 notification 或更高价值的 request dispatch 常量开销热点，而不是再机械按 changed files 追加小批次
 3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再扩 `Mediator` 的 compile-time lifetime 或 stream 对照矩阵，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档

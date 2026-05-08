@@ -18,6 +18,9 @@ using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
+[assembly: GFramework.Cqrs.CqrsHandlerRegistryAttribute(
+    typeof(GFramework.Cqrs.Benchmarks.Messaging.GeneratedDefaultStreamingBenchmarkRegistry))]
+
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
@@ -59,12 +62,12 @@ public class StreamingBenchmarks
             MinLevel = LogLevel.Fatal
         };
         Fixture.Setup("StreamRequest", handlerCount: 1, pipelineCount: 0);
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
 
         _baselineHandler = new BenchmarkStreamHandler();
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>>(
-                _baselineHandler);
+            container.RegisterCqrsHandlersFromAssembly(typeof(StreamingBenchmarks).Assembly);
         });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
@@ -86,7 +89,14 @@ public class StreamingBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+        try
+        {
+            BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+        }
+        finally
+        {
+            BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
+        }
     }
 
     /// <summary>

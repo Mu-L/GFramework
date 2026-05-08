@@ -2,6 +2,43 @@
 
 ## 2026-05-08
 
+### 阶段：默认 stream benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-107）
+
+- 延续 `$gframework-batch-boot 50`，但本轮按用户新增要求把默认停止依据改为“AI 上下文预算优先，建议在预计接近约 80% 安全上下文占用前收口”；在真正落代码前先复核：
+  - `origin/main` = `4d6dbba6`，提交时间 `2026-05-08 11:13:33 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 为 `10 files / 507 lines`
+  - 当前 turn 已加载 `AGENTS.md`、`gframework-batch-boot` / `gframework-boot`、active tracking/trace、上一轮 benchmark 结果与多次 validation 输出，因此继续一个自然批次可以接受，但不应在本次提交后继续无界循环
+- 本轮接受的只读探索结论：
+  - 默认 request / request pipeline 宿主都已吸收 generated provider，但 `StreamingBenchmarks` 仍停在“直接注册单个 stream handler”的旧宿主路径，口径与 `StreamInvokerBenchmarks` / 默认 request 组不对称
+  - 默认 stream steady-state 场景已经足够独立，适合用一份新的 handwritten generated stream registry 最小化收口，而不用再修改 runtime 语义
+  - 用户要求把停止条件从 changed files 改成 AI 上下文预算，因此 skill 文档本身也属于这一批必须一起落下的恢复边界更新
+- 本轮主线程决策：
+  - 新增 `GeneratedDefaultStreamingBenchmarkRegistry`，用 handwritten generated registry + `ICqrsStreamInvokerProvider` + `IEnumeratesCqrsStreamInvokerDescriptors` 为 `StreamingBenchmarks.BenchmarkStreamRequest` 提供真实的 generated stream invoker descriptor
+  - 让 `StreamingBenchmarks` 改用 `RegisterCqrsHandlersFromAssembly(typeof(StreamingBenchmarks).Assembly)` 建容器，并在 `Setup/Cleanup` 前后显式清理 dispatcher 静态缓存
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md`，明确默认 stream steady-state benchmark 也已接上 handwritten generated stream invoker provider
+  - 更新 `.agents/skills/gframework-batch-boot/SKILL.md` 与 `.agents/skills/gframework-boot/SKILL.md`，明确“上下文预算接近约 80% 时优先停止，branch diff 文件/行数只作次级仓库范围信号”
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedDefaultStreamingBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.608 ns / 32 B`、`Mediator` `5.445 ns / 32 B`、`MediatR` `57.071 ns / 232 B`、`GFramework.Cqrs` `64.825 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / `MediatR` / `GFramework.Cqrs` 约 `4.446 ns / 51.331 ns / 69.275 ns`；`Transient` 下约 `4.918 ns / 56.382 ns / 74.301 ns`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*StreamingBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：默认 stream steady-state 对照约为 baseline `5.535 ns / 32 B`、`MediatR` `59.499 ns / 232 B`、`GFramework.Cqrs` `66.778 ns / 32 B`
+- 本轮结论：
+  - 默认 stream steady-state benchmark 现在也已切到 generated-provider 宿主路径，request / pipeline / stream 三个默认宿主场景的 benchmark 口径终于对齐
+  - `StreamingBenchmarks` 的 `GFramework.Cqrs` 结果约 `66.778 ns / 32 B`，仍慢于 `MediatR`，但没有新增分配或明显回退，说明这次宿主收口是低风险可接受的
+  - 更重要的是，默认停止依据已从“branch diff 文件数是否触顶”改成“AI 上下文预算是否接近约 80%”；结合当前 turn 已加载的大量 recovery/validation/benchmark 输出，本次提交后应主动停止，而不是继续机械扩批
+  - 下一轮若继续性能线，应从 `RP-107` 恢复点重新进入，并优先挑选新的高价值热点族，而不是沿着当前 turn 再追加更多同类宿主收口
+
 ### 阶段：request pipeline benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-106）
 
 - 延续 `$gframework-batch-boot 50`，本轮基于 `RP-105` 已验证的默认 request 宿主接线继续推进，并先复核 branch diff 基线：
