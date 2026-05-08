@@ -7,10 +7,37 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-110`
+- 恢复点编号：`CQRS-REWRITE-RP-118`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #341`
+- 当前 PR 锚点：`PR #342`
 - 当前结论：
+  - 当前 `RP-118` 已使用 `$gframework-pr-review` 复核 `PR #342` latest-head review：CodeRabbit 当前仍成立的是 `NotificationFanOutBenchmarks` 中 MediatR 分支绕过共享 `HandleCore(...)`、`GFramework.Cqrs/README.md` 的 MD058 表格空行、以及恢复文档的 PR 锚点与 fan-out 历史值表述；Greptile 额外指出的 `UseTaskWhenAllNotificationPublisher()` 示例多余 `using GFramework.Cqrs.Notification;` 也在本轮一并收口
+  - 本轮不改 `GFramework.Cqrs` runtime 语义，只让 benchmark 的 MediatR handler 与其余对照分支共用同一组空值 / 取消检查，并把 README、中文文档与 `cqrs-rewrite` 恢复文档同步到当前 PR #342 上下文
+  - 本轮按 `NotificationFanOutBenchmarks` short-job 复跑确认，对称化 MediatR handler 后当前 fixed `4 handler` fan-out 结果约为 `Mediator` `3.598 ns / 0 B`、baseline `7.033 ns / 0 B`、`MediatR` `257.533 ns / 1256 B`、`GFramework.Cqrs` 顺序 `409.557 ns / 408 B`、`TaskWhenAll` `484.531 ns / 496 B`
+  - `RP-117` 留在“最近权威验证”中的固定 `4 handler` fan-out 数值属于早期 benchmark 记录，因此本轮选择显式补上 `历史基线（RP-112）` 标注，而不是把历史验证段落改写成新的 benchmark 结果，避免混淆恢复轨迹
+  - 当前 `RP-117` 继续沿用 `$gframework-batch-boot 50`，但没有继续把 batch 推回 request dispatch 热路径：本轮先试了一刀“按运行时类型缓存 `IContextAware` 判定”的 dispatcher 微优化，随后按 `RequestBenchmarks` / `RequestLifetimeBenchmarks` 复跑确认 steady-state request 反而回落到约 `71.824 ns`，因此这组运行时代码已在同轮完全撤回，不保留负收益热点实验
+  - 这一批改为只收口 notification publisher 的采用文档：`GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md` 现在把 `Sequential` / `TaskWhenAll` / 自定义 publisher 三条策略放进同一张选择矩阵，明确 `TaskWhenAll` 的价值是“并行完成 + 聚合失败”，而不是 fixed fan-out publish 的性能升级开关
+  - 当前分支相对 `origin/main`（`7ca21af9`, `2026-05-08 16:12:20 +0800`）的累计 branch diff 仍约为 `12 files`，远低于 `$gframework-batch-boot 50` 的停止阈值；因此这批继续保持 notification 采用边界内的低风险、可评审文档切片
+  - 当前 `RP-116` 已继续沿用 `$gframework-batch-boot 50`，并把刚收口的 notification publisher 配置面补成对称的内置策略集合：`SequentialNotificationPublisher` 现在作为公开类型提供，组合根新增 `UseSequentialNotificationPublisher()`，不再只存在“一个显式并行策略 + 一个隐式默认回退”
+  - 这一批让用户能够在文档、配置和测试里显式表达“我要顺序失败即停”与“我要并行等待全部完成”这两条内置语义，而不需要把默认顺序策略理解成 runtime 内部细节；这进一步降低了 notification publisher seam 的心智负担
+  - 当前分支相对 `origin/main` 的累计 branch diff 提交 `RP-115` 后约为 `11 files`，仍明显低于 `$gframework-batch-boot 50` 的停止阈值；因此这批继续保持 notification 配置面内的低风险、可评审切片
+  - 当前 `RP-115` 已继续沿用 `$gframework-batch-boot 50`，并把 notification publisher 线从“已具备 seam + benchmark 事实”继续收口到组合根配置面：新增 `GFramework.Cqrs.Extensions.NotificationPublisherRegistrationExtensions`，提供 `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` / `UseTaskWhenAllNotificationPublisher()` 三个显式入口，避免用户再手写 `Register<INotificationPublisher>(new ...)`
+  - 这一批同时把重复策略注册前移到组合根阶段显式阻止，并在回归里确认 `UseTaskWhenAllNotificationPublisher()` 经过默认 runtime 基础设施后仍会命中“失败不阻断其余 handler”的并行语义；这让 notification publisher 的采用路径从“知道内部 seam 如何接线”收口为“知道该在容器里选哪条策略”
+  - 用户文档现同步写明 `TaskWhenAllNotificationPublisher` 更适合“并行完成 + 统一观察失败”的语义诉求，而不是 fixed fan-out steady-state publish 优化；这与 `RP-114` 的 benchmark 结论保持一致，减少使用者把它误解成默认的性能升级开关
+  - 当前 `RP-114` 已继续沿用 `$gframework-batch-boot 50`，并沿着 `RP-113` 刚落地的 notification publisher 能力切片继续补 benchmark：`NotificationFanOutBenchmarks` 现同时纳入 `GFramework.Cqrs` 默认顺序发布器与新内置 `TaskWhenAllNotificationPublisher`，用于量化“能力差距收口后，固定 4 handler fan-out 的成本变化”
+  - `RP-114` 的 short-job 结果显示：fixed `4 handler` fan-out 下，默认顺序发布器约 `427.453 ns / 408 B`，内置 `TaskWhenAllNotificationPublisher` 约 `472.574 ns / 496 B`，`MediatR` 约 `225.940 ns / 1256 B`，NuGet `Mediator` concrete runtime 约 `3.854 ns / 0 B`；这说明当前内置并行 publisher 的主要价值是语义补齐，而不是 steady-state fan-out 性能收益
+  - 这一批保持 runtime 公开 API 与 notification 语义不变，只扩 benchmark 对照口径与恢复文档；原因是 `RP-113` 已经把并行 publisher 能力落到 production path，当前更高价值的是先证明它相对默认顺序发布器、`Mediator` 与 `MediatR` 的成本位置，而不是立即继续扩第二个 publisher strategy
+  - 当前分支相对 `origin/main` 的累计 branch diff 启动时为 `9 files`，仍明显低于 `$gframework-batch-boot 50` 的停止阈值；这一批继续保持单模块、低风险、可直接评审的 benchmark 边界
+  - 当前 `RP-113` 已继续沿用 `$gframework-batch-boot 50`，并把 notification 线从 benchmark 对照推进到实际 runtime 能力：新增公开内置 `TaskWhenAllNotificationPublisher`，让 `GFramework.Cqrs` 在保留默认顺序发布器的同时，提供与 `Mediator` `TaskWhenAllPublisher` 对齐的并行 notification publish 策略
+  - `TaskWhenAllNotificationPublisher` 当前语义明确为：零处理器静默完成，单处理器直接透传，多处理器并行启动并等待全部结束；它不保留默认顺序发布器的“首个异常立即停止”语义，而是把全部处理器的失败/取消结果收敛到同一个返回任务
+  - 本轮同时补齐 `CqrsNotificationPublisherTests` 对新内置策略的回归，并更新 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md`，把切换方式和语义边界写回用户可见文档；当前已提交 branch diff 仍明显低于 `$gframework-batch-boot 50` 的停止阈值
+  - 这一批选择真正落一个内置 publisher strategy，而不是继续加 notification benchmark 维度；原因是 `RP-111` / `RP-112` 已经把 notification gap 量化清楚，下一步更高价值的是开始收口“能力差距”而不是继续重复建立对照数据
+  - 当前 `RP-112` 已继续沿用 `$gframework-batch-boot 50`，并在 `RP-111` 的单处理器 notification 对照基础上补齐固定 `4 handler` 的 fan-out publish benchmark：新增 `NotificationFanOutBenchmarks`，对比 baseline、`GFramework.Cqrs`、NuGet `Mediator` concrete runtime 与 `MediatR`
+  - `NotificationFanOutBenchmarks` 当前 short-job 基线约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`；这说明 notification fan-out 的差距已经不只体现在单处理器 publish，而是在固定 4 处理器场景下依然保持相近量级
+  - 本轮仍然只扩 benchmark 对照口径，没有直接修改 notification runtime 或 publisher 策略语义；原因是当前更高价值的事实是先量化“单处理器”和“固定 fan-out”两条 notification 路径的外部差距，再决定下一批是否值得切进 publisher strategy 或 runtime 热点
+  - 当前 `RP-111` 已继续沿用 `$gframework-batch-boot 50`，并按 skill 规则重新以 `origin/main` 作为基线复核：`origin/main` = `7ca21af9`（`2026-05-08 16:12:20 +0800`），本地 `main` = `c2d22285` 已落后，当前分支 `feat/cqrs-optimization` 与 `origin/main` 的累计 branch diff 为 `0 files / 0 lines`；基于“上下文预算优先、单批可评审边界次之”的停止规则，本轮选择 `NotificationBenchmarks` 这一条仍缺 `Mediator` concrete runtime 对照的单模块 benchmark 切片，而不是为了对称性继续扩展 notification runtime seam
+  - `NotificationBenchmarks` 现已从双方对照扩成三方对照：新增 NuGet `Mediator` source-generated concrete runtime 宿主与 `PublishNotification_Mediator()`，`BenchmarkNotification` / `BenchmarkNotificationHandler` 也同步接上 `Mediator` 的 notification 合同；当前 short-job 基线约为 `Mediator` `1.108 ns / 0 B`、`MediatR` `97.173 ns / 416 B`、`GFramework.Cqrs` `291.582 ns / 392 B`
+  - 本轮只把“notification publish 的高性能外部对照”补齐到 benchmark 层，而没有直接新增 generated notification invoker/provider 或 runtime 语义调整；原因是 notification dispatch 现有反射委托本就只在首次命中时缓存，继续加一层 provider 对 steady-state publish 的收益信号不如先把 `Mediator` concrete runtime 对照补齐来得清晰
   - 当前 `RP-110` 已再次使用 `$gframework-pr-review` 复核 `PR #341` latest-head review：`BenchmarkHostFactory` 的 legacy runtime alias 防守式类型检查、benchmark 宿主定向 generated registry 激活、以及 `CqrsDispatcher.SendAsync(...)` 的 faulted `ValueTask` 失败语义在当前 head 均已实质收口；本轮仅继续接受仍然成立的 CodeRabbit nitpick，为 `SendAsync_Should_Return_Faulted_ValueTask_When_Handler_Is_Missing()` 补齐 `HasRegistration(...)` / `GetAll(...)` 防御性 mock，并删除 trace 中重复 `本轮权威验证` 的 `本轮下一步` 段落
   - 当前 `RP-109` 已使用 `$gframework-pr-review` 复核 `PR #341` latest-head review：benchmark 宿主改为定向激活当前场景的 generated registry，避免同一 benchmark 程序集里的其他 registry 扩大冻结服务索引与 `HasRegistration` 基线；`BenchmarkHostFactory` 为 legacy runtime alias 注册补齐防守式类型检查与 stream lifetime 运行时注释；`CqrsDispatcher.SendAsync(...)` 在保留 direct-return 热路径的同时恢复 faulted `ValueTask` 失败语义，并补齐 generated registry 定向接线与 request fault 语义回归测试；`.agents/skills/gframework-batch-boot/SKILL.md` 的 MD005 缩进也已顺手修正
   - `GFramework.Cqrs` 已完成对外部 `Mediator` 的生产级替代，当前主线已从“是否可替代”转向“仓库内部收口与能力深化顺序”
@@ -114,7 +141,7 @@ CQRS 迁移与收敛。
 - 若后续新增 benchmark / example / tooling 项目但未同步校验发布面，solution 级 `dotnet pack` 仍可能在 tag 发布前才暴露异常包
 - `RequestStartupBenchmarks` 为了量化真正的单次 cold-start，引入了 `InvocationCount=1` / `UnrollFactor=1` 的专用 job；该配置会触发 BenchmarkDotNet 的 `MinIterationTime` 提示，后续若要做稳定基线比较，还需要决定是否引入批量外层循环或自定义 cold-start harness
 - 当前 benchmark 宿主仍刻意保持“单根容器最小宿主”模型；若要公平比较 `Scoped` handler 生命周期，需要先引入显式 scope 创建与 scope 内首次解析的对照基线
-- 当前 `Mediator` 对照组仅先接入 steady-state request；若要把 `Transient` / `Scoped` 生命周期矩阵也纳入同一组对照，需要按 `Mediator` 官方 benchmark 的做法拆分 compile-time lifetime build config，而不是在同一编译产物里混用多个 lifetime
+- 当前 `Mediator` concrete runtime 对照已覆盖 steady-state request、单处理器 notification publish 与固定 `4 handler` notification fan-out；若要把 `Transient` / `Scoped` 生命周期矩阵、stream 生命周期矩阵或更大 fan-out 矩阵也纳入同一组对照，需要按 `Mediator` 官方 benchmark 的做法拆分 compile-time lifetime / 场景配置，而不是在同一编译产物里混用多个 runtime 变量
 - 当前 stream 生命周期矩阵尚未接入 `Mediator` concrete runtime；若要继续对齐 `Mediator` 官方 benchmark 的 compile-time lifetime 设计，需要为 stream 场景补专门的 build-time 配置，而不是在当前统一宿主里临时拼接
 - `BenchmarkDotNet.Artifacts/` 现已加入仓库忽略规则；若后续确实需要提交新的基准报告，应显式挑选结果文件或改走文档归档，而不是直接纳入整个生成目录
 - 当前 `GFramework.Cqrs` request steady-state 仍慢于 `MediatR`；在“至少超过反射版 `MediatR`”这个阶段目标达成前，任何相关改动都不能只看功能 build/test 结果，必须附带 benchmark 回归数据
@@ -128,6 +155,36 @@ CQRS 迁移与收敛。
 
 ## 最近权威验证
 
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：本轮对称化 MediatR handler 后，fixed `4 handler` fan-out 对照约为 `Mediator` `3.598 ns / 0 B`、baseline `7.033 ns / 0 B`、`MediatR` `257.533 ns / 1256 B`、`GFramework.Cqrs` 顺序 `409.557 ns / 408 B`、`TaskWhenAll` `484.531 ns / 496 B`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+  - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：历史基线（`RP-112`）固定 `4 handler` notification fan-out 对照约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+  - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：notification publish 三方对照当前约为 `Mediator` `1.108 ns / 0 B`、`MediatR` `97.173 ns / 416 B`、`GFramework.Cqrs` `291.582 ns / 392 B`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+  - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
 - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
   - 备注：并行验证首轮曾因 `build` 与 `test` 同时写入同一输出 DLL 触发 `MSB3026` 单次复制重试；改为串行重跑同一命令后稳定通过
@@ -140,7 +197,7 @@ CQRS 迁移与收敛。
   - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
   - 结果：通过
-  - 备注：确认当前分支对应 `PR #341`；latest-head 当前仍显示 `CodeRabbit 2` / `Greptile 2` open thread，但其中 `BenchmarkHostFactory` / benchmark registry / faulted `ValueTask` 三类运行时 thread 已在本地失效，当前仅剩测试 mock 脆弱性与 trace 冗余仍值得继续收口
+  - 备注：确认当前分支对应 `PR #342`；latest-head 当前显示 `CodeRabbit 4` / `Greptile 3` open thread，其中真正仍成立的是 benchmark handler 对称性、README / 中文文档示例与恢复文档锚点漂移，其余历史 thread 需要按当前 head 继续甄别
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
   - 结果：通过
   - 备注：确认当前分支对应 `PR #340`；latest-head 当前显示 `CodeRabbit 2` / `Greptile 2` open thread，且 `CTRF` 报告中唯一失败测试为 `CreateStream_Should_Throw_When_Stream_Pipeline_Behavior_Context_Does_Not_Implement_IArchitectureContext`
@@ -335,8 +392,8 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 当前 turn 已到新的自然批次边界；本次提交后应停止，并在新的 turn 里从 `RP-108` 恢复点继续，而不是在本轮继续启动新的 benchmark 宿主或 runtime 热点切片
-2. 若下一轮继续沿用 `$gframework-batch-boot` 且优先处理性能，先看 notification publish 或更高价值的 request dispatch 常量开销热点，而不是继续堆同层级 benchmark 宿主补齐
+1. 既然 `RP-117` 已把 notification publisher 的采用路径收口成显式策略矩阵，下一轮若继续留在 notification 线，优先评估是否需要补第三种仓库内置策略或更贴近示例代码的采用文档，而不是再重复翻写同一套边界说明
+2. 当前 benchmark 仍证明 `TaskWhenAllNotificationPublisher` 的价值主要在并行完成与异常聚合语义，而不是吞吐收益；若 notification 文档已经足够，下一轮再回到 request dispatch 常量开销时，应先避开“类型级 `IContextAware` 判定缓存”这条已验证无收益的热点假设
 3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档

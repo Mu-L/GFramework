@@ -16,6 +16,7 @@ using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using GeneratedMediator = Mediator.Mediator;
 
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
@@ -27,8 +28,10 @@ public class NotificationBenchmarks
 {
     private MicrosoftDiContainer _container = null!;
     private ICqrsRuntime _runtime = null!;
-    private ServiceProvider _serviceProvider = null!;
-    private IPublisher _publisher = null!;
+    private ServiceProvider _mediatrServiceProvider = null!;
+    private ServiceProvider _mediatorServiceProvider = null!;
+    private IPublisher _mediatrPublisher = null!;
+    private GeneratedMediator _mediator = null!;
     private BenchmarkNotification _notification = null!;
 
     /// <summary>
@@ -67,23 +70,26 @@ public class NotificationBenchmarks
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(NotificationBenchmarks)));
 
-        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+        _mediatrServiceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
             services => services.AddSingleton<MediatR.INotificationHandler<BenchmarkNotification>, BenchmarkNotificationHandler>(),
             typeof(NotificationBenchmarks),
             static candidateType => candidateType == typeof(BenchmarkNotificationHandler),
             ServiceLifetime.Singleton);
-        _publisher = _serviceProvider.GetRequiredService<IPublisher>();
+        _mediatrPublisher = _mediatrServiceProvider.GetRequiredService<IPublisher>();
+
+        _mediatorServiceProvider = BenchmarkHostFactory.CreateMediatorServiceProvider(configure: null);
+        _mediator = _mediatorServiceProvider.GetRequiredService<GeneratedMediator>();
 
         _notification = new BenchmarkNotification(Guid.NewGuid());
     }
 
     /// <summary>
-    ///     释放 MediatR 对照组使用的 DI 宿主。
+    ///     释放 MediatR 与 `Mediator` 对照组使用的 DI 宿主。
     /// </summary>
     [GlobalCleanup]
     public void Cleanup()
     {
-        BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+        BenchmarkCleanupHelper.DisposeAll(_container, _mediatrServiceProvider, _mediatorServiceProvider);
     }
 
     /// <summary>
@@ -101,7 +107,16 @@ public class NotificationBenchmarks
     [Benchmark]
     public Task PublishNotification_MediatR()
     {
-        return _publisher.Publish(_notification, CancellationToken.None);
+        return _mediatrPublisher.Publish(_notification, CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     通过 `Mediator` source-generated concrete mediator 发布 notification，作为高性能对照组。
+    /// </summary>
+    [Benchmark]
+    public ValueTask PublishNotification_Mediator()
+    {
+        return _mediator.Publish(_notification, CancellationToken.None);
     }
 
     /// <summary>
@@ -110,6 +125,7 @@ public class NotificationBenchmarks
     /// <param name="Id">通知标识。</param>
     public sealed record BenchmarkNotification(Guid Id) :
         GFramework.Cqrs.Abstractions.Cqrs.INotification,
+        Mediator.INotification,
         MediatR.INotification;
 
     /// <summary>
@@ -117,6 +133,7 @@ public class NotificationBenchmarks
     /// </summary>
     public sealed class BenchmarkNotificationHandler :
         GFramework.Cqrs.Abstractions.Cqrs.INotificationHandler<BenchmarkNotification>,
+        Mediator.INotificationHandler<BenchmarkNotification>,
         MediatR.INotificationHandler<BenchmarkNotification>
     {
         /// <summary>
@@ -125,6 +142,16 @@ public class NotificationBenchmarks
         public ValueTask Handle(BenchmarkNotification notification, CancellationToken cancellationToken)
         {
             return ValueTask.CompletedTask;
+        }
+
+        /// <summary>
+        ///     处理 NuGet `Mediator` notification。
+        /// </summary>
+        ValueTask Mediator.INotificationHandler<BenchmarkNotification>.Handle(
+            BenchmarkNotification notification,
+            CancellationToken cancellationToken)
+        {
+            return Handle(notification, cancellationToken);
         }
 
         /// <summary>

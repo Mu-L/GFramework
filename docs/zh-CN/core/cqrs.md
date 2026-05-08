@@ -117,7 +117,48 @@ var playerId = await architecture.Context.SendRequestAsync(
 - 零处理器时静默完成
 - 已解析处理器按容器顺序逐个执行
 - 首个处理器抛出异常时立即停止后续分发
-- 如果容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置顺序发布器
+- 如果容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`
+
+如果你需要在组合根里明确表达“为什么选这条策略”，可以按下面的矩阵判断：
+
+| 策略 | 适用场景 | 顺序语义 | 失败语义 | 备注 |
+| --- | --- | --- | --- | --- |
+| `UseSequentialNotificationPublisher()` | 需要保持容器顺序，且希望首个失败立即停止 | 保证按容器顺序执行 | 首个处理器异常会中断后续处理器 | 这也是默认回退策略 |
+| `UseTaskWhenAllNotificationPublisher()` | 需要让全部处理器并行完成，再统一观察异常或取消 | 不保证顺序 | 不会在首个失败时中断其余处理器；全部结束后统一暴露结果 | 更适合语义补齐，不是性能优化开关 |
+| `UseNotificationPublisher(...)` | 需要接入自定义或第三方 publisher 策略 | 取决于实现 | 取决于实现 | 仅在内置顺序 / 并行策略都不满足时使用 |
+
+如果你想在组合根里显式保留默认顺序语义，也可以直接写成：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseSequentialNotificationPublisher();
+```
+
+如果你需要等待所有通知处理器并行完成，而不是沿用默认顺序语义，可以显式切换到内置
+`TaskWhenAllNotificationPublisher`：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseTaskWhenAllNotificationPublisher();
+```
+
+这条策略的边界也需要明确：
+
+- 不保证处理器执行顺序
+- 不会在首个处理器失败时立即停止其余处理器
+- 会在全部处理器结束后统一暴露异常或取消结果
+- 当前 fixed `4 handler` fan-out benchmark 中，它的 steady-state 成本也高于默认顺序发布器；因此它更适合“我要并行语义”，而不是“我要更快的 publish”
+
+如果你需要显式提供自定义 publisher 实例，而不是直接采用内置 `TaskWhenAll` 策略，也可以在组合根里写成：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+using GFramework.Cqrs.Notification;
+
+container.UseNotificationPublisher(new TaskWhenAllNotificationPublisher());
+```
 
 ## Request 与流式变体
 

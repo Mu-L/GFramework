@@ -50,6 +50,7 @@
   - `CqrsRuntimeFactory.cs`
   - `Internal/CqrsDispatcher.cs`
   - `Notification/INotificationPublisher.cs`
+  - `Notification/TaskWhenAllNotificationPublisher.cs`
   - `Internal/CqrsHandlerRegistrar.cs`
   - `Internal/DefaultCqrsHandlerRegistrar.cs`
   - `Internal/DefaultCqrsRegistrationService.cs`
@@ -124,8 +125,43 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
   - 未找到处理器会抛出异常。
 - 通知分发
   - 通知会分发给所有已注册 `INotificationHandler<>`；零处理器时默认静默完成。
-  - 默认通知发布器会按容器解析顺序逐个执行处理器，并在首个处理器抛出异常时立即停止后续分发。
-  - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置顺序发布器。
+  - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`。
+  - 内置 notification publisher 的推荐选择如下：
+
+  | 策略 | 推荐场景 | 执行顺序 | 失败语义 | 备注 |
+  | --- | --- | --- | --- | --- |
+  | `SequentialNotificationPublisher` | 需要保持容器顺序，且希望首个失败立即停止后续分发 | 保证按容器解析顺序逐个执行 | 首个处理器抛出异常时立即停止 | 也是默认回退策略 |
+  | `TaskWhenAllNotificationPublisher` | 需要让全部处理器并行完成，并在结束后统一观察失败或取消 | 不保证顺序 | 不会在首个失败时停止其余处理器；会聚合最终异常或取消结果 | 更适合语义补齐，不是性能开关 |
+  | `UseNotificationPublisher(...)` 自定义实例 | 需要接入仓库外的自定义策略或第三方策略 | 取决于具体实现 | 取决于具体实现 | 仅在内置顺序 / 并行策略都不满足时使用 |
+
+  - 若只是为了降低 fixed fan-out publish 的 steady-state 成本，当前 benchmark 并不表明 `TaskWhenAllNotificationPublisher` 会优于默认顺序发布器；它更适合你需要“等待全部处理器完成并统一观察失败”的场景。
+
+如果你需要显式保留默认顺序语义，也可以在组合根里直接声明：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseSequentialNotificationPublisher();
+```
+
+如果你需要切换到内置并行 notification publisher，推荐在组合根里显式声明这条策略：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseTaskWhenAllNotificationPublisher();
+```
+
+如果你确实需要自定义 publisher 实例，也可以继续显式注册：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+using GFramework.Cqrs.Notification;
+
+container.UseNotificationPublisher(new TaskWhenAllNotificationPublisher());
+```
+
+对于走标准 `GFramework.Core` 启动路径的架构，这些组合根扩展会被默认基础设施自动复用；如果你直接调用 `CqrsRuntimeFactory.CreateRuntime(...)`，也仍然可以像以前一样显式传入 publisher 实例。
 - 流式请求
   - 通过 `IStreamRequest<TResponse>` 和 `IStreamRequestHandler<,>` 返回 `IAsyncEnumerable<TResponse>`。
   - 当消费端程序集提供 generated stream invoker provider / descriptor 后，runtime 会优先消费这组 stream invoker 元数据；未命中时仍回退到既有反射 stream binding 创建路径。

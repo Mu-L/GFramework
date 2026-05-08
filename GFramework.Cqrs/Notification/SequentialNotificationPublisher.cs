@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using GFramework.Cqrs.Abstractions.Cqrs;
-using GFramework.Cqrs.Notification;
 
-namespace GFramework.Cqrs.Internal;
+namespace GFramework.Cqrs.Notification;
 
 /// <summary>
-///     默认的通知发布器实现。
+///     以内置顺序策略逐个分发通知处理器。
 /// </summary>
 /// <remarks>
-///     该实现完整保留当前 CQRS runtime 的既有通知语义：按已解析顺序逐个执行处理器，
-///     并在首个处理器抛出异常时立即停止后续发布。
+///     <para>该实现完整保留默认 CQRS runtime 的既有通知语义：按已解析顺序逐个执行处理器。</para>
+///     <para>当任意处理器抛出异常时，后续处理器不会继续执行，因此更适合存在顺序依赖或希望尽早暴露首个失败的场景。</para>
 /// </remarks>
-internal sealed class SequentialNotificationPublisher : INotificationPublisher
+public sealed class SequentialNotificationPublisher : INotificationPublisher
 {
     /// <summary>
     ///     按既定顺序逐个执行当前通知的处理器。
