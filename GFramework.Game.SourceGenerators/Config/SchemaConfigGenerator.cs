@@ -237,6 +237,7 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return TryValidateStringFormatMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateUnsupportedCombinatorKeywordsRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateUnsupportedOpenObjectKeywordsRecursively(filePath, "<root>", root, out diagnostic) &&
+            TryValidateUnsupportedArrayShapeKeywordsRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateDependentRequiredMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateDependentSchemasMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
             TryValidateAllOfMetadataRecursively(filePath, "<root>", root, out diagnostic) &&
@@ -917,6 +918,40 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     递归拒绝当前共享子集尚未支持的数组形状关键字。
+    ///     当前配置系统只接受单个 object-typed <c>items</c> schema，
+    ///     并继续拒绝 tuple / open-array 关键字，避免生成器对数组元素形状
+    ///     比运行时与工具链更宽松。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>当前节点树是否未声明不支持的数组形状关键字。</returns>
+    private static bool TryValidateUnsupportedArrayShapeKeywordsRecursively(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        return TryTraverseSchemaRecursively(
+            filePath,
+            displayPath,
+            element,
+            static (currentFilePath, currentDisplayPath, currentElement, _) =>
+            {
+                return TryValidateUnsupportedArrayShapeKeywords(
+                    currentFilePath,
+                    currentDisplayPath,
+                    currentElement,
+                    out var currentDiagnostic)
+                    ? (true, (Diagnostic?)null)
+                    : (false, currentDiagnostic);
+            },
+            out diagnostic);
+    }
+
+    /// <summary>
     ///     验证当前节点是否声明了会改变生成类型形状的未支持组合关键字。
     /// </summary>
     /// <param name="filePath">Schema 文件路径。</param>
@@ -977,6 +1012,36 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     验证当前节点是否声明了当前共享子集尚未支持的数组形状关键字。
+    /// </summary>
+    /// <param name="filePath">Schema 文件路径。</param>
+    /// <param name="displayPath">逻辑字段路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <param name="diagnostic">失败时返回的诊断。</param>
+    /// <returns>未声明不支持关键字时返回 <see langword="true" />。</returns>
+    private static bool TryValidateUnsupportedArrayShapeKeywords(
+        string filePath,
+        string displayPath,
+        JsonElement element,
+        out Diagnostic? diagnostic)
+    {
+        diagnostic = null;
+        if (TryGetUnsupportedArrayShapeKeywordName(element) is not { } keywordName)
+        {
+            return true;
+        }
+
+        diagnostic = Diagnostic.Create(
+            ConfigSchemaDiagnostics.UnsupportedArrayShapeKeyword,
+            CreateFileLocation(filePath),
+            Path.GetFileName(filePath),
+            displayPath,
+            keywordName,
+            "The current config schema subset only accepts one object-valued 'items' schema and rejects tuple or open-array keywords that can change item shape across Runtime, Generator, and Tooling.");
+        return false;
+    }
+
+    /// <summary>
     ///     返回当前节点声明的首个未支持组合关键字。
     /// </summary>
     /// <param name="element">当前 schema 节点。</param>
@@ -1004,6 +1069,19 @@ public sealed class SchemaConfigGenerator : IIncrementalGenerator
         return element.TryGetProperty("patternProperties", out _) ? "patternProperties" :
             element.TryGetProperty("propertyNames", out _) ? "propertyNames" :
             element.TryGetProperty("unevaluatedProperties", out _) ? "unevaluatedProperties" :
+            null;
+    }
+
+    /// <summary>
+    ///     返回当前节点声明的首个未支持数组形状关键字。
+    /// </summary>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <returns>命中的关键字名称；未声明时返回空。</returns>
+    private static string? TryGetUnsupportedArrayShapeKeywordName(JsonElement element)
+    {
+        return element.TryGetProperty("prefixItems", out _) ? "prefixItems" :
+            element.TryGetProperty("additionalItems", out _) ? "additionalItems" :
+            element.TryGetProperty("unevaluatedItems", out _) ? "unevaluatedItems" :
             null;
     }
 

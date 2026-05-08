@@ -326,6 +326,7 @@ internal static partial class YamlConfigSchemaValidator
     {
         ValidateUnsupportedCombinatorKeywords(tableName, schemaPath, propertyPath, element);
         ValidateUnsupportedOpenObjectKeywords(tableName, schemaPath, propertyPath, element);
+        ValidateUnsupportedArrayShapeKeywords(tableName, schemaPath, propertyPath, element);
         var typeName = ResolveNodeTypeName(tableName, schemaPath, propertyPath, element);
         var referenceTableName = TryGetReferenceTableName(tableName, schemaPath, propertyPath, element);
         ValidateObjectOnlyKeywords(tableName, schemaPath, propertyPath, element, typeName);
@@ -402,6 +403,36 @@ internal static partial class YamlConfigSchemaValidator
     }
 
     /// <summary>
+    ///     显式拒绝当前共享子集中尚未支持的数组形状关键字。
+    ///     当前配置系统只接受单个 object-valued <c>items</c> schema，
+    ///     并继续拒绝 tuple / open-array 关键字，避免 Runtime / Generator / Tooling
+    ///     对数组元素形状产生静默漂移。
+    /// </summary>
+    /// <param name="tableName">所属配置表名称。</param>
+    /// <param name="schemaPath">Schema 文件路径。</param>
+    /// <param name="propertyPath">当前节点的逻辑属性路径。</param>
+    /// <param name="element">当前 schema 节点。</param>
+    private static void ValidateUnsupportedArrayShapeKeywords(
+        string tableName,
+        string schemaPath,
+        string propertyPath,
+        JsonElement element)
+    {
+        if (TryGetUnsupportedArrayShapeKeywordName(element) is not { } keywordName)
+        {
+            return;
+        }
+
+        throw ConfigLoadExceptionFactory.Create(
+            ConfigLoadFailureKind.SchemaUnsupported,
+            tableName,
+            $"Property '{propertyPath}' in schema file '{schemaPath}' uses unsupported '{keywordName}' metadata. " +
+            "The current config schema subset only accepts one object-valued 'items' schema and rejects tuple or open-array keywords that can change item shape across Runtime, Generator, and Tooling.",
+            schemaPath: schemaPath,
+            displayPath: GetDiagnosticPath(propertyPath));
+    }
+
+    /// <summary>
     ///     返回当前节点声明的首个未支持组合关键字。
     /// </summary>
     /// <param name="element">当前 schema 节点。</param>
@@ -429,6 +460,19 @@ internal static partial class YamlConfigSchemaValidator
         return element.TryGetProperty("patternProperties", out _) ? "patternProperties" :
             element.TryGetProperty("propertyNames", out _) ? "propertyNames" :
             element.TryGetProperty("unevaluatedProperties", out _) ? "unevaluatedProperties" :
+            null;
+    }
+
+    /// <summary>
+    ///     返回当前节点声明的首个未支持数组形状关键字。
+    /// </summary>
+    /// <param name="element">当前 schema 节点。</param>
+    /// <returns>命中的关键字名称；未声明时返回空。</returns>
+    private static string? TryGetUnsupportedArrayShapeKeywordName(JsonElement element)
+    {
+        return element.TryGetProperty("prefixItems", out _) ? "prefixItems" :
+            element.TryGetProperty("additionalItems", out _) ? "additionalItems" :
+            element.TryGetProperty("unevaluatedItems", out _) ? "unevaluatedItems" :
             null;
     }
 

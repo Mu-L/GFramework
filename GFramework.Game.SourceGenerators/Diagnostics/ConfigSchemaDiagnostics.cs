@@ -187,4 +187,15 @@ public static class ConfigSchemaDiagnostics
         SourceGeneratorsConfigCategory,
         DiagnosticSeverity.Error,
         true);
+
+    /// <summary>
+    ///     schema 节点声明了当前共享子集尚未支持的数组形状关键字。
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedArrayShapeKeyword = new(
+        "GF_ConfigSchema_017",
+        "Config schema uses an unsupported array-shape keyword",
+        "Property '{1}' in schema file '{0}' uses unsupported array-shape keyword '{2}': {3}",
+        SourceGeneratorsConfigCategory,
+        DiagnosticSeverity.Error,
+        true);
 }

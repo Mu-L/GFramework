@@ -80,6 +80,8 @@ The extension currently validates the repository's current schema subset:
   object-focused `if` / `then` / `else`
 - closed-object validation through `additionalProperties: false`
 - explicit rejection for unsupported combinators such as `oneOf` and `anyOf`, instead of silently ignoring them
+- explicit rejection for unsupported array-shape keywords such as `prefixItems`, `additionalItems`, and
+  `unevaluatedItems`, so tuple or open-array item shapes do not drift away from Runtime / Generator
 
 ## Contract Boundary
 
@@ -117,6 +119,8 @@ Minimal adoption checklist:
 - Use `x-gframework-ref-table` only on fields that should link to another config domain or reference file
 - Keep `additionalProperties` explicitly set to `false` when you need closed-object validation; omitting it, setting
   it to `true`, or mixing in `patternProperties`, `propertyNames`, or `unevaluatedProperties` is outside the supported subset
+- Keep arrays on one object-valued `items` schema; tuple or open-array keywords such as `prefixItems`,
+  `additionalItems`, and `unevaluatedItems` are outside the supported subset
 
 Use raw YAML directly when you need:
 
@@ -126,6 +130,7 @@ Use raw YAML directly when you need:
 - `contains` / `minContains` / `maxContains` when the structure is easier to reason about directly in YAML
 - schema designs outside the current shared subset, including `oneOf`, `anyOf`, non-`false` `additionalProperties`, or
   other open-object keywords such as `patternProperties`, `propertyNames`, and `unevaluatedProperties`
+- tuple or open-array designs that depend on `prefixItems`, `additionalItems`, or `unevaluatedItems`
 
 ## Documentation
 
@@ -142,6 +147,8 @@ Use raw YAML directly when you need:
 - Closed-object support is limited to `additionalProperties: false`; open-object keywords such as
   `patternProperties`, `propertyNames`, and `unevaluatedProperties` are rejected on purpose, as are unsupported
   combinators such as `oneOf` / `anyOf`
+- Array-shape support is limited to one object-valued `items` schema; tuple or open-array keywords such as
+  `prefixItems`, `additionalItems`, and `unevaluatedItems` are rejected on purpose
 
 ## Local Testing
 

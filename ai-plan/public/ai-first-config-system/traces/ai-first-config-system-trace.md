@@ -361,3 +361,31 @@
 
 1. 继续优先找“实现已存在但 reader-facing 表述漂移”的低风险 lane，避免在批处理模式下引入收益不明的新 schema contract
 2. 若下一轮回到主线代码批次，再继续盘点不会改变生成类型形状的共享关键字，而不是重复刷新同一组 Tooling 边界说明
+
+## 2026-05-08
+
+### 阶段：数组形状关键字边界收口（AI-FIRST-CONFIG-RP-003）
+
+- 已在 Runtime、Source Generator 与 VS Code Tooling 三端统一收紧数组形状关键字边界
+- 本轮不是扩 JSON Schema 能力，而是避免某一端静默接受 tuple / open-array 设计：
+  - 当前共享子集只接受单个 object-valued `items` schema
+  - `prefixItems`、`additionalItems`、`unevaluatedItems` 现在会在三端直接失败，而不是静默忽略
+- reader-facing docs 也已同步补齐数组形状边界，避免把“标准 JSON Schema 的 tuple/open-array 语义”误读成当前配置系统的隐藏支持范围
+
+### 验证
+
+- 2026-05-08：`bun run test`（`tools/gframework-config-tool`）
+  - 目标：验证工具端会拒绝 `prefixItems`、`additionalItems`、`unevaluatedItems`
+- 2026-05-08：`dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~SchemaConfigGeneratorTests"`
+  - 目标：验证生成器新增 `GF_ConfigSchema_017`
+- 2026-05-08：`dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~YamlConfigLoaderTests"`
+  - 目标：验证运行时会拒绝不在共享子集内的数组形状关键字
+- 2026-05-08：`dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+  - 目标：验证运行时模块 Release 构建
+- 2026-05-08：`dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release`
+  - 目标：验证生成器模块 Release 构建
+
+### 下一步
+
+1. 若本轮验证通过，继续回到“不会改变生成类型形状”的下一批共享关键字盘点
+2. 继续优先寻找“静默接受但主线不支持”的边界收口项，而不是先扩更复杂的组合语义

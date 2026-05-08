@@ -83,7 +83,7 @@ Explorer + 表单预览。
 - 对空配置文件提供基于 schema 的示例 YAML 初始化入口
 - 对同一配置域内的多份 YAML 文件执行批量字段更新
 - 在表单入口中显示 `title / description / default / const / enum / x-gframework-ref-table（UI 中显示为 ref-table） / multipleOf / pattern / format / uniqueItems / contains / minContains / maxContains / minProperties / maxProperties / dependentRequired / dependentSchemas / allOf / if / then / else` 元数据；批量编辑入口当前只暴露顶层可批量改写字段所需的基础信息
-- 对 `additionalProperties: false` 提供闭合对象边界校验，并在遇到 `oneOf` / `anyOf` 或其他当前未收口的组合形状时明确提示该 schema 不属于当前工具支持子集
+- 对 `additionalProperties: false` 提供闭合对象边界校验，并在遇到 `oneOf` / `anyOf`、`prefixItems` / `additionalItems` / `unevaluatedItems` 或其他当前未收口的组合 / 数组形状时明确提示该 schema 不属于当前工具支持子集
 
 当前表单入口适合编辑嵌套对象中的标量字段、标量数组，以及对象数组中的对象项。
 
@@ -195,6 +195,7 @@ rewardTableId: starter-reward
 
 - `additionalProperties` 是否显式设置为 `false`；省略或 `true` 不属于当前共享支持子集
 - schema 是否依赖 `oneOf` / `anyOf`；这些组合关键字会被 Runtime / Generator / Tooling 直接拒绝
+- schema 是否依赖 `prefixItems` / `additionalItems` / `unevaluatedItems`；当前数组子集只接受单个 object-valued `items` schema
 - 对象数组里是否混入标量项，或是否存在更深、更异构的数组结构
 - Runtime / Source Generator 是否已经接受这份 schema，而不是只有编辑器里“暂时看起来能写”
 
@@ -239,6 +240,7 @@ rewardTableId: starter-reward
 以下 shape 目前也建议直接回退到 raw YAML，并同时检查 schema 是否仍在当前共享支持子集内：
 
 - 需要表达 `oneOf` / `anyOf` 这类会改变生成类型形状的组合关键字
+- 需要表达 `prefixItems` / `additionalItems` / `unevaluatedItems` 这类 tuple / open-array 关键字
 - 需要 `additionalProperties` 的其他形态，而不是当前明确支持的 `additionalProperties: false`
 - 需要在 `allOf`、`dependentSchemas`、`if` / `then` / `else` 中引入父对象未声明的新字段
 - 需要比当前对象数组编辑器更深、更异构的数组结构
@@ -267,7 +269,7 @@ rewardTableId: starter-reward
 - 校验聚焦仓库当前支持的 schema 子集
 - 表单预览支持对象数组，以及对象数组项内部继续嵌套的对象数组；只有当内层结构超出共享子集时才需要回退到 raw YAML
 - 批量编辑当前聚焦顶层标量和顶层标量数组字段
-- 共享约束里只支持闭合对象边界 `additionalProperties: false`；`oneOf` / `anyOf` 等改变生成形状的组合关键字会被明确拒绝
+- 共享约束里只支持闭合对象边界 `additionalProperties: false`，数组形状里只支持单个 object-valued `items` schema；`oneOf` / `anyOf` 与 `prefixItems` / `additionalItems` / `unevaluatedItems` 这类会改变生成形状的关键字会被明确拒绝
 
 因此，最稳妥的理解方式是：
 

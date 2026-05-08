@@ -1637,6 +1637,66 @@ public class YamlConfigLoaderTests
     }
 
     /// <summary>
+    ///     验证数组字段声明 tuple / open-array 关键字时，会在 schema 解析阶段被显式拒绝。
+    /// </summary>
+    [TestCase("prefixItems", """
+                              [
+                                { "type": "integer" }
+                              ]
+                              """)]
+    [TestCase("additionalItems", "false")]
+    [TestCase("unevaluatedItems", "false")]
+    public void LoadAsync_Should_Throw_When_Array_Schema_Declares_Unsupported_ArrayShape_Keyword(
+        string keywordName,
+        string keywordValueJson)
+    {
+        CreateConfigFile(
+            "monster/slime.yaml",
+            """
+            id: 1
+            name: Slime
+            dropRates:
+              - 5
+            """);
+        CreateSchemaFile(
+            "schemas/monster.schema.json",
+            $$"""
+              {
+                "type": "object",
+                "required": ["id", "name", "dropRates"],
+                "properties": {
+                  "id": { "type": "integer" },
+                  "name": { "type": "string" },
+                  "dropRates": {
+                    "type": "array",
+                    "{{keywordName}}": {{keywordValueJson}},
+                    "items": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+              """);
+
+        var loader = new YamlConfigLoader(_rootPath)
+            .RegisterTable<int, MonsterConfigIntegerArrayStub>("monster", "monster", "schemas/monster.schema.json",
+                static config => config.Id);
+        var registry = new ConfigRegistry();
+
+        var exception = Assert.ThrowsAsync<ConfigLoadException>(() => loader.LoadAsync(registry));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Diagnostic.FailureKind, Is.EqualTo(ConfigLoadFailureKind.SchemaUnsupported));
+            Assert.That(exception.Diagnostic.DisplayPath, Is.EqualTo("dropRates"));
+            Assert.That(exception.Message, Does.Contain($"unsupported '{keywordName}' metadata"));
+            Assert.That(exception.Message, Does.Contain("only accepts one object-valued 'items' schema"));
+            Assert.That(registry.Count, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
     ///     验证对象数组的 <c>contains</c> 试匹配会按声明属性子集工作，而不会因额外字段误判为不匹配。
     /// </summary>
     [Test]
