@@ -93,9 +93,11 @@ public class StreamLifetimeBenchmarks
 
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            container.RegisterCqrsHandlersFromAssembly(typeof(StreamLifetimeBenchmarks).Assembly);
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedStreamLifetimeBenchmarkRegistry>(container);
             RegisterGFrameworkHandler(container, Lifetime);
         });
+        // 容器内已提前保留默认 runtime 以支撑 generated registry 接线；
+        // 这里额外创建带生命周期后缀的 runtime，只是为了区分不同 benchmark 矩阵的 dispatcher 日志。
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamLifetimeBenchmarks) + "." + Lifetime));

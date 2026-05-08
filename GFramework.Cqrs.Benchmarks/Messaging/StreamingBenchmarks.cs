@@ -67,7 +67,7 @@ public class StreamingBenchmarks
         _baselineHandler = new BenchmarkStreamHandler();
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            container.RegisterCqrsHandlersFromAssembly(typeof(StreamingBenchmarks).Assembly);
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedDefaultStreamingBenchmarkRegistry>(container);
         });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,

@@ -44,6 +44,57 @@ internal sealed class CqrsDispatcherContextValidationTests
     }
 
     /// <summary>
+    ///     验证 request 上下文校验失败时，<see cref="GFramework.Cqrs.Abstractions.Cqrs.ICqrsRuntime.SendAsync{TResponse}" />
+    ///     不会在调用点同步抛出，而是返回一个 faulted <see cref="ValueTask{TResult}" /> 保持既有异步失败语义。
+    /// </summary>
+    [Test]
+    public void SendAsync_Should_Return_Faulted_ValueTask_When_Context_Preparation_Fails()
+    {
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.Get(typeof(IRequestHandler<ContextAwareRequest, int>)))
+                    .Returns(new ContextAwareRequestHandler());
+                container
+                    .Setup(currentContainer => currentContainer.HasRegistration(typeof(IPipelineBehavior<ContextAwareRequest, int>)))
+                    .Returns(false);
+            });
+
+        ValueTask<int> dispatch = default;
+        Assert.That(
+            () => { dispatch = runtime.SendAsync(new FakeCqrsContext(), new ContextAwareRequest()); },
+            Throws.Nothing);
+        Assert.That(
+            async () => await dispatch.ConfigureAwait(false),
+            Throws.InvalidOperationException.With.Message.Contains("does not implement IArchitectureContext"));
+    }
+
+    /// <summary>
+    ///     验证 request handler 缺失时，dispatcher 仍返回 faulted <see cref="ValueTask{TResult}" />，
+    ///     而不是在调用点同步抛出异常。
+    /// </summary>
+    [Test]
+    public void SendAsync_Should_Return_Faulted_ValueTask_When_Handler_Is_Missing()
+    {
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.Get(typeof(IRequestHandler<ContextAwareRequest, int>)))
+                    .Returns((object?)null);
+            });
+
+        ValueTask<int> dispatch = default;
+        Assert.That(
+            () => { dispatch = runtime.SendAsync(new FakeCqrsContext(), new ContextAwareRequest()); },
+            Throws.Nothing);
+        Assert.That(
+            async () => await dispatch.ConfigureAwait(false),
+            Throws.InvalidOperationException.With.Message.Contains("No CQRS request handler registered"));
+    }
+
+    /// <summary>
     ///     验证当 notification handler 需要上下文注入、但当前 CQRS 上下文不实现 <see cref="GFramework.Core.Abstractions.Architectures.IArchitectureContext" /> 时，
     ///     dispatcher 会在发布前显式失败。
     /// </summary>

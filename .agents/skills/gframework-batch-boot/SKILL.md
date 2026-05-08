@@ -147,7 +147,7 @@ When shorthand is used:
 6. After each completed batch:
    - integrate or verify the result
    - rerun the required validation
-    - recompute the primary stop-condition metric
+   - recompute the primary stop-condition metric
    - reassess whether one more batch would likely push the agent near or beyond roughly 80% context usage
    - decide immediately whether to continue or stop
 7. Do not require the user to manually trigger every round unless:

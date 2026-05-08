@@ -66,7 +66,7 @@ public class RequestBenchmarks
         _baselineHandler = new BenchmarkRequestHandler();
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            container.RegisterCqrsHandlersFromAssembly(typeof(RequestBenchmarks).Assembly);
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedDefaultRequestBenchmarkRegistry>(container);
         });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,

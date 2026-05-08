@@ -2,6 +2,35 @@
 
 ## 2026-05-08
 
+### 阶段：PR #341 latest-head review 收口（CQRS-REWRITE-RP-109）
+
+- 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认当前锚点已从 `PR #340` 更新为 `PR #341`
+- 本轮 latest-head review 结论：
+  - `CodeRabbit` 仍有 `BenchmarkHostFactory.cs` 的 legacy runtime 硬转型、`StreamLifetimeBenchmarks.cs` 的注释缺口，以及 `.agents/skills/gframework-batch-boot/SKILL.md` 的 `MD005` 缩进问题
+  - `Greptile` 指出的两条仍然成立：benchmark 项目里通过 `RegisterCqrsHandlersFromAssembly(typeof(...).Assembly)` 会把同程序集的其他 generated registry 一并激活，扩大 benchmark 宿主的服务索引基线；`CqrsDispatcher.SendAsync(...)` 直接去掉 `async/await` 后也把原本的 faulted-`ValueTask` 失败语义改成了同步抛出
+- 本轮主线程决策：
+  - 在 `GFramework.Cqrs.Internal.CqrsHandlerRegistrar` 新增 direct generated-registry 激活入口，并通过 `InternalsVisibleTo` 暴露给 `GFramework.Cqrs.Benchmarks`，让 benchmark 宿主只激活当前场景的 generated registry
+  - 把 `RequestBenchmarks`、`RequestPipelineBenchmarks`、`StreamingBenchmarks`、`StreamLifetimeBenchmarks` 以及 request/stream invoker benchmark 的 generated 宿主全部切到定向 registry 接线，避免同程序集其他 registry 扩大冻结索引和 descriptor 预热基线
+  - 在 `BenchmarkHostFactory` 里用防守式类型检查注册 legacy runtime alias，并补充 stream lifetime runtime 二次创建的注释
+  - 让 `CqrsDispatcher.SendAsync(...)` 通过 `ValueTask.FromException<TResponse>(...)` 恢复旧的 faulted-`ValueTask` 失败语义，同时保留成功路径的 direct-return 热路径
+  - 补齐 `CqrsGeneratedRequestInvokerProviderTests` 与 `CqrsDispatcherContextValidationTests` 的 targeted 回归，并顺手修正 batch boot skill 的 markdown 缩进
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`1 warning / 0 error`
+    - 备注：仅出现 `MSB3026` 单次复制重试告警，随后成功产出 `net10.0` 目标；未出现编译失败或新增代码警告
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+    - 结果：通过，`24/24` passed
+    - 备注：首轮并行验证时因与 build 同时运行触发 MSBuild 输出文件锁竞争；改为串行重跑同一命令后稳定通过
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Properties/AssemblyInfo.cs GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs GFramework.Cqrs.Benchmarks/Messaging/RequestBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/RequestPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/RequestInvokerBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamInvokerBenchmarks.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs`
+    - 结果：通过
+    - 备注：仓库脚本默认内部调用未绑定 worktree 的 `git ls-files`，因此本轮按修改文件列表显式 `--paths` 校验
+  - `git diff --check`
+    - 结果：通过
+- 本轮下一步：
+  - 运行 `GFramework.Cqrs` / `GFramework.Cqrs.Benchmarks` 的 Release build、相关 targeted tests、license header check 与 `git diff --check`
+
 ### 阶段：stream handler 生命周期矩阵 benchmark（CQRS-REWRITE-RP-108）
 
 - 延续 `$gframework-batch-boot 50`，本轮继续使用 `origin/main` 作为 branch diff 基线，并先复核：

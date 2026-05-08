@@ -69,6 +69,36 @@ internal static class CqrsHandlerRegistrar
     }
 
     /// <summary>
+    ///     直接激活并注册单个 generated registry，避免调用方为了只接入一个 benchmark registry
+    ///     而额外扫描同一程序集里的其他 registry / handler。
+    /// </summary>
+    /// <param name="container">承载 generated registry 注册结果的目标容器。</param>
+    /// <param name="registryType">要直接激活的 generated registry 类型。</param>
+    /// <param name="logger">当前注册过程使用的日志记录器。</param>
+    /// <exception cref="ArgumentNullException">
+    ///     <paramref name="container" />、<paramref name="registryType" /> 或 <paramref name="logger" /> 为 <see langword="null" />。
+    /// </exception>
+    /// <exception cref="InvalidOperationException">指定 registry 类型不满足 generated registry 运行时契约。</exception>
+    internal static void RegisterGeneratedRegistry(
+        IIocContainer container,
+        Type registryType,
+        ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        ArgumentNullException.ThrowIfNull(registryType);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        var assemblyName = GetAssemblySortKey(registryType.Assembly);
+        if (!TryCreateGeneratedRegistry(registryType, assemblyName, logger, out var registry))
+        {
+            throw new InvalidOperationException(
+                $"Unable to activate generated CQRS handler registry {registryType.FullName} in assembly {assemblyName}.");
+        }
+
+        RegisterGeneratedRegistries(container.GetServicesUnsafe, [registry], assemblyName, logger);
+    }
+
+    /// <summary>
     ///     优先使用程序集级源码生成注册器完成 CQRS 映射注册。
     /// </summary>
     /// <param name="services">目标服务集合。</param>

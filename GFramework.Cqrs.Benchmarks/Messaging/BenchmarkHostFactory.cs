@@ -6,6 +6,7 @@ using System.Linq;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Ioc;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using GFramework.Cqrs.Internal;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using LegacyICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
@@ -58,11 +59,11 @@ internal static class BenchmarkHostFactory
             var notificationPublisher = container.Get<GFramework.Cqrs.Notification.INotificationPublisher>();
             var runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(container, runtimeLogger, notificationPublisher);
             container.Register(runtime);
-            container.Register<LegacyICqrsRuntime>((LegacyICqrsRuntime)runtime);
+            RegisterLegacyRuntimeAlias(container, runtime);
         }
         else if (container.Get<LegacyICqrsRuntime>() is null)
         {
-            container.Register<LegacyICqrsRuntime>((LegacyICqrsRuntime)container.GetRequired<ICqrsRuntime>());
+            RegisterLegacyRuntimeAlias(container, container.GetRequired<ICqrsRuntime>());
         }
 
         if (container.Get<ICqrsHandlerRegistrar>() is null)
@@ -79,6 +80,43 @@ internal static class BenchmarkHostFactory
             var registrationService = GFramework.Cqrs.CqrsRuntimeFactory.CreateRegistrationService(registrar, registrationLogger);
             container.Register<ICqrsRegistrationService>(registrationService);
         }
+    }
+
+    /// <summary>
+    ///     只激活当前 benchmark 场景明确拥有的 generated registry，避免同一程序集里的其他 benchmark registry
+    ///     扩大冻结后服务索引与 dispatcher descriptor 基线。
+    /// </summary>
+    /// <typeparam name="TRegistry">当前 benchmark 需要接入的 generated registry 类型。</typeparam>
+    /// <param name="container">承载 generated registry 注册结果的 GFramework benchmark 容器。</param>
+    internal static void RegisterGeneratedBenchmarkRegistry<TRegistry>(MicrosoftDiContainer container)
+        where TRegistry : class, GFramework.Cqrs.ICqrsHandlerRegistry
+    {
+        ArgumentNullException.ThrowIfNull(container);
+
+        var registrarLogger = LoggerFactoryResolver.Provider.CreateLogger("DefaultCqrsHandlerRegistrar");
+        CqrsHandlerRegistrar.RegisterGeneratedRegistry(container, typeof(TRegistry), registrarLogger);
+    }
+
+    /// <summary>
+    ///     为旧命名空间下的 CQRS runtime 契约注册兼容别名。
+    /// </summary>
+    /// <param name="container">承载 runtime 别名的 benchmark 容器。</param>
+    /// <param name="runtime">当前正式 CQRS runtime 实例。</param>
+    /// <exception cref="InvalidOperationException">
+    ///     <paramref name="runtime" /> 未同时实现 legacy CQRS runtime 契约。
+    /// </exception>
+    private static void RegisterLegacyRuntimeAlias(MicrosoftDiContainer container, ICqrsRuntime runtime)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        ArgumentNullException.ThrowIfNull(runtime);
+
+        if (runtime is not LegacyICqrsRuntime legacyRuntime)
+        {
+            throw new InvalidOperationException(
+                $"The registered {typeof(ICqrsRuntime).FullName} must also implement {typeof(LegacyICqrsRuntime).FullName}. Actual runtime type: {runtime.GetType().FullName}.");
+        }
+
+        container.Register<LegacyICqrsRuntime>(legacyRuntime);
     }
 
     /// <summary>

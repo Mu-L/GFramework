@@ -7,10 +7,11 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-108`
+- 恢复点编号：`CQRS-REWRITE-RP-109`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #340`
+- 当前 PR 锚点：`PR #341`
 - 当前结论：
+  - 当前 `RP-109` 已使用 `$gframework-pr-review` 复核 `PR #341` latest-head review：benchmark 宿主改为定向激活当前场景的 generated registry，避免同一 benchmark 程序集里的其他 registry 扩大冻结服务索引与 `HasRegistration` 基线；`BenchmarkHostFactory` 为 legacy runtime alias 注册补齐防守式类型检查与 stream lifetime 运行时注释；`CqrsDispatcher.SendAsync(...)` 在保留 direct-return 热路径的同时恢复 faulted `ValueTask` 失败语义，并补齐 generated registry 定向接线与 request fault 语义回归测试；`.agents/skills/gframework-batch-boot/SKILL.md` 的 MD005 缩进也已顺手修正
   - `GFramework.Cqrs` 已完成对外部 `Mediator` 的生产级替代，当前主线已从“是否可替代”转向“仓库内部收口与能力深化顺序”
   - `dispatch/invoker` 生成前移已扩展到 request / stream 路径，`RP-077` 已补齐 request invoker provider gate 与 stream gate 对称的 descriptor / descriptor entry runtime 合同回归
   - `RP-078` 已补齐 mixed fallback metadata 在 runtime 不允许多个 fallback attribute 实例时的单字符串 attribute 回退回归
