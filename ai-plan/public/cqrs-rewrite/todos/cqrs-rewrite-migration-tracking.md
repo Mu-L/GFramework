@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-098`
+- 恢复点编号：`CQRS-REWRITE-RP-099`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #334`
 - 当前结论：
@@ -34,13 +34,14 @@ CQRS 迁移与收敛。
   - `RP-096` 已再次使用 `$gframework-pr-review` 复核 `PR #334` latest-head review，确认仍显示为 open 的 AI threads 在本地代码中已无新增仍成立的运行时 / 测试 / 文档缺陷，剩余差异主要是 GitHub thread 未 resolve 的状态滞后
   - `RP-097` 已继续收口 `PR #334` latest-head nitpick：为 `AsyncQueryExecutorTests` / `CommandExecutorTests` 补齐可观察的上下文保留断言，并让 `RecordingCqrsRuntime` 在测试替身返回错误响应类型时抛出带请求/类型信息的诊断异常
   - 当前 `RP-098` 已再次使用 `$gframework-pr-review` 复核 `PR #334` latest-head review，并收口 `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)` 过宽吞掉 `InvalidOperationException` 的真实运行时诊断退化问题；现在仅把“上下文尚未就绪”视为允许 fallback 的信号，并为 fallback / 异常冒泡分别补齐回归测试
-- `ai-plan` active 入口现以 `RP-098` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - 当前 `RP-099` 已补齐 `GFramework.Cqrs` 的最小 stream pipeline seam：新增 `IStreamPipelineBehavior<,>` / `StreamMessageHandlerDelegate<,>`、`RegisterCqrsStreamPipelineBehavior<TBehavior>()`、dispatcher 侧 stream pipeline executor 缓存与 generated stream invoker 兼容回归，以及 `Architecture` 公开注册入口与对应文档说明
+- `ai-plan` active 入口现以 `RP-099` 为最新恢复锚点；`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
 - 当前分支为 `feat/cqrs-optimization`
 - 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`2c58d8b6`, 2026-05-07 13:24:46 +0800) 为基线；本地 `main` (`c2d22285`) 已落后，不作为 branch diff 基线
-- 当前分支相对 `origin/main` 的累计 branch diff 为 `4 files / 303 lines`，仍明显低于 `$gframework-batch-boot 50` 的文件阈值
+- 当前分支相对 `origin/main` 的累计 branch diff 为 `0 files / 0 lines`，仍明显低于 `$gframework-batch-boot 50` 的文件 / 行数阈值
 - `GFramework.Cqrs.Benchmarks` 作为 benchmark 基础设施项目，必须持续排除在 NuGet / GitHub Packages 发布集合之外
 - `GFramework.Cqrs.Benchmarks` 现已覆盖 request steady-state、pipeline 数量矩阵、startup、request/stream generated invoker，以及 request handler `Singleton / Transient` 生命周期矩阵
 - `GFramework.Core` 当前已通过内部 bridge request / handler 把 legacy `ICommand`、`IAsyncCommand`、`IQuery`、`IAsyncQuery` 接到统一 `ICqrsRuntime`
@@ -53,7 +54,7 @@ CQRS 迁移与收敛。
 - `ArchitectureContextTests.CreateFrozenBridgeContext(...)` 现把冻结容器所有权显式交回调用方，并在每个 bridge 用例的 `finally` 中释放
 - `CommandExecutorModule`、`QueryExecutorModule`、`AsyncQueryExecutorModule` 现改为 `GetRequired<ICqrsRuntime>()` 并在 XML 文档里显式声明注册顺序契约，避免 runtime 缺失时静默回退
 - `LegacyAsyncQueryDispatchRequestHandler`、`LegacyAsyncCommandResultDispatchRequestHandler`、`LegacyAsyncCommandDispatchRequestHandler` 现都通过 `ThrowIfCancellationRequested()` + `WaitAsync(cancellationToken)` 显式保留调用方取消可见性
-- 相对 `ai-libs/Mediator`，当前仍未完全吸收的能力集中在六类：facade 公开入口、telemetry、stream pipeline、notification publisher 策略、生成器配置与诊断、生命周期/缓存公开配置面
+- 相对 `ai-libs/Mediator`，当前仍未完全吸收的能力集中在五类：facade 公开入口、telemetry、notification publisher 策略、生成器配置与诊断、生命周期/缓存公开配置面
 - 发布工作流已有 packed modules 校验，但 PR 工作流此前没有等价的 solution pack 产物名单校验
 - 本地 `dotnet pack GFramework.sln -c Release --no-restore -o <temp-dir>` 当前只产出 14 个预期包，未复现 benchmark `.nupkg`
 - `PR #334` 在 `2026-05-07` 的 latest-head review 当前显示 `CodeRabbit 10` / `Greptile 5` 个 open thread；本轮再次复核后确认其中大部分仍是已实质修复但未 resolve 的 stale thread，仅 `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)` 的异常边界仍需要继续收口
@@ -79,6 +80,7 @@ CQRS 迁移与收敛。
 - 若继续扩大 generated invoker 覆盖面，需要持续区分“可静态表达的合同”与 `PreciseReflectedRegistrationSpec` 等仍需保守回退的场景
 - legacy bridge 当前只为已有 `Command` / `Query` 兼容入口接到统一 request pipeline；若后续要继续对齐 `Mediator`，仍需要单独设计 stream pipeline、telemetry 与 facade 公开面，而不是把这次 bridge 当成“全部收口完成”
 - `LegacyBridgePipelineTracker` 仍是进程级静态测试辅助；虽然现在已在相关 fixture 清理阶段重置并补充线程安全说明，但若将来扩大并行 bridge fixture 数量，仍要继续控制共享状态扩散
+- stream pipeline 当前只在“单次建流”层面包裹 handler 调用；若后续需要 per-item 拦截、元素级重试或流内 metrics 聚合，仍需额外设计更细粒度 contract，而不是把本轮 seam 直接等同于元素级 middleware
 
 ## 最近权威验证
 
@@ -175,9 +177,9 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 在 GitHub 上 resolve / reply 已被当前分支实质吸收的 `PR #334` stale review threads，尤其是仍停留在旧 head 上的 CodeRabbit / Greptile open thread；若 head 更新后线程数量继续变化，再用 `$gframework-pr-review` 复核
-2. 若继续沿用 `$gframework-batch-boot 50` 且优先处理 `Mediator` 能力吸收，下一批建议从 `stream pipeline` 或 `notification publisher` 策略中选择一个独立切片推进
-3. 若继续收敛 legacy Core CQRS，可评估是否补一个 `IMediator` 风格 facade，而不是继续扩大 `ArchitectureContext` 兼容入口的职责
+1. 若继续沿用 `$gframework-batch-boot 50` 且优先处理 `Mediator` 能力吸收，下一批建议从 `notification publisher` 策略或 facade 公开入口中选择一个独立切片推进
+2. 若后续要增强 stream observability，优先评估是否需要元素级 hook，而不是直接复用当前建流级 seam 承载更多语义
+3. 在 GitHub 上 resolve / reply 已被当前分支实质吸收的 `PR #334` stale review threads；若 head 更新后线程数量继续变化，再用 `$gframework-pr-review` 复核
 
 ## 活跃文档
 

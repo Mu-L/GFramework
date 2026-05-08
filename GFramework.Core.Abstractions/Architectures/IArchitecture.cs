@@ -85,6 +85,15 @@ public interface IArchitecture : IAsyncInitializable, IAsyncDestroyable, IInitia
         where TBehavior : class;
 
     /// <summary>
+    ///     注册 CQRS 流式请求管道行为。
+    ///     既支持实现 <c>IStreamPipelineBehavior&lt;,&gt;</c> 的开放泛型行为类型，
+    ///     也支持绑定到单一流式请求/响应对的封闭行为类型。
+    /// </summary>
+    /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    void RegisterCqrsStreamPipelineBehavior<TBehavior>()
+        where TBehavior : class;
+
+    /// <summary>
     ///     从指定程序集显式注册 CQRS 处理器。
     ///     当处理器位于默认架构程序集之外的模块或扩展程序集中时，可在初始化阶段调用该入口接入对应程序集。
     /// </summary>

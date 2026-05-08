@@ -28,6 +28,17 @@ internal sealed class ArchitectureModules(
     }
 
     /// <summary>
+    ///     注册 CQRS 流式请求管道行为。
+    ///     支持开放泛型行为类型和针对单一流式请求的封闭行为类型。
+    /// </summary>
+    /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    public void RegisterCqrsStreamPipelineBehavior<TBehavior>() where TBehavior : class
+    {
+        logger.Debug($"Registering CQRS stream pipeline behavior: {typeof(TBehavior).Name}");
+        services.Container.RegisterCqrsStreamPipelineBehavior<TBehavior>();
+    }
+
+    /// <summary>
     ///     从指定程序集显式注册 CQRS 处理器。
     ///     该入口用于把默认架构程序集之外的扩展处理器接入当前架构容器。
     /// </summary>

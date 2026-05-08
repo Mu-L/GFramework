@@ -31,6 +31,10 @@ internal sealed class CqrsDispatcherCacheTests
         _container.RegisterCqrsPipelineBehavior<DispatcherPipelineContextRefreshBehavior>();
         _container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderOuterBehavior>();
         _container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderInnerBehavior>();
+        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineCacheBehavior>();
+        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineContextRefreshBehavior>();
+        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderOuterBehavior>();
+        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderInnerBehavior>();
 
         CqrsTestRuntime.RegisterHandlers(
             _container,
@@ -41,6 +45,7 @@ internal sealed class CqrsDispatcherCacheTests
         _context = new ArchitectureContext(_container);
         DispatcherNotificationContextRefreshState.Reset();
         DispatcherPipelineContextRefreshState.Reset();
+        DispatcherStreamPipelineOrderState.Reset();
         DispatcherStreamContextRefreshState.Reset();
         ClearDispatcherCaches();
     }
@@ -221,6 +226,71 @@ internal sealed class CqrsDispatcherCacheTests
     }
 
     /// <summary>
+    ///     验证 stream pipeline executor 会按行为数量在 binding 内首次创建并在后续建流中复用。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Cache_Stream_Pipeline_Executors_Per_Behavior_Count()
+    {
+        var streamBindings = GetCacheField("StreamDispatchBindings");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                GetStreamPipelineExecutorValue(
+                    streamBindings,
+                    typeof(DispatcherCacheStreamRequest),
+                    typeof(int),
+                    1),
+                Is.Null);
+            Assert.That(
+                GetStreamPipelineExecutorValue(
+                    streamBindings,
+                    typeof(DispatcherStreamPipelineOrderRequest),
+                    typeof(int),
+                    2),
+                Is.Null);
+        });
+
+        await DrainAsync(_context!.CreateStream(new DispatcherCacheStreamRequest()));
+        await DrainAsync(_context.CreateStream(new DispatcherStreamPipelineOrderRequest()));
+
+        var singleBehaviorExecutor = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherCacheStreamRequest),
+            typeof(int),
+            1);
+        var twoBehaviorExecutor = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherStreamPipelineOrderRequest),
+            typeof(int),
+            2);
+
+        await DrainAsync(_context.CreateStream(new DispatcherCacheStreamRequest()));
+        await DrainAsync(_context.CreateStream(new DispatcherStreamPipelineOrderRequest()));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(singleBehaviorExecutor, Is.Not.Null);
+            Assert.That(twoBehaviorExecutor, Is.Not.Null);
+            Assert.That(singleBehaviorExecutor, Is.Not.SameAs(twoBehaviorExecutor));
+            Assert.That(
+                GetStreamPipelineExecutorValue(
+                    streamBindings,
+                    typeof(DispatcherCacheStreamRequest),
+                    typeof(int),
+                    1),
+                Is.SameAs(singleBehaviorExecutor));
+            Assert.That(
+                GetStreamPipelineExecutorValue(
+                    streamBindings,
+                    typeof(DispatcherStreamPipelineOrderRequest),
+                    typeof(int),
+                    2),
+                Is.SameAs(twoBehaviorExecutor));
+        });
+    }
+
+    /// <summary>
     ///     验证复用缓存的 request pipeline executor 后，行为顺序和最终处理器顺序保持不变。
     /// </summary>
     [Test]
@@ -235,6 +305,38 @@ internal sealed class CqrsDispatcherCacheTests
 
         await _context.SendRequestAsync(new DispatcherPipelineOrderCacheRequest());
         var secondInvocation = DispatcherPipelineOrderState.Steps.ToArray();
+
+        var expectedOrder = new[]
+        {
+            "Outer:Before",
+            "Inner:Before",
+            "Handler",
+            "Inner:After",
+            "Outer:After"
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstInvocation, Is.EqualTo(expectedOrder));
+            Assert.That(secondInvocation, Is.EqualTo(expectedOrder));
+        });
+    }
+
+    /// <summary>
+    ///     验证复用缓存的 stream pipeline executor 后，行为顺序和最终处理器顺序保持不变。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Preserve_Stream_Pipeline_Order_When_Reusing_Cached_Executor()
+    {
+        DispatcherStreamPipelineOrderState.Reset();
+
+        await DrainAsync(_context!.CreateStream(new DispatcherStreamPipelineOrderRequest()));
+        var firstInvocation = DispatcherStreamPipelineOrderState.Steps.ToArray();
+
+        DispatcherStreamPipelineOrderState.Reset();
+
+        await DrainAsync(_context.CreateStream(new DispatcherStreamPipelineOrderRequest()));
+        var secondInvocation = DispatcherStreamPipelineOrderState.Steps.ToArray();
 
         var expectedOrder = new[]
         {
@@ -393,6 +495,60 @@ internal sealed class CqrsDispatcherCacheTests
     }
 
     /// <summary>
+    ///     验证缓存的 stream pipeline executor 在重复建流时仍会重新解析 behavior/handler，
+    ///     并为当次实例重新注入当前架构上下文。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Reinject_Current_Context_When_Reusing_Cached_Stream_Pipeline_Executor()
+    {
+        DispatcherStreamContextRefreshState.Reset();
+
+        var streamBindings = GetCacheField("StreamDispatchBindings");
+        var firstContext = new ArchitectureContext(_container!);
+        var secondContext = new ArchitectureContext(_container!);
+
+        await DrainAsync(firstContext.CreateStream(new DispatcherStreamContextRefreshRequest("first")));
+
+        var executorAfterFirstDispatch = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherStreamContextRefreshRequest),
+            typeof(int),
+            1);
+
+        await DrainAsync(secondContext.CreateStream(new DispatcherStreamContextRefreshRequest("second")));
+
+        var executorAfterSecondDispatch = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherStreamContextRefreshRequest),
+            typeof(int),
+            1);
+        var behaviorSnapshots = DispatcherStreamContextRefreshState.BehaviorSnapshots.ToArray();
+        var handlerSnapshots = DispatcherStreamContextRefreshState.HandlerSnapshots.ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(executorAfterFirstDispatch, Is.Not.Null);
+            Assert.That(executorAfterSecondDispatch, Is.SameAs(executorAfterFirstDispatch));
+
+            Assert.That(behaviorSnapshots, Has.Length.EqualTo(2));
+            Assert.That(handlerSnapshots, Has.Length.EqualTo(2));
+
+            Assert.That(behaviorSnapshots[0].DispatchId, Is.EqualTo("first"));
+            Assert.That(behaviorSnapshots[0].Context, Is.SameAs(firstContext));
+            Assert.That(behaviorSnapshots[1].DispatchId, Is.EqualTo("second"));
+            Assert.That(behaviorSnapshots[1].Context, Is.SameAs(secondContext));
+            Assert.That(behaviorSnapshots[1].Context, Is.Not.SameAs(behaviorSnapshots[0].Context));
+
+            Assert.That(handlerSnapshots[0].DispatchId, Is.EqualTo("first"));
+            Assert.That(handlerSnapshots[0].Context, Is.SameAs(firstContext));
+            Assert.That(handlerSnapshots[1].DispatchId, Is.EqualTo("second"));
+            Assert.That(handlerSnapshots[1].Context, Is.SameAs(secondContext));
+            Assert.That(handlerSnapshots[1].Context, Is.Not.SameAs(handlerSnapshots[0].Context));
+            Assert.That(handlerSnapshots[1].InstanceId, Is.Not.EqualTo(handlerSnapshots[0].InstanceId));
+        });
+    }
+
+    /// <summary>
     ///     通过反射读取 dispatcher 的静态缓存对象。
     /// </summary>
     private static object GetCacheField(string fieldName)
@@ -450,6 +606,26 @@ internal sealed class CqrsDispatcherCacheTests
         int behaviorCount)
     {
         var binding = GetRequestDispatchBindingValue(requestBindings, requestType, responseType);
+        return binding is null
+            ? null
+            : InvokeInstanceMethod(binding, "GetPipelineExecutorForTesting", behaviorCount);
+    }
+
+    /// <summary>
+    ///     读取 stream dispatch binding 中指定行为数量的 pipeline executor 缓存项。
+    /// </summary>
+    /// <param name="streamBindings">dispatcher 内部的 stream binding 缓存对象。</param>
+    /// <param name="requestType">要读取的流式请求运行时类型。</param>
+    /// <param name="responseType">要读取的响应元素类型。</param>
+    /// <param name="behaviorCount">目标 executor 对应的行为数量。</param>
+    /// <returns>已缓存的 executor；若 binding 或 executor 尚未建立则返回 <see langword="null" />。</returns>
+    private static object? GetStreamPipelineExecutorValue(
+        object streamBindings,
+        Type requestType,
+        Type responseType,
+        int behaviorCount)
+    {
+        var binding = GetPairCacheValue(streamBindings, requestType, responseType);
         return binding is null
             ? null
             : InvokeInstanceMethod(binding, "GetPipelineExecutorForTesting", behaviorCount);

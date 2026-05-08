@@ -523,6 +523,56 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     }
 
     /// <summary>
+    ///     注册 CQRS 流式请求管道行为。
+    ///     同时支持开放泛型行为类型和已闭合的具体行为类型，
+    ///     以兼容通用行为和针对单一流式请求的专用行为两种注册方式。
+    /// </summary>
+    /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    public void RegisterCqrsStreamPipelineBehavior<TBehavior>() where TBehavior : class
+    {
+        ThrowIfDisposed();
+        EnterWriteLockOrThrowDisposed();
+        try
+        {
+            ThrowIfFrozen();
+
+            var behaviorType = typeof(TBehavior);
+
+            if (behaviorType.IsGenericTypeDefinition)
+            {
+                GetServicesUnsafe.AddSingleton(typeof(IStreamPipelineBehavior<,>), behaviorType);
+            }
+            else
+            {
+                var pipelineInterfaces = behaviorType
+                    .GetInterfaces()
+                    .Where(type => type.IsGenericType &&
+                                   type.GetGenericTypeDefinition() == typeof(IStreamPipelineBehavior<,>))
+                    .ToList();
+
+                if (pipelineInterfaces.Count == 0)
+                {
+                    var errorMessage = $"{behaviorType.Name} does not implement IStreamPipelineBehavior<,>";
+                    _logger.Error(errorMessage);
+                    throw new InvalidOperationException(errorMessage);
+                }
+
+                // 为每个已闭合的流式管道接口建立显式映射，支持针对特定流式请求/响应的专用行为。
+                foreach (var pipelineInterface in pipelineInterfaces)
+                {
+                    GetServicesUnsafe.AddSingleton(pipelineInterface, behaviorType);
+                }
+            }
+
+            _logger.Debug($"CQRS stream pipeline behavior registered: {behaviorType.Name}");
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    /// <summary>
     ///     从指定程序集显式注册 CQRS 处理器。
     /// </summary>
     /// <param name="assembly">包含 CQRS 处理器或生成注册器的程序集。</param>

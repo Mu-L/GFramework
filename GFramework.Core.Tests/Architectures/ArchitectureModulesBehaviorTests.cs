@@ -28,6 +28,7 @@ public class ArchitectureModulesBehaviorTests
         LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
         GameContext.Clear();
         TrackingPipelineBehavior<ModuleBehaviorRequest, string>.InvocationCount = 0;
+        TrackingStreamPipelineBehavior<ModuleStreamBehaviorRequest, int>.InvocationCount = 0;
     }
 
     /// <summary>
@@ -38,6 +39,7 @@ public class ArchitectureModulesBehaviorTests
     {
         GameContext.Clear();
         TrackingPipelineBehavior<ModuleBehaviorRequest, string>.InvocationCount = 0;
+        TrackingStreamPipelineBehavior<ModuleStreamBehaviorRequest, int>.InvocationCount = 0;
         LegacyBridgePipelineTracker.Reset();
     }
 
@@ -84,6 +86,34 @@ public class ArchitectureModulesBehaviorTests
             {
                 Assert.That(response, Is.EqualTo("handled"));
                 Assert.That(TrackingPipelineBehavior<ModuleBehaviorRequest, string>.InvocationCount, Is.EqualTo(1));
+            });
+        }
+        finally
+        {
+            await architecture.DestroyAsync();
+        }
+    }
+
+    /// <summary>
+    ///     验证注册的 CQRS stream 行为会参与建流处理流程。
+    /// </summary>
+    [Test]
+    public async Task RegisterCqrsStreamPipelineBehavior_Should_Apply_Pipeline_Behavior_To_Stream_Request()
+    {
+        var architecture = new ModuleTestArchitecture(target =>
+            target.RegisterCqrsStreamPipelineBehavior<TrackingStreamPipelineBehavior<ModuleStreamBehaviorRequest, int>>());
+
+        await architecture.InitializeAsync();
+        try
+        {
+            var response = await DrainAsync(architecture.Context.CreateStream(new ModuleStreamBehaviorRequest()));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(response, Is.EqualTo([7]));
+                Assert.That(
+                    TrackingStreamPipelineBehavior<ModuleStreamBehaviorRequest, int>.InvocationCount,
+                    Is.EqualTo(1));
             });
         }
         finally
@@ -193,5 +223,23 @@ public class ArchitectureModulesBehaviorTests
     /// </summary>
     private sealed class InstalledByModuleUtility : IUtility
     {
+    }
+
+    /// <summary>
+    ///     物化异步流为只读列表，便于断言 stream pipeline 行为的最终可观察结果。
+    /// </summary>
+    /// <typeparam name="T">流元素类型。</typeparam>
+    /// <param name="stream">要物化的异步流。</param>
+    /// <returns>按枚举顺序收集的元素列表。</returns>
+    private static async Task<IReadOnlyList<T>> DrainAsync<T>(IAsyncEnumerable<T> stream)
+    {
+        var results = new List<T>();
+
+        await foreach (var item in stream.ConfigureAwait(false))
+        {
+            results.Add(item);
+        }
+
+        return results;
     }
 }

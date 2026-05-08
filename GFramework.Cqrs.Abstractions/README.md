@@ -19,7 +19,7 @@
 推荐按职责引用：
 
 - `GeWuYou.GFramework.Cqrs.Abstractions`
-  - 提供 `IRequest<TResponse>`、`INotification`、`IStreamRequest<TResponse>`、`IRequestHandler<,>`、`INotificationHandler<>`、`IPipelineBehavior<,>`、`ICqrsRuntime`、`ICqrsContext`、`Unit` 等基础契约。
+  - 提供 `IRequest<TResponse>`、`INotification`、`IStreamRequest<TResponse>`、`IRequestHandler<,>`、`INotificationHandler<>`、`IPipelineBehavior<,>`、`IStreamPipelineBehavior<,>`、`ICqrsRuntime`、`ICqrsContext`、`Unit` 等基础契约。
 - `GeWuYou.GFramework.Cqrs`
   - 引用本包，并提供默认 runtime、处理器注册、消息基类、处理器基类、上下文扩展方法。
 - `GeWuYou.GFramework.Cqrs.SourceGenerators`
@@ -38,7 +38,7 @@
 - 运行时协作接口
   - `ICqrsRuntime`、`ICqrsContext`、`ICqrsHandlerRegistrar`
 - 管道与辅助类型
-  - `IPipelineBehavior<,>`、`MessageHandlerDelegate<,>`、`Unit`
+  - `IPipelineBehavior<,>`、`IStreamPipelineBehavior<,>`、`MessageHandlerDelegate<,>`、`StreamMessageHandlerDelegate<,>`、`Unit`
 
 ## 最小接入路径
 

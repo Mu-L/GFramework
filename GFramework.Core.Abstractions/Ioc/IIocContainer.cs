@@ -106,6 +106,13 @@ public interface IIocContainer : IContextAware, IDisposable
         where TBehavior : class;
 
     /// <summary>
+    ///     注册 CQRS 流式请求管道行为。
+    /// </summary>
+    /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    void RegisterCqrsStreamPipelineBehavior<TBehavior>()
+        where TBehavior : class;
+
+    /// <summary>
     ///     从指定程序集显式注册 CQRS 处理器。
     ///     该入口适用于处理器不位于默认架构程序集中的场景，例如扩展包、模块程序集或拆分后的业务程序集。
     ///     运行时会优先使用程序集级源码生成注册器；若不存在可用注册器，则自动回退到反射扫描。

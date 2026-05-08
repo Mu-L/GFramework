@@ -27,6 +27,7 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     {
         _previousLoggerFactoryProvider = LoggerFactoryResolver.Provider;
         LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
+        GeneratedStreamPipelineTrackingBehavior.InvocationCount = 0;
         ClearRegistrarCaches();
         ClearDispatcherCaches();
     }
@@ -38,6 +39,7 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     public void TearDown()
     {
         LoggerFactoryResolver.Provider = _previousLoggerFactoryProvider ?? new ConsoleLoggerFactoryProvider();
+        GeneratedStreamPipelineTrackingBehavior.InvocationCount = 0;
         ClearRegistrarCaches();
         ClearDispatcherCaches();
     }
@@ -167,6 +169,30 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         var context = new ArchitectureContext(container);
         var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3)));
         Assert.That(results, Is.EqualTo([30, 31]));
+    }
+
+    /// <summary>
+    ///     验证 generated stream invoker 与 stream pipeline 行为同时存在时，
+    ///     dispatcher 仍会保持 generated invoker 优先，并正确包裹到行为链内。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Use_Generated_Stream_Invoker_Inside_Stream_Pipeline()
+    {
+        var generatedAssembly = CreateGeneratedStreamInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+        container.RegisterCqrsStreamPipelineBehavior<GeneratedStreamPipelineTrackingBehavior>();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(results, Is.EqualTo([30, 31]));
+            Assert.That(GeneratedStreamPipelineTrackingBehavior.InvocationCount, Is.EqualTo(1));
+        });
     }
 
     /// <summary>

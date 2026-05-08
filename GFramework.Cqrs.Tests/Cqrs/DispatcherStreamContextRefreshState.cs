@@ -12,8 +12,26 @@ namespace GFramework.Cqrs.Tests.Cqrs;
 internal static class DispatcherStreamContextRefreshState
 {
     private static readonly Lock _syncRoot = new();
+    private static int _nextBehaviorInstanceId;
     private static int _nextHandlerInstanceId;
+    private static readonly List<DispatcherPipelineContextSnapshot> _behaviorSnapshots = [];
     private static readonly List<DispatcherPipelineContextSnapshot> _handlerSnapshots = [];
+
+    /// <summary>
+    ///     获取每次建流时记录的 behavior 快照副本。
+    /// </summary>
+    /// <returns>当前已记录的 behavior 上下文快照副本。</returns>
+    /// <remarks>共享状态通过 <c>_syncRoot</c> 串行化，避免并行测试写入抖动。</remarks>
+    public static IReadOnlyList<DispatcherPipelineContextSnapshot> BehaviorSnapshots
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _behaviorSnapshots.ToArray();
+            }
+        }
+    }
 
     /// <summary>
     ///     获取每次建流时记录的快照副本。
@@ -32,12 +50,36 @@ internal static class DispatcherStreamContextRefreshState
     }
 
     /// <summary>
+    ///     为新的 behavior 测试实例分配稳定编号。
+    /// </summary>
+    /// <returns>单调递增的 behavior 实例编号。</returns>
+    public static int AllocateBehaviorInstanceId()
+    {
+        return Interlocked.Increment(ref _nextBehaviorInstanceId);
+    }
+
+    /// <summary>
     ///     为新的 handler 测试实例分配稳定编号。
     /// </summary>
     /// <returns>单调递增的 handler 实例编号。</returns>
     public static int AllocateHandlerInstanceId()
     {
         return Interlocked.Increment(ref _nextHandlerInstanceId);
+    }
+
+    /// <summary>
+    ///     记录 behavior 在当前建流中观察到的上下文。
+    /// </summary>
+    /// <param name="dispatchId">触发本次记录的稳定分发标识。</param>
+    /// <param name="instanceId">观察到该上下文的 behavior 实例编号。</param>
+    /// <param name="context">当前分发注入到 behavior 的架构上下文。</param>
+    /// <remarks>写入过程通过 <c>_syncRoot</c> 串行化，确保快照列表保持稳定顺序。</remarks>
+    public static void RecordBehavior(string dispatchId, int instanceId, IArchitectureContext context)
+    {
+        lock (_syncRoot)
+        {
+            _behaviorSnapshots.Add(new DispatcherPipelineContextSnapshot(dispatchId, instanceId, context));
+        }
     }
 
     /// <summary>
@@ -63,7 +105,9 @@ internal static class DispatcherStreamContextRefreshState
     {
         lock (_syncRoot)
         {
+            _nextBehaviorInstanceId = 0;
             _nextHandlerInstanceId = 0;
+            _behaviorSnapshots.Clear();
             _handlerSnapshots.Clear();
         }
     }

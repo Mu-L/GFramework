@@ -207,7 +207,19 @@ RegisterCqrsPipelineBehavior<LoggingBehavior<,>>();
 - 审计
 - 重试或统一异常封装
 
-当前公开入口只有 `RegisterCqrsPipelineBehavior<TBehavior>()`。
+如果你需要围绕 `CreateStream(...)` 的建流过程插入横切逻辑，实现 `IStreamPipelineBehavior<TRequest, TResponse>`，并在初始化阶段注册：
+
+```csharp
+RegisterCqrsStreamPipelineBehavior<MyStreamBehavior<,>>();
+```
+
+这里有两个需要明确的边界：
+
+- `RegisterCqrsPipelineBehavior<TBehavior>()`
+  - 只作用于 `SendRequestAsync(...)` / `SendAsync(...)` / `SendQueryAsync(...)` 这类单次请求分发
+- `RegisterCqrsStreamPipelineBehavior<TBehavior>()`
+  - 作用于 `CreateStream(...)` 的建流阶段
+  - 默认实现围绕单次建流调用编排行为链，不会自动把行为扩展成“每个流元素都单独拦截一次”
 
 ## 和旧 Command / Query 的关系
 
@@ -237,7 +249,6 @@ RegisterCqrsPipelineBehavior<LoggingBehavior<,>>();
 
 - `IMediator` / `ISender` / `IPublisher` 风格的一等 facade 公开入口
 - telemetry / tracing / metrics 的运行时与生成器配置面
-- 独立的 stream pipeline 行为体系
 - 更丰富的 notification publisher 策略
 - 更强的生成器配置与诊断公开面
 - 生命周期 / 缓存策略的显式公开配置面
