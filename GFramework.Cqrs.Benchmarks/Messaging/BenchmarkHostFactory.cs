@@ -3,10 +3,12 @@
 
 using System;
 using System.Linq;
+using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Ioc;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using LegacyICqrsRuntime = GFramework.Core.Abstractions.Cqrs.ICqrsRuntime;
 
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
@@ -31,9 +33,52 @@ internal static class BenchmarkHostFactory
         ArgumentNullException.ThrowIfNull(configure);
 
         var container = new MicrosoftDiContainer();
+        RegisterCqrsInfrastructure(container);
         configure(container);
         container.Freeze();
         return container;
+    }
+
+    /// <summary>
+    ///     为 benchmark 宿主补齐默认 CQRS runtime seam，确保它既能手工注册 handler，也能走真实的程序集注册入口。
+    /// </summary>
+    /// <param name="container">当前 benchmark 拥有的 GFramework 容器。</param>
+    /// <remarks>
+    ///     `RegisterCqrsHandlersFromAssembly(...)` 依赖预先可见的 runtime / registrar / registration service 实例绑定。
+    ///     benchmark 宿主直接使用裸 <see cref="MicrosoftDiContainer" />，因此需要在配置阶段先补齐这组基础设施，
+    ///     避免各个 benchmark 用例各自复制同一段前置接线逻辑。
+    /// </remarks>
+    private static void RegisterCqrsInfrastructure(MicrosoftDiContainer container)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+
+        if (container.Get<ICqrsRuntime>() is null)
+        {
+            var runtimeLogger = LoggerFactoryResolver.Provider.CreateLogger("CqrsDispatcher");
+            var notificationPublisher = container.Get<GFramework.Cqrs.Notification.INotificationPublisher>();
+            var runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(container, runtimeLogger, notificationPublisher);
+            container.Register(runtime);
+            container.Register<LegacyICqrsRuntime>((LegacyICqrsRuntime)runtime);
+        }
+        else if (container.Get<LegacyICqrsRuntime>() is null)
+        {
+            container.Register<LegacyICqrsRuntime>((LegacyICqrsRuntime)container.GetRequired<ICqrsRuntime>());
+        }
+
+        if (container.Get<ICqrsHandlerRegistrar>() is null)
+        {
+            var registrarLogger = LoggerFactoryResolver.Provider.CreateLogger("DefaultCqrsHandlerRegistrar");
+            var registrar = GFramework.Cqrs.CqrsRuntimeFactory.CreateHandlerRegistrar(container, registrarLogger);
+            container.Register<ICqrsHandlerRegistrar>(registrar);
+        }
+
+        if (container.Get<ICqrsRegistrationService>() is null)
+        {
+            var registrationLogger = LoggerFactoryResolver.Provider.CreateLogger("DefaultCqrsRegistrationService");
+            var registrar = container.GetRequired<ICqrsHandlerRegistrar>();
+            var registrationService = GFramework.Cqrs.CqrsRuntimeFactory.CreateRegistrationService(registrar, registrationLogger);
+            container.Register<ICqrsRegistrationService>(registrationService);
+        }
     }
 
     /// <summary>

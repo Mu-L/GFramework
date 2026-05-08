@@ -15,7 +15,7 @@
 - `Messaging/Fixture.cs`
   - 运行前输出并校验场景配置
 - `Messaging/RequestBenchmarks.cs`
-  - direct handler、NuGet `Mediator` source-generated concrete path、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
+  - direct handler、NuGet `Mediator` source-generated concrete path、已接上 handwritten generated request invoker provider 的默认 `GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestLifetimeBenchmarks.cs`
   - `Singleton / Transient` 两类 handler 生命周期下，direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestPipelineBenchmarks.cs`

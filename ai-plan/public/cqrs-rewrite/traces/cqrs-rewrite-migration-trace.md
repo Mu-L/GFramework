@@ -2,6 +2,36 @@
 
 ## 2026-05-08
 
+### 阶段：默认 request benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-105）
+
+- 延续 `$gframework-batch-boot 50`，本轮先确认失败试验已手工回退回 `RP-104` 的已验证状态，再重新评估“默认 request 路径继续逼近 source-generated `Mediator`”的下一刀
+- 本轮接受的只读探索结论：
+  - 继续在 `CqrsDispatcher` 或 `MicrosoftDiContainer` 上堆叠同层级微优化的性价比已经下降，而且上一轮“总是 `GetAll(Type)`”的试验已被 benchmark 明确否决
+  - 默认 `RequestBenchmarks` 虽然已包含 `Mediator` 对照，但当前 GFramework 组仍只注册了单个 handler 实例，没有走 `RegisterCqrsHandlersFromAssembly(...)` + generated registry/provider 的真实宿主接线路径
+  - `RequestInvokerBenchmarks` 已证明 generated request invoker provider 路径比纯反射 binding 更接近目标，因此下一批最小切片应先把这条收益吸收到默认 steady-state request benchmark
+- 本轮主线程决策：
+  - 在 `BenchmarkHostFactory` 内补齐 benchmark 最小宿主的 CQRS 基础设施预接线：runtime、legacy alias、registrar、registration service
+  - 新增 `GeneratedDefaultRequestBenchmarkRegistry`，用 handwritten generated registry + `ICqrsRequestInvokerProvider` + `IEnumeratesCqrsRequestInvokerDescriptors` 为 `RequestBenchmarks.BenchmarkRequest` 提供真实的 generated request invoker descriptor
+  - 让 `RequestBenchmarks` 改用 `RegisterCqrsHandlersFromAssembly(typeof(RequestBenchmarks).Assembly)` 建容器，并在 `Setup/Cleanup` 前后显式清理 dispatcher 静态缓存，避免前一组 benchmark 污染默认 request steady-state 结果
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedDefaultRequestBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs GFramework.Cqrs.Benchmarks/Messaging/RequestBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.013 ns / 32 B`、`Mediator` `5.747 ns / 32 B`、`MediatR` `51.588 ns / 232 B`、`GFramework.Cqrs` `65.296 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 `GFramework.Cqrs` / `MediatR` 约 `68.772 ns / 32 B` vs `48.177 ns / 232 B`；`Transient` 下约 `73.157 ns / 56 B` vs `51.753 ns / 232 B`
+- 本轮结论：
+  - 默认 request benchmark 现在终于测到了“默认宿主已吸收 generated request invoker provider”后的真实 steady-state，而不再只是纯反射 request binding
+  - 这条宿主层收口在不改 runtime 语义的前提下，把 `GFramework.Cqrs` steady-state request 从约 `70.298 ns` 再压到约 `65.296 ns`
+  - lifetime 矩阵也同步改善到 `68.772 ns / 73.157 ns`，说明默认 request 宿主吸收 generated provider 不只是 benchmark 口径变化，而是对常见 handler 生命周期也有稳定收益
+  - 下一批若继续沿用 `$gframework-batch-boot 50`，应优先转向 pipeline 路径或 handler 解析热路径中仍未吸收 generated/provider 收益的常量开销，而不是回头重试已被否决的 `GetAll(Type)` 零行为探测方案
+
 ### 阶段：request 热路径继续收口（CQRS-REWRITE-RP-104）
 
 - 延续 `$gframework-batch-boot 50`，本轮先重新按 `origin/main` 复核 branch diff 基线：
