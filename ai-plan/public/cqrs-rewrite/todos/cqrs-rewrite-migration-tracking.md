@@ -7,10 +7,13 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-114`
+- 恢复点编号：`CQRS-REWRITE-RP-115`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #341`
 - 当前结论：
+  - 当前 `RP-115` 已继续沿用 `$gframework-batch-boot 50`，并把 notification publisher 线从“已具备 seam + benchmark 事实”继续收口到组合根配置面：新增 `GFramework.Cqrs.Extensions.NotificationPublisherRegistrationExtensions`，提供 `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` / `UseTaskWhenAllNotificationPublisher()` 三个显式入口，避免用户再手写 `Register<INotificationPublisher>(new ...)`
+  - 这一批同时把重复策略注册前移到组合根阶段显式阻止，并在回归里确认 `UseTaskWhenAllNotificationPublisher()` 经过默认 runtime 基础设施后仍会命中“失败不阻断其余 handler”的并行语义；这让 notification publisher 的采用路径从“知道内部 seam 如何接线”收口为“知道该在容器里选哪条策略”
+  - 用户文档现同步写明 `TaskWhenAllNotificationPublisher` 更适合“并行完成 + 统一观察失败”的语义诉求，而不是 fixed fan-out steady-state publish 优化；这与 `RP-114` 的 benchmark 结论保持一致，减少使用者把它误解成默认的性能升级开关
   - 当前 `RP-114` 已继续沿用 `$gframework-batch-boot 50`，并沿着 `RP-113` 刚落地的 notification publisher 能力切片继续补 benchmark：`NotificationFanOutBenchmarks` 现同时纳入 `GFramework.Cqrs` 默认顺序发布器与新内置 `TaskWhenAllNotificationPublisher`，用于量化“能力差距收口后，固定 4 handler fan-out 的成本变化”
   - `RP-114` 的 short-job 结果显示：fixed `4 handler` fan-out 下，默认顺序发布器约 `427.453 ns / 408 B`，内置 `TaskWhenAllNotificationPublisher` 约 `472.574 ns / 496 B`，`MediatR` 约 `225.940 ns / 1256 B`，NuGet `Mediator` concrete runtime 约 `3.854 ns / 0 B`；这说明当前内置并行 publisher 的主要价值是语义补齐，而不是 steady-state fan-out 性能收益
   - 这一批保持 runtime 公开 API 与 notification 语义不变，只扩 benchmark 对照口径与恢复文档；原因是 `RP-113` 已经把并行 publisher 能力落到 production path，当前更高价值的是先证明它相对默认顺序发布器、`Mediator` 与 `MediatR` 的成本位置，而不是立即继续扩第二个 publisher strategy
@@ -369,8 +372,8 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 若 `RP-114` 的 fan-out benchmark 证实内置 `TaskWhenAllNotificationPublisher` 在固定多处理器场景下明显优于默认顺序发布器，可继续评估是否需要补单处理器 / 异常路径的对照或把这组结果吸收到用户文档
-2. 当前 benchmark 已证明 `TaskWhenAllNotificationPublisher` 的价值主要在并行完成与异常聚合语义，而不是吞吐收益；下一轮优先评估 notification publisher 配置面 / 文档边界，或回到 request dispatch 常量开销，而不是新增 generated notification invoker/provider 这类 steady-state 收益信号偏弱的 runtime seam
+1. 既然 `RP-115` 已把 notification publisher 选择面收口到显式组合根扩展，下一轮若继续留在 notification 线，优先评估是否需要补第二个内置策略或更细的配置文档，而不是再让用户直接依赖裸 `INotificationPublisher` 注册细节
+2. 当前 benchmark 已证明 `TaskWhenAllNotificationPublisher` 的价值主要在并行完成与异常聚合语义，而不是吞吐收益；若 notification 配置面已经足够，下一轮优先回到 request dispatch 常量开销，而不是新增 generated notification invoker/provider 这类 steady-state 收益信号偏弱的 runtime seam
 3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档

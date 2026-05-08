@@ -123,13 +123,10 @@ var playerId = await architecture.Context.SendRequestAsync(
 `TaskWhenAllNotificationPublisher`：
 
 ```csharp
-using GFramework.Cqrs;
+using GFramework.Cqrs.Extensions;
 using GFramework.Cqrs.Notification;
 
-var runtime = CqrsRuntimeFactory.CreateRuntime(
-    container,
-    logger,
-    new TaskWhenAllNotificationPublisher());
+container.UseTaskWhenAllNotificationPublisher();
 ```
 
 这条策略的边界也需要明确：
@@ -137,6 +134,16 @@ var runtime = CqrsRuntimeFactory.CreateRuntime(
 - 不保证处理器执行顺序
 - 不会在首个处理器失败时立即停止其余处理器
 - 会在全部处理器结束后统一暴露异常或取消结果
+- 当前 fixed `4 handler` fan-out benchmark 中，它的 steady-state 成本也高于默认顺序发布器；因此它更适合“我要并行语义”，而不是“我要更快的 publish”
+
+如果你需要显式提供自定义 publisher 实例，而不是直接采用内置 `TaskWhenAll` 策略，也可以在组合根里写成：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+using GFramework.Cqrs.Notification;
+
+container.UseNotificationPublisher(new TaskWhenAllNotificationPublisher());
+```
 
 ## Request 与流式变体
 

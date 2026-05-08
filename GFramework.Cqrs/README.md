@@ -128,20 +128,27 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
   - 默认通知发布器会按容器解析顺序逐个执行处理器，并在首个处理器抛出异常时立即停止后续分发。
   - 若需要等待所有处理器并行完成，可以在创建 runtime 时显式传入 `TaskWhenAllNotificationPublisher`；该策略不保证执行顺序，并会在全部处理器结束后聚合异常或取消结果。
   - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置顺序发布器。
+  - 若只是为了降低 fixed fan-out publish 的 steady-state 成本，当前 benchmark 并不表明 `TaskWhenAllNotificationPublisher` 会优于默认顺序发布器；它更适合你需要“等待全部处理器完成并统一观察失败”的场景。
 
-如果你需要切换到内置并行 notification publisher，可以在组合根里显式选择它：
+如果你需要切换到内置并行 notification publisher，推荐在组合根里显式声明这条策略：
 
 ```csharp
-using GFramework.Cqrs;
+using GFramework.Cqrs.Extensions;
 using GFramework.Cqrs.Notification;
 
-var runtime = CqrsRuntimeFactory.CreateRuntime(
-    container,
-    logger,
-    new TaskWhenAllNotificationPublisher());
+container.UseTaskWhenAllNotificationPublisher();
 ```
 
-对于走标准 `GFramework.Core` 启动路径的架构，也可以在 runtime 创建前预先向容器注册 `INotificationPublisher`，让默认基础设施复用同一策略。
+如果你确实需要自定义 publisher 实例，也可以继续显式注册：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+using GFramework.Cqrs.Notification;
+
+container.UseNotificationPublisher(new TaskWhenAllNotificationPublisher());
+```
+
+对于走标准 `GFramework.Core` 启动路径的架构，这些组合根扩展会被默认基础设施自动复用；如果你直接调用 `CqrsRuntimeFactory.CreateRuntime(...)`，也仍然可以像以前一样显式传入 publisher 实例。
 - 流式请求
   - 通过 `IStreamRequest<TResponse>` 和 `IStreamRequestHandler<,>` 返回 `IAsyncEnumerable<TResponse>`。
   - 当消费端程序集提供 generated stream invoker provider / descriptor 后，runtime 会优先消费这组 stream invoker 元数据；未命中时仍回退到既有反射 stream binding 创建路径。

@@ -2,6 +2,28 @@
 
 ## 2026-05-08
 
+### 阶段：notification publisher 组合根配置面（CQRS-REWRITE-RP-115）
+
+- 延续 `$gframework-batch-boot 50`，本轮不再回到 benchmark 宿主，而是沿着 `RP-114` 已明确的性能/语义事实继续收口用户接入缺口：
+  - 当前分支相对 `origin/main`（`7ca21af9`, `2026-05-08 16:12:20 +0800`）的累计 branch diff 在启动时仍为 `9 files`，明显低于 `50` 文件阈值
+  - `RP-113` / `RP-114` 已证明内置 `TaskWhenAllNotificationPublisher` 的价值主要是语义补齐，但当前用户若要采用它，仍需知道 `INotificationPublisher` 的底层注册细节
+- 本轮主线程决策：
+  - 新增 `GFramework.Cqrs/Extensions/NotificationPublisherRegistrationExtensions.cs`，提供 `UseNotificationPublisher(...)`、`UseNotificationPublisher<TPublisher>()` 与 `UseTaskWhenAllNotificationPublisher()` 三个显式组合根入口
+  - 在 `GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs` 补齐回归，确认默认 runtime 基础设施会复用 `UseTaskWhenAllNotificationPublisher()`，且重复策略注册会在组合根阶段被显式阻止
+  - 更新 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md`，把推荐用法改成组合根扩展，并把 `RP-114` 的 benchmark 结论翻译成用户可用的采用边界
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests|FullyQualifiedName~CqrsNotificationPublisherTests"`
+    - 结果：通过，`9/9` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Extensions/NotificationPublisherRegistrationExtensions.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - 这一批已把 notification publisher 的采用路径从“理解内部 seam”收口成“在组合根里显式选择策略”，并让重复策略注册在配置阶段就得到清晰失败信号
+  - 若后续仍继续 notification 线，更合理的下一刀会是补第二个内置策略或更细的采用文档，而不是继续要求用户手写容器底层注册
+
 ### 阶段：`TaskWhenAll` notification publisher fan-out benchmark（CQRS-REWRITE-RP-114）
 
 - 延续 `$gframework-batch-boot 50`，本轮不再扩新的 notification runtime 能力，而是沿着 `RP-113` 刚落地的内置并行 publisher 继续补验证口径：
