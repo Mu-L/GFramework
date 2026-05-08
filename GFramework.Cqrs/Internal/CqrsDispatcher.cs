@@ -1035,6 +1035,8 @@ internal sealed class CqrsDispatcher(
         /// <summary>
         ///     获取指定阶段的 continuation，并在首次请求时为该阶段绑定一次不可变调用入口。
         ///     同一行为多次调用 <c>next</c> 时会命中相同 continuation，保持与 request pipeline 一致的链式语义。
+        ///     线程模型上，该缓存仅假定单次建流链按顺序推进；若某个 behavior 并发调用多个 <c>next</c>，
+        ///     这里可能重复创建等价 continuation，但不会跨建流共享，也不会缓存容器解析出的实例。
         /// </summary>
         private StreamMessageHandlerDelegate<TRequest, TResponse> GetContinuation(int index)
         {

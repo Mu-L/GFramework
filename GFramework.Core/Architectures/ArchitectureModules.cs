@@ -32,6 +32,8 @@ internal sealed class ArchitectureModules(
     ///     支持开放泛型行为类型和针对单一流式请求的封闭行为类型。
     /// </summary>
     /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    /// <exception cref="InvalidOperationException">底层容器已冻结，无法继续注册流式管道行为。</exception>
+    /// <exception cref="ObjectDisposedException">底层容器已释放，无法继续注册流式管道行为。</exception>
     public void RegisterCqrsStreamPipelineBehavior<TBehavior>() where TBehavior : class
     {
         logger.Debug($"Registering CQRS stream pipeline behavior: {typeof(TBehavior).Name}");

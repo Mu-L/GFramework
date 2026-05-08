@@ -182,6 +182,11 @@ public abstract class Architecture : IArchitecture
     ///     可以传入开放泛型行为类型，也可以传入绑定到特定流式请求的封闭行为类型。
     /// </summary>
     /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    /// <exception cref="InvalidOperationException">当前架构的底层容器已冻结，无法继续注册流式管道行为。</exception>
+    /// <exception cref="ObjectDisposedException">当前架构的底层容器已释放，无法继续注册流式管道行为。</exception>
+    /// <remarks>
+    ///     该调用会委托到底层容器完成校验与注册，因此应在初始化冻结前完成所有流式行为接线。
+    /// </remarks>
     public void RegisterCqrsStreamPipelineBehavior<TBehavior>() where TBehavior : class
     {
         _modules.RegisterCqrsStreamPipelineBehavior<TBehavior>();

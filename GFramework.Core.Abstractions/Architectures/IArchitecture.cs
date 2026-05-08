@@ -90,6 +90,11 @@ public interface IArchitecture : IAsyncInitializable, IAsyncDestroyable, IInitia
     ///     也支持绑定到单一流式请求/响应对的封闭行为类型。
     /// </summary>
     /// <typeparam name="TBehavior">行为类型，必须是引用类型</typeparam>
+    /// <exception cref="InvalidOperationException">当前架构的底层容器已冻结，无法继续注册流式管道行为。</exception>
+    /// <exception cref="ObjectDisposedException">当前架构的底层容器已释放，无法继续注册流式管道行为。</exception>
+    /// <remarks>
+    ///     该入口应在架构初始化冻结容器之前调用；具体开放泛型或封闭行为类型的校验逻辑由底层容器负责。
+    /// </remarks>
     void RegisterCqrsStreamPipelineBehavior<TBehavior>()
         where TBehavior : class;
 

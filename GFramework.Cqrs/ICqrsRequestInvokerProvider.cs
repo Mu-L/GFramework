@@ -19,8 +19,8 @@ namespace GFramework.Cqrs;
 public interface ICqrsRequestInvokerProvider
 {
     /// <summary>
-///     尝试为指定请求/响应类型对提供运行时元数据。
-/// </summary>
+    ///     尝试为指定请求/响应类型对提供运行时元数据。
+    /// </summary>
     /// <param name="requestType">请求运行时类型。</param>
     /// <param name="responseType">响应运行时类型。</param>
     /// <param name="descriptor">命中时返回的 request invoker 元数据。</param>
