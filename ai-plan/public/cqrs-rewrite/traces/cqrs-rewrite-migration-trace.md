@@ -2,6 +2,33 @@
 
 ## 2026-05-08
 
+### 阶段：PR #342 latest-head review 收口（CQRS-REWRITE-RP-118）
+
+- 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认当前锚点已从 `PR #341` 更新为 `PR #342`
+- 本轮 latest-head review 结论：
+  - `CodeRabbit` 当前仍成立的是 `NotificationFanOutBenchmarks.cs` 中 MediatR 显式 `Handle(...)` 直接返回 `Task.CompletedTask`，导致该对照组绕过共享 `HandleCore(...)` 的空值 / 取消校验
+  - `CodeRabbit` 对 `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md` 的两条评论也成立：当前恢复点锚点仍写 `PR #341`，且“最近权威验证”里的 fan-out 数值属于更早轮次，需要显式标注历史来源
+  - `Greptile` 额外指出 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md` 里 `UseTaskWhenAllNotificationPublisher()` 示例包含多余 `using GFramework.Cqrs.Notification;`；这条在当前 head 仍成立
+  - MegaLinter 仍报告 `dotnet-format` restore 失败，但这属于 CI 环境 restore 噪声，不是当前 diff 的格式违规；README 的 MD058 空行问题仍需在本地直接修复
+- 本轮主线程决策：
+  - 让 `NotificationFanOutBenchmarks` 的四个 MediatR handler 显式转发到 `HandleCore(notification, cancellationToken).AsTask()`，保持与 baseline、`GFramework.Cqrs` 和 NuGet `Mediator` 分支一致的前置检查
+  - 在 `GFramework.Cqrs/README.md` 修复表格前后空行，并删除 README / 中文文档中 `UseTaskWhenAllNotificationPublisher()` 示例的多余 `using`
+  - 把 `cqrs-rewrite` tracking 当前恢复点推进到 `RP-118`，同步 `PR #342` 锚点，并把早期 fan-out 数值显式标成 `历史基线（RP-112）`
+- 本轮权威验证：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
+    - 结果：通过
+    - 备注：确认当前分支对应 `PR #342`；CodeRabbit 当前 `4` 条 actionable comments 与 Greptile `3` 条 open thread 已作为本轮本地复核输入
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：本轮对称化 MediatR handler 后，fixed `4 handler` fan-out 对照约为 `Mediator` `3.598 ns / 0 B`、baseline `7.033 ns / 0 B`、`MediatR` `257.533 ns / 1256 B`、`GFramework.Cqrs` 顺序 `409.557 ns / 408 B`、`TaskWhenAll` `484.531 ns / 496 B`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+
 ### 阶段：notification publisher 采用矩阵文档收口（CQRS-REWRITE-RP-117）
 
 - 延续 `$gframework-batch-boot 50`，本轮没有继续把自动批处理推到新的 runtime seam，而是先按 tracking 建议复核“notification 线是否还缺采用边界文档”：
@@ -136,7 +163,7 @@
     - 结果：通过，`0 warning / 0 error`
   - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
     - 结果：通过
-    - 备注：固定 `4 handler` notification fan-out 对照当前约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`
+    - 备注：历史基线（`RP-112`）固定 `4 handler` notification fan-out 对照约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`
   - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
     - 结果：通过
   - `git diff --check`

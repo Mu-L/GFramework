@@ -7,10 +7,14 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-117`
+- 恢复点编号：`CQRS-REWRITE-RP-118`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #341`
+- 当前 PR 锚点：`PR #342`
 - 当前结论：
+  - 当前 `RP-118` 已使用 `$gframework-pr-review` 复核 `PR #342` latest-head review：CodeRabbit 当前仍成立的是 `NotificationFanOutBenchmarks` 中 MediatR 分支绕过共享 `HandleCore(...)`、`GFramework.Cqrs/README.md` 的 MD058 表格空行、以及恢复文档的 PR 锚点与 fan-out 历史值表述；Greptile 额外指出的 `UseTaskWhenAllNotificationPublisher()` 示例多余 `using GFramework.Cqrs.Notification;` 也在本轮一并收口
+  - 本轮不改 `GFramework.Cqrs` runtime 语义，只让 benchmark 的 MediatR handler 与其余对照分支共用同一组空值 / 取消检查，并把 README、中文文档与 `cqrs-rewrite` 恢复文档同步到当前 PR #342 上下文
+  - 本轮按 `NotificationFanOutBenchmarks` short-job 复跑确认，对称化 MediatR handler 后当前 fixed `4 handler` fan-out 结果约为 `Mediator` `3.598 ns / 0 B`、baseline `7.033 ns / 0 B`、`MediatR` `257.533 ns / 1256 B`、`GFramework.Cqrs` 顺序 `409.557 ns / 408 B`、`TaskWhenAll` `484.531 ns / 496 B`
+  - `RP-117` 留在“最近权威验证”中的固定 `4 handler` fan-out 数值属于早期 benchmark 记录，因此本轮选择显式补上 `历史基线（RP-112）` 标注，而不是把历史验证段落改写成新的 benchmark 结果，避免混淆恢复轨迹
   - 当前 `RP-117` 继续沿用 `$gframework-batch-boot 50`，但没有继续把 batch 推回 request dispatch 热路径：本轮先试了一刀“按运行时类型缓存 `IContextAware` 判定”的 dispatcher 微优化，随后按 `RequestBenchmarks` / `RequestLifetimeBenchmarks` 复跑确认 steady-state request 反而回落到约 `71.824 ns`，因此这组运行时代码已在同轮完全撤回，不保留负收益热点实验
   - 这一批改为只收口 notification publisher 的采用文档：`GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md` 现在把 `Sequential` / `TaskWhenAll` / 自定义 publisher 三条策略放进同一张选择矩阵，明确 `TaskWhenAll` 的价值是“并行完成 + 聚合失败”，而不是 fixed fan-out publish 的性能升级开关
   - 当前分支相对 `origin/main`（`7ca21af9`, `2026-05-08 16:12:20 +0800`）的累计 branch diff 仍约为 `12 files`，远低于 `$gframework-batch-boot 50` 的停止阈值；因此这批继续保持 notification 采用边界内的低风险、可评审文档切片
@@ -155,7 +159,17 @@ CQRS 迁移与收敛。
   - 结果：通过，`0 warning / 0 error`
 - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
   - 结果：通过
-  - 备注：固定 `4 handler` notification fan-out 对照当前约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`
+  - 备注：本轮对称化 MediatR handler 后，fixed `4 handler` fan-out 对照约为 `Mediator` `3.598 ns / 0 B`、baseline `7.033 ns / 0 B`、`MediatR` `257.533 ns / 1256 B`、`GFramework.Cqrs` 顺序 `409.557 ns / 408 B`、`TaskWhenAll` `484.531 ns / 496 B`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+  - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：历史基线（`RP-112`）固定 `4 handler` notification fan-out 对照约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`
 - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
   - 结果：通过
 - `git diff --check`
@@ -183,7 +197,7 @@ CQRS 迁移与收敛。
   - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
   - 结果：通过
-  - 备注：确认当前分支对应 `PR #341`；latest-head 当前仍显示 `CodeRabbit 2` / `Greptile 2` open thread，但其中 `BenchmarkHostFactory` / benchmark registry / faulted `ValueTask` 三类运行时 thread 已在本地失效，当前仅剩测试 mock 脆弱性与 trace 冗余仍值得继续收口
+  - 备注：确认当前分支对应 `PR #342`；latest-head 当前显示 `CodeRabbit 4` / `Greptile 3` open thread，其中真正仍成立的是 benchmark handler 对称性、README / 中文文档示例与恢复文档锚点漂移，其余历史 thread 需要按当前 head 继续甄别
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
   - 结果：通过
   - 备注：确认当前分支对应 `PR #340`；latest-head 当前显示 `CodeRabbit 2` / `Greptile 2` open thread，且 `CTRF` 报告中唯一失败测试为 `CreateStream_Should_Throw_When_Stream_Pipeline_Behavior_Context_Does_Not_Implement_IArchitectureContext`

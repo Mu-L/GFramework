@@ -128,11 +128,12 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
   - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`。
   - 内置 notification publisher 的推荐选择如下：
 
-    | 策略 | 推荐场景 | 执行顺序 | 失败语义 | 备注 |
-    | --- | --- | --- | --- | --- |
-    | `SequentialNotificationPublisher` | 需要保持容器顺序，且希望首个失败立即停止后续分发 | 保证按容器解析顺序逐个执行 | 首个处理器抛出异常时立即停止 | 也是默认回退策略 |
-    | `TaskWhenAllNotificationPublisher` | 需要让全部处理器并行完成，并在结束后统一观察失败或取消 | 不保证顺序 | 不会在首个失败时停止其余处理器；会聚合最终异常或取消结果 | 更适合语义补齐，不是性能开关 |
-    | `UseNotificationPublisher(...)` 自定义实例 | 需要接入仓库外的自定义策略或第三方策略 | 取决于具体实现 | 取决于具体实现 | 仅在内置顺序 / 并行策略都不满足时使用 |
+  | 策略 | 推荐场景 | 执行顺序 | 失败语义 | 备注 |
+  | --- | --- | --- | --- | --- |
+  | `SequentialNotificationPublisher` | 需要保持容器顺序，且希望首个失败立即停止后续分发 | 保证按容器解析顺序逐个执行 | 首个处理器抛出异常时立即停止 | 也是默认回退策略 |
+  | `TaskWhenAllNotificationPublisher` | 需要让全部处理器并行完成，并在结束后统一观察失败或取消 | 不保证顺序 | 不会在首个失败时停止其余处理器；会聚合最终异常或取消结果 | 更适合语义补齐，不是性能开关 |
+  | `UseNotificationPublisher(...)` 自定义实例 | 需要接入仓库外的自定义策略或第三方策略 | 取决于具体实现 | 取决于具体实现 | 仅在内置顺序 / 并行策略都不满足时使用 |
+
   - 若只是为了降低 fixed fan-out publish 的 steady-state 成本，当前 benchmark 并不表明 `TaskWhenAllNotificationPublisher` 会优于默认顺序发布器；它更适合你需要“等待全部处理器完成并统一观察失败”的场景。
 
 如果你需要显式保留默认顺序语义，也可以在组合根里直接声明：
@@ -147,7 +148,6 @@ container.UseSequentialNotificationPublisher();
 
 ```csharp
 using GFramework.Cqrs.Extensions;
-using GFramework.Cqrs.Notification;
 
 container.UseTaskWhenAllNotificationPublisher();
 ```

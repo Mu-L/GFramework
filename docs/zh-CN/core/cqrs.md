@@ -140,7 +140,6 @@ container.UseSequentialNotificationPublisher();
 
 ```csharp
 using GFramework.Cqrs.Extensions;
-using GFramework.Cqrs.Notification;
 
 container.UseTaskWhenAllNotificationPublisher();
 ```

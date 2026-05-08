@@ -230,7 +230,7 @@ public class NotificationFanOutBenchmarks
             BenchmarkNotification notification,
             CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return HandleCore(notification, cancellationToken).AsTask();
         }
     }
 
@@ -268,7 +268,7 @@ public class NotificationFanOutBenchmarks
             BenchmarkNotification notification,
             CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return HandleCore(notification, cancellationToken).AsTask();
         }
     }
 
@@ -306,7 +306,7 @@ public class NotificationFanOutBenchmarks
             BenchmarkNotification notification,
             CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return HandleCore(notification, cancellationToken).AsTask();
         }
     }
 
@@ -344,7 +344,7 @@ public class NotificationFanOutBenchmarks
             BenchmarkNotification notification,
             CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return HandleCore(notification, cancellationToken).AsTask();
         }
     }
 }
