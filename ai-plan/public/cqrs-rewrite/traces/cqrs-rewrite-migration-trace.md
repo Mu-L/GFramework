@@ -2,6 +2,30 @@
 
 ## 2026-05-08
 
+### 阶段：`TaskWhenAll` notification publisher fan-out benchmark（CQRS-REWRITE-RP-114）
+
+- 延续 `$gframework-batch-boot 50`，本轮不再扩新的 notification runtime 能力，而是沿着 `RP-113` 刚落地的内置并行 publisher 继续补验证口径：
+  - 当前分支相对 `origin/main`（`7ca21af9`, `2026-05-08 16:12:20 +0800`）的累计 branch diff 启动时为 `9 files`，明显低于 `50` 文件阈值
+  - `RP-112` 只量化了默认顺序发布器的 fixed `4 handler` fan-out 成本；`RP-113` 已把 `TaskWhenAllNotificationPublisher` 引入 production runtime，但还没有 benchmark 说明“能力差距收口后，代价是多少”
+- 本轮主线程决策：
+  - 在 `GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs` 同时保留 `baseline`、默认顺序 `GFramework.Cqrs`、内置 `TaskWhenAllNotificationPublisher`、NuGet `Mediator` concrete runtime 与 `MediatR` 五组对照
+  - 复用同一个冻结 `MicrosoftDiContainer` 创建两个 `ICqrsRuntime`，确保变量集中在 notification publisher 策略，而不是 handler 注册或容器形状差异
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md` 与 active tracking，使默认恢复入口直接记录新的 benchmark 口径
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：fixed `4 handler` fan-out 对照当前约为 baseline `7.424 ns / 0 B`、`Mediator` `3.854 ns / 0 B`、`MediatR` `225.940 ns / 1256 B`、`GFramework.Cqrs` 默认顺序发布器 `427.453 ns / 408 B`、内置 `TaskWhenAllNotificationPublisher` `472.574 ns / 496 B`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - 当前 benchmark 说明 `TaskWhenAllNotificationPublisher` 的主要价值是补齐“等待全部处理器并聚合异常”的 notification 语义，而不是在 fixed `4 handler` fan-out steady-state 下带来吞吐收益；它比默认顺序发布器额外增加了约 `45 ns` 与 `88 B`
+  - 这组结果足以支持后续把 notification 线的重心转回 API 配置面、使用边界与文档语义，而不是继续机械堆新的 runtime seam 或期待 `TaskWhenAll` 自带性能红利
+  - 当前 turn 仍可继续自动推进，但默认停止规则仍以“上下文预算优先、单批可评审边界次之”为准
+
 ### 阶段：内置 `TaskWhenAll` notification publisher（CQRS-REWRITE-RP-113）
 
 - 延续 `$gframework-batch-boot 50`，本轮不再继续堆 notification benchmark 维度，而是直接把上一批已经量化清楚的 capability gap 收口到 runtime：

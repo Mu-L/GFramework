@@ -14,6 +14,7 @@ using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using GFramework.Cqrs.Notification;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using GeneratedMediator = Mediator.Mediator;
@@ -28,7 +29,8 @@ namespace GFramework.Cqrs.Benchmarks.Messaging;
 public class NotificationFanOutBenchmarks
 {
     private MicrosoftDiContainer _container = null!;
-    private ICqrsRuntime _runtime = null!;
+    private ICqrsRuntime _sequentialRuntime = null!;
+    private ICqrsRuntime _taskWhenAllRuntime = null!;
     private ServiceProvider _mediatrServiceProvider = null!;
     private ServiceProvider _mediatorServiceProvider = null!;
     private IPublisher _mediatrPublisher = null!;
@@ -78,9 +80,13 @@ public class NotificationFanOutBenchmarks
             container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.INotificationHandler<BenchmarkNotification>, BenchmarkNotificationHandler3>();
             container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.INotificationHandler<BenchmarkNotification>, BenchmarkNotificationHandler4>();
         });
-        _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+        _sequentialRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(NotificationFanOutBenchmarks)));
+        _taskWhenAllRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+            _container,
+            LoggerFactoryResolver.Provider.CreateLogger($"{nameof(NotificationFanOutBenchmarks)}.{nameof(TaskWhenAllNotificationPublisher)}"),
+            new TaskWhenAllNotificationPublisher());
 
         _mediatrServiceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
             services =>
@@ -127,12 +133,21 @@ public class NotificationFanOutBenchmarks
     }
 
     /// <summary>
-    ///     通过 GFramework.CQRS runtime 发布固定 4 处理器的 notification。
+    ///     通过默认顺序发布器的 GFramework.CQRS runtime 发布固定 4 处理器的 notification。
     /// </summary>
     [Benchmark]
-    public ValueTask PublishNotification_GFrameworkCqrs()
+    public ValueTask PublishNotification_GFrameworkCqrsSequential()
     {
-        return _runtime.PublishAsync(BenchmarkContext.Instance, _notification, CancellationToken.None);
+        return _sequentialRuntime.PublishAsync(BenchmarkContext.Instance, _notification, CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     通过内置 <c>Task.WhenAll(...)</c> 发布器的 GFramework.CQRS runtime 发布固定 4 处理器的 notification。
+    /// </summary>
+    [Benchmark]
+    public ValueTask PublishNotification_GFrameworkCqrsTaskWhenAll()
+    {
+        return _taskWhenAllRuntime.PublishAsync(BenchmarkContext.Instance, _notification, CancellationToken.None);
     }
 
     /// <summary>
