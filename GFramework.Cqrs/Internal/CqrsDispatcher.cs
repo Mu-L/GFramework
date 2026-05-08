@@ -105,36 +105,43 @@ internal sealed class CqrsDispatcher(
     /// <param name="request">请求对象。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求响应。</returns>
-    public async ValueTask<TResponse> SendAsync<TResponse>(
+    public ValueTask<TResponse> SendAsync<TResponse>(
         ICqrsContext context,
         IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(request);
-
-        var requestType = request.GetType();
-        var dispatchBinding = GetRequestDispatchBinding<TResponse>(requestType);
-        var handler = container.Get(dispatchBinding.HandlerType)
-                      ?? throw new InvalidOperationException(
-                          $"No CQRS request handler registered for {requestType.FullName}.");
-
-        PrepareHandler(handler, context);
-        if (!container.HasRegistration(dispatchBinding.BehaviorType))
+        try
         {
-            return await dispatchBinding.RequestInvoker(handler, request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(context);
+            ArgumentNullException.ThrowIfNull(request);
+
+            var requestType = request.GetType();
+            var dispatchBinding = GetRequestDispatchBinding<TResponse>(requestType);
+            var handler = container.Get(dispatchBinding.HandlerType)
+                          ?? throw new InvalidOperationException(
+                              $"No CQRS request handler registered for {requestType.FullName}.");
+
+            PrepareHandler(handler, context);
+            if (!container.HasRegistration(dispatchBinding.BehaviorType))
+            {
+                return dispatchBinding.RequestInvoker(handler, request, cancellationToken);
+            }
+
+            var behaviors = container.GetAll(dispatchBinding.BehaviorType);
+
+            foreach (var behavior in behaviors)
+            {
+                PrepareHandler(behavior, context);
+            }
+
+            return dispatchBinding.GetPipelineExecutor(behaviors.Count)
+                .Invoke(handler, behaviors, request, cancellationToken);
         }
-
-        var behaviors = container.GetAll(dispatchBinding.BehaviorType);
-
-        foreach (var behavior in behaviors)
+        catch (Exception exception)
         {
-            PrepareHandler(behavior, context);
+            // 保留旧 async 实现的 faulted-ValueTask 失败语义，同时继续复用 direct-return 的热路径。
+            return ValueTask.FromException<TResponse>(exception);
         }
-
-        return await dispatchBinding.GetPipelineExecutor(behaviors.Count)
-            .Invoke(handler, behaviors, request, cancellationToken)
-            .ConfigureAwait(false);
     }
 
     /// <summary>

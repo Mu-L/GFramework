@@ -83,7 +83,7 @@ public class RequestInvokerBenchmarks
 
         _generatedContainer = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            container.RegisterCqrsHandlersFromAssembly(typeof(RequestInvokerBenchmarks).Assembly);
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedRequestInvokerBenchmarkRegistry>(container);
         });
         _generatedRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _generatedContainer,

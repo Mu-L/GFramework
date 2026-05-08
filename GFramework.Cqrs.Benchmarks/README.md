@@ -15,11 +15,13 @@
 - `Messaging/Fixture.cs`
   - 运行前输出并校验场景配置
 - `Messaging/RequestBenchmarks.cs`
-  - direct handler、NuGet `Mediator` source-generated concrete path、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
+  - direct handler、NuGet `Mediator` source-generated concrete path、已接上 handwritten generated request invoker provider 的默认 `GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestLifetimeBenchmarks.cs`
   - `Singleton / Transient` 两类 handler 生命周期下，direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
+- `Messaging/StreamLifetimeBenchmarks.cs`
+  - `Singleton / Transient` 两类 handler 生命周期下，direct handler、已接上 handwritten generated stream invoker provider 的 `GFramework.Cqrs` runtime 与 `MediatR` 的 stream 完整枚举对比
 - `Messaging/RequestPipelineBenchmarks.cs`
-  - `0 / 1 / 4` 个 pipeline 行为下，direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
+  - `0 / 1 / 4` 个 pipeline 行为下，direct handler、已接上 handwritten generated request invoker provider 的 `GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestStartupBenchmarks.cs`
   - `Initialization` 与 `ColdStart` 两组 request startup 成本对比，补齐与 `Mediator` comparison benchmark 更接近的 startup 维度
 - `Messaging/RequestInvokerBenchmarks.cs`
@@ -29,7 +31,7 @@
 - `Messaging/NotificationBenchmarks.cs`
   - `GFramework.Cqrs` runtime 与 `MediatR` 的单处理器 notification publish 对比
 - `Messaging/StreamingBenchmarks.cs`
-  - direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 stream request 完整枚举对比
+  - direct handler、已接上 handwritten generated stream invoker provider 的 `GFramework.Cqrs` runtime 与 `MediatR` 的 stream request 完整枚举对比
 
 ## 最小使用方式
 
@@ -51,6 +53,5 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 - request / stream 的真实 source-generator 产物与 handwritten generated provider 对照
 - `Mediator` 的 transient / scoped compile-time lifetime 矩阵对照
-- stream handler 生命周期矩阵
 - 带真实显式作用域边界的 scoped host 对照
 - generated invoker provider 与纯反射 dispatch / 建流对比继续扩展到更多场景

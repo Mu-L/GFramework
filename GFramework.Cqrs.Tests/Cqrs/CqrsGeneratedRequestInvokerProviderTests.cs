@@ -7,6 +7,7 @@ using GFramework.Core.Architectures;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using GFramework.Cqrs.Internal;
 
 namespace GFramework.Cqrs.Tests.Cqrs;
 
@@ -97,6 +98,32 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         Assert.That(
             providers.Select(static provider => provider.GetType()),
             Is.EqualTo([typeof(GeneratedStreamInvokerProviderRegistry)]));
+    }
+
+    /// <summary>
+    ///     验证 direct generated-registry 激活入口只会接入指定 registry，而不会顺手把同一测试程序集里的其他 registry 一并注册。
+    /// </summary>
+    [Test]
+    public void RegisterGeneratedRegistry_Should_Register_Only_The_Selected_Provider()
+    {
+        var container = new MicrosoftDiContainer();
+        var logger = LoggerFactoryResolver.Provider.CreateLogger(nameof(CqrsGeneratedRequestInvokerProviderTests));
+
+        CqrsHandlerRegistrar.RegisterGeneratedRegistry(
+            container,
+            typeof(GeneratedRequestInvokerProviderRegistry),
+            logger);
+
+        var requestProviders = container.GetAll<ICqrsRequestInvokerProvider>();
+        var streamProviders = container.GetAll<ICqrsStreamInvokerProvider>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                requestProviders.Select(static provider => provider.GetType()),
+                Is.EqualTo([typeof(GeneratedRequestInvokerProviderRegistry)]));
+            Assert.That(streamProviders, Is.Empty);
+        });
     }
 
     /// <summary>

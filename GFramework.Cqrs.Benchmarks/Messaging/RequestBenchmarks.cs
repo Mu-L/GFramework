@@ -61,12 +61,12 @@ public class RequestBenchmarks
             MinLevel = LogLevel.Fatal
         };
         Fixture.Setup("Request", handlerCount: 1, pipelineCount: 0);
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
 
         _baselineHandler = new BenchmarkRequestHandler();
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>>(
-                _baselineHandler);
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedDefaultRequestBenchmarkRegistry>(container);
         });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
@@ -91,7 +91,14 @@ public class RequestBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        BenchmarkCleanupHelper.DisposeAll(_container, _mediatrServiceProvider, _mediatorServiceProvider);
+        try
+        {
+            BenchmarkCleanupHelper.DisposeAll(_container, _mediatrServiceProvider, _mediatorServiceProvider);
+        }
+        finally
+        {
+            BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
+        }
     }
 
     /// <summary>

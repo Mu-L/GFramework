@@ -69,8 +69,7 @@ public class RequestPipelineBenchmarks
         _baselineHandler = new BenchmarkRequestHandler();
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>>(
-                _baselineHandler);
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedRequestPipelineBenchmarkRegistry>(container);
             RegisterGFrameworkPipelineBehaviors(container, PipelineCount);
         });
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(

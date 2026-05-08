@@ -2,6 +2,243 @@
 
 ## 2026-05-08
 
+### 阶段：PR #341 latest-head review 尾声收口（CQRS-REWRITE-RP-110）
+
+- 再次使用 `$gframework-pr-review` 抓取 `PR #341` latest-head review，确认当前 open thread 已收敛到：
+  - `BenchmarkHostFactory.cs` 的 legacy runtime alias 防守式类型检查 thread，但当前 head 已存在 `RegisterLegacyRuntimeAlias(...)` 的显式类型校验与实际类型信息异常，属于 GitHub 未 resolve 的 stale thread
+  - `RequestBenchmarks.cs` / `CqrsDispatcher.cs` 的 Greptile thread，对应“程序集级 registry 扩散”与“faulted ValueTask 失败语义”均已在当前 head 修复，属于 stale thread
+  - 仍然成立且值得当前收口的只剩 `CqrsDispatcherContextValidationTests.cs` 的 strict mock 脆弱性，以及本 trace 中 `本轮下一步` 与 `本轮权威验证` 重复的问题
+- 本轮主线程决策：
+  - 为 `SendAsync_Should_Return_Faulted_ValueTask_When_Handler_Is_Missing()` 补齐 `HasRegistration(...)` 与 `GetAll(...)` 的防御性 mock，降低该测试对 dispatcher 内部检查顺序的隐式耦合
+  - 删除 `RP-109` 记录中重复 `本轮权威验证` 的 `本轮下一步` 段落，保持默认恢复入口只保留仍有价值的恢复信息
+- 本轮权威验证：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
+    - 结果：通过
+    - 备注：确认当前分支对应 `PR #341`；latest-head 当前仍显示 `CodeRabbit 2` / `Greptile 2` open thread，但其中运行时/benchmark 两条已在本地失效
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+    - 备注：并行验证首轮曾因 `build` 与 `test` 同时写入同一输出 DLL 触发 `MSB3026` 单次复制重试；改为串行重跑同一命令后稳定通过
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`6/6` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+
+### 阶段：PR #341 latest-head review 收口（CQRS-REWRITE-RP-109）
+
+- 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认当前锚点已从 `PR #340` 更新为 `PR #341`
+- 本轮 latest-head review 结论：
+  - `CodeRabbit` 仍有 `BenchmarkHostFactory.cs` 的 legacy runtime 硬转型、`StreamLifetimeBenchmarks.cs` 的注释缺口，以及 `.agents/skills/gframework-batch-boot/SKILL.md` 的 `MD005` 缩进问题
+  - `Greptile` 指出的两条仍然成立：benchmark 项目里通过 `RegisterCqrsHandlersFromAssembly(typeof(...).Assembly)` 会把同程序集的其他 generated registry 一并激活，扩大 benchmark 宿主的服务索引基线；`CqrsDispatcher.SendAsync(...)` 直接去掉 `async/await` 后也把原本的 faulted-`ValueTask` 失败语义改成了同步抛出
+- 本轮主线程决策：
+  - 在 `GFramework.Cqrs.Internal.CqrsHandlerRegistrar` 新增 direct generated-registry 激活入口，并通过 `InternalsVisibleTo` 暴露给 `GFramework.Cqrs.Benchmarks`，让 benchmark 宿主只激活当前场景的 generated registry
+  - 把 `RequestBenchmarks`、`RequestPipelineBenchmarks`、`StreamingBenchmarks`、`StreamLifetimeBenchmarks` 以及 request/stream invoker benchmark 的 generated 宿主全部切到定向 registry 接线，避免同程序集其他 registry 扩大冻结索引和 descriptor 预热基线
+  - 在 `BenchmarkHostFactory` 里用防守式类型检查注册 legacy runtime alias，并补充 stream lifetime runtime 二次创建的注释
+  - 让 `CqrsDispatcher.SendAsync(...)` 通过 `ValueTask.FromException<TResponse>(...)` 恢复旧的 faulted-`ValueTask` 失败语义，同时保留成功路径的 direct-return 热路径
+  - 补齐 `CqrsGeneratedRequestInvokerProviderTests` 与 `CqrsDispatcherContextValidationTests` 的 targeted 回归，并顺手修正 batch boot skill 的 markdown 缩进
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`1 warning / 0 error`
+    - 备注：仅出现 `MSB3026` 单次复制重试告警，随后成功产出 `net10.0` 目标；未出现编译失败或新增代码警告
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+    - 结果：通过，`24/24` passed
+    - 备注：首轮并行验证时因与 build 同时运行触发 MSBuild 输出文件锁竞争；改为串行重跑同一命令后稳定通过
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Properties/AssemblyInfo.cs GFramework.Cqrs/Internal/CqrsHandlerRegistrar.cs GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs GFramework.Cqrs.Benchmarks/Messaging/RequestBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/RequestPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/RequestInvokerBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamInvokerBenchmarks.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs`
+    - 结果：通过
+    - 备注：仓库脚本默认内部调用未绑定 worktree 的 `git ls-files`，因此本轮按修改文件列表显式 `--paths` 校验
+  - `git diff --check`
+    - 结果：通过
+
+### 阶段：stream handler 生命周期矩阵 benchmark（CQRS-REWRITE-RP-108）
+
+- 延续 `$gframework-batch-boot 50`，本轮继续使用 `origin/main` 作为 branch diff 基线，并先复核：
+  - `origin/main` = `4d6dbba6`，提交时间 `2026-05-08 11:13:33 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 为 `14 files / 507 lines`
+  - 当前 turn 虽然仍低于 `50 files` 阈值，但已加载多轮 recovery / benchmark 输出；因此只允许再推进一个单模块、低风险 benchmark 切片
+- 本轮接受的只读探索结论：
+  - `RequestLifetimeBenchmarks` 已覆盖 request 的 `Singleton / Transient` 生命周期矩阵，但 stream 侧仍缺少对称的 handler 生命周期对照
+  - `StreamingBenchmarks` 已在 `RP-107` 切到 generated-provider 宿主，适合作为 stream 生命周期矩阵的宿主基础；继续退回纯反射路径会让“生命周期变量”和“descriptor 路径变量”混在一起
+  - 如果让 generated registry 顺手注册默认单例 handler，会破坏生命周期矩阵的变量控制，因此 registry 只能暴露 descriptor，不能抢先锁死 handler 生命周期
+- 本轮主线程决策：
+  - 新增 `StreamLifetimeBenchmarks`，对齐 request 生命周期矩阵，只比较 `Singleton / Transient` 两档，继续明确把 `Scoped` 留给未来显式 scoped host
+  - 新增 `GeneratedStreamLifetimeBenchmarkRegistry`，只提供 handwritten generated stream invoker descriptor，不直接注册 handler
+  - 让 `StreamLifetimeBenchmarks` 使用 `RegisterCqrsHandlersFromAssembly(typeof(StreamLifetimeBenchmarks).Assembly)` 建立 generated-provider 宿主，再显式按 benchmark 参数注册 `Singleton / Transient` handler 生命周期
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md`，把 stream 生命周期矩阵列为已覆盖场景，并从“后续扩展方向”里移除这项待办
+- 本轮验证过程的重要补充：
+  - 首次并行触发 `RequestBenchmarks` / `RequestLifetimeBenchmarks` / `StreamLifetimeBenchmarks` 时，在同一 autogenerated BenchmarkDotNet 目录下复现了文件已存在冲突与 bootstrap 异常；这是 benchmark 基础设施层面的并行目录竞争，不是代码缺陷
+  - 改为串行重跑后三组 benchmark 全部稳定通过，因此本轮将“BenchmarkDotNet 在当前仓库里不应并行运行多条 `dotnet run --project ... --filter ...` 会话”视为有效执行约束
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedStreamLifetimeBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.336 ns / 32 B`、`Mediator` `5.564 ns / 32 B`、`MediatR` `53.307 ns / 232 B`、`GFramework.Cqrs` `64.745 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / `MediatR` / `GFramework.Cqrs` 约 `4.309 ns / 51.923 ns / 67.981 ns`；`Transient` 下约 `5.029 ns / 54.435 ns / 76.437 ns`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约 `80.144 ns / 137.515 ns / 229.242 ns`，`Transient` 下约 `77.198 ns / 144.998 ns / 228.185 ns`
+- 本轮结论：
+  - stream 生命周期矩阵现在已与 request 生命周期矩阵对称，且继续沿用 generated-provider 宿主路径，没有把变量退化回纯反射 binding
+  - `GFramework.Cqrs` 在 stream `Singleton / Transient` 两档下都明显快于 `MediatR`，同时保持接近 baseline 的分配规模；`Transient` 仅从 `240 B` 小幅增至 `264 B`
+  - 真正的停止依据仍是上下文预算安全。虽然 branch diff 只有 `14 files`，但当前 turn 已包含多轮 benchmark 输出和恢复文档，因此本批提交后应主动停止
+  - 下一轮若继续性能线，更值得优先看 notification publish 或更高价值的 request 常量开销热点，而不是继续做同层级 benchmark 宿主补齐
+
+### 阶段：默认 stream benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-107）
+
+- 延续 `$gframework-batch-boot 50`，但本轮按用户新增要求把默认停止依据改为“AI 上下文预算优先，建议在预计接近约 80% 安全上下文占用前收口”；在真正落代码前先复核：
+  - `origin/main` = `4d6dbba6`，提交时间 `2026-05-08 11:13:33 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 为 `10 files / 507 lines`
+  - 当前 turn 已加载 `AGENTS.md`、`gframework-batch-boot` / `gframework-boot`、active tracking/trace、上一轮 benchmark 结果与多次 validation 输出，因此继续一个自然批次可以接受，但不应在本次提交后继续无界循环
+- 本轮接受的只读探索结论：
+  - 默认 request / request pipeline 宿主都已吸收 generated provider，但 `StreamingBenchmarks` 仍停在“直接注册单个 stream handler”的旧宿主路径，口径与 `StreamInvokerBenchmarks` / 默认 request 组不对称
+  - 默认 stream steady-state 场景已经足够独立，适合用一份新的 handwritten generated stream registry 最小化收口，而不用再修改 runtime 语义
+  - 用户要求把停止条件从 changed files 改成 AI 上下文预算，因此 skill 文档本身也属于这一批必须一起落下的恢复边界更新
+- 本轮主线程决策：
+  - 新增 `GeneratedDefaultStreamingBenchmarkRegistry`，用 handwritten generated registry + `ICqrsStreamInvokerProvider` + `IEnumeratesCqrsStreamInvokerDescriptors` 为 `StreamingBenchmarks.BenchmarkStreamRequest` 提供真实的 generated stream invoker descriptor
+  - 让 `StreamingBenchmarks` 改用 `RegisterCqrsHandlersFromAssembly(typeof(StreamingBenchmarks).Assembly)` 建容器，并在 `Setup/Cleanup` 前后显式清理 dispatcher 静态缓存
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md`，明确默认 stream steady-state benchmark 也已接上 handwritten generated stream invoker provider
+  - 更新 `.agents/skills/gframework-batch-boot/SKILL.md` 与 `.agents/skills/gframework-boot/SKILL.md`，明确“上下文预算接近约 80% 时优先停止，branch diff 文件/行数只作次级仓库范围信号”
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedDefaultStreamingBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.608 ns / 32 B`、`Mediator` `5.445 ns / 32 B`、`MediatR` `57.071 ns / 232 B`、`GFramework.Cqrs` `64.825 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / `MediatR` / `GFramework.Cqrs` 约 `4.446 ns / 51.331 ns / 69.275 ns`；`Transient` 下约 `4.918 ns / 56.382 ns / 74.301 ns`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*StreamingBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：默认 stream steady-state 对照约为 baseline `5.535 ns / 32 B`、`MediatR` `59.499 ns / 232 B`、`GFramework.Cqrs` `66.778 ns / 32 B`
+- 本轮结论：
+  - 默认 stream steady-state benchmark 现在也已切到 generated-provider 宿主路径，request / pipeline / stream 三个默认宿主场景的 benchmark 口径终于对齐
+  - `StreamingBenchmarks` 的 `GFramework.Cqrs` 结果约 `66.778 ns / 32 B`，仍慢于 `MediatR`，但没有新增分配或明显回退，说明这次宿主收口是低风险可接受的
+  - 更重要的是，默认停止依据已从“branch diff 文件数是否触顶”改成“AI 上下文预算是否接近约 80%”；结合当前 turn 已加载的大量 recovery/validation/benchmark 输出，本次提交后应主动停止，而不是继续机械扩批
+  - 下一轮若继续性能线，应从 `RP-107` 恢复点重新进入，并优先挑选新的高价值热点族，而不是沿着当前 turn 再追加更多同类宿主收口
+
+### 阶段：request pipeline benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-106）
+
+- 延续 `$gframework-batch-boot 50`，本轮基于 `RP-105` 已验证的默认 request 宿主接线继续推进，并先复核 branch diff 基线：
+  - `origin/main` = `4d6dbba6`，提交时间 `2026-05-08 11:13:33 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 为 `8 files / 358 lines`
+  - 当前工作树待提交改动只集中在 `RequestPipelineBenchmarks`、对应 handwritten generated registry 与 benchmark `README`，因此继续自动推进下一批 pipeline 宿主收口
+- 本轮接受的只读探索结论：
+  - `RP-105` 已证明“让默认 request 宿主真实接上 generated request invoker provider”能稳定压低 steady-state request，因此 pipeline benchmark 仍保留旧的“直接注册单个 handler”路径会让口径不对齐
+  - 之前已被 benchmark 否决的“总是 `GetAll(Type)` 做零 pipeline 探测”不应回头重试；下一刀更合理的是把 pipeline benchmark 也切到真实程序集注册入口
+  - `RequestPipelineBenchmarks` 只需要补一份与 `RequestBenchmarks` 对称的 handwritten generated registry，就能最小化改动并保持 runtime 语义不变
+- 本轮主线程决策：
+  - 新增 `GeneratedRequestPipelineBenchmarkRegistry`，用 handwritten generated registry + `ICqrsRequestInvokerProvider` + `IEnumeratesCqrsRequestInvokerDescriptors` 为 `RequestPipelineBenchmarks.BenchmarkRequest` 提供真实的 generated request invoker descriptor
+  - 让 `RequestPipelineBenchmarks` 改用 `RegisterCqrsHandlersFromAssembly(typeof(RequestPipelineBenchmarks).Assembly)` 建容器，只把 pipeline 行为数量矩阵保留在 benchmark 自己的显式注册里
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md`，明确 request pipeline benchmark 也已接上 handwritten generated request invoker provider
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedRequestPipelineBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/RequestPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.680 ns / 32 B`、`Mediator` `6.565 ns / 32 B`、`MediatR` `54.737 ns / 232 B`、`GFramework.Cqrs` `63.644 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 `GFramework.Cqrs` / `MediatR` 约 `69.896 ns / 32 B` vs `57.469 ns / 232 B`；`Transient` 下约 `72.880 ns / 56 B` vs `55.106 ns / 232 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestPipelineBenchmarks.SendRequest_GFrameworkCqrs*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：第一次短跑为 `PipelineCount=0` `64.928 ns / 32 B`、`PipelineCount=1` `366.468 ns / 536 B`、`PipelineCount=4` `547.800 ns / 896 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestPipelineBenchmarks.SendRequest_GFrameworkCqrs*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：复跑确认后为 `PipelineCount=0` `64.755 ns / 32 B`、`PipelineCount=1` `353.141 ns / 536 B`、`PipelineCount=4` `555.083 ns / 896 B`
+- 本轮结论：
+  - request pipeline benchmark 现在已与默认 request steady-state 使用同一条 generated-provider 宿主接线路径，后续再看 `0 / 1 / 4` 行为矩阵时不再混入“默认 request 已吸收 generated invoker，而 pipeline 还停在纯反射宿主”的口径偏差
+  - `0 pipeline` steady-state 继续下探到约 `64.755 ns / 32 B`，与 `RP-105` 的默认 request benchmark 收敛方向一致，说明这条宿主接线收益能稳定复用到 pipeline benchmark
+  - `1 pipeline` 与 `4 pipeline` 结果在当前 short job 配置下存在噪音，但没有出现清晰的新增分配或显著退化；因此本轮适合作为低风险宿主收口批次接受
+  - 下一批若继续沿用 `$gframework-batch-boot 50`，应优先查看 request lifetime、stream 或 notification benchmark 中是否还存在未吸收 generated-provider 宿主收益的对称切片，而不是回头重试已被 benchmark 否决的 runtime 微优化
+
+### 阶段：默认 request benchmark 吸收 generated provider 宿主（CQRS-REWRITE-RP-105）
+
+- 延续 `$gframework-batch-boot 50`，本轮先确认失败试验已手工回退回 `RP-104` 的已验证状态，再重新评估“默认 request 路径继续逼近 source-generated `Mediator`”的下一刀
+- 本轮接受的只读探索结论：
+  - 继续在 `CqrsDispatcher` 或 `MicrosoftDiContainer` 上堆叠同层级微优化的性价比已经下降，而且上一轮“总是 `GetAll(Type)`”的试验已被 benchmark 明确否决
+  - 默认 `RequestBenchmarks` 虽然已包含 `Mediator` 对照，但当前 GFramework 组仍只注册了单个 handler 实例，没有走 `RegisterCqrsHandlersFromAssembly(...)` + generated registry/provider 的真实宿主接线路径
+  - `RequestInvokerBenchmarks` 已证明 generated request invoker provider 路径比纯反射 binding 更接近目标，因此下一批最小切片应先把这条收益吸收到默认 steady-state request benchmark
+- 本轮主线程决策：
+  - 在 `BenchmarkHostFactory` 内补齐 benchmark 最小宿主的 CQRS 基础设施预接线：runtime、legacy alias、registrar、registration service
+  - 新增 `GeneratedDefaultRequestBenchmarkRegistry`，用 handwritten generated registry + `ICqrsRequestInvokerProvider` + `IEnumeratesCqrsRequestInvokerDescriptors` 为 `RequestBenchmarks.BenchmarkRequest` 提供真实的 generated request invoker descriptor
+  - 让 `RequestBenchmarks` 改用 `RegisterCqrsHandlersFromAssembly(typeof(RequestBenchmarks).Assembly)` 建容器，并在 `Setup/Cleanup` 前后显式清理 dispatcher 静态缓存，避免前一组 benchmark 污染默认 request steady-state 结果
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedDefaultRequestBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs GFramework.Cqrs.Benchmarks/Messaging/RequestBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.013 ns / 32 B`、`Mediator` `5.747 ns / 32 B`、`MediatR` `51.588 ns / 232 B`、`GFramework.Cqrs` `65.296 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 `GFramework.Cqrs` / `MediatR` 约 `68.772 ns / 32 B` vs `48.177 ns / 232 B`；`Transient` 下约 `73.157 ns / 56 B` vs `51.753 ns / 232 B`
+- 本轮结论：
+  - 默认 request benchmark 现在终于测到了“默认宿主已吸收 generated request invoker provider”后的真实 steady-state，而不再只是纯反射 request binding
+  - 这条宿主层收口在不改 runtime 语义的前提下，把 `GFramework.Cqrs` steady-state request 从约 `70.298 ns` 再压到约 `65.296 ns`
+  - lifetime 矩阵也同步改善到 `68.772 ns / 73.157 ns`，说明默认 request 宿主吸收 generated provider 不只是 benchmark 口径变化，而是对常见 handler 生命周期也有稳定收益
+  - 下一批若继续沿用 `$gframework-batch-boot 50`，应优先转向 pipeline 路径或 handler 解析热路径中仍未吸收 generated/provider 收益的常量开销，而不是回头重试已被否决的 `GetAll(Type)` 零行为探测方案
+
+### 阶段：request 热路径继续收口（CQRS-REWRITE-RP-104）
+
+- 延续 `$gframework-batch-boot 50`，本轮先重新按 `origin/main` 复核 branch diff 基线：
+  - `origin/main` = `4d6dbba6`，提交时间 `2026-05-08 11:13:33 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 仍为 `0 files / 0 lines`
+  - 当前工作树在真正落代码前只有活跃文档更新，仍明显低于 `$gframework-batch-boot 50` 的文件阈值，因此继续自动推进下一批 request 热路径收口
+- 本轮接受的只读探索结论：
+  - `RequestBenchmarks` / `RequestInvokerBenchmarks` 的下一个低风险热点仍在“每次发送都必经的容器查询与短生命周期对象创建”，不是重新回到更高风险的语义层重构
+  - 候选优先级排序为：`SendAsync` 自身状态机开销、`HasRegistration + GetAll` / 服务键扫描，以及 pipeline continuation 的临时对象
+- 本轮主线程决策：
+  - 先以最小行为改动切第一刀：把 `CqrsDispatcher.SendAsync(...)` 从 `async/await` 改为 direct-return `ValueTask`，让零 pipeline request 常见路径不再为 dispatcher 自身生成额外状态机
+  - 在第一刀验证通过且 benchmark 明显改善后，再切第二刀：让 `MicrosoftDiContainer.HasRegistration(Type)` 在冻结后复用预构建的服务键索引，而不是每次线性扫描全部 `ServiceDescriptor`
+  - 第二刀完成后停止继续叠第三刀，因为当前批次已经能清晰区分“有效收益”和“无回退但收益不明显”的因果，不再为了追逐更小常量开销降低评审清晰度
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+    - 结果：通过，`52/52` passed
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherCacheTests|FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`14/14` passed
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：最新 steady-state request 对照约为 baseline `6.141 ns / 32 B`、`Mediator` `6.674 ns / 32 B`、`MediatR` `61.803 ns / 232 B`、`GFramework.Cqrs` `70.298 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：最新 lifetime request 对照约为 `Singleton` 下 baseline / `MediatR` / `GFramework.Cqrs` = `4.706 ns / 52.197 ns / 73.005 ns`，`Transient` 下 = `4.571 ns / 50.175 ns / 74.757 ns`
+  - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仍仅有 `GFramework.sln` 的历史 CRLF 警告，无本轮新增格式问题
+- 本轮结论：
+  - 第一刀有效：`CqrsDispatcher.SendAsync(...)` 的 direct-return `ValueTask` 把 `GFramework.Cqrs` steady-state request 从 `RP-103` 记录的约 `83.823 ns` 压到约 `70.298 ns`
+  - 第二刀保守有效：冻结后 `HasRegistration(Type)` 索引化没有带来同量级的可见收益，但也没有造成功能回退、额外分配或测试破坏
+  - 下一批若继续压 request hot path，应优先评估默认 request 路径吸收 generated invoker/provider，而不是继续围绕同层级容器存在性判断做微调
+
 ### 阶段：PR #340 latest-head review 收口（CQRS-REWRITE-RP-103）
 
 - 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认当前锚点已从 `PR #339` 更新为 `PR #340`

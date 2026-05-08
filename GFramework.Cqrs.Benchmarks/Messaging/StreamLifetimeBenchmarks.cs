@@ -18,16 +18,18 @@ using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
-[assembly: GFramework.Cqrs.CqrsHandlerRegistryAttribute(
-    typeof(GFramework.Cqrs.Benchmarks.Messaging.GeneratedDefaultStreamingBenchmarkRegistry))]
-
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比单个 stream request 在直接调用、GFramework.CQRS runtime 与 MediatR 之间的完整枚举开销。
+///     对比 stream 完整枚举在不同 handler 生命周期下的额外开销。
 /// </summary>
+/// <remarks>
+///     当前矩阵只覆盖 `Singleton` 与 `Transient`。
+///     `Scoped` 仍依赖真实的显式作用域边界；在当前“单根容器最小宿主”模型下直接加入 scoped 会把枚举宿主成本与生命周期成本混在一起，
+///     因此保持与 request 生命周期矩阵相同的边界，留待后续 scoped host 基线具备后再扩展。
+/// </remarks>
 [Config(typeof(Config))]
-public class StreamingBenchmarks
+public class StreamLifetimeBenchmarks
 {
     private MicrosoftDiContainer _container = null!;
     private ICqrsRuntime _runtime = null!;
@@ -37,7 +39,29 @@ public class StreamingBenchmarks
     private BenchmarkStreamRequest _request = null!;
 
     /// <summary>
-    ///     配置 stream benchmark 的公共输出格式。
+    ///     控制当前 benchmark 使用的 handler 生命周期。
+    /// </summary>
+    [Params(HandlerLifetime.Singleton, HandlerLifetime.Transient)]
+    public HandlerLifetime Lifetime { get; set; }
+
+    /// <summary>
+    ///     可公平比较的 benchmark handler 生命周期集合。
+    /// </summary>
+    public enum HandlerLifetime
+    {
+        /// <summary>
+        ///     复用单个 handler 实例。
+        /// </summary>
+        Singleton,
+
+        /// <summary>
+        ///     每次建流都重新解析新的 handler 实例。
+        /// </summary>
+        Transient
+    }
+
+    /// <summary>
+    ///     配置 stream 生命周期 benchmark 的公共输出格式。
     /// </summary>
     private sealed class Config : ManualConfig
     {
@@ -45,14 +69,14 @@ public class StreamingBenchmarks
         {
             AddJob(Job.Default);
             AddColumnProvider(DefaultColumnProviders.Instance);
-            AddColumn(new CustomColumn("Scenario", static (_, _) => "StreamRequest"));
+            AddColumn(new CustomColumn("Scenario", static (_, _) => "StreamLifetime"));
             AddDiagnoser(MemoryDiagnoser.Default);
             WithOrderer(new DefaultOrderer(SummaryOrderPolicy.FastestToSlowest, MethodOrderPolicy.Declared));
         }
     }
 
     /// <summary>
-    ///     构建 stream dispatch 所需的最小 runtime 宿主和对照对象。
+    ///     构建当前生命周期下的 GFramework 与 MediatR stream 对照宿主。
     /// </summary>
     [GlobalSetup]
     public void Setup()
@@ -61,30 +85,33 @@ public class StreamingBenchmarks
         {
             MinLevel = LogLevel.Fatal
         };
-        Fixture.Setup("StreamRequest", handlerCount: 1, pipelineCount: 0);
+        Fixture.Setup($"StreamLifetime/{Lifetime}", handlerCount: 1, pipelineCount: 0);
         BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
 
         _baselineHandler = new BenchmarkStreamHandler();
+        _request = new BenchmarkStreamRequest(Guid.NewGuid(), 3);
+
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
-            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedDefaultStreamingBenchmarkRegistry>(container);
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedStreamLifetimeBenchmarkRegistry>(container);
+            RegisterGFrameworkHandler(container, Lifetime);
         });
+        // 容器内已提前保留默认 runtime 以支撑 generated registry 接线；
+        // 这里额外创建带生命周期后缀的 runtime，只是为了区分不同 benchmark 矩阵的 dispatcher 日志。
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
-            LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamingBenchmarks)));
+            LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamLifetimeBenchmarks) + "." + Lifetime));
 
         _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
             configure: null,
-            typeof(StreamingBenchmarks),
+            typeof(StreamLifetimeBenchmarks),
             static candidateType => candidateType == typeof(BenchmarkStreamHandler),
-            ServiceLifetime.Singleton);
+            ResolveMediatRLifetime(Lifetime));
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
-
-        _request = new BenchmarkStreamRequest(Guid.NewGuid(), 3);
     }
 
     /// <summary>
-    ///     释放 MediatR 对照组使用的 DI 宿主。
+    ///     释放当前生命周期矩阵持有的 benchmark 宿主资源，并清理 dispatcher 缓存。
     /// </summary>
     [GlobalCleanup]
     public void Cleanup()
@@ -100,7 +127,7 @@ public class StreamingBenchmarks
     }
 
     /// <summary>
-    ///     直接调用 handler 并完整枚举响应序列，作为 stream dispatch 额外开销的 baseline。
+    ///     直接调用 handler 并完整枚举，作为不同生命周期矩阵下的 dispatch 额外开销 baseline。
     /// </summary>
     [Benchmark(Baseline = true)]
     public async ValueTask Stream_Baseline()
@@ -125,7 +152,7 @@ public class StreamingBenchmarks
     }
 
     /// <summary>
-    ///     通过 MediatR 创建并完整枚举 stream，作为外部设计对照。
+    ///     通过 MediatR 创建并完整枚举 stream，作为外部对照。
     /// </summary>
     [Benchmark]
     public async ValueTask Stream_MediatR()
@@ -134,6 +161,53 @@ public class StreamingBenchmarks
         {
             _ = response;
         }
+    }
+
+    /// <summary>
+    ///     按生命周期把 benchmark stream handler 注册到 GFramework 容器。
+    /// </summary>
+    /// <param name="container">当前 benchmark 拥有并负责释放的容器。</param>
+    /// <param name="lifetime">待比较的 handler 生命周期。</param>
+    /// <remarks>
+    ///     先通过 generated registry 提供静态 descriptor，再显式覆盖 handler 生命周期，
+    ///     可以把比较变量收敛到 handler 解析成本，而不是 descriptor 发现路径本身。
+    /// </remarks>
+    private static void RegisterGFrameworkHandler(MicrosoftDiContainer container, HandlerLifetime lifetime)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+
+        switch (lifetime)
+        {
+            case HandlerLifetime.Singleton:
+                container.RegisterSingleton<
+                    GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>,
+                    BenchmarkStreamHandler>();
+                return;
+
+            case HandlerLifetime.Transient:
+                container.RegisterTransient<
+                    GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>,
+                    BenchmarkStreamHandler>();
+                return;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Unsupported benchmark handler lifetime.");
+        }
+    }
+
+    /// <summary>
+    ///     将 benchmark 生命周期映射为 MediatR 组装所需的 <see cref="ServiceLifetime" />。
+    /// </summary>
+    /// <param name="lifetime">待比较的 handler 生命周期。</param>
+    /// <returns>当前生命周期对应的 MediatR 注册方式。</returns>
+    private static ServiceLifetime ResolveMediatRLifetime(HandlerLifetime lifetime)
+    {
+        return lifetime switch
+        {
+            HandlerLifetime.Singleton => ServiceLifetime.Singleton,
+            HandlerLifetime.Transient => ServiceLifetime.Transient,
+            _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Unsupported benchmark handler lifetime.")
+        };
     }
 
     /// <summary>
@@ -146,7 +220,7 @@ public class StreamingBenchmarks
         MediatR.IStreamRequest<BenchmarkResponse>;
 
     /// <summary>
-    ///     复用 request benchmark 的响应结构，保持跨场景可比性。
+    ///     Benchmark stream response。
     /// </summary>
     /// <param name="Id">响应标识。</param>
     public sealed record BenchmarkResponse(Guid Id);
@@ -161,6 +235,9 @@ public class StreamingBenchmarks
         /// <summary>
         ///     处理 GFramework.CQRS stream request。
         /// </summary>
+        /// <param name="request">当前 benchmark stream 请求。</param>
+        /// <param name="cancellationToken">用于中断异步枚举的取消令牌。</param>
+        /// <returns>完整枚举所需的低噪声异步响应序列。</returns>
         public IAsyncEnumerable<BenchmarkResponse> Handle(
             BenchmarkStreamRequest request,
             CancellationToken cancellationToken)
@@ -171,6 +248,9 @@ public class StreamingBenchmarks
         /// <summary>
         ///     处理 MediatR stream request。
         /// </summary>
+        /// <param name="request">当前 benchmark stream 请求。</param>
+        /// <param name="cancellationToken">用于中断异步枚举的取消令牌。</param>
+        /// <returns>完整枚举所需的低噪声异步响应序列。</returns>
         IAsyncEnumerable<BenchmarkResponse> MediatR.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>.Handle(
             BenchmarkStreamRequest request,
             CancellationToken cancellationToken)
@@ -179,13 +259,16 @@ public class StreamingBenchmarks
         }
 
         /// <summary>
-        ///     为 benchmark 构造稳定、低噪声的异步响应序列。
+        ///     为生命周期矩阵构造稳定、低噪声的异步响应序列。
         /// </summary>
+        /// <param name="request">当前 benchmark 请求。</param>
+        /// <param name="cancellationToken">用于中断异步枚举的取消令牌。</param>
+        /// <returns>按固定元素数量返回的异步响应序列。</returns>
         private static async IAsyncEnumerable<BenchmarkResponse> EnumerateAsync(
             BenchmarkStreamRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            for (int index = 0; index < request.ItemCount; index++)
+            for (var index = 0; index < request.ItemCount; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return new BenchmarkResponse(request.Id);
