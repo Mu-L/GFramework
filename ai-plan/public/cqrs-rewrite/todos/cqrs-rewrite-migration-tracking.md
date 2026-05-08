@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-107`
+- 恢复点编号：`CQRS-REWRITE-RP-108`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #340`
 - 当前结论：
@@ -44,14 +44,15 @@ CQRS 迁移与收敛。
   - 当前 `RP-105` 已继续沿用 `$gframework-batch-boot 50` 压默认 request steady-state：为 benchmark 最小宿主补齐 CQRS runtime / registrar / registration service 基础设施，让 `RequestBenchmarks` 不再只测反射路径，而是通过 handwritten generated registry + `RegisterCqrsHandlersFromAssembly(...)` 真实接上 generated request invoker provider；本轮 benchmark 表明默认 request 路径进一步从约 `70.298 ns / 32 B` 压到约 `65.296 ns / 32 B`，`Singleton / Transient` lifetime 也同步收敛到约 `68.772 ns / 32 B` 与 `73.157 ns / 56 B`
   - 当前 `RP-106` 已把同一套 generated-provider 宿主收口扩展到 `RequestPipelineBenchmarks`：新增 handwritten `GeneratedRequestPipelineBenchmarkRegistry`，并让 `RequestPipelineBenchmarks` 改走 `RegisterCqrsHandlersFromAssembly(...)` + benchmark CQRS 基础设施预接线；本轮 benchmark 表明 `0 pipeline` steady-state 进一步收敛到约 `64.755 ns / 32 B`，`1 pipeline` 约 `353.141 ns / 536 B`，`4 pipeline` 在短跑噪音下维持约 `555.083 ns / 896 B`
   - 当前 `RP-107` 已把默认 stream steady-state 宿主也切到 generated-provider 路径：新增 handwritten `GeneratedDefaultStreamingBenchmarkRegistry`，让 `StreamingBenchmarks` 改走 `RegisterCqrsHandlersFromAssembly(...)` 并在 setup/cleanup 清理 dispatcher cache；同时将 `gframework-boot` / `gframework-batch-boot` 的默认停止规则改为“AI 上下文预算优先，建议在预计接近约 80% 安全上下文占用前收口”，不再把 changed files 误当作唯一阈值
-- `ai-plan` active 入口现以 `RP-107` 为最新恢复锚点；`PR #340`、`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - 当前 `RP-108` 已补齐 stream handler `Singleton / Transient` 生命周期矩阵 benchmark：新增 `StreamLifetimeBenchmarks` 与 `GeneratedStreamLifetimeBenchmarkRegistry`，让 stream 生命周期对照沿用 generated-provider 宿主接线而不是退回纯反射路径；本轮 benchmark 表明 `Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约 `80.144 ns / 137.515 ns / 229.242 ns`，`Transient` 下约 `77.198 ns / 144.998 ns / 228.185 ns`
+- `ai-plan` active 入口现以 `RP-108` 为最新恢复锚点；`PR #340`、`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
 - 当前分支为 `feat/cqrs-optimization`
 - 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`4d6dbba6`, 2026-05-08 11:13:33 +0800) 为基线；本地 `main` 仍落后，不作为 branch diff 基线
-- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `10 files / 507 lines`
-- 本批待提交工作树集中在 `GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/Messaging/GeneratedDefaultStreamingBenchmarkRegistry.cs`、`GFramework.Cqrs.Benchmarks/README.md`、`.agents/skills/gframework-batch-boot/SKILL.md` 与 `.agents/skills/gframework-boot/SKILL.md`
+- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `14 files / 507 lines`
+- 本批待提交工作树集中在 `GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/Messaging/GeneratedStreamLifetimeBenchmarkRegistry.cs` 与 `GFramework.Cqrs.Benchmarks/README.md`
 - 当前批次后的默认停止依据已改为 AI 上下文预算：若下一轮预计会让活动对话、已加载 recovery 文档、验证输出与当前 diff 接近约 `80%` 安全上下文占用，应在当前自然批次边界停止，即使 branch diff 仍有余量
 - `GFramework.Cqrs.Benchmarks` 作为 benchmark 基础设施项目，必须持续排除在 NuGet / GitHub Packages 发布集合之外
 - `GFramework.Cqrs.Benchmarks` 现已覆盖 request steady-state、pipeline 数量矩阵、startup、request/stream generated invoker，以及 request handler `Singleton / Transient` 生命周期矩阵
@@ -60,6 +61,7 @@ CQRS 迁移与收敛。
 - 当前 request lifetime benchmark 已继续收敛：`Singleton` 下 `GFramework.Cqrs` 最新约 `69.275 ns / 32 B`，`Transient` 下约 `74.301 ns / 56 B`；相较 `RP-104` 前的 `73.005 ns / 32 B` 与 `74.757 ns / 56 B` 仍维持同一收敛区间
 - 当前 request pipeline benchmark 已改为与默认 request steady-state 相同的 generated-provider 宿主接线路径：`0 pipeline` 约 `64.755 ns / 32 B`，`1 pipeline` 约 `353.141 ns / 536 B`，`4 pipeline` 约 `555.083 ns / 896 B`
 - 当前 stream steady-state benchmark 也已切到 generated-provider 宿主接线路径：baseline 约 `5.535 ns / 32 B`、`MediatR` 约 `59.499 ns / 232 B`、`GFramework.Cqrs` 约 `66.778 ns / 32 B`
+- 当前 stream lifetime benchmark 已补齐 `Singleton / Transient` 两档矩阵，并沿用 generated-provider 宿主接线：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约 `80.144 ns / 137.515 ns / 229.242 ns`，`Transient` 下约 `77.198 ns / 144.998 ns / 228.185 ns`
 - 本轮已验证旧 benchmark 劣化的两个主热点：`0 pipeline` 场景下仍解析空行为列表，以及容器查询热路径在 debug 禁用时仍构造日志字符串；两者收口后，`GFramework.Cqrs` request 路径不再出现额外数百字节分配
 - `HasRegistration(Type)` 现在只把“同一服务键已注册”或“开放泛型服务键可闭合到目标类型”视为命中，不再把“仅以具体实现类型自注册”的行为误判为接口服务已注册；该语义与 `Get(Type)` / `GetAll(Type)` 已重新对齐
 - `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs` 已同步适配 `HasRegistration(Type)` fast-path，避免 strict mock 因缺少新调用配置而在上下文失败语义断言前提前抛出 `Moq.MockException`
@@ -110,6 +112,7 @@ CQRS 迁移与收敛。
 - `RequestStartupBenchmarks` 为了量化真正的单次 cold-start，引入了 `InvocationCount=1` / `UnrollFactor=1` 的专用 job；该配置会触发 BenchmarkDotNet 的 `MinIterationTime` 提示，后续若要做稳定基线比较，还需要决定是否引入批量外层循环或自定义 cold-start harness
 - 当前 benchmark 宿主仍刻意保持“单根容器最小宿主”模型；若要公平比较 `Scoped` handler 生命周期，需要先引入显式 scope 创建与 scope 内首次解析的对照基线
 - 当前 `Mediator` 对照组仅先接入 steady-state request；若要把 `Transient` / `Scoped` 生命周期矩阵也纳入同一组对照，需要按 `Mediator` 官方 benchmark 的做法拆分 compile-time lifetime build config，而不是在同一编译产物里混用多个 lifetime
+- 当前 stream 生命周期矩阵尚未接入 `Mediator` concrete runtime；若要继续对齐 `Mediator` 官方 benchmark 的 compile-time lifetime 设计，需要为 stream 场景补专门的 build-time 配置，而不是在当前统一宿主里临时拼接
 - `BenchmarkDotNet.Artifacts/` 现已加入仓库忽略规则；若后续确实需要提交新的基准报告，应显式挑选结果文件或改走文档归档，而不是直接纳入整个生成目录
 - 当前 `GFramework.Cqrs` request steady-state 仍慢于 `MediatR`；在“至少超过反射版 `MediatR`”这个阶段目标达成前，任何相关改动都不能只看功能 build/test 结果，必须附带 benchmark 回归数据
 - 仓库内部仍保留旧 `Command` / `Query` API、`LegacyICqrsRuntime` alias 与部分历史命名语义，后续若不继续分批收口，容易混淆“对外替代已完成”与“内部收口未完成”
@@ -147,6 +150,21 @@ CQRS 迁移与收敛。
   - 备注：按新性能回归门槛复跑后，`Singleton` 下 `GFramework.Cqrs` / `MediatR` 约 `83.183 ns / 32 B` vs `60.915 ns / 232 B`；`Transient` 下约 `86.243 ns / 56 B` vs `59.644 ns / 232 B`
 - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
   - 结果：通过
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/GeneratedStreamLifetimeBenchmarkRegistry.cs GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：steady-state request 对照约为 baseline `5.336 ns / 32 B`、`Mediator` `5.564 ns / 32 B`、`MediatR` `53.307 ns / 232 B`、`GFramework.Cqrs` `64.745 ns / 32 B`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：`Singleton` 下 baseline / `MediatR` / `GFramework.Cqrs` 约 `4.309 ns / 51.923 ns / 67.981 ns`；`Transient` 下约 `5.029 ns / 54.435 ns / 76.437 ns`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约 `80.144 ns / 137.515 ns / 229.242 ns`，`Transient` 下约 `77.198 ns / 144.998 ns / 228.185 ns`
 - `git diff --check`
   - 结果：通过
   - 备注：当前仅保留 `GFramework.sln` 的历史 CRLF 警告，无本轮新增 diff 格式错误
@@ -301,9 +319,9 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 当前 turn 已接近默认的上下文预算停止线；本次提交后应停止，并在新的 turn 里从 `RP-107` 恢复点继续，而不是在本轮继续启动新的 benchmark 宿主或 runtime 热点切片
-2. 若下一轮继续沿用 `$gframework-batch-boot` 且优先处理性能，先看 notification 或更高价值的 request dispatch 常量开销热点，而不是再机械按 changed files 追加小批次
-3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再扩 `Mediator` 的 compile-time lifetime 或 stream 对照矩阵，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
+1. 当前 turn 已到新的自然批次边界；本次提交后应停止，并在新的 turn 里从 `RP-108` 恢复点继续，而不是在本轮继续启动新的 benchmark 宿主或 runtime 热点切片
+2. 若下一轮继续沿用 `$gframework-batch-boot` 且优先处理性能，先看 notification publish 或更高价值的 request dispatch 常量开销热点，而不是继续堆同层级 benchmark 宿主补齐
+3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档
 
