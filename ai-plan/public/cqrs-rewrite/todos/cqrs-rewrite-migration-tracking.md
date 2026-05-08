@@ -7,10 +7,13 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-111`
+- 恢复点编号：`CQRS-REWRITE-RP-112`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #341`
 - 当前结论：
+  - 当前 `RP-112` 已继续沿用 `$gframework-batch-boot 50`，并在 `RP-111` 的单处理器 notification 对照基础上补齐固定 `4 handler` 的 fan-out publish benchmark：新增 `NotificationFanOutBenchmarks`，对比 baseline、`GFramework.Cqrs`、NuGet `Mediator` concrete runtime 与 `MediatR`
+  - `NotificationFanOutBenchmarks` 当前 short-job 基线约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`；这说明 notification fan-out 的差距已经不只体现在单处理器 publish，而是在固定 4 处理器场景下依然保持相近量级
+  - 本轮仍然只扩 benchmark 对照口径，没有直接修改 notification runtime 或 publisher 策略语义；原因是当前更高价值的事实是先量化“单处理器”和“固定 fan-out”两条 notification 路径的外部差距，再决定下一批是否值得切进 publisher strategy 或 runtime 热点
   - 当前 `RP-111` 已继续沿用 `$gframework-batch-boot 50`，并按 skill 规则重新以 `origin/main` 作为基线复核：`origin/main` = `7ca21af9`（`2026-05-08 16:12:20 +0800`），本地 `main` = `c2d22285` 已落后，当前分支 `feat/cqrs-optimization` 与 `origin/main` 的累计 branch diff 为 `0 files / 0 lines`；基于“上下文预算优先、单批可评审边界次之”的停止规则，本轮选择 `NotificationBenchmarks` 这一条仍缺 `Mediator` concrete runtime 对照的单模块 benchmark 切片，而不是为了对称性继续扩展 notification runtime seam
   - `NotificationBenchmarks` 现已从双方对照扩成三方对照：新增 NuGet `Mediator` source-generated concrete runtime 宿主与 `PublishNotification_Mediator()`，`BenchmarkNotification` / `BenchmarkNotificationHandler` 也同步接上 `Mediator` 的 notification 合同；当前 short-job 基线约为 `Mediator` `1.108 ns / 0 B`、`MediatR` `97.173 ns / 416 B`、`GFramework.Cqrs` `291.582 ns / 392 B`
   - 本轮只把“notification publish 的高性能外部对照”补齐到 benchmark 层，而没有直接新增 generated notification invoker/provider 或 runtime 语义调整；原因是 notification dispatch 现有反射委托本就只在首次命中时缓存，继续加一层 provider 对 steady-state publish 的收益信号不如先把 `Mediator` concrete runtime 对照补齐来得清晰
@@ -117,7 +120,7 @@ CQRS 迁移与收敛。
 - 若后续新增 benchmark / example / tooling 项目但未同步校验发布面，solution 级 `dotnet pack` 仍可能在 tag 发布前才暴露异常包
 - `RequestStartupBenchmarks` 为了量化真正的单次 cold-start，引入了 `InvocationCount=1` / `UnrollFactor=1` 的专用 job；该配置会触发 BenchmarkDotNet 的 `MinIterationTime` 提示，后续若要做稳定基线比较，还需要决定是否引入批量外层循环或自定义 cold-start harness
 - 当前 benchmark 宿主仍刻意保持“单根容器最小宿主”模型；若要公平比较 `Scoped` handler 生命周期，需要先引入显式 scope 创建与 scope 内首次解析的对照基线
-- 当前 `Mediator` concrete runtime 对照已覆盖 steady-state request 与单处理器 notification publish；若要把 `Transient` / `Scoped` 生命周期矩阵、stream 生命周期矩阵或多处理器 notification publish 也纳入同一组对照，需要按 `Mediator` 官方 benchmark 的做法拆分 compile-time lifetime / 场景配置，而不是在同一编译产物里混用多个 runtime 变量
+- 当前 `Mediator` concrete runtime 对照已覆盖 steady-state request、单处理器 notification publish 与固定 `4 handler` notification fan-out；若要把 `Transient` / `Scoped` 生命周期矩阵、stream 生命周期矩阵或更大 fan-out 矩阵也纳入同一组对照，需要按 `Mediator` 官方 benchmark 的做法拆分 compile-time lifetime / 场景配置，而不是在同一编译产物里混用多个 runtime 变量
 - 当前 stream 生命周期矩阵尚未接入 `Mediator` concrete runtime；若要继续对齐 `Mediator` 官方 benchmark 的 compile-time lifetime 设计，需要为 stream 场景补专门的 build-time 配置，而不是在当前统一宿主里临时拼接
 - `BenchmarkDotNet.Artifacts/` 现已加入仓库忽略规则；若后续确实需要提交新的基准报告，应显式挑选结果文件或改走文档归档，而不是直接纳入整个生成目录
 - 当前 `GFramework.Cqrs` request steady-state 仍慢于 `MediatR`；在“至少超过反射版 `MediatR`”这个阶段目标达成前，任何相关改动都不能只看功能 build/test 结果，必须附带 benchmark 回归数据
@@ -131,6 +134,16 @@ CQRS 迁移与收敛。
 
 ## 最近权威验证
 
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：固定 `4 handler` notification fan-out 对照当前约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+  - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
 - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
@@ -348,10 +361,9 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 当前 turn 已到新的自然批次边界；本次提交后应停止，并在新的 turn 里从 `RP-111` 恢复点继续，而不是在本轮继续堆叠 notification 基准或 runtime 热点切片
-2. 若下一轮继续沿用 `$gframework-batch-boot` 且优先处理性能，优先从多处理器 notification publish、publisher strategy，或更高价值的 request dispatch 常量开销热点里选一块，而不是继续做同层级 benchmark 宿主补齐
-3. 若继续沿着 notification 线推进，优先评估多处理器 publish、publisher strategy 或异常/取消语义的对照，而不是新增 generated notification invoker/provider 这一类 steady-state 收益信号偏弱的 runtime seam
-4. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
+1. 当前 turn 仍可继续自动推进；若下一批继续沿用 `$gframework-batch-boot` 且优先处理 notification 线，先评估 publisher strategy 或异常/取消语义的对照，而不是继续机械扩充更多同层级 fan-out benchmark
+2. 若下一轮要切回更高价值热点，优先重新审视 request dispatch 常量开销或 notification publisher strategy，而不是新增 generated notification invoker/provider 这一类 steady-state 收益信号偏弱的 runtime seam
+3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档
 

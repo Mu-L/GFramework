@@ -2,6 +2,31 @@
 
 ## 2026-05-08
 
+### 阶段：notification fan-out publish benchmark（CQRS-REWRITE-RP-112）
+
+- 延续 `$gframework-batch-boot 50`，本轮没有直接切入 notification runtime 或 publisher strategy，而是先补齐固定 `4 handler` 的 fan-out publish 对照：
+  - `RP-111` 已量化单处理器 notification publish，但还缺“同一路径在固定多处理器 fan-out 时是否保持同级差距”的事实
+  - 继续机械扩充 `HandlerCount` 参数矩阵会把 `Mediator` compile-time 处理器集合、MediatR 扫描过滤与 benchmark 注册变量混在一起；固定 `4 handler` 场景更容易保持三方对照口径稳定
+- 本轮主线程决策：
+  - 新增 `GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs`，固定 4 个 handler，比对 baseline、`GFramework.Cqrs`、NuGet `Mediator` concrete runtime 与 `MediatR` 的 publish 开销
+  - 让 baseline 直接顺序调用 4 个 handler，避免把 fan-out 的额外调用成本误归因为框架 dispatch 自身
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md`，明确 notification benchmark 现在同时覆盖单处理器与固定 4 处理器 fan-out 场景
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：固定 `4 handler` notification fan-out 对照当前约为 baseline `8.302 ns / 0 B`、`Mediator` `4.314 ns / 0 B`、`MediatR` `230.304 ns / 1256 B`、`GFramework.Cqrs` `434.413 ns / 408 B`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationFanOutBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- 本轮结论：
+  - notification 路径现在已同时具备“单处理器 publish”与“固定 4 处理器 fan-out publish”两条三方对照基线，足以支撑后续是否值得切进 publisher strategy 或 runtime 热点
+  - 当前更有价值的下一步不是继续横向堆更多 fan-out 场景，而是转向 publisher strategy / 异常语义，或回到 request dispatch 常量开销这类更可能产生真实运行时收益的切片
+  - 在 branch diff 仍明显低于阈值时可以继续自动推进，但应把“上下文预算接近约 80%”继续视为优先停止信号
+
 ### 阶段：notification publish 补齐 `Mediator` concrete runtime 对照（CQRS-REWRITE-RP-111）
 
 - 延续 `$gframework-batch-boot 50`，本轮重新按 skill 规则复核 branch diff 基线与容量：
