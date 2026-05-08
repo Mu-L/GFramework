@@ -16,19 +16,22 @@ using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using GeneratedMediator = Mediator.Mediator;
 
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比单个 request 在直接调用、GFramework.CQRS runtime 与 MediatR 之间的 steady-state dispatch 开销。
+///     对比单个 request 在直接调用、GFramework.CQRS runtime、`ai-libs/Mediator` 与 MediatR 之间的 steady-state dispatch 开销。
 /// </summary>
 [Config(typeof(Config))]
 public class RequestBenchmarks
 {
     private MicrosoftDiContainer _container = null!;
     private ICqrsRuntime _runtime = null!;
-    private ServiceProvider _serviceProvider = null!;
+    private ServiceProvider _mediatrServiceProvider = null!;
+    private ServiceProvider _mediatorServiceProvider = null!;
     private IMediator _mediatr = null!;
+    private GeneratedMediator _mediator = null!;
     private BenchmarkRequestHandler _baselineHandler = null!;
     private BenchmarkRequest _request = null!;
 
@@ -69,23 +72,26 @@ public class RequestBenchmarks
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestBenchmarks)));
 
-        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+        _mediatrServiceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
             configure: null,
             typeof(RequestBenchmarks),
             static candidateType => candidateType == typeof(BenchmarkRequestHandler),
             ServiceLifetime.Singleton);
-        _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        _mediatr = _mediatrServiceProvider.GetRequiredService<IMediator>();
+
+        _mediatorServiceProvider = BenchmarkHostFactory.CreateMediatorServiceProvider(configure: null);
+        _mediator = _mediatorServiceProvider.GetRequiredService<GeneratedMediator>();
 
         _request = new BenchmarkRequest(Guid.NewGuid());
     }
 
     /// <summary>
-    ///     释放 MediatR 对照组使用的 DI 宿主。
+    ///     释放 MediatR 与 `Mediator` 对照组使用的 DI 宿主。
     /// </summary>
     [GlobalCleanup]
     public void Cleanup()
     {
-        BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+        BenchmarkCleanupHelper.DisposeAll(_container, _mediatrServiceProvider, _mediatorServiceProvider);
     }
 
     /// <summary>
@@ -116,11 +122,21 @@ public class RequestBenchmarks
     }
 
     /// <summary>
+    ///     通过 `ai-libs/Mediator` 的 source-generated concrete mediator 发送 request，作为高性能对照组。
+    /// </summary>
+    [Benchmark]
+    public ValueTask<BenchmarkResponse> SendRequest_Mediator()
+    {
+        return _mediator.Send(_request, CancellationToken.None);
+    }
+
+    /// <summary>
     ///     Benchmark request。
     /// </summary>
     /// <param name="Id">请求标识。</param>
     public sealed record BenchmarkRequest(Guid Id) :
         GFramework.Cqrs.Abstractions.Cqrs.IRequest<BenchmarkResponse>,
+        Mediator.IRequest<BenchmarkResponse>,
         MediatR.IRequest<BenchmarkResponse>;
 
     /// <summary>
@@ -134,6 +150,7 @@ public class RequestBenchmarks
     /// </summary>
     public sealed class BenchmarkRequestHandler :
         GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>,
+        Mediator.IRequestHandler<BenchmarkRequest, BenchmarkResponse>,
         MediatR.IRequestHandler<BenchmarkRequest, BenchmarkResponse>
     {
         /// <summary>

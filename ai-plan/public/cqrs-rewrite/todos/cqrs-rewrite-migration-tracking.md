@@ -7,7 +7,7 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-100`
+- 恢复点编号：`CQRS-REWRITE-RP-101`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #339`
 - 当前结论：
@@ -36,15 +36,22 @@ CQRS 迁移与收敛。
   - 当前 `RP-098` 已再次使用 `$gframework-pr-review` 复核 `PR #334` latest-head review，并收口 `LegacyCqrsDispatchHelper.TryResolveDispatchContext(...)` 过宽吞掉 `InvalidOperationException` 的真实运行时诊断退化问题；现在仅把“上下文尚未就绪”视为允许 fallback 的信号，并为 fallback / 异常冒泡分别补齐回归测试
   - `RP-099` 已补齐 `GFramework.Cqrs` 的最小 stream pipeline seam：新增 `IStreamPipelineBehavior<,>` / `StreamMessageHandlerDelegate<,>`、`RegisterCqrsStreamPipelineBehavior<TBehavior>()`、dispatcher 侧 stream pipeline executor 缓存与 generated stream invoker 兼容回归，以及 `Architecture` 公开注册入口与对应文档说明
   - 当前 `RP-100` 已使用 `$gframework-pr-review` 复核 `PR #339` latest-head review：收口 `RegisterCqrsStreamPipelineBehavior<TBehavior>()` 的异常契约文档、为 `StreamPipelineInvocation.GetContinuation(...)` 补齐并发 continuation 缓存说明、抽取 `MicrosoftDiContainer` 的 CQRS 行为注册公共逻辑，并顺手修复当前 branch diff 内 `ICqrsRequestInvokerProvider.cs` 的 XML 缩进格式问题
-- `ai-plan` active 入口现以 `RP-100` 为最新恢复锚点；`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+  - 当前 `RP-101` 已按用户新增 benchmark 诉求收口 request 热路径：为 `IIocContainer` 新增不激活实例的 `HasRegistration(Type)`、让 dispatcher 在 `0 pipeline` 场景下跳过空行为解析，并为 `MicrosoftDiContainer` 的热路径查询补齐 debug-level 守卫，避免无效日志字符串分配
+  - 当前 `RP-101` 已把 `GFramework.Cqrs.Benchmarks` 的 `Mediator` 对照组收口为官方 NuGet 引用（`Mediator.Abstractions` / `Mediator.SourceGenerator` `3.0.2`），不再使用本地 `ai-libs/Mediator` project reference；`RequestBenchmarks` 现已新增 source-generated concrete `Mediator` 对照方法，并通过 `RequestLifetimeBenchmarks` 复核 hot path 收口后的新基线
+- `ai-plan` active 入口现以 `RP-101` 为最新恢复锚点；`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
 - 当前分支为 `feat/cqrs-optimization`
-- 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`2c58d8b6`, 2026-05-07 13:24:46 +0800) 为基线；本地 `main` (`c2d22285`) 已落后，不作为 branch diff 基线
-- 当前分支相对 `origin/main` 的累计 branch diff 为 `31 files changed, 1176 insertions(+), 15 deletions(-)`，仍明显低于 `$gframework-batch-boot 50` 的文件 / 行数阈值
+- 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`5dc2dd25`, 2026-05-08 09:08:37 +0800) 为基线；本地 `main` (`c2d22285`) 已落后，不作为 branch diff 基线
+- 当前分支相对 `origin/main` 的累计 branch diff 仍为 `0 files / 0 lines`；本轮待提交工作树包含 9 个跟踪文件修改，另有 `BenchmarkDotNet.Artifacts/` 生成输出未纳入提交，仍明显低于 `$gframework-batch-boot 50` 的文件阈值
 - `GFramework.Cqrs.Benchmarks` 作为 benchmark 基础设施项目，必须持续排除在 NuGet / GitHub Packages 发布集合之外
 - `GFramework.Cqrs.Benchmarks` 现已覆盖 request steady-state、pipeline 数量矩阵、startup、request/stream generated invoker，以及 request handler `Singleton / Transient` 生命周期矩阵
+- `GFramework.Cqrs.Benchmarks` 当前以 NuGet 方式引用 `Mediator.Abstractions` / `Mediator.SourceGenerator` `3.0.2`；`ai-libs/Mediator` 只保留为本地源码/README 对照资料，不再参与 benchmark 项目编译
+- 当前 request steady-state benchmark 已形成 baseline / `Mediator` / `MediatR` / `GFramework.Cqrs` 四方对照：约 `5.969 ns / 32 B`、`6.242 ns / 32 B`、`53.818 ns / 232 B`、`85.504 ns / 32 B`
+- 当前 request lifetime benchmark 已从旧坏值显著收敛：`Singleton` 下 `GFramework.Cqrs` 约 `84.066 ns / 32 B`（旧值 `301.731 ns / 440 B`），`Transient` 下约 `90.652 ns / 56 B`（旧值 `287.863 ns / 464 B`）
+- 本轮已验证旧 benchmark 劣化的两个主热点：`0 pipeline` 场景下仍解析空行为列表，以及容器查询热路径在 debug 禁用时仍构造日志字符串；两者收口后，`GFramework.Cqrs` request 路径不再出现额外数百字节分配
+- 当前 request steady-state 仍落后于 source-generated `Mediator` 与 `MediatR`，但差距已从“额外数百字节分配 + 近 300ns”收敛到“零 pipeline fast-path 仍慢约 `31ns` / `3.6x` 于 `Mediator`”；下一批若继续压 request dispatch，应优先评估默认路径吸收 generated invoker/provider 的空间
 - `GFramework.Core` 当前已通过内部 bridge request / handler 把 legacy `ICommand`、`IAsyncCommand`、`IQuery`、`IAsyncQuery` 接到统一 `ICqrsRuntime`
 - 标准 `Architecture` 初始化路径会自动扫描 `GFramework.Core` 程序集中的 legacy bridge handler，因此旧 `SendCommand(...)` / `SendQuery(...)` 无需改变用法即可进入统一 pipeline
 - `CommandExecutor`、`QueryExecutor`、`AsyncQueryExecutor` 仍保留“无 runtime 时直接执行”的回退路径，用于不依赖容器的隔离单元测试
@@ -83,6 +90,8 @@ CQRS 迁移与收敛。
 - 若后续新增 benchmark / example / tooling 项目但未同步校验发布面，solution 级 `dotnet pack` 仍可能在 tag 发布前才暴露异常包
 - `RequestStartupBenchmarks` 为了量化真正的单次 cold-start，引入了 `InvocationCount=1` / `UnrollFactor=1` 的专用 job；该配置会触发 BenchmarkDotNet 的 `MinIterationTime` 提示，后续若要做稳定基线比较，还需要决定是否引入批量外层循环或自定义 cold-start harness
 - 当前 benchmark 宿主仍刻意保持“单根容器最小宿主”模型；若要公平比较 `Scoped` handler 生命周期，需要先引入显式 scope 创建与 scope 内首次解析的对照基线
+- 当前 `Mediator` 对照组仅先接入 steady-state request；若要把 `Transient` / `Scoped` 生命周期矩阵也纳入同一组对照，需要按 `Mediator` 官方 benchmark 的做法拆分 compile-time lifetime build config，而不是在同一编译产物里混用多个 lifetime
+- `BenchmarkDotNet.Artifacts/` 是本轮本地运行生成的未跟踪输出；若后续需要提交新的基准报告，应先确认仓库是否要保留该批产物，而不是默认把生成目录纳入版本控制
 - 仓库内部仍保留旧 `Command` / `Query` API、`LegacyICqrsRuntime` alias 与部分历史命名语义，后续若不继续分批收口，容易混淆“对外替代已完成”与“内部收口未完成”
 - 若继续扩大 generated invoker 覆盖面，需要持续区分“可静态表达的合同”与 `PreciseReflectedRegistrationSpec` 等仍需保守回退的场景
 - legacy bridge 当前只为已有 `Command` / `Query` 兼容入口接到统一 request pipeline；若后续要继续对齐 `Mediator`，仍需要单独设计 stream pipeline、telemetry 与 facade 公开面，而不是把这次 bridge 当成“全部收口完成”
@@ -100,6 +109,14 @@ CQRS 迁移与收敛。
   - 备注：共享脚本确认 actual package set 与预期 14 个发布包完全一致
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+  - 结果：通过，`51/51` passed
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：最新 steady-state request 对照约为 baseline `5.969 ns / 32 B`、`Mediator` `6.242 ns / 32 B`、`MediatR` `53.818 ns / 232 B`、`GFramework.Cqrs` `85.504 ns / 32 B`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：`Singleton` 下 `GFramework.Cqrs` / `MediatR` 约 `84.066 ns / 32 B` vs `56.096 ns / 232 B`；`Transient` 下约 `90.652 ns / 56 B` vs `57.207 ns / 232 B`
 - `python3 scripts/license-header.py --check`
   - 结果：通过
 - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestStartupBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
@@ -204,9 +221,9 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 在 GitHub 上 resolve / reply 已被当前分支实质吸收的 `PR #339` stale review threads；若 head 更新后线程数量继续变化，再用 `$gframework-pr-review` 复核
-2. 若继续沿用 `$gframework-batch-boot 50` 且优先处理 `Mediator` 能力吸收，下一批建议从 `notification publisher` 策略或 facade 公开入口中选择一个独立切片推进
-3. 若后续要增强 stream observability，优先评估是否需要元素级 hook，而不是直接复用当前建流级 seam 承载更多语义
+1. 若继续沿用 `$gframework-batch-boot 50` 且优先处理 benchmark/`Mediator` 对齐，下一批建议把 `Mediator` 的 compile-time lifetime 矩阵扩展到 `RequestLifetimeBenchmarks`，避免只有 `MediatR` 参与生命周期对照
+2. 若继续压 request steady-state 开销，下一批优先评估 `GFramework.Cqrs` 默认 request 路径吸收 generated invoker provider 的可行性，而不是只在单独 benchmark 类里保留 handwritten generated 对照
+3. 在 GitHub 上 resolve / reply 已被当前分支实质吸收的 `PR #339` stale review threads；若 head 更新后线程数量继续变化，再用 `$gframework-pr-review` 复核
 
 ## 活跃文档
 

@@ -420,6 +420,32 @@ public class MicrosoftDiContainerTests
     }
 
     /// <summary>
+    ///     测试显式服务不存在时，HasRegistration 应返回 false，且不会要求先冻结或解析实例。
+    /// </summary>
+    [Test]
+    public void HasRegistration_WithNoMatchingService_Should_ReturnFalse()
+    {
+        Assert.That(_container.HasRegistration(typeof(IPipelineBehavior<HasRegistrationRequest, int>)), Is.False);
+    }
+
+    /// <summary>
+    ///     测试 HasRegistration 能识别开放泛型 CQRS pipeline 行为对闭合请求/响应对的可见性。
+    /// </summary>
+    [Test]
+    public void HasRegistration_Should_ReturnTrue_For_Closed_Service_Satisfied_By_Open_Generic_Registration()
+    {
+        _container.GetServicesUnsafe.AddSingleton(
+            typeof(IPipelineBehavior<,>),
+            typeof(OpenGenericHasRegistrationBehavior<,>));
+
+        Assert.That(_container.HasRegistration(typeof(IPipelineBehavior<HasRegistrationRequest, int>)), Is.True);
+
+        _container.Freeze();
+
+        Assert.That(_container.HasRegistration(typeof(IPipelineBehavior<HasRegistrationRequest, int>)), Is.True);
+    }
+
+    /// <summary>
     ///     测试当实例存在时检查实例包含关系应返回 true 的功能
     /// </summary>
     [Test]
@@ -901,5 +927,33 @@ public class MicrosoftDiContainerTests
         var lockField = typeof(MicrosoftDiContainer).GetField("_lock", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.That(lockField, Is.Not.Null);
         return (ReaderWriterLockSlim)lockField!.GetValue(container)!;
+    }
+
+    /// <summary>
+    ///     供 HasRegistration 回归使用的最小请求类型。
+    /// </summary>
+    private sealed class HasRegistrationRequest : IRequest<int>
+    {
+    }
+
+    /// <summary>
+    ///     供 HasRegistration 回归使用的开放泛型 pipeline 行为。
+    /// </summary>
+    /// <typeparam name="TRequest">请求类型。</typeparam>
+    /// <typeparam name="TResponse">响应类型。</typeparam>
+    private sealed class OpenGenericHasRegistrationBehavior<TRequest, TResponse> :
+        IPipelineBehavior<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        /// <summary>
+        ///     透传到下一个 pipeline 节点，不额外改变请求语义。
+        /// </summary>
+        public ValueTask<TResponse> Handle(
+            TRequest request,
+            MessageHandlerDelegate<TRequest, TResponse> next,
+            CancellationToken cancellationToken)
+        {
+            return next(request, cancellationToken);
+        }
     }
 }

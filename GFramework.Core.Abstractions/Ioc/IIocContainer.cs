@@ -253,6 +253,18 @@ public interface IIocContainer : IContextAware, IDisposable
     bool Contains<T>() where T : class;
 
     /// <summary>
+    ///     检查容器中是否存在可赋值给指定服务类型的注册项，而不要求解析出实例。
+    /// </summary>
+    /// <param name="type">要检查的服务类型。</param>
+    /// <returns>若存在显式注册或开放泛型映射可满足该服务类型，则返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    /// <remarks>
+    ///     该入口面向“先判断是否值得解析实例”的热路径优化场景。
+    ///     与 <see cref="Contains{T}" /> 不同，它不会为了判断结果而激活服务实例，因此可避免把瞬态对象创建、
+    ///     多服务枚举或日志分配混入仅需存在性判断的调用链中。
+    /// </remarks>
+    bool HasRegistration(Type type);
+
+    /// <summary>
     ///     判断容器中是否包含某个具体的实例对象
     /// </summary>
     /// <param name="instance">待查询的实例对象</param>

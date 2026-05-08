@@ -1,5 +1,49 @@
 # CQRS 重写迁移追踪
 
+## 2026-05-08
+
+### 阶段：request 热路径 benchmark 收口与 NuGet `Mediator` 对照补齐（CQRS-REWRITE-RP-101）
+
+- 延续 `$gframework-batch-boot 50`，本轮先按 `origin/main` 复核 branch diff 基线：
+  - `origin/main` = `5dc2dd25`，提交时间 `2026-05-08 09:08:37 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 仍为 `0 files / 0 lines`
+  - 当前工作树仅新增 9 个跟踪文件修改，另有 `BenchmarkDotNet.Artifacts/` 本地生成输出未纳入提交范围，仍明显低于 `$gframework-batch-boot 50` 的文件阈值
+- 用户新增的 benchmark 诉求有两部分：
+  - 解释 `BenchmarkDotNet.Artifacts/results` 里为什么 `GFramework.Cqrs` request 路径表现显著差于对照组
+  - 把 `martinothamar/Mediator` 加入 benchmark 对照，但必须使用官方 NuGet 包，不允许接本地 `ai-libs/Mediator` project reference
+- 本轮主线程先回到 runtime hot path 与 benchmark 宿主做最小成本排查，确认旧坏值的两个主要根因：
+  - `CqrsDispatcher.SendAsync(...)` / `CreateStream(...)` 在 `0 pipeline` 场景下仍无条件执行 `container.GetAll(dispatchBinding.BehaviorType)`，即使根本没有行为注册，也会多走一次容器解析与空集合分配
+  - `MicrosoftDiContainer.Get(Type)` / `GetAll<T>()` / `GetAll(Type)` 在 debug logging 关闭时仍会先构造日志字符串，导致 benchmark 默认 `Fatal` 级别下仍持续产生无效分配
+- 本轮主线程决策：
+  - 为 `IIocContainer` 新增不激活实例的 `HasRegistration(Type)`，并由 `MicrosoftDiContainer` 提供支持开放泛型匹配的非激活查询实现
+  - 让 `CqrsDispatcher` 在 request / stream 的 `0 pipeline` 场景先走 `HasRegistration(...)` fast-path；没有行为注册时直接调用已准备好的 request / stream invoker，不再解析空行为列表
+  - 为 `MicrosoftDiContainer` 的热路径查询补 `IsDebugEnabled()` 守卫，避免 benchmark 常态配置下的无效日志字符串构造
+  - 在 benchmark 项目中通过 NuGet 接入 `Mediator.Abstractions` 与 `Mediator.SourceGenerator` `3.0.2`，并让 `RequestBenchmarks` 使用 source-generated concrete `Mediator.Mediator` 作为新对照组
+  - 保持 `ai-libs/Mediator` 只作为本地源码 / README 参考资料，不参与编译或项目引用
+- 本轮新增 / 更新的验证与回归覆盖：
+  - `GFramework.Core.Tests/Ioc/MicrosoftDiContainerTests.cs` 新增 `HasRegistration(...)` 回归，覆盖“无匹配注册返回 false”与“开放泛型注册可满足封闭请求行为类型”两个分支
+  - `GFramework.Cqrs.Benchmarks/Messaging/RequestBenchmarks.cs` 现在同时对照 baseline / `Mediator` / `MediatR` / `GFramework.Cqrs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs` 新增 `CreateMediatorServiceProvider(...)`，统一最小宿主构建方式
+- 本轮权威验证：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+    - 结果：通过，`51/51` passed
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：steady-state request 对照约为 baseline `5.969 ns / 32 B`、`Mediator` `6.242 ns / 32 B`、`MediatR` `53.818 ns / 232 B`、`GFramework.Cqrs` `85.504 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 `GFramework.Cqrs` 从旧值 `301.731 ns / 440 B` 收敛到 `84.066 ns / 32 B`；`Transient` 下从旧值 `287.863 ns / 464 B` 收敛到 `90.652 ns / 56 B`
+- 本轮结论：
+  - `GFramework.Cqrs` 之前“垫底很多”的主要原因不是抽象层级本身，而是 request 热路径残留了两个可避免的分配热点：空 pipeline 解析与禁用日志下的字符串构造
+  - 收口后，`GFramework.Cqrs` 仍慢于 `MediatR` 与 source-generated `Mediator`，但已经去掉了旧 benchmark 中最明显的异常分配和 300ns 级退化
+  - 下一批若继续沿用 `$gframework-batch-boot 50` 压 request steady-state，最值得优先评估的是让默认 request 路径进一步吸收 generated invoker/provider 的收益，而不是继续扩大更多横向对照项
+
 ## 2026-05-07
 
 ### 阶段：PR #339 stream pipeline seam review 收口（CQRS-REWRITE-RP-100）

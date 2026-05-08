@@ -15,7 +15,7 @@
 - `Messaging/Fixture.cs`
   - 运行前输出并校验场景配置
 - `Messaging/RequestBenchmarks.cs`
-  - direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
+  - direct handler、`GFramework.Cqrs` runtime、`ai-libs/Mediator` source-generated concrete path 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestLifetimeBenchmarks.cs`
   - `Singleton / Transient` 两类 handler 生命周期下，direct handler、`GFramework.Cqrs` runtime 与 `MediatR` 的 request steady-state dispatch 对比
 - `Messaging/RequestPipelineBenchmarks.cs`
@@ -42,6 +42,7 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 ## 后续扩展方向
 
 - request / stream 的真实 source-generator 产物与 handwritten generated provider 对照
+- `ai-libs/Mediator` 的 transient / scoped compile-time lifetime 矩阵对照
 - stream handler 生命周期矩阵
 - 带真实显式作用域边界的 scoped host 对照
 - generated invoker provider 与纯反射 dispatch / 建流对比继续扩展到更多场景

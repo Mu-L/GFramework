@@ -706,9 +706,12 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
             }
 
             var result = _provider!.GetService(type);
-            _logger.Debug(result != null
-                ? $"Retrieved instance: {type.Name}"
-                : $"No instance found for type: {type.Name}");
+            if (_logger.IsDebugEnabled())
+            {
+                _logger.Debug(result != null
+                    ? $"Retrieved instance: {type.Name}"
+                    : $"No instance found for type: {type.Name}");
+            }
             return result;
         }
         finally
@@ -792,7 +795,10 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
             }
 
             var services = _provider!.GetServices<T>().ToList();
-            _logger.Debug($"Retrieved {services.Count} instances of {typeof(T).Name}");
+            if (_logger.IsDebugEnabled())
+            {
+                _logger.Debug($"Retrieved {services.Count} instances of {typeof(T).Name}");
+            }
             return services;
         }
         finally
@@ -821,7 +827,10 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
             }
 
             var services = _provider!.GetServices(type).ToList();
-            _logger.Debug($"Retrieved {services.Count} instances of {type.Name}");
+            if (_logger.IsDebugEnabled())
+            {
+                _logger.Debug($"Retrieved {services.Count} instances of {type.Name}");
+            }
             return services.Where(o => o != null).Cast<object>().ToList();
         }
         finally
@@ -1024,6 +1033,26 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     }
 
     /// <summary>
+    ///     检查容器中是否存在可赋值给指定服务类型的注册项，而不要求先解析实例。
+    /// </summary>
+    /// <param name="type">要检查的服务类型。</param>
+    /// <returns>若存在显式注册或开放泛型映射可满足该服务类型，则返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    public bool HasRegistration(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ThrowIfDisposed();
+        EnterReadLockOrThrowDisposed();
+        try
+        {
+            return HasRegistrationCore(type);
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
+    }
+
+    /// <summary>
     /// 判断容器中是否包含某个具体的实例对象
     /// 通过已注册实例集合进行快速查找
     /// </summary>
@@ -1041,6 +1070,50 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         {
             _lock.ExitReadLock();
         }
+    }
+
+    /// <summary>
+    ///     在当前容器状态下检查指定服务类型是否存在可见注册。
+    /// </summary>
+    /// <param name="requestedType">要检查的服务类型。</param>
+    /// <returns>存在可满足该类型的注册时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    /// <remarks>
+    ///     该检查只回答“是否可能解析到服务”，不会为了判断结果而激活实例。
+    ///     预冻结阶段只基于当前服务描述符推断；冻结后则同样只观察描述符，
+    ///     避免把瞬态/多实例解析成本混入热路径中的存在性判断。
+    /// </remarks>
+    private bool HasRegistrationCore(Type requestedType)
+    {
+        foreach (var descriptor in GetServicesUnsafe)
+        {
+            if (CanSatisfyServiceType(descriptor.ServiceType, requestedType))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     判断某个服务描述符声明的服务类型是否能满足当前请求类型。
+    /// </summary>
+    /// <param name="registeredServiceType">注册时声明的服务类型。</param>
+    /// <param name="requestedType">调用方请求的服务类型。</param>
+    /// <returns>若当前注册可用于解析 <paramref name="requestedType" />，则返回 <see langword="true" />。</returns>
+    private static bool CanSatisfyServiceType(Type registeredServiceType, Type requestedType)
+    {
+        if (registeredServiceType == requestedType || requestedType.IsAssignableFrom(registeredServiceType))
+        {
+            return true;
+        }
+
+        if (requestedType.IsConstructedGenericType && registeredServiceType.IsGenericTypeDefinition)
+        {
+            return requestedType.GetGenericTypeDefinition() == registeredServiceType;
+        }
+
+        return false;
     }
 
     /// <summary>
