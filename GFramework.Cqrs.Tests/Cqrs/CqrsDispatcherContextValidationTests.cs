@@ -83,6 +83,12 @@ internal sealed class CqrsDispatcherContextValidationTests
                 container
                     .Setup(currentContainer => currentContainer.Get(typeof(IRequestHandler<ContextAwareRequest, int>)))
                     .Returns((object?)null);
+                container
+                    .Setup(currentContainer => currentContainer.HasRegistration(typeof(IPipelineBehavior<ContextAwareRequest, int>)))
+                    .Returns(false);
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(IPipelineBehavior<ContextAwareRequest, int>)))
+                    .Returns(Array.Empty<object>());
             });
 
         ValueTask<int> dispatch = default;

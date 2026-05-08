@@ -2,6 +2,30 @@
 
 ## 2026-05-08
 
+### 阶段：PR #341 latest-head review 尾声收口（CQRS-REWRITE-RP-110）
+
+- 再次使用 `$gframework-pr-review` 抓取 `PR #341` latest-head review，确认当前 open thread 已收敛到：
+  - `BenchmarkHostFactory.cs` 的 legacy runtime alias 防守式类型检查 thread，但当前 head 已存在 `RegisterLegacyRuntimeAlias(...)` 的显式类型校验与实际类型信息异常，属于 GitHub 未 resolve 的 stale thread
+  - `RequestBenchmarks.cs` / `CqrsDispatcher.cs` 的 Greptile thread，对应“程序集级 registry 扩散”与“faulted ValueTask 失败语义”均已在当前 head 修复，属于 stale thread
+  - 仍然成立且值得当前收口的只剩 `CqrsDispatcherContextValidationTests.cs` 的 strict mock 脆弱性，以及本 trace 中 `本轮下一步` 与 `本轮权威验证` 重复的问题
+- 本轮主线程决策：
+  - 为 `SendAsync_Should_Return_Faulted_ValueTask_When_Handler_Is_Missing()` 补齐 `HasRegistration(...)` 与 `GetAll(...)` 的防御性 mock，降低该测试对 dispatcher 内部检查顺序的隐式耦合
+  - 删除 `RP-109` 记录中重复 `本轮权威验证` 的 `本轮下一步` 段落，保持默认恢复入口只保留仍有价值的恢复信息
+- 本轮权威验证：
+  - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
+    - 结果：通过
+    - 备注：确认当前分支对应 `PR #341`；latest-head 当前仍显示 `CodeRabbit 2` / `Greptile 2` open thread，但其中运行时/benchmark 两条已在本地失效
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+    - 备注：并行验证首轮曾因 `build` 与 `test` 同时写入同一输出 DLL 触发 `MSB3026` 单次复制重试；改为串行重跑同一命令后稳定通过
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`6/6` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+
 ### 阶段：PR #341 latest-head review 收口（CQRS-REWRITE-RP-109）
 
 - 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认当前锚点已从 `PR #340` 更新为 `PR #341`
@@ -28,8 +52,6 @@
     - 备注：仓库脚本默认内部调用未绑定 worktree 的 `git ls-files`，因此本轮按修改文件列表显式 `--paths` 校验
   - `git diff --check`
     - 结果：通过
-- 本轮下一步：
-  - 运行 `GFramework.Cqrs` / `GFramework.Cqrs.Benchmarks` 的 Release build、相关 targeted tests、license header check 与 `git diff --check`
 
 ### 阶段：stream handler 生命周期矩阵 benchmark（CQRS-REWRITE-RP-108）
 

@@ -7,10 +7,11 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-109`
+- 恢复点编号：`CQRS-REWRITE-RP-110`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #341`
 - 当前结论：
+  - 当前 `RP-110` 已再次使用 `$gframework-pr-review` 复核 `PR #341` latest-head review：`BenchmarkHostFactory` 的 legacy runtime alias 防守式类型检查、benchmark 宿主定向 generated registry 激活、以及 `CqrsDispatcher.SendAsync(...)` 的 faulted `ValueTask` 失败语义在当前 head 均已实质收口；本轮仅继续接受仍然成立的 CodeRabbit nitpick，为 `SendAsync_Should_Return_Faulted_ValueTask_When_Handler_Is_Missing()` 补齐 `HasRegistration(...)` / `GetAll(...)` 防御性 mock，并删除 trace 中重复 `本轮权威验证` 的 `本轮下一步` 段落
   - 当前 `RP-109` 已使用 `$gframework-pr-review` 复核 `PR #341` latest-head review：benchmark 宿主改为定向激活当前场景的 generated registry，避免同一 benchmark 程序集里的其他 registry 扩大冻结服务索引与 `HasRegistration` 基线；`BenchmarkHostFactory` 为 legacy runtime alias 注册补齐防守式类型检查与 stream lifetime 运行时注释；`CqrsDispatcher.SendAsync(...)` 在保留 direct-return 热路径的同时恢复 faulted `ValueTask` 失败语义，并补齐 generated registry 定向接线与 request fault 语义回归测试；`.agents/skills/gframework-batch-boot/SKILL.md` 的 MD005 缩进也已顺手修正
   - `GFramework.Cqrs` 已完成对外部 `Mediator` 的生产级替代，当前主线已从“是否可替代”转向“仓库内部收口与能力深化顺序”
   - `dispatch/invoker` 生成前移已扩展到 request / stream 路径，`RP-077` 已补齐 request invoker provider gate 与 stream gate 对称的 descriptor / descriptor entry runtime 合同回归
@@ -66,6 +67,7 @@ CQRS 迁移与收敛。
 - 本轮已验证旧 benchmark 劣化的两个主热点：`0 pipeline` 场景下仍解析空行为列表，以及容器查询热路径在 debug 禁用时仍构造日志字符串；两者收口后，`GFramework.Cqrs` request 路径不再出现额外数百字节分配
 - `HasRegistration(Type)` 现在只把“同一服务键已注册”或“开放泛型服务键可闭合到目标类型”视为命中，不再把“仅以具体实现类型自注册”的行为误判为接口服务已注册；该语义与 `Get(Type)` / `GetAll(Type)` 已重新对齐
 - `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs` 已同步适配 `HasRegistration(Type)` fast-path，避免 strict mock 因缺少新调用配置而在上下文失败语义断言前提前抛出 `Moq.MockException`
+- `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs` 现连“handler 缺失但仍返回 faulted `ValueTask`”这条 request 失败语义回归也显式为 `HasRegistration(Type)` / `GetAll(Type)` 预留了防御性 mock，不再依赖 dispatcher 先判空 handler、后探测 pipeline 的内部顺序
 - `docs/zh-CN/core/ioc.md` 已新增 `HasRegistration(Type)` 的使用语义、热路径用途与“按服务键而非可赋值关系判断”的示例说明
 - 当前 request steady-state 仍落后于 source-generated `Mediator` 与 `MediatR`，但差距已从“额外数百字节分配 + 近 300ns”收敛到“零 pipeline fast-path 仍慢约 `31ns` / `3.6x` 于 `Mediator`”；下一批若继续压 request dispatch，应优先评估默认路径吸收 generated invoker/provider 的空间
 - 本轮 `SendAsync(...)` 的 direct-return `ValueTask` 改动已证明确实是有效热点：同样的短跑配置下，`GFramework.Cqrs` steady-state request 从约 `83.823 ns` 下探到 `69-70 ns` 区间
@@ -126,6 +128,19 @@ CQRS 迁移与收敛。
 
 ## 最近权威验证
 
+- `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+  - 备注：并行验证首轮曾因 `build` 与 `test` 同时写入同一输出 DLL 触发 `MSB3026` 单次复制重试；改为串行重跑同一命令后稳定通过
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+  - 结果：通过，`6/6` passed
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs`
+  - 结果：通过
+- `git diff --check`
+  - 结果：通过
+  - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --format json --json-output /tmp/current-pr-review.json`
+  - 结果：通过
+  - 备注：确认当前分支对应 `PR #341`；latest-head 当前仍显示 `CodeRabbit 2` / `Greptile 2` open thread，但其中 `BenchmarkHostFactory` / benchmark registry / faulted `ValueTask` 三类运行时 thread 已在本地失效，当前仅剩测试 mock 脆弱性与 trace 冗余仍值得继续收口
 - `python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
   - 结果：通过
   - 备注：确认当前分支对应 `PR #340`；latest-head 当前显示 `CodeRabbit 2` / `Greptile 2` open thread，且 `CTRF` 报告中唯一失败测试为 `CreateStream_Should_Throw_When_Stream_Pipeline_Behavior_Context_Does_Not_Implement_IArchitectureContext`
