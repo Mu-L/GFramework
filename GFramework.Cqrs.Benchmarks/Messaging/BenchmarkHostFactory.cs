@@ -76,14 +76,14 @@ internal static class BenchmarkHostFactory
     }
 
     /// <summary>
-    ///     创建承载 `ai-libs/Mediator` source-generated concrete mediator 的最小对照宿主。
+    ///     创建承载 NuGet `Mediator` source-generated concrete mediator 的最小对照宿主。
     /// </summary>
     /// <param name="configure">补充当前场景的显式服务注册。</param>
     /// <returns>可直接解析 generated `Mediator.Mediator` 的 DI 宿主。</returns>
     /// <remarks>
     ///     当前 benchmark 只把 `Mediator` 作为单例 steady-state 对照组接入，
-    ///     因为它的 lifetime 由 source generator 在编译期塑形；若后续需要 `Transient` / `Scoped` 矩阵，
-    ///     应按 `ai-libs/Mediator/benchmarks` 的做法拆成独立 build config，而不是在同一编译产物里混用多个 lifetime。
+     ///     因为它的 lifetime 由 source generator 在编译期塑形；若后续需要 `Transient` / `Scoped` 矩阵，
+    ///     应按 `Mediator` 官方 benchmark 的做法拆成独立 build config，而不是在同一编译产物里混用多个 lifetime。
     /// </remarks>
     internal static ServiceProvider CreateMediatorServiceProvider(Action<IServiceCollection>? configure)
     {

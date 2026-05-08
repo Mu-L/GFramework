@@ -446,6 +446,21 @@ public class MicrosoftDiContainerTests
     }
 
     /// <summary>
+    ///     测试 HasRegistration 不会把仅以具体实现类型自注册的服务误判成其接口服务键也已注册。
+    /// </summary>
+    [Test]
+    public void HasRegistration_Should_ReturnFalse_For_Interface_When_Only_Concrete_Service_Key_Is_Registered()
+    {
+        _container.GetServicesUnsafe.AddSingleton(typeof(SelfRegisteredConcreteBehavior), typeof(SelfRegisteredConcreteBehavior));
+
+        Assert.That(_container.HasRegistration(typeof(IPipelineBehavior<HasRegistrationRequest, int>)), Is.False);
+
+        _container.Freeze();
+
+        Assert.That(_container.HasRegistration(typeof(IPipelineBehavior<HasRegistrationRequest, int>)), Is.False);
+    }
+
+    /// <summary>
     ///     测试当实例存在时检查实例包含关系应返回 true 的功能
     /// </summary>
     [Test]
@@ -951,6 +966,23 @@ public class MicrosoftDiContainerTests
         public ValueTask<TResponse> Handle(
             TRequest request,
             MessageHandlerDelegate<TRequest, TResponse> next,
+            CancellationToken cancellationToken)
+        {
+            return next(request, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    ///     供 HasRegistration 服务键判定回归使用的最小封闭 pipeline 行为。
+    /// </summary>
+    private sealed class SelfRegisteredConcreteBehavior : IPipelineBehavior<HasRegistrationRequest, int>
+    {
+        /// <summary>
+        ///     透传到下一个 pipeline 节点，不额外改变请求语义。
+        /// </summary>
+        public ValueTask<int> Handle(
+            HasRegistrationRequest request,
+            MessageHandlerDelegate<HasRegistrationRequest, int> next,
             CancellationToken cancellationToken)
         {
             return next(request, cancellationToken);

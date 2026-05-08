@@ -1103,7 +1103,9 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     /// <returns>若当前注册可用于解析 <paramref name="requestedType" />，则返回 <see langword="true" />。</returns>
     private static bool CanSatisfyServiceType(Type registeredServiceType, Type requestedType)
     {
-        if (registeredServiceType == requestedType || requestedType.IsAssignableFrom(registeredServiceType))
+        // 这里刻意与 Get/GetAll 的“按服务键解析”语义保持一致：
+        // 只有注册时声明的服务类型本身命中，或开放泛型服务键能闭合到请求类型时，才视为存在可见注册。
+        if (registeredServiceType == requestedType)
         {
             return true;
         }

@@ -21,7 +21,7 @@ using GeneratedMediator = Mediator.Mediator;
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比单个 request 在直接调用、GFramework.CQRS runtime、`ai-libs/Mediator` 与 MediatR 之间的 steady-state dispatch 开销。
+///     对比单个 request 在直接调用、GFramework.CQRS runtime、NuGet `Mediator` 与 MediatR 之间的 steady-state dispatch 开销。
 /// </summary>
 [Config(typeof(Config))]
 public class RequestBenchmarks
@@ -159,6 +159,16 @@ public class RequestBenchmarks
         public ValueTask<BenchmarkResponse> Handle(BenchmarkRequest request, CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(new BenchmarkResponse(request.Id));
+        }
+
+        /// <summary>
+        ///     处理 NuGet `Mediator` request。
+        /// </summary>
+        ValueTask<BenchmarkResponse> Mediator.IRequestHandler<BenchmarkRequest, BenchmarkResponse>.Handle(
+            BenchmarkRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Handle(request, cancellationToken);
         }
 
         /// <summary>

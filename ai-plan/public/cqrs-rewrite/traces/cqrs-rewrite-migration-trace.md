@@ -2,6 +2,42 @@
 
 ## 2026-05-08
 
+### 阶段：PR #340 latest-head review 收口（CQRS-REWRITE-RP-103）
+
+- 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认当前锚点已从 `PR #339` 更新为 `PR #340`
+- 本轮 latest-head review 结论：
+  - `CodeRabbit` 当前显示 `2` 个 nitpick / open thread，`Greptile` 显示 `2` 个 open thread；`MegaLinter` 仍只有 `dotnet-format restore` 环境噪音
+  - `CTRF` 当前显示 `2321` 项测试中 `1` 项失败，失败用例为 `CreateStream_Should_Throw_When_Stream_Pipeline_Behavior_Context_Does_Not_Implement_IArchitectureContext`
+  - 失败原因不是业务断言退化，而是 `CqrsDispatcher` 新增 `HasRegistration(Type)` fast-path 后，严格 mock 的上下文校验测试没有同步配置该调用，导致在命中上下文注入失败断言前先抛出 `Moq.MockException`
+  - `MicrosoftDiContainer.HasRegistration(Type)` 当前实现用 `requestedType.IsAssignableFrom(registeredServiceType)` 判断命中，会把“仅以实现类型自身注册”的服务误判成接口服务键也已注册，这与 `Get(Type)` / `GetAll(Type)` 的服务键语义不一致，属于仍成立的运行时缺陷
+  - `IIocContainer.HasRegistration(Type)` XML 文档缺少异常契约；`docs/zh-CN/core/ioc.md` 也还未解释该新公开入口的用途与语义边界；`BenchmarkHostFactory` / `RequestBenchmarks` 中仍残留旧 `ai-libs/Mediator` 注释或隐式共享 handler 合同，属于仍成立的文档/维护性问题
+- 本轮主线程决策：
+  - 在 `CqrsDispatcherContextValidationTests` 为受影响的 request / stream pipeline mock 显式补 `HasRegistration(Type)` 配置，确保上下文失败语义测试不会被 strict mock 噪音短路
+  - 把 `MicrosoftDiContainer.CanSatisfyServiceType(...)` 收窄为“服务键完全命中”或“开放泛型服务键可闭合到目标类型”，并新增回归覆盖“仅按具体实现类型自注册时，接口服务键应返回 false”
+  - 为 `IIocContainer.HasRegistration(Type)` 补 `<exception>` / `<remarks>`，并在 `docs/zh-CN/core/ioc.md` 新增用户接入说明，明确该入口按服务键而不是按可赋值关系判断可见性
+  - 更新 benchmark 相关注释到 NuGet `Mediator` 语义，并为 `BenchmarkRequestHandler` 增补显式 `Mediator.IRequestHandler<,>` 实现，降低未来升级时的契约漂移诊断成本
+- 本轮权威验证：
+  - `dotnet build GFramework.Core.Abstractions/GFramework.Core.Abstractions.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+    - 结果：通过，`52/52` passed
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`4/4` passed
+  - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 警告，无本轮新增格式问题
+- 下一步：
+  - 关注 `PR #340` 重新索引后的 latest-head open thread 是否随本轮提交自然收敛，尤其是 `HasRegistration(Type)` 相关 runtime / docs 线程
+  - 若后续继续压 request hot path，可从 `CqrsDispatcher` 默认 request 路径与 generated invoker/provider 的进一步吸收空间继续下钻
+
 ### 阶段：性能回归门槛收紧与 benchmark 产物忽略收口（CQRS-REWRITE-RP-102）
 
 - 延续 `RP-101` 后的 benchmark 基线，本轮没有继续改 runtime 热路径，而是先把性能治理规则补齐，避免后续优化波次出现“功能通过但 steady-state request 变慢”的回退

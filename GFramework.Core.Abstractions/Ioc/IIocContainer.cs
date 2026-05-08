@@ -257,10 +257,13 @@ public interface IIocContainer : IContextAware, IDisposable
     /// </summary>
     /// <param name="type">要检查的服务类型。</param>
     /// <returns>若存在显式注册或开放泛型映射可满足该服务类型，则返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    /// <exception cref="ArgumentNullException">当 <paramref name="type" /> 为 <see langword="null" /> 时抛出。</exception>
+    /// <exception cref="ObjectDisposedException">当调用 <see cref="HasRegistration(Type)" /> 时容器已被释放时抛出。</exception>
     /// <remarks>
     ///     该入口面向“先判断是否值得解析实例”的热路径优化场景。
     ///     与 <see cref="Contains{T}" /> 不同，它不会为了判断结果而激活服务实例，因此可避免把瞬态对象创建、
     ///     多服务枚举或日志分配混入仅需存在性判断的调用链中。
+    ///     该方法按服务键与开放泛型映射判断可见性，不会把“仅以实现类型自身注册”的实例误判成其所有可赋值接口都已注册。
     /// </remarks>
     bool HasRegistration(Type type);
 
