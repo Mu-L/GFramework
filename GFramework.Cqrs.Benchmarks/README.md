@@ -29,7 +29,7 @@
 - `Messaging/StreamInvokerBenchmarks.cs`
   - direct handler、`GFramework.Cqrs` reflection runtime、handwritten generated-invoker runtime 与 `MediatR` 的 stream 完整枚举对比
 - `Messaging/NotificationBenchmarks.cs`
-  - `GFramework.Cqrs` runtime 与 `MediatR` 的单处理器 notification publish 对比
+  - `GFramework.Cqrs` runtime、NuGet `Mediator` source-generated concrete path 与 `MediatR` 的单处理器 notification publish 对比
 - `Messaging/StreamingBenchmarks.cs`
   - direct handler、已接上 handwritten generated stream invoker provider 的 `GFramework.Cqrs` runtime 与 `MediatR` 的 stream request 完整枚举对比
 

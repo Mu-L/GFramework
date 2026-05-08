@@ -2,6 +2,37 @@
 
 ## 2026-05-08
 
+### 阶段：notification publish 补齐 `Mediator` concrete runtime 对照（CQRS-REWRITE-RP-111）
+
+- 延续 `$gframework-batch-boot 50`，本轮重新按 skill 规则复核 branch diff 基线与容量：
+  - `origin/main` = `7ca21af9`，提交时间 `2026-05-08 16:12:20 +0800`
+  - 本地 `main` = `c2d22285`，已落后于 remote-tracking ref，因此不作为本轮 baseline
+  - 当前分支 `feat/cqrs-optimization` 与 `origin/main` 的累计 branch diff 为 `0 files / 0 lines`
+  - 当前工作树干净，且上一个自然批次 `RP-110` 已并入 `origin/main`；因此本轮不是“续做未提交热路径”，而是基于 active topic 重新选择下一块低风险 CQRS benchmark 切片
+- 本轮接受的只读探索结论：
+  - `NotificationBenchmarks` 仍停留在 `GFramework.Cqrs` vs `MediatR` 的双方对照，缺少 request steady-state 已具备的 `Mediator` concrete runtime 高性能参照物
+  - 对 notification 路径直接补 generated invoker/provider 的性价比不高：dispatcher 当前对 notification 反射委托已按消息类型弱缓存，steady-state publish 的主要差距不在“每次都反射”
+  - 因此本轮更高信号、边界更清晰的切片是先补 benchmark 对照口径，而不是为了对称性新增一层 runtime seam
+- 本轮主线程决策：
+  - 在 `GFramework.Cqrs.Benchmarks/Messaging/NotificationBenchmarks.cs` 新增 `Mediator` concrete runtime 宿主、`PublishNotification_Mediator()` benchmark 方法，以及对应的 `Mediator.INotification` / `Mediator.INotificationHandler<T>` 合同实现
+  - 保持现有 `GFramework.Cqrs` 与 `MediatR` notification publish 路径不变，只扩充对照组，确保这批仍然是单模块、低风险、可直接评审的 benchmark 收口
+  - 更新 `GFramework.Cqrs.Benchmarks/README.md` 与 active tracking，使 notification 场景的公开说明和恢复入口都反映新的三方对照事实
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：notification publish 三方对照当前约为 `Mediator` `1.108 ns / 0 B`、`MediatR` `97.173 ns / 416 B`、`GFramework.Cqrs` `291.582 ns / 392 B`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/NotificationBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- 本轮结论：
+  - notification 场景现在也拥有了与 request steady-state 对称的 `Mediator` concrete runtime 参照物，后续再讨论 `notification publisher` 策略或 runtime 热点时，不再只能拿 `MediatR` 做外部对照
+  - 当前最值得保留的结论不是“立刻给 notification 也上 generated invoker/provider”，而是 `GFramework.Cqrs` 单处理器 publish 相对 `Mediator` 与 `MediatR` 的量级差距已经被量化出来，可为后续是否继续压 notification 路径提供依据
+  - 本轮到这里属于新的自然批次边界；下一轮若继续沿用 `$gframework-batch-boot 50`，更适合从多处理器 publish / publisher strategy 或更高价值的 request 常量开销热点里再选一块，而不是在同一 turn 里继续堆 notification 基准扩展
+
 ### 阶段：PR #341 latest-head review 尾声收口（CQRS-REWRITE-RP-110）
 
 - 再次使用 `$gframework-pr-review` 抓取 `PR #341` latest-head review，确认当前 open thread 已收敛到：
