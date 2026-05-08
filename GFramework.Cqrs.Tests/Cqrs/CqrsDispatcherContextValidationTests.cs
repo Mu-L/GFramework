@@ -31,6 +31,9 @@ internal sealed class CqrsDispatcherContextValidationTests
                     .Setup(currentContainer => currentContainer.Get(typeof(IRequestHandler<ContextAwareRequest, int>)))
                     .Returns(new ContextAwareRequestHandler());
                 container
+                    .Setup(currentContainer => currentContainer.HasRegistration(typeof(IPipelineBehavior<ContextAwareRequest, int>)))
+                    .Returns(false);
+                container
                     .Setup(currentContainer => currentContainer.GetAll(typeof(IPipelineBehavior<ContextAwareRequest, int>)))
                     .Returns(Array.Empty<object>());
             });
@@ -74,6 +77,9 @@ internal sealed class CqrsDispatcherContextValidationTests
                     .Setup(currentContainer => currentContainer.Get(typeof(IStreamRequestHandler<ContextAwareStreamRequest, int>)))
                     .Returns(new ContextAwareStreamHandler());
                 container
+                    .Setup(currentContainer => currentContainer.HasRegistration(typeof(IStreamPipelineBehavior<ContextAwareStreamRequest, int>)))
+                    .Returns(false);
+                container
                     .Setup(currentContainer => currentContainer.GetAll(typeof(IStreamPipelineBehavior<ContextAwareStreamRequest, int>)))
                     .Returns(Array.Empty<object>());
             });
@@ -97,6 +103,9 @@ internal sealed class CqrsDispatcherContextValidationTests
                 container
                     .Setup(currentContainer => currentContainer.Get(typeof(IStreamRequestHandler<ContextAwareStreamRequest, int>)))
                     .Returns(new PassthroughStreamHandler());
+                container
+                    .Setup(currentContainer => currentContainer.HasRegistration(typeof(IStreamPipelineBehavior<ContextAwareStreamRequest, int>)))
+                    .Returns(true);
                 container
                     .Setup(currentContainer => currentContainer.GetAll(typeof(IStreamPipelineBehavior<ContextAwareStreamRequest, int>)))
                     .Returns([new ContextAwareStreamBehavior()]);

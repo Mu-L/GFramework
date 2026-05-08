@@ -76,6 +76,24 @@ internal static class BenchmarkHostFactory
     }
 
     /// <summary>
+    ///     创建承载 NuGet `Mediator` source-generated concrete mediator 的最小对照宿主。
+    /// </summary>
+    /// <param name="configure">补充当前场景的显式服务注册。</param>
+    /// <returns>可直接解析 generated `Mediator.Mediator` 的 DI 宿主。</returns>
+    /// <remarks>
+    ///     当前 benchmark 只把 `Mediator` 作为单例 steady-state 对照组接入，
+     ///     因为它的 lifetime 由 source generator 在编译期塑形；若后续需要 `Transient` / `Scoped` 矩阵，
+    ///     应按 `Mediator` 官方 benchmark 的做法拆成独立 build config，而不是在同一编译产物里混用多个 lifetime。
+    /// </remarks>
+    internal static ServiceProvider CreateMediatorServiceProvider(Action<IServiceCollection>? configure)
+    {
+        var services = new ServiceCollection();
+        configure?.Invoke(services);
+        services.AddMediator();
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
     ///     判断某个类型是否正好实现了指定的闭合或开放 MediatR 合同。
     /// </summary>
     /// <param name="candidateType">待判断类型。</param>

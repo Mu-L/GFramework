@@ -26,3 +26,4 @@ ai-libs/
 .codex
 # tool
 .venv/
+BenchmarkDotNet.Artifacts/

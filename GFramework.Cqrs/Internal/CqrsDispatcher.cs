@@ -120,13 +120,17 @@ internal sealed class CqrsDispatcher(
                           $"No CQRS request handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
+        if (!container.HasRegistration(dispatchBinding.BehaviorType))
+        {
+            return await dispatchBinding.RequestInvoker(handler, request, cancellationToken).ConfigureAwait(false);
+        }
+
         var behaviors = container.GetAll(dispatchBinding.BehaviorType);
 
         foreach (var behavior in behaviors)
+        {
             PrepareHandler(behavior, context);
-
-        if (behaviors.Count == 0)
-            return await dispatchBinding.RequestInvoker(handler, request, cancellationToken).ConfigureAwait(false);
+        }
 
         return await dispatchBinding.GetPipelineExecutor(behaviors.Count)
             .Invoke(handler, behaviors, request, cancellationToken)
@@ -159,13 +163,17 @@ internal sealed class CqrsDispatcher(
                           $"No CQRS stream handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
+        if (!container.HasRegistration(dispatchBinding.BehaviorType))
+        {
+            return (IAsyncEnumerable<TResponse>)dispatchBinding.StreamInvoker(handler, request, cancellationToken);
+        }
+
         var behaviors = container.GetAll(dispatchBinding.BehaviorType);
 
         foreach (var behavior in behaviors)
+        {
             PrepareHandler(behavior, context);
-
-        if (behaviors.Count == 0)
-            return (IAsyncEnumerable<TResponse>)dispatchBinding.StreamInvoker(handler, request, cancellationToken);
+        }
 
         return (IAsyncEnumerable<TResponse>)dispatchBinding.GetPipelineExecutor(behaviors.Count)
             .Invoke(handler, behaviors, dispatchBinding.StreamInvoker, request, cancellationToken);

@@ -287,6 +287,7 @@ Architecture (架构层)
 │   ├── GetRequired<T>()      // 获取必需实例
 │   ├── GetAllSorted<T>()     // 排序获取
 │   ├── Contains<T>()         // 检查存在性
+│   ├── HasRegistration()     // 检查服务键是否已注册
 │   ├── ContainsInstance()    // 检查实例
 │   ├── Clear()               // 清空容器
 │   └── Freeze()              // 冻结容器
@@ -587,6 +588,43 @@ if (!container.Contains<ISettingsService>())
 - 条件注册服务
 - 检查依赖是否可用
 - 动态功能开关
+
+### `HasRegistration(Type type)`
+
+检查某个服务键或开放泛型映射是否已经注册，但不会为了判断结果先解析实例。
+
+```csharp
+public bool HasRegistration(Type type)
+```
+
+**参数：**
+
+- `type`：要检查的服务类型
+
+**返回值：**
+
+- 若存在显式服务键注册，或开放泛型注册可以闭合到该服务类型，则返回 `true`
+- 若只注册了实现类型自身、但没有把对应接口作为服务键注册，则返回 `false`
+
+**特点：**
+
+- 适合 request / pipeline 等热路径上的“先判断再解析”场景
+- 不会激活瞬态实例，也不会触发多服务枚举
+- 语义与 `Get(Type)` / `GetAll(Type)` 保持一致，按服务键而不是按“可赋值关系”判断可见性
+
+**使用示例：**
+
+```csharp
+var behaviorServiceType = typeof(IPipelineBehavior<CreatePlayerRequest, PlayerCreated>);
+
+if (container.HasRegistration(behaviorServiceType))
+{
+    foreach (var behavior in container.GetAll(behaviorServiceType))
+    {
+        Console.WriteLine(behavior.GetType().Name);
+    }
+}
+```
 
 ### `ContainsInstance(object instance)`
 
