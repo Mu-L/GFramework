@@ -2,6 +2,46 @@
 
 ## 2026-05-08
 
+### 阶段：request 热路径继续收口（CQRS-REWRITE-RP-104）
+
+- 延续 `$gframework-batch-boot 50`，本轮先重新按 `origin/main` 复核 branch diff 基线：
+  - `origin/main` = `4d6dbba6`，提交时间 `2026-05-08 11:13:33 +0800`
+  - 当前分支 `feat/cqrs-optimization` 相对 `origin/main` 的累计 branch diff 仍为 `0 files / 0 lines`
+  - 当前工作树在真正落代码前只有活跃文档更新，仍明显低于 `$gframework-batch-boot 50` 的文件阈值，因此继续自动推进下一批 request 热路径收口
+- 本轮接受的只读探索结论：
+  - `RequestBenchmarks` / `RequestInvokerBenchmarks` 的下一个低风险热点仍在“每次发送都必经的容器查询与短生命周期对象创建”，不是重新回到更高风险的语义层重构
+  - 候选优先级排序为：`SendAsync` 自身状态机开销、`HasRegistration + GetAll` / 服务键扫描，以及 pipeline continuation 的临时对象
+- 本轮主线程决策：
+  - 先以最小行为改动切第一刀：把 `CqrsDispatcher.SendAsync(...)` 从 `async/await` 改为 direct-return `ValueTask`，让零 pipeline request 常见路径不再为 dispatcher 自身生成额外状态机
+  - 在第一刀验证通过且 benchmark 明显改善后，再切第二刀：让 `MicrosoftDiContainer.HasRegistration(Type)` 在冻结后复用预构建的服务键索引，而不是每次线性扫描全部 `ServiceDescriptor`
+  - 第二刀完成后停止继续叠第三刀，因为当前批次已经能清晰区分“有效收益”和“无回退但收益不明显”的因果，不再为了追逐更小常量开销降低评审清晰度
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --filter "FullyQualifiedName~MicrosoftDiContainerTests"`
+    - 结果：通过，`52/52` passed
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherCacheTests|FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`14/14` passed
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：最新 steady-state request 对照约为 baseline `6.141 ns / 32 B`、`Mediator` `6.674 ns / 32 B`、`MediatR` `61.803 ns / 232 B`、`GFramework.Cqrs` `70.298 ns / 32 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：最新 lifetime request 对照约为 `Singleton` 下 baseline / `MediatR` / `GFramework.Cqrs` = `4.706 ns / 52.197 ns / 73.005 ns`，`Transient` 下 = `4.571 ns / 50.175 ns / 74.757 ns`
+  - `env GIT_DIR=... GIT_WORK_TREE=... python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仍仅有 `GFramework.sln` 的历史 CRLF 警告，无本轮新增格式问题
+- 本轮结论：
+  - 第一刀有效：`CqrsDispatcher.SendAsync(...)` 的 direct-return `ValueTask` 把 `GFramework.Cqrs` steady-state request 从 `RP-103` 记录的约 `83.823 ns` 压到约 `70.298 ns`
+  - 第二刀保守有效：冻结后 `HasRegistration(Type)` 索引化没有带来同量级的可见收益，但也没有造成功能回退、额外分配或测试破坏
+  - 下一批若继续压 request hot path，应优先评估默认 request 路径吸收 generated invoker/provider，而不是继续围绕同层级容器存在性判断做微调
+
 ### 阶段：PR #340 latest-head review 收口（CQRS-REWRITE-RP-103）
 
 - 使用 `$gframework-pr-review` 抓取 `feat/cqrs-optimization` 当前公开 PR，并确认当前锚点已从 `PR #339` 更新为 `PR #340`

@@ -105,7 +105,7 @@ internal sealed class CqrsDispatcher(
     /// <param name="request">请求对象。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>请求响应。</returns>
-    public async ValueTask<TResponse> SendAsync<TResponse>(
+    public ValueTask<TResponse> SendAsync<TResponse>(
         ICqrsContext context,
         IRequest<TResponse> request,
         CancellationToken cancellationToken = default)
@@ -122,7 +122,7 @@ internal sealed class CqrsDispatcher(
         PrepareHandler(handler, context);
         if (!container.HasRegistration(dispatchBinding.BehaviorType))
         {
-            return await dispatchBinding.RequestInvoker(handler, request, cancellationToken).ConfigureAwait(false);
+            return dispatchBinding.RequestInvoker(handler, request, cancellationToken);
         }
 
         var behaviors = container.GetAll(dispatchBinding.BehaviorType);
@@ -132,9 +132,8 @@ internal sealed class CqrsDispatcher(
             PrepareHandler(behavior, context);
         }
 
-        return await dispatchBinding.GetPipelineExecutor(behaviors.Count)
-            .Invoke(handler, behaviors, request, cancellationToken)
-            .ConfigureAwait(false);
+        return dispatchBinding.GetPipelineExecutor(behaviors.Count)
+            .Invoke(handler, behaviors, request, cancellationToken);
     }
 
     /// <summary>

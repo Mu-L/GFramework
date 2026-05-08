@@ -186,6 +186,12 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
     private IServiceProvider? _provider;
 
     /// <summary>
+    ///     冻结后可复用的服务类型可见性索引。
+    ///     容器冻结后注册集合不再变化，因此 <see cref="HasRegistration(Type)" /> 可以安全复用该索引。
+    /// </summary>
+    private FrozenServiceTypeIndex? _frozenServiceTypeIndex;
+
+    /// <summary>
     /// 容器冻结状态标志，true表示容器已冻结不可修改
     /// </summary>
     private volatile bool _frozen;
@@ -1044,6 +1050,11 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
         EnterReadLockOrThrowDisposed();
         try
         {
+            if (_frozenServiceTypeIndex is not null)
+            {
+                return _frozenServiceTypeIndex.Contains(type);
+            }
+
             return HasRegistrationCore(type);
         }
         finally
@@ -1139,6 +1150,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
             GetServicesUnsafe.Clear();
             _registeredInstances.Clear();
             _provider = null;
+            _frozenServiceTypeIndex = null;
             _frozen = false;
             _logger.Info("Container cleared");
         }
@@ -1166,12 +1178,66 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
             }
 
             _provider = GetServicesUnsafe.BuildServiceProvider();
+            _frozenServiceTypeIndex = FrozenServiceTypeIndex.Create(GetServicesUnsafe);
             _frozen = true;
             _logger.Info("IOC Container frozen - ServiceProvider built");
         }
         finally
         {
             _lock.ExitWriteLock();
+        }
+    }
+
+    /// <summary>
+    ///     保存冻结后按服务键可见的精确服务类型与开放泛型定义集合。
+    /// </summary>
+    /// <remarks>
+    ///     该索引只回答“按当前服务键语义是否可见”，因此与 <see cref="Get(Type)" /> /
+    ///     <see cref="GetAll(Type)" /> 一样不会退化为更宽松的可赋值匹配。
+    /// </remarks>
+    private sealed class FrozenServiceTypeIndex(HashSet<Type> exactServiceTypes, HashSet<Type> openGenericServiceTypes)
+    {
+        private readonly HashSet<Type> _exactServiceTypes = exactServiceTypes;
+        private readonly HashSet<Type> _openGenericServiceTypes = openGenericServiceTypes;
+
+        /// <summary>
+        ///     基于冻结时最终确定的服务描述符集合创建索引。
+        /// </summary>
+        /// <param name="descriptors">冻结时的服务描述符序列。</param>
+        /// <returns>供存在性判断热路径复用的服务键索引。</returns>
+        public static FrozenServiceTypeIndex Create(IEnumerable<ServiceDescriptor> descriptors)
+        {
+            ArgumentNullException.ThrowIfNull(descriptors);
+
+            var exactServiceTypes = new HashSet<Type>();
+            var openGenericServiceTypes = new HashSet<Type>();
+
+            foreach (var descriptor in descriptors)
+            {
+                var serviceType = descriptor.ServiceType;
+                exactServiceTypes.Add(serviceType);
+
+                if (serviceType.IsGenericTypeDefinition)
+                {
+                    openGenericServiceTypes.Add(serviceType);
+                }
+            }
+
+            return new FrozenServiceTypeIndex(exactServiceTypes, openGenericServiceTypes);
+        }
+
+        /// <summary>
+        ///     判断当前索引是否声明了目标服务键。
+        /// </summary>
+        /// <param name="requestedType">要检查的服务类型。</param>
+        /// <returns>命中精确服务键或可闭合的开放泛型服务键时返回 <see langword="true" />。</returns>
+        public bool Contains(Type requestedType)
+        {
+            ArgumentNullException.ThrowIfNull(requestedType);
+
+            return _exactServiceTypes.Contains(requestedType) ||
+                   requestedType.IsConstructedGenericType &&
+                   _openGenericServiceTypes.Contains(requestedType.GetGenericTypeDefinition());
         }
     }
 
@@ -1250,6 +1316,7 @@ public class MicrosoftDiContainer(IServiceCollection? serviceCollection = null) 
             _disposed = true;
             (_provider as IDisposable)?.Dispose();
             _provider = null;
+            _frozenServiceTypeIndex = null;
             GetServicesUnsafe.Clear();
             _registeredInstances.Clear();
             _frozen = false;
