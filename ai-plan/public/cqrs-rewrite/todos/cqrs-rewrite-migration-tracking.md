@@ -7,11 +7,18 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-123`
+- 恢复点编号：`CQRS-REWRITE-RP-124`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #344`
 - 当前结论：
-  - 当前 `RP-123` 通过 `$gframework-pr-review` 重新复核 `feat/cqrs-optimization` 的 latest-head review，确认 `PR #344` 仍成立且值得在本轮一起收口的问题共有四类：`CqrsDispatcher.ResolveNotificationPublisher()` 默认路径每次 publish 都重复查容器并在零注册分支分配新的 `SequentialNotificationPublisher`；`CqrsDispatcherContextValidationTests` 与 `CqrsNotificationPublisherTests` 的 strict `IIocContainer` helper 缺少 `GetAll(typeof(INotificationPublisher))` 默认装配，导致 CI 在真正断言前就被 mock 异常短路；`NotificationPublisherRegistrationExtensionsTests` 缺少“唯一注册”断言；`CqrsDispatcherCacheTests` 的隔离容器构建复制了 `SetUp()` 的注册形状，存在后续漂移风险
+- 当前 `RP-124` 延续 `$gframework-batch-boot 50`，在 `RP-123` 收口 latest-head review 对 notification publisher 的四类问题后，回到 stream steady-state 热路径，选择与 `RP-122` request cache 对称、且仍保持小写面的一刀：把 `CreateStream(...)` 上的 behavior presence 判定收口为 dispatcher 实例级缓存
+- 本轮改动面只落在 `GFramework.Cqrs/Internal/CqrsDispatcher.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`、新增的 `DispatcherZeroPipelineStreamRequest/Handler` 测试桩，以及 `ai-plan/public/cqrs-rewrite` 恢复文档，不扩到新的公开 API、文档页或额外 benchmark 宿主代码
+- `CqrsDispatcher` 现新增 `_streamBehaviorPresenceCache`，按闭合 `IStreamPipelineBehavior<,>` 服务类型缓存当前 dispatcher 容器中的服务可见性；这样 `CreateStream(...)` 在 steady-state 下不会每次都重复执行 `HasRegistration(Type)`，并继续保持“同一 runtime 实例内缓存、不同容器不共享”的边界
+- `CqrsDispatcherCacheTests` 现新增 `Dispatcher_Should_Cache_Stream_Behavior_Presence_Per_Dispatcher_Instance()`，锁住两件事：同一容器解析出的多个 `ArchitectureContext` 会共享同一个 dispatcher 实例及其 stream presence cache；另一独立冻结容器创建的 dispatcher 不会提前共享该实例级状态。为避免夹具里已有 stream behavior 注册干扰零管道建流路径，本轮补入 `DispatcherZeroPipelineStreamRequest` 与 `DispatcherZeroPipelineStreamHandler` 作为最小测试桩
+- 本轮 benchmark 仅复跑最小 stream 生命周期矩阵中的 `StreamLifetimeBenchmarks.Stream_GFrameworkCqrs`，确认 benchmark 宿主在这刀之后仍能稳定产出：`Singleton` 约 `107.241 ns / 240 B`，`Transient` 约 `119.434 ns / 264 B`
+- 当前已提交分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的累计 branch diff 仍为 `0 files / 0 changed lines`；本批待提交工作树共触达 `4 files`，其中已跟踪 diff 为 `135 insertions / 1 deletion`，另有 `2` 个新测试文件共 `43` 行，明显低于 `$gframework-batch-boot 50` 的文件阈值
+- 下一推荐步骤：提交并推送本轮 commit 后，再次运行 `$gframework-pr-review` 复核 `PR #344` latest-head thread 是否已收敛；若 review 已清空，则下一批优先比较完整 `StreamLifetimeBenchmarks` 三方对照是否仍优于 `MediatR`，再决定继续压 stream 零管道常量路径还是切回 request `Transient` 热点
+- 当前 `RP-123` 通过 `$gframework-pr-review` 重新复核 `feat/cqrs-optimization` 的 latest-head review，确认 `PR #344` 仍成立且值得在本轮一起收口的问题共有四类：`CqrsDispatcher.ResolveNotificationPublisher()` 默认路径每次 publish 都重复查容器并在零注册分支分配新的 `SequentialNotificationPublisher`；`CqrsDispatcherContextValidationTests` 与 `CqrsNotificationPublisherTests` 的 strict `IIocContainer` helper 缺少 `GetAll(typeof(INotificationPublisher))` 默认装配，导致 CI 在真正断言前就被 mock 异常短路；`NotificationPublisherRegistrationExtensionsTests` 缺少“唯一注册”断言；`CqrsDispatcherCacheTests` 的隔离容器构建复制了 `SetUp()` 的注册形状，存在后续漂移风险
   - 本轮保持改动面只落在 `GFramework.Cqrs`、`GFramework.Cqrs.Tests` 与 `ai-plan/public/cqrs-rewrite`，不扩散到新的 benchmark 宿主或额外 notification API；其中 `CqrsDispatcher` 新增 dispatcher 实例级 `_resolvedNotificationPublisher` 缓存，并在首次解析后通过线程安全比较交换固定最终策略实例，继续保持“显式实例优先、容器内唯一注册次之、默认顺序发布器兜底”的既有契约
   - 两个 strict mock runtime helper 现统一预设 `IIocContainer.GetAll(typeof(INotificationPublisher)) => Array.Empty<object>()`，把“未注册自定义 publisher 时回退到默认顺序发布器”这条默认路径显式纳入测试装配，避免后续相同语义再次被环境性 mock 配置遗漏掩盖
   - `NotificationPublisherRegistrationExtensionsTests` 现在对泛型组合根重载补上 `container.GetAll(typeof(INotificationPublisher))` 的唯一注册断言，防止实现未来意外追加重复 descriptor 却仍因 `GetRequired<INotificationPublisher>()` 返回单个实例而误通过
@@ -97,9 +104,9 @@ CQRS 迁移与收敛。
 ## 当前活跃事实
 
 - 当前分支为 `feat/cqrs-optimization`
-- 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`d389eb36`, 2026-05-08 20:08:33 +0800) 为基线；本地 `main` 仍落后，不作为 branch diff 基线
-- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `10 files / 377 changed lines`
-- 本批待提交工作树集中在 `GFramework.Cqrs/Internal/CqrsDispatcher.cs` 与 `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`
+- 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`d85828c5`, `2026-05-09 12:25:41 +0800`) 为基线；本地 `main` (`c2d22285`, `2026-05-06 21:34:59 +0800`) 已落后，不作为 branch diff 基线
+- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `0 files / 0 changed lines`
+- 本批待提交工作树触达 `4 files`：`GFramework.Cqrs/Internal/CqrsDispatcher.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`、`DispatcherZeroPipelineStreamRequest.cs` 与 `DispatcherZeroPipelineStreamHandler.cs`
 - 当前批次后的默认停止依据已改为 AI 上下文预算：若下一轮预计会让活动对话、已加载 recovery 文档、验证输出与当前 diff 接近约 `80%` 安全上下文占用，应在当前自然批次边界停止，即使 branch diff 仍有余量
 - `GFramework.Cqrs.Benchmarks` 作为 benchmark 基础设施项目，必须持续排除在 NuGet / GitHub Packages 发布集合之外
 - `GFramework.Cqrs.Benchmarks` 现已覆盖 request steady-state、pipeline 数量矩阵、startup、request/stream generated invoker，以及 request handler `Singleton / Transient` 生命周期矩阵
@@ -156,6 +163,7 @@ CQRS 迁移与收敛。
 ## 当前风险
 
 - 当前 `_requestBehaviorPresenceCache` 依赖“同一 dispatcher 生命周期内，request pipeline 行为注册在容器冻结后保持稳定”这一约束；若未来引入运行时动态增删 request behavior 的模型，需要重新评估这类实例级 presence cache 的失效策略
+- 当前 `_streamBehaviorPresenceCache` 也依赖“同一 dispatcher 生命周期内，stream pipeline 行为注册在容器冻结后保持稳定”这一约束；若后续引入运行期动态增删 stream behavior 或按 scope 改写可见性的模型，需要同步设计失效策略，而不能继续假设实例级缓存永久有效
 - 标准架构启动路径现在已经有“自定义 notification publisher 不被默认顺序策略短路”的集成回归；但若后续再引入第三种仓库内置策略或新的启动快捷入口，仍需要同步补这条生产路径验证，不能只看 `CqrsTestRuntime` 测试宿主
 - 顶层 `GFramework.sln` / `GFramework.csproj` 在 WSL 下仍可能受 Windows NuGet fallback 配置影响，完整 solution 级验证成本高于模块级验证
 - 若后续新增 benchmark / example / tooling 项目但未同步校验发布面，solution 级 `dotnet pack` 仍可能在 tag 发布前才暴露异常包
@@ -175,6 +183,23 @@ CQRS 迁移与收敛。
 - `PR #344` 当前 latest-head review 仍需等待新 commit 推送后的 GitHub 重新索引；在远端 thread 状态刷新前，不应仅凭现有 open-thread 计数判断本轮修复未生效
 
 ## 最近权威验证
+
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs GFramework.Cqrs.Tests/Cqrs/DispatcherZeroPipelineStreamRequest.cs GFramework.Cqrs.Tests/Cqrs/DispatcherZeroPipelineStreamHandler.cs`
+  - 结果：通过
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherCacheTests"`
+  - 结果：通过，`12/12` passed
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks.Stream_GFrameworkCqrs*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：`Singleton` 约 `107.241 ns / 240 B`，`Transient` 约 `119.434 ns / 264 B`
+- `git diff --check`
+  - 结果：通过
+  - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
 
 - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
   - 结果：通过

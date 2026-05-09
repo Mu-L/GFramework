@@ -2,6 +2,33 @@
 
 ## 2026-05-09
 
+### 阶段：stream behavior presence cache（CQRS-REWRITE-RP-124）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-123` 收口 notification publisher review 线程后，继续把 `CqrsDispatcher` 的 stream 热路径与 `RP-122` 的 request hot path 对齐，选择“缓存 `CreateStream(...)` 的 behavior presence 判定”这一条最小且可验证的 runtime 切片
+- 本轮主线程决策：
+  - 仅修改 `GFramework.Cqrs/Internal/CqrsDispatcher.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`，并新增 `DispatcherZeroPipelineStreamRequest/Handler` 测试桩，不扩散到新的公开 API、中文文档或额外 benchmark 宿主实现
+  - 为 `CqrsDispatcher` 新增实例级 `_streamBehaviorPresenceCache`，按闭合 `IStreamPipelineBehavior<,>` 服务类型缓存当前 dispatcher 容器中的服务可见性，让 `CreateStream(...)` 在 steady-state 下不再重复调用 `HasRegistration(Type)`
+  - 在 `CqrsDispatcherCacheTests` 新增 `Dispatcher_Should_Cache_Stream_Behavior_Presence_Per_Dispatcher_Instance()`，显式锁住“同容器共享同一 dispatcher/cache、独立容器不共享”的实例级边界，并把缓存值与容器实际 `HasRegistration(...)` 语义对齐，避免测试再依赖夹具对某个具体 stream 类型的错误可见性假设
+- 本轮验证：
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs GFramework.Cqrs.Tests/Cqrs/DispatcherZeroPipelineStreamRequest.cs GFramework.Cqrs.Tests/Cqrs/DispatcherZeroPipelineStreamHandler.cs`
+    - 结果：通过
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherCacheTests"`
+    - 结果：通过，`12/12` passed
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks.Stream_GFrameworkCqrs*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 约 `107.241 ns / 240 B`，`Transient` 约 `119.434 ns / 264 B`
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- 下一恢复点：
+  - 推送本轮 commit 后，再次运行 `$gframework-pr-review` 复核 `PR #344` latest-head thread 是否已收敛；若 review 已清空，则下一批优先补完整 `StreamLifetimeBenchmarks` 三方对照，再决定继续压 stream 零管道常量路径还是切回 request `Transient` 热点
+
 ### 阶段：PR #344 latest-head review 收尾（CQRS-REWRITE-RP-123）
 
 - 使用 `$gframework-pr-review` 重新抓取当前分支 PR，确认当前 worktree 对应 `PR #344`，latest-head 仍有 `CodeRabbit 2` / `Greptile 1` open thread

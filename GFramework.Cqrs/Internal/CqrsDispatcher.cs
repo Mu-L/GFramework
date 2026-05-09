@@ -26,6 +26,10 @@ internal sealed class CqrsDispatcher(
     // 每次 SendAsync 都重复询问容器。缓存值只反映当前 dispatcher 持有容器的注册可见性，不跨 runtime 共享。
     private readonly ConcurrentDictionary<Type, bool> _requestBehaviorPresenceCache = new();
 
+    // 与 request 路径相同，stream 的 behavior 注册可见性在当前 dispatcher 生命周期内保持稳定。
+    // 这里缓存 “CreateStream(...) 对应 behaviorType 是否存在注册”，避免零管道 stream 每次建流都重复询问容器。
+    private readonly ConcurrentDictionary<Type, bool> _streamBehaviorPresenceCache = new();
+
     // 卸载安全的进程级缓存：当 generated registry 提供 request invoker 元数据时，
     // registrar 会按请求/响应类型对把它们写入这里；若类型被卸载，条目会自然失效。
     private static readonly WeakTypePairCache<GeneratedRequestInvokerMetadata>
@@ -195,7 +199,7 @@ internal sealed class CqrsDispatcher(
                           $"No CQRS stream handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
-        if (!container.HasRegistration(dispatchBinding.BehaviorType))
+        if (!HasStreamBehaviorRegistration(dispatchBinding.BehaviorType))
         {
             return (IAsyncEnumerable<TResponse>)dispatchBinding.StreamInvoker(handler, request, cancellationToken);
         }
@@ -209,6 +213,21 @@ internal sealed class CqrsDispatcher(
 
         return (IAsyncEnumerable<TResponse>)dispatchBinding.GetPipelineExecutor(behaviors.Count)
             .Invoke(handler, behaviors, dispatchBinding.StreamInvoker, request, cancellationToken);
+    }
+
+    /// <summary>
+    ///     读取当前 dispatcher 容器里是否存在指定 stream pipeline 行为注册，并在首次命中后缓存结果。
+    /// </summary>
+    /// <param name="behaviorType">目标 stream pipeline 行为服务类型。</param>
+    /// <returns>存在注册时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    private bool HasStreamBehaviorRegistration(Type behaviorType)
+    {
+        ArgumentNullException.ThrowIfNull(behaviorType);
+
+        return _streamBehaviorPresenceCache.GetOrAdd(
+            behaviorType,
+            static (cachedBehaviorType, currentContainer) => currentContainer.HasRegistration(cachedBehaviorType),
+            container);
     }
 
     /// <summary>

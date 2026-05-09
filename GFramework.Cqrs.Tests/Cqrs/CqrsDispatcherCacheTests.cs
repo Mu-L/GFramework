@@ -196,6 +196,55 @@ internal sealed class CqrsDispatcherCacheTests
     }
 
     /// <summary>
+    ///     验证 stream 的“是否存在 pipeline behavior”判定会按 dispatcher 实例缓存，
+    ///     并与当前容器的实际服务可见性保持一致，同时不同 dispatcher 不共享该实例级状态。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Cache_Stream_Behavior_Presence_Per_Dispatcher_Instance()
+    {
+        var firstContext = new ArchitectureContext(_container!);
+        var secondContext = new ArchitectureContext(_container!);
+        var firstDispatcher = GetDispatcherFromContext(firstContext);
+        var secondDispatcher = GetDispatcherFromContext(secondContext);
+        using var isolatedContainer = CreateFrozenContainer();
+        var isolatedContext = new ArchitectureContext(isolatedContainer);
+        var isolatedDispatcher = GetDispatcherFromContext(isolatedContext);
+        var zeroPipelineBehaviorType = typeof(IStreamPipelineBehavior<DispatcherZeroPipelineStreamRequest, int>);
+        var twoPipelineBehaviorType = typeof(IStreamPipelineBehavior<DispatcherStreamPipelineOrderRequest, int>);
+        var expectedZeroPipelinePresence = _container!.HasRegistration(zeroPipelineBehaviorType);
+        var expectedTwoPipelinePresence = _container.HasRegistration(twoPipelineBehaviorType);
+
+        AssertStreamBehaviorPresenceIsUnset(firstDispatcher, zeroPipelineBehaviorType);
+        AssertStreamBehaviorPresenceIsUnset(secondDispatcher, zeroPipelineBehaviorType);
+        AssertStreamBehaviorPresenceIsUnset(isolatedDispatcher, zeroPipelineBehaviorType);
+        AssertStreamBehaviorPresenceIsUnset(firstDispatcher, twoPipelineBehaviorType);
+
+        await DrainAsync(firstContext.CreateStream(new DispatcherZeroPipelineStreamRequest()));
+        await DrainAsync(firstContext.CreateStream(new DispatcherStreamPipelineOrderRequest()));
+
+        var zeroPipelinePresence = GetStreamBehaviorPresenceCacheValue(
+            firstDispatcher,
+            zeroPipelineBehaviorType);
+        var twoPipelinePresence = GetStreamBehaviorPresenceCacheValue(
+            firstDispatcher,
+            twoPipelineBehaviorType);
+
+        AssertSharedStreamDispatcherCacheState(
+            firstDispatcher,
+            secondDispatcher,
+            isolatedDispatcher,
+            zeroPipelinePresence,
+            twoPipelinePresence,
+            zeroPipelineBehaviorType,
+            expectedZeroPipelinePresence,
+            expectedTwoPipelinePresence);
+
+        await DrainAsync(isolatedContext.CreateStream(new DispatcherZeroPipelineStreamRequest()));
+
+        AssertStreamBehaviorPresenceEquals(isolatedDispatcher, zeroPipelineBehaviorType, expectedZeroPipelinePresence);
+    }
+
+    /// <summary>
     ///     验证 request pipeline executor 会按行为数量在 binding 内首次创建并在后续分发中复用。
     /// </summary>
     [Test]
@@ -714,6 +763,33 @@ internal sealed class CqrsDispatcherCacheTests
     }
 
     /// <summary>
+    ///     读取指定 dispatcher 实例中当前保存的 stream behavior presence 缓存项。
+    /// </summary>
+    private static object? GetStreamBehaviorPresenceCacheValue(object dispatcher, Type behaviorType)
+    {
+        var field = dispatcher.GetType().GetField(
+            "_streamBehaviorPresenceCache",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.That(field, Is.Not.Null, "Missing dispatcher stream behavior presence cache field.");
+
+        var cache = field!.GetValue(dispatcher)
+                   ?? throw new InvalidOperationException(
+                       "Dispatcher stream behavior presence cache returned null.");
+        var tryGetValueMethod = cache.GetType().GetMethod(
+            "TryGetValue",
+            BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.That(tryGetValueMethod, Is.Not.Null, "Missing ConcurrentDictionary.TryGetValue accessor.");
+
+        object?[] arguments = [behaviorType, null];
+        var found = (bool)(tryGetValueMethod!.Invoke(cache, arguments)
+                           ?? throw new InvalidOperationException(
+                               "ConcurrentDictionary.TryGetValue returned null."));
+        return found ? arguments[1] : null;
+    }
+
+    /// <summary>
     ///     断言指定 dispatcher 上某个 request behavior presence 缓存项尚未建立。
     /// </summary>
     private static void AssertRequestBehaviorPresenceIsUnset(object dispatcher, Type behaviorType)
@@ -727,6 +803,22 @@ internal sealed class CqrsDispatcherCacheTests
     private static void AssertRequestBehaviorPresenceEquals(object dispatcher, Type behaviorType, bool expected)
     {
         Assert.That(GetRequestBehaviorPresenceCacheValue(dispatcher, behaviorType), Is.EqualTo(expected));
+    }
+
+    /// <summary>
+    ///     断言指定 dispatcher 上某个 stream behavior presence 缓存项尚未建立。
+    /// </summary>
+    private static void AssertStreamBehaviorPresenceIsUnset(object dispatcher, Type behaviorType)
+    {
+        Assert.That(GetStreamBehaviorPresenceCacheValue(dispatcher, behaviorType), Is.Null);
+    }
+
+    /// <summary>
+    ///     断言指定 dispatcher 上某个 stream behavior presence 缓存项等于预期值。
+    /// </summary>
+    private static void AssertStreamBehaviorPresenceEquals(object dispatcher, Type behaviorType, bool expected)
+    {
+        Assert.That(GetStreamBehaviorPresenceCacheValue(dispatcher, behaviorType), Is.EqualTo(expected));
     }
 
     /// <summary>
@@ -751,6 +843,29 @@ internal sealed class CqrsDispatcherCacheTests
             AssertRequestBehaviorPresenceIsUnset(
                 isolatedDispatcher,
                 typeof(IPipelineBehavior<DispatcherCacheRequest, int>));
+        });
+    }
+
+    /// <summary>
+    ///     断言同一容器解析出的 dispatcher 会共享 stream 的实例级缓存，而另一独立容器的 dispatcher 不会提前命中。
+    /// </summary>
+    private static void AssertSharedStreamDispatcherCacheState(
+        object firstDispatcher,
+        object secondDispatcher,
+        object isolatedDispatcher,
+        object? zeroPipelinePresence,
+        object? twoPipelinePresence,
+        Type zeroPipelineBehaviorType,
+        bool expectedZeroPipelinePresence,
+        bool expectedTwoPipelinePresence)
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(secondDispatcher, Is.SameAs(firstDispatcher));
+            Assert.That(zeroPipelinePresence, Is.EqualTo(expectedZeroPipelinePresence));
+            Assert.That(twoPipelinePresence, Is.EqualTo(expectedTwoPipelinePresence));
+            AssertStreamBehaviorPresenceEquals(secondDispatcher, zeroPipelineBehaviorType, expectedZeroPipelinePresence);
+            AssertStreamBehaviorPresenceIsUnset(isolatedDispatcher, zeroPipelineBehaviorType);
         });
     }
 
