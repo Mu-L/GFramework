@@ -2,6 +2,24 @@
 
 ## 2026-05-09
 
+### 阶段：标准架构启动路径 notification publisher 回归（CQRS-REWRITE-RP-121）
+
+- 延续 `$gframework-batch-boot 50`，本轮没有继续扩 notification runtime 语义，而是先给 `RP-120` 刚修复的默认接线补一条更贴近生产的架构启动回归
+- 本轮主线程决策：
+  - 保持写面只落在 `GFramework.Core.Tests/Architectures/ArchitectureModulesBehaviorTests.cs`，不再改动 `GFramework.Cqrs` / `GFramework.Core` 运行时代码
+  - 通过 `Architecture.Configurator` 注册依赖容器 probe 的自定义 `INotificationPublisher`，并在 `OnInitialize()` 显式接入额外程序集 notification handler，验证默认 `Architecture.InitializeAsync()` 路径最终 publish 时不会退回默认顺序策略
+  - 用现有 `AdditionalAssemblyNotificationHandlerRegistry` 测试桩承载 handler 执行观察，把本轮信号收敛到“标准架构启动路径是否真正复用自定义 publisher”
+- 本轮权威验证：
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ArchitectureModulesBehaviorTests"`
+    - 结果：通过，`5/5` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Core.Tests/Architectures/ArchitectureModulesBehaviorTests.cs`
+    - 结果：通过
+- 本轮结论：
+  - 标准 `Architecture.InitializeAsync()` 启动路径现在也被回归锁住：通过 `Configurator` 声明的自定义 `INotificationPublisher` 会在真实 publish 路径里被复用，不会再被 `CqrsRuntimeModule` 创建 runtime 时静默短路成默认顺序发布器
+  - notification 线当前已形成“组合根入口 -> 默认接线修复 -> 标准架构启动回归”的闭环；下一轮若继续留在该方向，更合理的是重新评估产品面是否真的需要第三种仓库内置策略，而不是继续堆同层级回归
+
 ### 阶段：notification publisher 默认接线修复（CQRS-REWRITE-RP-120）
 
 - 延续 `$gframework-batch-boot 50`，本轮沿着 `RP-119` 的 notification publisher 组合根回归继续向下追，发现这不是单纯的文档或测试补洞，而是默认 runtime 接线存在真实时序缺陷

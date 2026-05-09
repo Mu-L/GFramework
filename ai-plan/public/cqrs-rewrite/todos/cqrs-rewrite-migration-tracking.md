@@ -7,15 +7,15 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-120`
+- 恢复点编号：`CQRS-REWRITE-RP-121`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #342`
 - 当前结论：
-  - 当前 `RP-120` 继续沿用 `$gframework-batch-boot 50`，并在 `RP-119` 刚补完泛型组合根入口回归后继续追到一个真实默认接线缺陷：`UseNotificationPublisher<TPublisher>()` 与 `UseTaskWhenAllNotificationPublisher()` 虽然都能把策略注册进容器，但默认 `RegisterInfrastructure(...)` / `CqrsRuntimeModule` 先创建 runtime，再由 `CqrsRuntimeFactory.CreateRuntime(...)` 在工厂层直接固化 `SequentialNotificationPublisher`，导致这些组合根策略在标准 publish 路径里根本不会生效
-  - 本轮把 notification publisher 解析责任从“runtime 构造时抢先决定”收口为“publish 时按唯一注册策略解析”：`CqrsRuntimeFactory.CreateRuntime(...)` 现在不再把 `null` 立即替换成顺序发布器，`CqrsDispatcher` 会优先复用显式传入实例，否则在真正 publish 时从容器解析唯一的 `INotificationPublisher`，只有在完全未注册策略时才回退到默认顺序发布器
-  - `CqrsRuntimeModule` 与 `GFramework.Tests.Common/CqrsTestRuntime` 也同步移除了预解析 `container.Get<INotificationPublisher>()` 的时序耦合，避免实现类型注册或冻结前可见性再次把策略短路成默认顺序发布器
-  - `NotificationPublisherRegistrationExtensionsTests` 现新增一条更贴近真实采用场景的回归：当自定义 publisher 依赖容器内其他服务时，`UseNotificationPublisher<TPublisher>()` 经过默认 runtime 基础设施后仍会被实际 publish 路径复用；同时 `UseTaskWhenAllNotificationPublisher()` 的默认基础设施回归也重新通过，证明 fix 不只覆盖泛型重载
-  - 当前批次工作树 diff 为 `5 files / 131 changed lines`，相对 `origin/main` 的累计 branch diff 仍远低于 `$gframework-batch-boot 50` 的文件阈值；但本轮已经跨过一个完整的“发现缺陷 -> 修复接线 -> 回归验证”自然边界，继续开启下一批前应先提交并刷新恢复点
+  - 当前 `RP-121` 延续 `$gframework-batch-boot 50`，但不再继续扩 notification runtime 语义或新内置策略，而是先把 `RP-120` 刚修复的默认接线补成更贴近生产的架构启动回归
+  - `GFramework.Core.Tests/Architectures/ArchitectureModulesBehaviorTests.cs` 现新增 `InitializeAsync_Should_Reuse_Custom_NotificationPublisher_From_Configurator()`：测试通过标准 `Architecture.Configurator` 注册依赖容器 probe 的自定义 `INotificationPublisher`，并在 `OnInitialize()` 显式接入额外程序集 notification handler，验证默认 `Architecture.InitializeAsync()` 路径最终 publish 时确实命中自定义策略
+  - 这一批只扩 `GFramework.Core.Tests` 的集成回归，不再改动 `GFramework.Cqrs` / `GFramework.Core` 运行时代码；目的在于把“组合根声明的 publisher 不会再被默认顺序策略短路”从测试宿主路径补到真实架构启动路径
+  - 当前已提交分支相对 `origin/main`（`d389eb36`, `2026-05-08 20:08:33 +0800`）的累计 branch diff 为 `9 files / 241 changed lines`；本批待提交工作树仅新增 `1 file / 122 changed lines`，提交后预计约为 `10 files / 363 changed lines`，仍明显低于 `$gframework-batch-boot 50` 的文件阈值
+  - 本轮虽然仍有 branch diff 余量，但 notification 线已连续完成“组合根入口 -> 默认接线修复 -> 标准架构启动回归”三段闭环，继续下一批前更合理的是先提交并把后续选择重新收敛到“是否需要第三种内置策略”或“是否切回 request steady-state 热点”
   - 当前 `RP-119` 继续沿用 `$gframework-batch-boot 50`，并在分支已与 `origin/main` 对齐（`d389eb36`, `2026-05-08 20:08:33 +0800`）后，重新选择 notification publisher 线上一个更小的采用面切片：补齐 `UseNotificationPublisher<TPublisher>()` 的组合根采用说明与回归，而不是提前切回 request dispatch 热路径
   - 本轮不修改 `GFramework.Cqrs` runtime 语义，只收口“泛型组合根入口是否真的可用、以及读者是否知道该在什么情况下选它”这两个采用缺口
   - `NotificationPublisherRegistrationExtensionsTests` 现额外覆盖两条行为：泛型重载会把指定 publisher 类型注册为容器内唯一的单例策略；当容器里已存在 `INotificationPublisher` 注册时，泛型重载也会像实例重载一样在组合根阶段拒绝重复声明
@@ -84,14 +84,14 @@ CQRS 迁移与收敛。
   - 当前 `RP-106` 已把同一套 generated-provider 宿主收口扩展到 `RequestPipelineBenchmarks`：新增 handwritten `GeneratedRequestPipelineBenchmarkRegistry`，并让 `RequestPipelineBenchmarks` 改走 `RegisterCqrsHandlersFromAssembly(...)` + benchmark CQRS 基础设施预接线；本轮 benchmark 表明 `0 pipeline` steady-state 进一步收敛到约 `64.755 ns / 32 B`，`1 pipeline` 约 `353.141 ns / 536 B`，`4 pipeline` 在短跑噪音下维持约 `555.083 ns / 896 B`
   - 当前 `RP-107` 已把默认 stream steady-state 宿主也切到 generated-provider 路径：新增 handwritten `GeneratedDefaultStreamingBenchmarkRegistry`，让 `StreamingBenchmarks` 改走 `RegisterCqrsHandlersFromAssembly(...)` 并在 setup/cleanup 清理 dispatcher cache；同时将 `gframework-boot` / `gframework-batch-boot` 的默认停止规则改为“AI 上下文预算优先，建议在预计接近约 80% 安全上下文占用前收口”，不再把 changed files 误当作唯一阈值
   - 当前 `RP-108` 已补齐 stream handler `Singleton / Transient` 生命周期矩阵 benchmark：新增 `StreamLifetimeBenchmarks` 与 `GeneratedStreamLifetimeBenchmarkRegistry`，让 stream 生命周期对照沿用 generated-provider 宿主接线而不是退回纯反射路径；本轮 benchmark 表明 `Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约 `80.144 ns / 137.515 ns / 229.242 ns`，`Transient` 下约 `77.198 ns / 144.998 ns / 228.185 ns`
-- `ai-plan` active 入口现以 `RP-108` 为最新恢复锚点；`PR #340`、`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
+- `ai-plan` active 入口现以 `RP-121` 为最新恢复锚点；`PR #340`、`PR #339`、`PR #334`、`PR #331`、`PR #326`、`PR #323`、`PR #307` 与其他更早阶段细节均以下方归档或说明为准
 
 ## 当前活跃事实
 
 - 当前分支为 `feat/cqrs-optimization`
-- 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`4d6dbba6`, 2026-05-08 11:13:33 +0800) 为基线；本地 `main` 仍落后，不作为 branch diff 基线
-- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `14 files / 507 lines`
-- 本批待提交工作树集中在 `GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/Messaging/GeneratedStreamLifetimeBenchmarkRegistry.cs` 与 `GFramework.Cqrs.Benchmarks/README.md`
+- 本轮 `$gframework-batch-boot 50` 以 `origin/main` (`d389eb36`, 2026-05-08 20:08:33 +0800) 为基线；本地 `main` 仍落后，不作为 branch diff 基线
+- 当前已提交分支相对 `origin/main` 的累计 branch diff 为 `9 files / 241 changed lines`
+- 本批待提交工作树集中在 `GFramework.Core.Tests/Architectures/ArchitectureModulesBehaviorTests.cs`
 - 当前批次后的默认停止依据已改为 AI 上下文预算：若下一轮预计会让活动对话、已加载 recovery 文档、验证输出与当前 diff 接近约 `80%` 安全上下文占用，应在当前自然批次边界停止，即使 branch diff 仍有余量
 - `GFramework.Cqrs.Benchmarks` 作为 benchmark 基础设施项目，必须持续排除在 NuGet / GitHub Packages 发布集合之外
 - `GFramework.Cqrs.Benchmarks` 现已覆盖 request steady-state、pipeline 数量矩阵、startup、request/stream generated invoker，以及 request handler `Singleton / Transient` 生命周期矩阵
@@ -147,6 +147,7 @@ CQRS 迁移与收敛。
 
 ## 当前风险
 
+- 标准架构启动路径现在已经有“自定义 notification publisher 不被默认顺序策略短路”的集成回归；但若后续再引入第三种仓库内置策略或新的启动快捷入口，仍需要同步补这条生产路径验证，不能只看 `CqrsTestRuntime` 测试宿主
 - 顶层 `GFramework.sln` / `GFramework.csproj` 在 WSL 下仍可能受 Windows NuGet fallback 配置影响，完整 solution 级验证成本高于模块级验证
 - 若后续新增 benchmark / example / tooling 项目但未同步校验发布面，solution 级 `dotnet pack` 仍可能在 tag 发布前才暴露异常包
 - `RequestStartupBenchmarks` 为了量化真正的单次 cold-start，引入了 `InvocationCount=1` / `UnrollFactor=1` 的专用 job；该配置会触发 BenchmarkDotNet 的 `MinIterationTime` 提示，后续若要做稳定基线比较，还需要决定是否引入批量外层循环或自定义 cold-start harness
@@ -165,6 +166,12 @@ CQRS 迁移与收敛。
 
 ## 最近权威验证
 
+- `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ArchitectureModulesBehaviorTests"`
+  - 结果：通过，`5/5` passed
+- `python3 scripts/license-header.py --check --paths GFramework.Core.Tests/Architectures/ArchitectureModulesBehaviorTests.cs`
+  - 结果：通过
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
 - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*NotificationFanOutBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
@@ -402,9 +409,10 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 既然 `RP-120` 已修正 notification publisher 的默认接线时序，下一轮若继续留在 notification 线，优先评估是否真的需要第三种仓库内置策略，或是否要给 `CqrsRuntimeModule` / 架构启动路径补更贴近生产的集成回归
-2. 若后续批次切回 request dispatch 常量开销，继续避开“类型级 `IContextAware` 判定缓存”这条已验证无收益的热点假设，并优先挑选更可能影响 steady-state 的 generated/provider 吸收点
-3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
+1. 既然 `RP-120` 与 `RP-121` 已分别补齐默认接线修复和标准架构启动回归，下一轮若继续留在 notification 线，优先评估是否真的需要第三种仓库内置策略，而不是继续重复同层级生产路径验证
+2. 既然本轮已经补上标准架构启动回归，下一轮若继续留在 notification 线，应把问题重新收敛到“是否值得公开第三种仓库内置 publisher strategy”，而不是继续重复扩同层级回归
+3. 若后续批次切回 request dispatch 常量开销，继续避开“类型级 `IContextAware` 判定缓存”这条已验证无收益的热点假设，并优先挑选更可能影响 steady-state 的 generated/provider 吸收点
+4. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档
 

@@ -1,12 +1,15 @@
 // Copyright (c) 2025-2026 GeWuYou
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Reflection;
 using GFramework.Core.Abstractions.Architectures;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Abstractions.Utility;
 using GFramework.Core.Architectures;
 using GFramework.Core.Logging;
+using GFramework.Cqrs;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using GFramework.Cqrs.Notification;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GFramework.Core.Tests.Architectures;
@@ -27,6 +30,7 @@ public class ArchitectureModulesBehaviorTests
     {
         LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
         GameContext.Clear();
+        AdditionalAssemblyNotificationHandlerState.Reset();
         TrackingPipelineBehavior<ModuleBehaviorRequest, string>.InvocationCount = 0;
         TrackingStreamPipelineBehavior<ModuleStreamBehaviorRequest, int>.InvocationCount = 0;
     }
@@ -37,6 +41,7 @@ public class ArchitectureModulesBehaviorTests
     [TearDown]
     public void TearDown()
     {
+        AdditionalAssemblyNotificationHandlerState.Reset();
         GameContext.Clear();
         TrackingPipelineBehavior<ModuleBehaviorRequest, string>.InvocationCount = 0;
         TrackingStreamPipelineBehavior<ModuleStreamBehaviorRequest, int>.InvocationCount = 0;
@@ -157,6 +162,35 @@ public class ArchitectureModulesBehaviorTests
     }
 
     /// <summary>
+    ///     验证标准架构启动路径会复用通过 <see cref="Architecture.Configurator" /> 声明的自定义 notification publisher，
+    ///     而不是在 <see cref="GFramework.Core.Services.Modules.CqrsRuntimeModule" /> 创建 runtime 时提前固化默认顺序策略。
+    /// </summary>
+    [Test]
+    public async Task InitializeAsync_Should_Reuse_Custom_NotificationPublisher_From_Configurator()
+    {
+        var generatedAssembly = CreateGeneratedHandlerAssembly();
+        var architecture = new ConfiguredNotificationPublisherArchitecture(generatedAssembly.Object);
+
+        await architecture.InitializeAsync();
+        try
+        {
+            var probe = architecture.Context.GetService<ArchitectureNotificationPublisherProbe>();
+
+            await architecture.Context.PublishAsync(new AdditionalAssemblyNotification());
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(probe.WasCalled, Is.True);
+                Assert.That(AdditionalAssemblyNotificationHandlerState.InvocationCount, Is.EqualTo(1));
+            });
+        }
+        finally
+        {
+            await architecture.DestroyAsync();
+        }
+    }
+
+    /// <summary>
     ///     用于测试模块行为的最小架构实现。
     /// </summary>
     private sealed class ModuleTestArchitecture(Action<ModuleTestArchitecture> registrationAction) : Architecture
@@ -192,6 +226,31 @@ public class ArchitectureModulesBehaviorTests
     }
 
     /// <summary>
+    ///     通过标准架构启动路径声明自定义 notification publisher 的最小架构。
+    /// </summary>
+    private sealed class ConfiguredNotificationPublisherArchitecture(Assembly generatedAssembly) : Architecture
+    {
+        /// <summary>
+        ///     在服务钩子阶段注册 probe 与自定义 publisher，
+        ///     以模拟真实项目在组合根里通过 <see cref="IServiceCollection" /> 覆盖默认策略的路径。
+        /// </summary>
+        public override Action<IServiceCollection>? Configurator => services =>
+        {
+            services.AddSingleton<ArchitectureNotificationPublisherProbe>();
+            services.AddSingleton<INotificationPublisher, ArchitectureTrackingNotificationPublisher>();
+        };
+
+        /// <summary>
+        ///     在用户初始化阶段显式接入额外程序集里的 notification handler，
+        ///     让测试聚焦“publisher 是否被复用”，而不是依赖当前测试文件自己的 handler 扫描形状。
+        /// </summary>
+        protected override void OnInitialize()
+        {
+            RegisterCqrsHandlersFromAssembly(generatedAssembly);
+        }
+    }
+
+    /// <summary>
     ///     记录模块安装调用情况的测试模块。
     /// </summary>
     private sealed class TrackingArchitectureModule : IArchitectureModule
@@ -223,6 +282,69 @@ public class ArchitectureModulesBehaviorTests
     /// </summary>
     private sealed class InstalledByModuleUtility : IUtility
     {
+    }
+
+    /// <summary>
+    ///     创建一个仅暴露程序集级 CQRS registry 元数据的 mocked Assembly。
+    ///     该测试替身模拟扩展程序集已经提供 notification handler registry，而架构只需在初始化时显式接入该程序集。
+    /// </summary>
+    /// <returns>包含程序集级 notification handler registry 元数据的 mocked Assembly。</returns>
+    private static Mock<Assembly> CreateGeneratedHandlerAssembly()
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns("GFramework.Core.Tests.Architectures.ExplicitAdditionalHandlers, Version=1.0.0.0");
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(typeof(AdditionalAssemblyNotificationHandlerRegistry))]);
+        return generatedAssembly;
+    }
+
+    /// <summary>
+    ///     记录自定义 notification publisher 是否真正参与了标准架构启动路径下的 publish 调用。
+    /// </summary>
+    private sealed class ArchitectureNotificationPublisherProbe
+    {
+        /// <summary>
+        ///     获取 probe 是否已被 publisher 标记为执行过。
+        /// </summary>
+        public bool WasCalled { get; private set; }
+
+        /// <summary>
+        ///     记录当前 publish 调用已经命中了自定义 publisher。
+        /// </summary>
+        public void MarkCalled()
+        {
+            WasCalled = true;
+        }
+    }
+
+    /// <summary>
+    ///     依赖容器内 probe 的自定义 notification publisher。
+    ///     该类型通过显式标记 + 正常转发处理器执行，验证标准架构启动路径不会把自定义策略短路成默认顺序发布器。
+    /// </summary>
+    private sealed class ArchitectureTrackingNotificationPublisher(
+        ArchitectureNotificationPublisherProbe probe) : INotificationPublisher
+    {
+        /// <summary>
+        ///     记录自定义 publisher 已参与当前发布调用，并继续按处理器解析顺序转发执行。
+        /// </summary>
+        public async ValueTask PublishAsync<TNotification>(
+            NotificationPublishContext<TNotification> context,
+            CancellationToken cancellationToken = default)
+            where TNotification : INotification
+        {
+            ArgumentNullException.ThrowIfNull(context);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            probe.MarkCalled();
+
+            foreach (var handler in context.Handlers)
+            {
+                await context.InvokeHandlerAsync(handler, cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <summary>
