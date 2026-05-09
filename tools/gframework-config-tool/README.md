@@ -80,6 +80,8 @@ The extension currently validates the repository's current schema subset:
   object-focused `if` / `then` / `else`
 - closed-object validation through `additionalProperties: false`
 - explicit rejection for unsupported combinators such as `oneOf` and `anyOf`, instead of silently ignoring them
+- explicit rejection for unsupported array-shape keywords such as `prefixItems`, `additionalItems`, and
+  `unevaluatedItems`, so tuple or open-array item shapes do not drift away from Runtime / Generator
 
 ## Contract Boundary
 
@@ -106,8 +108,8 @@ This extension is an editor-side helper. It does not define the runtime contract
    project-specific paths relative to the first workspace folder.
 3. Open the `GFramework Config` explorer view and select a config file or domain.
 4. Run validation first to confirm the current YAML files still match the supported schema subset.
-5. Open the lightweight form preview or domain batch editing actions, then fall back to raw YAML for deeper nested edits
-   when needed.
+5. Open the lightweight form preview or domain batch editing actions, then fall back to raw YAML only when the current
+   path exceeds the supported object-array editor boundary or leaves the shared schema subset.
 
 Minimal adoption checklist:
 
@@ -117,6 +119,8 @@ Minimal adoption checklist:
 - Use `x-gframework-ref-table` only on fields that should link to another config domain or reference file
 - Keep `additionalProperties` explicitly set to `false` when you need closed-object validation; omitting it, setting
   it to `true`, or mixing in `patternProperties`, `propertyNames`, or `unevaluatedProperties` is outside the supported subset
+- Keep arrays on one object-valued `items` schema; tuple or open-array keywords such as `prefixItems`,
+  `additionalItems`, and `unevaluatedItems` are outside the supported subset
 
 Use raw YAML directly when you need:
 
@@ -126,6 +130,7 @@ Use raw YAML directly when you need:
 - `contains` / `minContains` / `maxContains` when the structure is easier to reason about directly in YAML
 - schema designs outside the current shared subset, including `oneOf`, `anyOf`, non-`false` `additionalProperties`, or
   other open-object keywords such as `patternProperties`, `propertyNames`, and `unevaluatedProperties`
+- tuple or open-array designs that depend on `prefixItems`, `additionalItems`, or `unevaluatedItems`
 
 ## Documentation
 
@@ -136,12 +141,14 @@ Use raw YAML directly when you need:
 
 - Multi-root workspaces use the first workspace folder
 - Validation only covers the repository's current schema subset
-- Form preview supports nested objects and object-array editing, but deeper nested object arrays inside array items still
-  fall back to raw YAML
+- Form preview supports nested objects, object arrays, and nested object arrays inside object-array items as long as
+  those nested items still stay within the shared subset's object/scalar/array shape
 - Batch editing remains limited to top-level scalar fields and top-level scalar arrays
 - Closed-object support is limited to `additionalProperties: false`; open-object keywords such as
   `patternProperties`, `propertyNames`, and `unevaluatedProperties` are rejected on purpose, as are unsupported
   combinators such as `oneOf` / `anyOf`
+- Array-shape support is limited to one object-valued `items` schema; tuple or open-array keywords such as
+  `prefixItems`, `additionalItems`, and `unevaluatedItems` are rejected on purpose
 
 ## Local Testing
 

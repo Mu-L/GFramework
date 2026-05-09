@@ -302,6 +302,61 @@ test("parseSchemaContent should reject unsupported open-object keywords", () => 
         /unsupported 'unevaluatedProperties' metadata/u);
 });
 
+test("parseSchemaContent should reject unsupported array-shape keywords", () => {
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "prefixItems": [
+                    { "type": "integer" }
+                  ],
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'prefixItems' metadata/u);
+
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "additionalItems": false,
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'additionalItems' metadata/u);
+
+    assert.throws(
+        () => parseSchemaContent(`
+            {
+              "type": "object",
+              "properties": {
+                "dropRates": {
+                  "type": "array",
+                  "unevaluatedItems": false,
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+        `),
+        /unsupported 'unevaluatedItems' metadata/u);
+});
+
 test("parseSchemaContent should reject unsupported explicit schema types", () => {
     assert.throws(
         () => parseSchemaContent(`

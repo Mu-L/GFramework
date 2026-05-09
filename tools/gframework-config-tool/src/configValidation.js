@@ -1107,6 +1107,7 @@ function parseSchemaNode(rawNode, displayPath) {
     }
 
     validateUnsupportedOpenObjectKeyword(value, displayPath);
+    validateUnsupportedArrayShapeKeyword(value, displayPath);
 
     const type = resolveSupportedSchemaType(value.type, displayPath);
     const patternMetadata = normalizeSchemaPattern(value.pattern, displayPath);
@@ -1291,6 +1292,24 @@ function validateUnsupportedOpenObjectKeyword(schemaNode, displayPath) {
 }
 
 /**
+ * Reject tuple-array and open-array keywords that would let tooling accept item
+ * shapes outside the Runtime / Generator shared subset.
+ *
+ * @param {Record<string, unknown>} schemaNode Raw schema object.
+ * @param {string} displayPath Logical property path.
+ */
+function validateUnsupportedArrayShapeKeyword(schemaNode, displayPath) {
+    const unsupportedKeyword = getUnsupportedArrayShapeKeywordName(schemaNode);
+    if (!unsupportedKeyword) {
+        return;
+    }
+
+    throw new Error(
+        `Schema property '${displayPath}' uses unsupported '${unsupportedKeyword}' metadata. ` +
+        "The current config schema subset only accepts one object-valued 'items' schema and rejects tuple or open-array keywords that can change item shape across Runtime, Generator, and Tooling.");
+}
+
+/**
  * Parse one required array child schema while keeping tooling errors aligned
  * with the Runtime and Source Generator contracts.
  *
@@ -1401,6 +1420,29 @@ function getUnsupportedOpenObjectKeywordName(schemaNode) {
 
     if (Object.prototype.hasOwnProperty.call(schemaNode, "unevaluatedProperties")) {
         return "unevaluatedProperties";
+    }
+
+    return undefined;
+}
+
+/**
+ * Return the first array-shape keyword that the current shared schema subset
+ * intentionally rejects to keep array item contracts aligned.
+ *
+ * @param {Record<string, unknown>} schemaNode Raw schema object.
+ * @returns {string | undefined} Unsupported keyword name when present.
+ */
+function getUnsupportedArrayShapeKeywordName(schemaNode) {
+    if (Object.prototype.hasOwnProperty.call(schemaNode, "prefixItems")) {
+        return "prefixItems";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(schemaNode, "additionalItems")) {
+        return "additionalItems";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(schemaNode, "unevaluatedItems")) {
+        return "unevaluatedItems";
     }
 
     return undefined;

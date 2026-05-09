@@ -2018,6 +2018,56 @@ public class SchemaConfigGeneratorTests
     }
 
     /// <summary>
+    ///     验证生成器会显式拒绝当前共享子集尚未支持的数组形状关键字。
+    /// </summary>
+    /// <param name="keywordName">待验证的数组形状关键字名称。</param>
+    /// <param name="keywordValueJson">用于拼接测试 schema 的关键字值 JSON 片段。</param>
+    [TestCase("prefixItems", """
+                              [
+                                { "type": "integer" }
+                              ]
+                              """)]
+    [TestCase("additionalItems", "false")]
+    [TestCase("unevaluatedItems", "false")]
+    public void Run_Should_Report_Diagnostic_When_Array_Schema_Declares_Unsupported_ArrayShape_Keyword(
+        string keywordName,
+        string keywordValueJson)
+    {
+        const string source = DummySource;
+        var schema = $$"""
+                       {
+                         "type": "object",
+                         "required": ["id", "dropRates"],
+                         "properties": {
+                           "id": { "type": "integer" },
+                           "dropRates": {
+                             "type": "array",
+                             "{{keywordName}}": {{keywordValueJson}},
+                             "items": {
+                               "type": "integer"
+                             }
+                           }
+                         }
+                       }
+                       """;
+
+        var result = SchemaGeneratorTestDriver.Run(
+            source,
+            ("monster.schema.json", schema));
+
+        var diagnostic = result.Results.Single().Diagnostics.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.Id, Is.EqualTo("GF_ConfigSchema_017"));
+            Assert.That(diagnostic.Severity, Is.EqualTo(DiagnosticSeverity.Error));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("dropRates"));
+            Assert.That(diagnostic.GetMessage(), Does.Contain(keywordName));
+            Assert.That(diagnostic.GetMessage(), Does.Contain("only accepts one object-valued 'items' schema"));
+        });
+    }
+
+    /// <summary>
     ///     验证 <c>then</c> 子 schema 内的非法 <c>format</c> 也会在生成阶段直接给出诊断。
     /// </summary>
     [Test]

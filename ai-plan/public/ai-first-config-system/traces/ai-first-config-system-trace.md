@@ -145,7 +145,7 @@
   - 指向真正承载并行批次细节的 backlog 文件
 - 本轮不新增代码范围、测试范围或文档范围，只整理 public `ai-plan/**` 的恢复入口表达，避免把治理噪音带回 reader-facing docs
 
-### 关键决定
+### 关键决定（Tooling 文档与实际编辑边界对齐）
 
 - `C# Runtime + Source Generator + Consumer DX` 仍是默认恢复主线
 - Tooling / Docs 可以并发推进，但后续 batch 应直接以 `ai-first-config-system-csharp-experience-next.md` 为入口，而不是继续扩写 active tracking / trace
@@ -242,19 +242,19 @@
   - `patternProperties`、`propertyNames`、`unevaluatedProperties` 当前改为三端直接失败
 - reader-facing docs 也已同步更新，避免采用文档继续把这类关键字描述成“也许工具没做但运行时可能支持”的灰区
 
-### 关键决定
+### 关键决定（Tooling 文档与实际编辑边界对齐）
 
 - `additionalProperties: false` 仍是唯一共享支持的开放对象相关关键字形状
 - 任何会重新引入动态字段集的开放对象关键字，都视为当前主线之外的设计，而不是后续工具增强项
 - 本轮继续保持主线为 `C# Runtime + Source Generator + Consumer DX`，没有把工作重心切回复杂表单或宿主验证
 
-### Stop Condition
+### Stop Condition（Tooling 文档与实际编辑边界对齐）
 
 - Batch baseline：`origin/main` (`a8c6c11e`, `2026-05-05 13:14:24 +0800`)
 - Primary metric：branch diff vs `origin/main` changed files，阈值 `50`
 - 本轮执行时的 branch diff 指标仍为 `0`，说明当前批次尚未把 `HEAD` 推进到接近阈值；reviewability headroom 充足
 
-### 验证
+### 验证（Tooling 文档与实际编辑边界对齐）
 
 - 2026-05-06：`bun run test`（`tools/gframework-config-tool`）
   - 结果：通过（133 tests）
@@ -275,7 +275,7 @@
 - 2026-05-06：`git diff --check`
   - 结果：通过
 
-### 下一步
+### 下一步（Tooling 文档与实际编辑边界对齐）
 
 1. 继续盘点下一批不会改变生成类型形状、也不会重新打开对象形状的共享关键字
 2. Tooling / Docs 如继续并发推进，优先补真实采用示例，不再重复扩写开放对象边界清单
@@ -324,3 +324,103 @@
 1. 执行本轮受影响 Tooling / Runtime / Generator 定向验证，并确认没有新增 warning 或格式漂移
 2. 若验证通过，重新抓取 PR `#325` review 状态，区分哪些 open threads 会随推送自动折叠
 3. 继续把 PR review follow-up 约束在“latest unresolved thread + 本地仍成立问题”，不回头追旧 summary 噪音
+
+### 阶段：Tooling 文档与实际编辑边界对齐（AI-FIRST-CONFIG-RP-003）
+
+- 已重新核对 `tools/gframework-config-tool/src/extension.js` 的对象数组表单能力，并确认当前实现不只支持对象数组本身
+- 当前表单还支持“对象数组项内部继续嵌套的对象数组”，前提是内层条目仍保持共享子集允许的对象 / 标量字段 / 标量数组 / 嵌套对象形状
+- 本轮不扩 Runtime / Generator / Tooling 的 schema 契约，只修正 reader-facing docs 漂移：
+  - `tools/gframework-config-tool/README.md` 不再把“更深层嵌套编辑”笼统描述成默认回退 raw YAML
+  - `docs/zh-CN/game/config-tool.md` 改为明确：只有当对象数组继续嵌套后的结构超出当前共享子集，才需要回到 raw YAML
+
+### 关键决定（Tooling 文档与实际编辑边界对齐）
+
+- 这轮批次继续遵守“先核对共享契约，再改文档”的 lane 规则，没有为追求批量推进而硬扩一个收益不明确的新关键字
+- Tooling 的 reader-facing 说明要以 `extension.js` 当前真实能力为准，避免把已经支持的对象数组路径继续描述成工具缺口
+- raw YAML 回退条件保留，但需要收敛为“超出共享子集或当前编辑器边界”而不是“只要更深层对象数组就默认回退”
+
+### Stop Condition（Tooling 文档与实际编辑边界对齐）
+
+- Batch baseline：`origin/main` (`c01abac0`, `2026-05-06 09:40:08 +0800`)
+- Primary metric：branch diff vs `origin/main` changed files，阈值 `30`
+- 本轮开始前 branch diff 指标为 `0` files / `0` changed lines；本批次只触碰 reader-facing docs 与 active `ai-plan`，预计仍远低于阈值
+
+### 验证（Tooling 文档与实际编辑边界对齐）
+
+- 2026-05-06：`rg -n "nested object arrays|回退到 raw YAML|更深层对象数组"`（文档 + `extension.js`）
+  - 结果：通过
+  - 备注：确认 `README` / 中文工具文档存在旧边界表述，而 `extension.js` 已支持对象数组项内部继续嵌套的对象数组编辑
+- 2026-05-06：`git diff --check -- tools/gframework-config-tool/README.md docs/zh-CN/game/config-tool.md ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`
+  - 结果：通过
+- 2026-05-06：`python3 scripts/license-header.py --check --paths tools/gframework-config-tool/README.md docs/zh-CN/game/config-tool.md ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`
+  - 结果：通过
+- 2026-05-06：`dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+  - 结果：通过（0 warnings, 0 errors）
+
+### 下一步（Tooling 文档与实际编辑边界对齐）
+
+1. 继续优先找“实现已存在但 reader-facing 表述漂移”的低风险 lane，避免在批处理模式下引入收益不明的新 schema contract
+2. 若下一轮回到主线代码批次，再继续盘点不会改变生成类型形状的共享关键字，而不是重复刷新同一组 Tooling 边界说明
+
+## 2026-05-08
+
+### 阶段：数组形状关键字边界收口（AI-FIRST-CONFIG-RP-003）
+
+- 已在 Runtime、Source Generator 与 VS Code Tooling 三端统一收紧数组形状关键字边界
+- 本轮不是扩 JSON Schema 能力，而是避免某一端静默接受 tuple / open-array 设计：
+  - 当前共享子集只接受单个 object-valued `items` schema
+  - `prefixItems`、`additionalItems`、`unevaluatedItems` 现在会在三端直接失败，而不是静默忽略
+- reader-facing docs 也已同步补齐数组形状边界，避免把“标准 JSON Schema 的 tuple/open-array 语义”误读成当前配置系统的隐藏支持范围
+
+### 验证
+
+- 2026-05-08：`bun run test`（`tools/gframework-config-tool`）
+  - 目标：验证工具端会拒绝 `prefixItems`、`additionalItems`、`unevaluatedItems`
+- 2026-05-08：`dotnet test GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release --filter "FullyQualifiedName~SchemaConfigGeneratorTests"`
+  - 目标：验证生成器新增 `GF_ConfigSchema_017`
+- 2026-05-08：`dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~YamlConfigLoaderTests"`
+  - 目标：验证运行时会拒绝不在共享子集内的数组形状关键字
+- 2026-05-08：`dotnet build GFramework.Game/GFramework.Game.csproj -c Release`
+  - 目标：验证运行时模块 Release 构建
+- 2026-05-08：`dotnet build GFramework.Game.SourceGenerators/GFramework.Game.SourceGenerators.csproj -c Release`
+  - 目标：验证生成器模块 Release 构建
+
+### 下一步
+
+1. 若本轮验证通过，继续回到“不会改变生成类型形状”的下一批共享关键字盘点
+2. 继续优先寻找“静默接受但主线不支持”的边界收口项，而不是先扩更复杂的组合语义
+
+## 2026-05-09
+
+### 阶段：PR #343 review follow-up（AI-FIRST-CONFIG-RP-003）
+
+- 已用 `gframework-pr-review` 重新抓取当前分支 PR `#343` 的 latest unresolved review threads
+- 本轮只处理本地仍成立的 3 条 open threads：
+  - `GFramework.Game.Tests/Config/YamlConfigLoaderTests.cs` 的 public 参数化测试补齐 XML `<param>` 注释
+  - `GFramework.SourceGenerators.Tests/Config/SchemaConfigGeneratorTests.cs` 的 public 参数化测试补齐 XML `<param>` 注释
+  - `ai-first-config-system-trace.md` 为 `2026-05-06` Tooling 文档批次的重复三级标题加上上下文后缀，消除 `MD024`
+- 其余 PR 信号已核对：
+  - 当前没有 failed checks
+  - MegaLinter 仅报告 1 条 `dotnet-format` 相关问题；本轮先按 latest open review threads 收口本地仍成立项
+  - GitHub Test Reporter 显示 `2336` tests passed、`0` failed
+
+### 验证（PR #343 review follow-up）
+
+- 2026-05-09：`python3 .agents/skills/gframework-pr-review/scripts/fetch_current_pr_review.py --json-output /tmp/current-pr-review.json`
+  - 结果：通过
+  - 备注：确认 PR `#343` 当前仍有 3 条 latest unresolved CodeRabbit threads，且都可在本地直接复现
+- 2026-05-09：`git diff --check -- GFramework.Game.Tests/Config/YamlConfigLoaderTests.cs GFramework.SourceGenerators.Tests/Config/SchemaConfigGeneratorTests.cs ai-plan/public/ai-first-config-system/todos/ai-first-config-system-tracking.md ai-plan/public/ai-first-config-system/traces/ai-first-config-system-trace.md`
+  - 结果：通过
+- 2026-05-09：`python3 scripts/license-header.py --check --paths GFramework.Game.Tests/Config/YamlConfigLoaderTests.cs GFramework.SourceGenerators.Tests/Config/SchemaConfigGeneratorTests.cs`
+  - 结果：通过
+- 2026-05-09：`dotnet build GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release`
+  - 结果：通过（0 warnings, 0 errors）
+  - 备注：沙箱内并行 restore 命中了 `.nuget.g.props` 已存在的环境型冲突；已按仓库规则在沙箱外重跑原命令，并以外部结果作为准确信号
+- 2026-05-09：`dotnet build GFramework.SourceGenerators.Tests/GFramework.SourceGenerators.Tests.csproj -c Release`
+  - 结果：通过（0 warnings, 0 errors）
+  - 备注：已在沙箱外串行重跑原命令，确认本轮 PR review 修复未引入构建问题
+
+### 下一步（PR #343 review follow-up）
+
+1. 若本轮定向校验通过，重新抓取 PR `#343` review 状态，确认这 3 条 open threads 是否已具备自动折叠条件
+2. 若 PR 仍残留 review 信号，继续只处理 latest unresolved thread 中本地仍成立的问题，不回头追旧 summary 噪音
