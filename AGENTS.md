@@ -102,9 +102,13 @@ All AI agents and contributors must follow these rules when writing, reviewing, 
 
 ## Repository Boot Skill
 
-- The repository-maintained Codex boot skill lives at `.codex/skills/gframework-boot/`.
+- The repository-maintained Codex boot skill lives at `.agents/skills/gframework-boot/`.
+- The repository-maintained multi-agent coordination skill lives at `.agents/skills/gframework-multi-agent-batch/`.
 - Prefer invoking `$gframework-boot` when the user uses short startup prompts such as `boot`、`continue`、`next step`、
   `按 boot 开始`、`先看 AGENTS`、`继续当前任务`.
+- Prefer invoking `$gframework-multi-agent-batch` when the user explicitly wants the main agent to delegate bounded
+  parallel work, track subagent progress, maintain `ai-plan`, verify subagent output, and keep coordinating until the
+  current multi-agent batch reaches a natural stop boundary.
 - The boot skill is a startup convenience layer, not a replacement for this document. If the skill and `AGENTS.md`
   diverge, follow `AGENTS.md` first and update the skill in the same change.
 - The boot skill MUST read `AGENTS.md`、`.ai/environment/tools.ai.yaml`、`ai-plan/public/README.md` and the relevant
@@ -130,6 +134,52 @@ All AI agents and contributors must follow these rules when writing, reviewing, 
   higher confidence reasoning.
 - The main agent remains responsible for reviewing and integrating subagent output. Unreviewed subagent conclusions do
   not count as final results.
+
+### Multi-Agent Coordination Rules
+
+The terms below describe the default guardrails for multi-agent batches and how they affect worker-launch decisions.
+
+- `branch-diff budget`: the maximum acceptable branch diff size in files or lines before another worker wave becomes
+  harder to review as a single PR.
+- `reviewability budget`: the cumulative complexity limit beyond which accepting more parallel slices would materially
+  reduce review quality, even if the raw file count still looks acceptable.
+- `context-budget`: the main agent's remaining capacity to track active workers, validation, and integration state
+  without losing critical execution context.
+- When any of these budgets approaches its safe limit, the main agent SHOULD stop launching more workers and close the
+  current wave first.
+- `$gframework-multi-agent-batch` contains the fuller workflow and stop-condition guidance for applying these budgets in
+  practice.
+
+- Prefer the repository's multi-agent coordination mode when the user explicitly wants the main agent to keep
+  orchestrating parallel subagents, or when the work naturally splits into `2+` disjoint write slices that can proceed
+  in parallel without blocking the next local step.
+- In that mode, the main agent MUST keep ownership of:
+  - critical-path selection
+  - baseline and stop-condition tracking
+  - `ai-plan` updates
+  - validation planning and final validation
+  - review and acceptance of every subagent result
+  - the final integration and completion decision
+- Before spawning any `worker` subagent, the main agent MUST:
+  - identify the immediate blocking step and keep it local
+  - define disjoint file or subsystem ownership for each worker
+  - state the required validation commands and expected output format
+  - check that the expected write set still fits the current branch-diff and reviewability budget
+- While workers run, the main agent MUST avoid overlapping edits and focus on non-conflicting work such as:
+  - ranking the next candidate slices
+  - reviewing completed worker output
+  - recomputing branch-diff and context-budget posture
+  - keeping `ai-plan/public/**` recovery artifacts current
+- Before accepting a worker result, the main agent MUST confirm:
+  - the worker stayed within its owned files or subsystem
+  - the reported validation is sufficient for that slice
+  - any accepted findings or follow-up scope are recorded in the active `ai-plan` todo or trace when the task is
+    complex or multi-step
+- Do not continue launching workers merely because a file-count threshold still has room. Stop the current wave when
+  ownership boundaries start to overlap, reviewability materially degrades, or the context-budget signal says the main
+  agent should close the batch.
+- When a complex task uses multiple workers, the main agent SHOULD prefer the public workflow documented by
+  `$gframework-multi-agent-batch` unless a more task-specific skill already provides stricter rules.
 
 ## Commenting Rules (MUST)
 

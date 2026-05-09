@@ -2,6 +2,121 @@
 
 ## 2026-05-09
 
+### 阶段：PR #345 latest-head review 收口（CQRS-REWRITE-RP-128）
+
+- 使用 `$gframework-pr-review` 抓取当前分支对应的 `PR #345`，确认 latest-head 没有新的 unresolved review thread，但 CodeRabbit 最新 review body 仍保留 `4` 条 actionable comments
+- 本轮本地复核后接受并修复的反馈收敛到四类：
+  - `AGENTS.md` 的 multi-agent budget 术语缺少明确释义，影响新贡献者理解 stop condition
+  - `StreamLifetimeBenchmarks` 的 `ConsumeFirstItemAsync(...)` 未显式向枚举器传播 `CancellationToken`，且 `[EnumeratorCancellation]` 仍使用全限定名
+  - `StreamLifetimeBenchmarks` 类级 `<remarks>` 尚未解释 `FirstItem / DrainAll` 观测维度的取舍
+  - `GFramework.Cqrs.Benchmarks/README.md` 与 `ai-plan/public/cqrs-rewrite/todos/**` 仍保留治理型 `RP-127` 表述、过期 `PR #344` 锚点与旧 branch diff 数字
+- 本轮验证计划保持最小化：
+  - 代码路径用 `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release` 证明 benchmark 工程仍可编译
+  - 文档与 tracking 更新后补跑 `python3 scripts/license-header.py --check --paths AGENTS.md GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+- 本轮验证结果：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths AGENTS.md GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+- 当前分支相对 `origin/main` (`d85828c5`) 的累计 branch diff 已复核为 `21 files / 1344 insertions / 194 deletions`，后续 active tracking 与 trace 均以这组数字为准
+- 下一恢复点：
+  - 推送本轮 commit 后，再次运行 `$gframework-pr-review` 复核 `PR #345` latest-head review body 是否已收敛
+  - 若 stream lifetime 后续仍要继续压热路径，优先恢复 `Transient + FirstItem` 的小幅差值复核，而不是重新展开已收口的 `README` / `ai-plan` 漂移问题
+
+### 阶段：stream lifetime 观测维度补齐与 generated binding 强类型缓存（CQRS-REWRITE-RP-127）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-126` 已建立四方 stream lifetime 口径后，本轮改用多 worker wave 同时推进三个互不冲突切片：
+  - `benchmark-only`：为 `StreamLifetimeBenchmarks` 增加 `FirstItem / DrainAll` 观测维度，并收口 `MA0004`
+  - `runtime-only`：把 `CqrsDispatcher.CreateStream(...)` 的 stream dispatch binding 改成按 `TResponse` 强类型缓存，避免 generated lane 在热路径上继续通过 `object -> IAsyncEnumerable<TResponse>` 桥接
+  - `docs / ai-plan`：把 `RP-126` 的旧恢复结论更新为本轮实测结果，并给出下一恢复入口
+- 本轮主线程验收与修正：
+  - 首次并行验证时，`dotnet test` 与 `dotnet build` 同跑触发 `MSB3030` 输出争用；已按仓库规则改为串行重跑同一命令，并以串行结果为权威
+  - runtime worker 初版在 `CqrsDispatcher.cs` 留下一个 `StreamInvoker<TResponse>` 方法组绑定编译错误；主线程已局部修正为显式 lambda 适配，未改变预期语义
+  - 经修正后，generated lane 不再出现 “incompatible invoker signature” 运行时异常，`StreamLifetimeBenchmarks` 16 个 case 全部通过
+- 本轮验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherCacheTests|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+    - 结果：通过，`31/31` passed
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Transient + FirstItem` 下 generated 约 `100.011 ns / 240 B`、reflection 约 `97.628 ns / 240 B`；`Transient + DrainAll` 下 generated 约 `116.780 ns / 304 B`、reflection 约 `124.174 ns / 304 B`
+- 本轮结论：
+  - `FirstItem / DrainAll` 双观测维度把“建流到首个元素的瞬时成本”和“完整枚举总成本”拆开后，`Transient` 场景下的 generated lane 已不再呈现统一的反向退化
+  - 当前仍保留的差值集中在 `Transient + FirstItem`，规模约 `2.4 ns`，明显小于 `RP-126` 的旧结论；而 `Transient + DrainAll` 已转为 generated 领先 reflection
+  - 当前分支相对 `origin/main` 的累计 branch diff 已到 `21 files`（`1231 insertions / 181 deletions`），仍低于 `$gframework-batch-boot 50` 阈值；但主线程已接近当前回合的安全上下文预算，因此在本轮自然边界停止，不继续开下一波 worker
+- 下一恢复点：
+  - 若继续 benchmark 线，先从 `Transient + FirstItem` 的小幅差值恢复，并用 `StreamInvokerBenchmarks` 复核 generated lane 的常量成本收益是否仍成立；若差值不稳定，再考虑把下一批切到 `Mediator` concrete runtime 的 stream lifetime 对照
+  - 若切回 runtime 线，则以 `b7fa3eee` 与本轮 `StreamLifetimeBenchmarks` 双口径结果作为后续回归基线
+
+### 阶段：stream lifetime 对照口径补齐（CQRS-REWRITE-RP-126）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-125` 先把 request lifetime benchmark 宿主对齐到 generated-provider 路径后，本轮继续补齐 stream 生命周期矩阵的当前对照口径，不回到 runtime 或测试代码
+- 本轮主线程决策：
+  - 只修改 `GFramework.Cqrs.Benchmarks/Messaging/GeneratedStreamLifetimeBenchmarkRegistry.cs` 与 `StreamLifetimeBenchmarks.cs`，不扩散到 `GFramework.Cqrs` runtime、README 或 docs
+  - 将 stream lifetime 的 GFramework reflection、GFramework generated 与 `MediatR` 请求/响应/handler 类型拆开，避免不同宿主继续共用同一 stream 合同而污染对照语义
+  - 将 generated registry 收口为只绑定 `GeneratedBenchmarkStreamRequest/Response` 这一条 generated lane，避免静态 dispatcher cache 把 reflection 与 generated 结果混在一起
+- 本轮验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / generated / reflection / `MediatR` 约为 `79.602 ns / 280 B`、`111.547 ns / 280 B`、`120.553 ns / 280 B`、`208.381 ns / 672 B`；`Transient` 下 baseline / reflection / generated / `MediatR` 约为 `76.351 ns / 280 B`、`119.632 ns / 304 B`、`129.166 ns / 304 B`、`213.420 ns / 672 B`
+- 本轮结论：
+  - 当前 stream 生命周期矩阵已经具备可直接比较 `baseline / reflection / generated / MediatR` 的四方口径，后续恢复时无需再回头拼接不同批次的 stream 生命周期数据
+  - 当前短跑下，generated lane 在 `Singleton` 档优于 reflection，但在 `Transient` 档仍慢于 reflection，差值约为 `9.5 ns` 与 `24 B`；这里先只把它记录为 benchmark 观察，不把它放大成更宽泛的 runtime 优劣结论
+  - 当前已提交分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的累计 branch diff 已到 `10 files`（`556 insertions / 75 deletions`），仍远低于 `$gframework-batch-boot 50` 的 `50 files` stop condition
+- 下一恢复点：
+  - 若继续 benchmark 线，优先从 `Stream_GFrameworkGenerated` 与 `Stream_GFrameworkReflection` 的 `Transient` 差值恢复，先确认该差值是否稳定，再决定继续压 generated 宿主的瞬时解析成本，或单开 `Mediator` concrete runtime 的 stream lifetime 对照批次；若切回 runtime 线，则以 `RP-126` 的四方矩阵作为后续性能回归基线
+
+### 阶段：request lifetime generated-provider 宿主对齐（CQRS-REWRITE-RP-125）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-124` 收口 stream behavior presence cache 后，本轮先不继续改 dispatcher，而是回头补齐 request lifetime benchmark 宿主路径，让生命周期矩阵与当前默认 request steady-state 的 generated-provider 口径重新对齐
+- 本轮主线程决策：
+  - 只修改 `GFramework.Cqrs.Benchmarks/Messaging/GeneratedRequestLifetimeBenchmarkRegistry.cs` 与 `RequestLifetimeBenchmarks.cs`
+  - 为 request lifetime 补入 handwritten generated registry，只暴露最小 generated request descriptor，再由 benchmark 主体显式控制 `Singleton / Transient` handler 生命周期
+  - 在 setup / cleanup 统一清理 dispatcher cache，避免不同生命周期矩阵之间共享静态缓存而污染结果
+- 本轮验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约为 `5.012 ns / 32 B`、`49.612 ns / 32 B`、`51.796 ns / 232 B`；`Transient` 下约为 `3.962 ns / 32 B`、`50.480 ns / 56 B`、`50.284 ns / 232 B`
+- 本轮结论：
+  - request lifetime 宿主现已与当前 generated-provider request 宿主保持一致，后续不再需要把旧生命周期矩阵结果与 generated steady-state 数据做“跨宿主”比较
+  - 当前短跑下，`Singleton` 仍稳定快于 `MediatR`，`Transient` 已缩到基本持平但仍略慢；这给下一步 stream 线 benchmark 同步提供了更干净的 request 基线
+- 下一恢复点：
+  - 继续补齐 `StreamLifetimeBenchmarks` 的当前对照口径，把 `baseline / reflection / generated / MediatR` 四方生命周期矩阵补完整
+
+### 阶段：stream behavior presence cache（CQRS-REWRITE-RP-124）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-123` 收口 notification publisher review 线程后，继续把 `CqrsDispatcher` 的 stream 热路径与 `RP-122` 的 request hot path 对齐，选择“缓存 `CreateStream(...)` 的 behavior presence 判定”这一条最小且可验证的 runtime 切片
+- 本轮主线程决策：
+  - 仅修改 `GFramework.Cqrs/Internal/CqrsDispatcher.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`，并新增 `DispatcherZeroPipelineStreamRequest/Handler` 测试桩，不扩散到新的公开 API、中文文档或额外 benchmark 宿主实现
+  - 为 `CqrsDispatcher` 新增实例级 `_streamBehaviorPresenceCache`，按闭合 `IStreamPipelineBehavior<,>` 服务类型缓存当前 dispatcher 容器中的服务可见性，让 `CreateStream(...)` 在 steady-state 下不再重复调用 `HasRegistration(Type)`
+  - 在 `CqrsDispatcherCacheTests` 新增 `Dispatcher_Should_Cache_Stream_Behavior_Presence_Per_Dispatcher_Instance()`，显式锁住“同容器共享同一 dispatcher/cache、独立容器不共享”的实例级边界，并把缓存值与容器实际 `HasRegistration(...)` 语义对齐，避免测试再依赖夹具对某个具体 stream 类型的错误可见性假设
+- 本轮验证：
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs GFramework.Cqrs.Tests/Cqrs/DispatcherZeroPipelineStreamRequest.cs GFramework.Cqrs.Tests/Cqrs/DispatcherZeroPipelineStreamHandler.cs`
+    - 结果：通过
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherCacheTests"`
+    - 结果：通过，`12/12` passed
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks.Stream_GFrameworkCqrs*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 约 `107.241 ns / 240 B`，`Transient` 约 `119.434 ns / 264 B`
+  - `git diff --check`
+    - 结果：通过
+    - 备注：仅剩 `GFramework.sln` 的历史 CRLF 提示，无本轮新增 diff 格式问题
+- 下一恢复点：
+  - 推送本轮 commit 后，再次运行 `$gframework-pr-review` 复核 `PR #344` latest-head thread 是否已收敛；若 review 已清空，则下一批优先补完整 `StreamLifetimeBenchmarks` 三方对照，再决定继续压 stream 零管道常量路径还是切回 request `Transient` 热点
+
 ### 阶段：PR #344 latest-head review 收尾（CQRS-REWRITE-RP-123）
 
 - 使用 `$gframework-pr-review` 重新抓取当前分支 PR，确认当前 worktree 对应 `PR #344`，latest-head 仍有 `CodeRabbit 2` / `Greptile 1` open thread

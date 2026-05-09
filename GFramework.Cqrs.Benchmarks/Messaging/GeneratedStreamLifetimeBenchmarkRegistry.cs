@@ -26,8 +26,8 @@ public sealed class GeneratedStreamLifetimeBenchmarkRegistry :
     private static readonly GFramework.Cqrs.CqrsStreamInvokerDescriptor Descriptor =
         new(
             typeof(IStreamRequestHandler<
-                StreamLifetimeBenchmarks.BenchmarkStreamRequest,
-                StreamLifetimeBenchmarks.BenchmarkResponse>),
+                StreamLifetimeBenchmarks.GeneratedBenchmarkStreamRequest,
+                StreamLifetimeBenchmarks.GeneratedBenchmarkResponse>),
             typeof(GeneratedStreamLifetimeBenchmarkRegistry).GetMethod(
                 nameof(InvokeBenchmarkStreamHandler),
                 BindingFlags.Public | BindingFlags.Static)
@@ -36,8 +36,8 @@ public sealed class GeneratedStreamLifetimeBenchmarkRegistry :
     private static readonly IReadOnlyList<GFramework.Cqrs.CqrsStreamInvokerDescriptorEntry> Descriptors =
     [
         new GFramework.Cqrs.CqrsStreamInvokerDescriptorEntry(
-            typeof(StreamLifetimeBenchmarks.BenchmarkStreamRequest),
-            typeof(StreamLifetimeBenchmarks.BenchmarkResponse),
+            typeof(StreamLifetimeBenchmarks.GeneratedBenchmarkStreamRequest),
+            typeof(StreamLifetimeBenchmarks.GeneratedBenchmarkResponse),
             Descriptor)
     ];
 
@@ -78,8 +78,8 @@ public sealed class GeneratedStreamLifetimeBenchmarkRegistry :
         Type responseType,
         out GFramework.Cqrs.CqrsStreamInvokerDescriptor? descriptor)
     {
-        if (requestType == typeof(StreamLifetimeBenchmarks.BenchmarkStreamRequest) &&
-            responseType == typeof(StreamLifetimeBenchmarks.BenchmarkResponse))
+        if (requestType == typeof(StreamLifetimeBenchmarks.GeneratedBenchmarkStreamRequest) &&
+            responseType == typeof(StreamLifetimeBenchmarks.GeneratedBenchmarkResponse))
         {
             descriptor = Descriptor;
             return true;
@@ -102,9 +102,9 @@ public sealed class GeneratedStreamLifetimeBenchmarkRegistry :
         CancellationToken cancellationToken)
     {
         var typedHandler = (IStreamRequestHandler<
-            StreamLifetimeBenchmarks.BenchmarkStreamRequest,
-            StreamLifetimeBenchmarks.BenchmarkResponse>)handler;
-        var typedRequest = (StreamLifetimeBenchmarks.BenchmarkStreamRequest)request;
+            StreamLifetimeBenchmarks.GeneratedBenchmarkStreamRequest,
+            StreamLifetimeBenchmarks.GeneratedBenchmarkResponse>)handler;
+        var typedRequest = (StreamLifetimeBenchmarks.GeneratedBenchmarkStreamRequest)request;
         return typedHandler.Handle(typedRequest, cancellationToken);
     }
 }

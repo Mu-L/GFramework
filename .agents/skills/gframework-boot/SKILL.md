@@ -9,6 +9,8 @@ description: Repository-specific boot workflow for the GFramework repo. Use when
 
 Use this skill to bootstrap work in the GFramework repository with minimal user prompting.
 Treat `AGENTS.md` as the source of truth. Use this skill to enforce a startup sequence, not to replace repository rules.
+If the task clearly requires the main agent to keep coordinating multiple parallel subagents while maintaining
+`ai-plan` and reviewing each result, switch to `gframework-multi-agent-batch` after the boot context is established.
 
 ## Startup Workflow
 
@@ -45,6 +47,8 @@ Treat `AGENTS.md` as the source of truth. Use this skill to enforce a startup se
    - Use `explorer` with `gpt-5.1-codex-mini` for narrow read-only questions, tracing, inventory, and comparisons
    - Use `worker` with `gpt-5.4` only for bounded implementation tasks with explicit ownership
    - Do not delegate purely for ceremony; delegate only when it materially shortens the task or controls context growth
+   - If the user explicitly wants the main agent to keep orchestrating multiple workers through several review/integration
+     cycles, prefer `gframework-multi-agent-batch` over ad-hoc delegation
 13. Before editing files, tell the user what you read, how you classified the task, whether subagents will be used,
     and the first implementation step.
 14. Proceed with execution, validation, and documentation updates required by `AGENTS.md`.

@@ -26,6 +26,10 @@ internal sealed class CqrsDispatcher(
     // 每次 SendAsync 都重复询问容器。缓存值只反映当前 dispatcher 持有容器的注册可见性，不跨 runtime 共享。
     private readonly ConcurrentDictionary<Type, bool> _requestBehaviorPresenceCache = new();
 
+    // 与 request 路径相同，stream 的 behavior 注册可见性在当前 dispatcher 生命周期内保持稳定。
+    // 这里缓存 “CreateStream(...) 对应 behaviorType 是否存在注册”，避免零管道 stream 每次建流都重复询问容器。
+    private readonly ConcurrentDictionary<Type, bool> _streamBehaviorPresenceCache = new();
+
     // 卸载安全的进程级缓存：当 generated registry 提供 request invoker 元数据时，
     // registrar 会按请求/响应类型对把它们写入这里；若类型被卸载，条目会自然失效。
     private static readonly WeakTypePairCache<GeneratedRequestInvokerMetadata>
@@ -41,8 +45,9 @@ internal sealed class CqrsDispatcher(
     private static readonly WeakKeyCache<Type, NotificationDispatchBinding>
         NotificationDispatchBindings = new();
 
-    // 卸载安全的进程级缓存：请求/响应类型对采用弱键缓存，避免流式消息类型被静态字典永久保留。
-    private static readonly WeakTypePairCache<StreamDispatchBinding>
+    // 卸载安全的进程级缓存：流式请求/响应类型对命中后复用强类型 dispatch binding 盒子，
+    // 避免 stream 响应元素在热路径上退化为 object 桥接，同时仍保持弱键卸载安全语义。
+    private static readonly WeakTypePairCache<StreamDispatchBindingBox>
         StreamDispatchBindings = new();
 
     // 卸载安全的进程级缓存：请求/响应类型对命中后复用强类型 dispatch binding；
@@ -186,18 +191,15 @@ internal sealed class CqrsDispatcher(
         ArgumentNullException.ThrowIfNull(request);
 
         var requestType = request.GetType();
-        var dispatchBinding = StreamDispatchBindings.GetOrAdd(
-            requestType,
-            typeof(TResponse),
-            static (requestType, responseType) => CreateStreamDispatchBinding(requestType, responseType));
+        var dispatchBinding = GetStreamDispatchBinding<TResponse>(requestType);
         var handler = container.Get(dispatchBinding.HandlerType)
                       ?? throw new InvalidOperationException(
                           $"No CQRS stream handler registered for {requestType.FullName}.");
 
         PrepareHandler(handler, context);
-        if (!container.HasRegistration(dispatchBinding.BehaviorType))
+        if (!HasStreamBehaviorRegistration(dispatchBinding.BehaviorType))
         {
-            return (IAsyncEnumerable<TResponse>)dispatchBinding.StreamInvoker(handler, request, cancellationToken);
+            return dispatchBinding.StreamInvoker(handler, request, cancellationToken);
         }
 
         var behaviors = container.GetAll(dispatchBinding.BehaviorType);
@@ -207,8 +209,23 @@ internal sealed class CqrsDispatcher(
             PrepareHandler(behavior, context);
         }
 
-        return (IAsyncEnumerable<TResponse>)dispatchBinding.GetPipelineExecutor(behaviors.Count)
+        return dispatchBinding.GetPipelineExecutor(behaviors.Count)
             .Invoke(handler, behaviors, dispatchBinding.StreamInvoker, request, cancellationToken);
+    }
+
+    /// <summary>
+    ///     读取当前 dispatcher 容器里是否存在指定 stream pipeline 行为注册，并在首次命中后缓存结果。
+    /// </summary>
+    /// <param name="behaviorType">目标 stream pipeline 行为服务类型。</param>
+    /// <returns>存在注册时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    private bool HasStreamBehaviorRegistration(Type behaviorType)
+    {
+        ArgumentNullException.ThrowIfNull(behaviorType);
+
+        return _streamBehaviorPresenceCache.GetOrAdd(
+            behaviorType,
+            static (cachedBehaviorType, currentContainer) => currentContainer.HasRegistration(cachedBehaviorType),
+            container);
     }
 
     /// <summary>
@@ -380,75 +397,114 @@ internal sealed class CqrsDispatcher(
     /// <summary>
     ///     为指定流式请求类型构造完整分发绑定，把服务类型与调用委托聚合到同一缓存项。
     /// </summary>
-    private static StreamDispatchBinding CreateStreamDispatchBinding(Type requestType, Type responseType)
+    private static StreamDispatchBinding<TResponse> CreateStreamDispatchBinding<TResponse>(Type requestType)
     {
-        var generatedDescriptor = TryGetGeneratedStreamInvokerDescriptor(requestType, responseType);
+        var generatedDescriptor = TryGetGeneratedStreamInvokerDescriptor<TResponse>(requestType);
         if (generatedDescriptor is not null)
         {
             var resolvedGeneratedDescriptor = generatedDescriptor.Value;
-            return new StreamDispatchBinding(
+            return new StreamDispatchBinding<TResponse>(
                 resolvedGeneratedDescriptor.HandlerType,
-                typeof(IStreamPipelineBehavior<,>).MakeGenericType(requestType, responseType),
+                typeof(IStreamPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse)),
                 requestType,
-                responseType,
                 resolvedGeneratedDescriptor.Invoker);
         }
 
-        return new StreamDispatchBinding(
-            typeof(IStreamRequestHandler<,>).MakeGenericType(requestType, responseType),
-            typeof(IStreamPipelineBehavior<,>).MakeGenericType(requestType, responseType),
+        return new StreamDispatchBinding<TResponse>(
+            typeof(IStreamRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse)),
+            typeof(IStreamPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse)),
             requestType,
-            responseType,
-            CreateStreamInvoker(requestType, responseType));
+            CreateStreamInvoker<TResponse>(requestType));
+    }
+
+    /// <summary>
+    ///     获取指定流式请求/响应类型对的 dispatch binding；若缓存未命中则按当前加载状态创建。
+    /// </summary>
+    /// <typeparam name="TResponse">流式响应元素类型。</typeparam>
+    /// <param name="requestType">流式请求运行时类型。</param>
+    /// <returns>当前请求/响应类型对对应的强类型 stream dispatch binding。</returns>
+    private static StreamDispatchBinding<TResponse> GetStreamDispatchBinding<TResponse>(Type requestType)
+    {
+        var bindingBox = StreamDispatchBindings.GetOrAdd(
+            requestType,
+            typeof(TResponse),
+            static (cachedRequestType, cachedResponseType) =>
+                CreateStreamDispatchBindingBox<TResponse>(cachedRequestType, cachedResponseType));
+        return bindingBox.Get<TResponse>();
+    }
+
+    /// <summary>
+    ///     为弱键流式请求缓存创建强类型 binding 盒子，避免响应元素走 object 结果桥接。
+    /// </summary>
+    /// <typeparam name="TResponse">流式响应元素类型。</typeparam>
+    /// <param name="requestType">流式请求运行时类型。</param>
+    /// <param name="responseType">缓存命中的响应运行时类型。</param>
+    /// <returns>可放入弱键缓存的强类型 binding 盒子。</returns>
+    private static StreamDispatchBindingBox CreateStreamDispatchBindingBox<TResponse>(
+        Type requestType,
+        Type responseType)
+    {
+        if (responseType != typeof(TResponse))
+        {
+            throw new InvalidOperationException(
+                $"Stream dispatch binding cache expected response type {typeof(TResponse).FullName}, but received {responseType.FullName}.");
+        }
+
+        return StreamDispatchBindingBox.Create(CreateStreamDispatchBinding<TResponse>(requestType));
     }
 
     /// <summary>
     ///     尝试从容器已注册的 generated stream invoker provider 中获取指定流式请求/响应类型对的元数据。
     /// </summary>
+    /// <typeparam name="TResponse">流式响应元素类型。</typeparam>
     /// <param name="requestType">流式请求运行时类型。</param>
-    /// <param name="responseType">流式响应元素类型。</param>
     /// <returns>命中时返回强类型化后的描述符；否则返回 <see langword="null" />。</returns>
-    private static StreamInvokerDescriptor? TryGetGeneratedStreamInvokerDescriptor(Type requestType, Type responseType)
+    private static StreamInvokerDescriptor<TResponse>? TryGetGeneratedStreamInvokerDescriptor<TResponse>(Type requestType)
     {
-        return GeneratedStreamInvokers.TryGetValue(requestType, responseType, out var metadata) &&
+        return GeneratedStreamInvokers.TryGetValue(requestType, typeof(TResponse), out var metadata) &&
                metadata is not null
-            ? CreateStreamInvokerDescriptor(requestType, responseType, metadata)
+            ? CreateStreamInvokerDescriptor<TResponse>(requestType, metadata)
             : null;
     }
 
     /// <summary>
     ///     把 provider 返回的弱类型描述符转换为 dispatcher 内部使用的 stream invoker 描述符。
     /// </summary>
+    /// <typeparam name="TResponse">流式响应元素类型。</typeparam>
     /// <param name="requestType">流式请求运行时类型。</param>
-    /// <param name="responseType">流式响应元素类型。</param>
     /// <param name="descriptor">provider 返回的弱类型描述符。</param>
     /// <returns>可直接用于创建 stream dispatch binding 的描述符。</returns>
     /// <exception cref="InvalidOperationException">当 provider 返回的委托签名与当前流式请求/响应类型对不匹配时抛出。</exception>
-    private static StreamInvokerDescriptor CreateStreamInvokerDescriptor(
+    private static StreamInvokerDescriptor<TResponse> CreateStreamInvokerDescriptor<TResponse>(
         Type requestType,
-        Type responseType,
         GeneratedStreamInvokerMetadata descriptor)
     {
         if (!descriptor.InvokerMethod.IsStatic)
         {
             throw new InvalidOperationException(
-                $"Generated CQRS stream invoker provider returned a non-static invoker method for request type {requestType.FullName} and response type {responseType.FullName}.");
+                $"Generated CQRS stream invoker provider returned a non-static invoker method for request type {requestType.FullName} and response type {typeof(TResponse).FullName}.");
         }
 
         try
         {
-            if (Delegate.CreateDelegate(typeof(StreamInvoker), descriptor.InvokerMethod) is not StreamInvoker invoker)
+            if (Delegate.CreateDelegate(typeof(WeakStreamInvoker), descriptor.InvokerMethod) is not
+                WeakStreamInvoker weakInvoker)
             {
                 throw new InvalidOperationException(
-                    $"Generated CQRS stream invoker provider returned an incompatible invoker for request type {requestType.FullName} and response type {responseType.FullName}.");
+                    $"Generated CQRS stream invoker provider returned an incompatible invoker for request type {requestType.FullName} and response type {typeof(TResponse).FullName}.");
             }
 
-            return new StreamInvokerDescriptor(descriptor.HandlerType, invoker);
+            // generated stream descriptor 的公开契约仍以 object 返回值暴露异步流；
+            // 这里在 binding 创建时只做一次适配，把后续 CreateStream 热路径保持为强类型调用。
+            var adapter = new GeneratedStreamInvokerAdapter<TResponse>(weakInvoker);
+            StreamInvoker<TResponse> invoker = (handler, request, cancellationToken) =>
+                adapter.Invoke(handler, request, cancellationToken);
+            return new StreamInvokerDescriptor<TResponse>(descriptor.HandlerType, invoker);
         }
         catch (ArgumentException exception)
         {
             throw new InvalidOperationException(
-                $"Generated CQRS stream invoker provider returned an incompatible invoker for request type {requestType.FullName} and response type {responseType.FullName}.",
+                $"Generated CQRS stream invoker provider returned an incompatible invoker for request type {requestType.FullName} and response type {typeof(TResponse).FullName}.",
                 exception);
         }
     }
@@ -520,11 +576,11 @@ internal sealed class CqrsDispatcher(
     /// <summary>
     ///     生成流式处理器调用委托，避免每次创建流都重复反射。
     /// </summary>
-    private static StreamInvoker CreateStreamInvoker(Type requestType, Type responseType)
+    private static StreamInvoker<TResponse> CreateStreamInvoker<TResponse>(Type requestType)
     {
         var method = StreamHandlerInvokerMethodDefinition
-            .MakeGenericMethod(requestType, responseType);
-        return (StreamInvoker)Delegate.CreateDelegate(typeof(StreamInvoker), method);
+            .MakeGenericMethod(requestType, typeof(TResponse));
+        return (StreamInvoker<TResponse>)Delegate.CreateDelegate(typeof(StreamInvoker<TResponse>), method);
     }
 
     /// <summary>
@@ -575,7 +631,7 @@ internal sealed class CqrsDispatcher(
     /// <summary>
     ///     执行已强类型化的流式处理器调用。
     /// </summary>
-    private static object InvokeStreamHandler<TRequest, TResponse>(
+    private static IAsyncEnumerable<TResponse> InvokeStreamHandler<TRequest, TResponse>(
         object handler,
         object request,
         CancellationToken cancellationToken)
@@ -590,10 +646,10 @@ internal sealed class CqrsDispatcher(
     ///     执行指定行为数量的强类型 stream pipeline executor。
     ///     该入口本身是缓存的固定 executor 形状；每次建流只绑定当前 handler 与 behaviors 实例。
     /// </summary>
-    private static object InvokeStreamPipelineExecutor<TRequest, TResponse>(
+    private static IAsyncEnumerable<TResponse> InvokeStreamPipelineExecutor<TRequest, TResponse>(
         object handler,
         IReadOnlyList<object> behaviors,
-        StreamInvoker streamInvoker,
+        StreamInvoker<TResponse> streamInvoker,
         object request,
         CancellationToken cancellationToken)
         where TRequest : IStreamRequest<TResponse>
@@ -619,12 +675,17 @@ internal sealed class CqrsDispatcher(
     private delegate ValueTask NotificationInvoker(object handler, object notification,
         CancellationToken cancellationToken);
 
-    private delegate object StreamInvoker(object handler, object request, CancellationToken cancellationToken);
+    private delegate IAsyncEnumerable<TResponse> StreamInvoker<TResponse>(
+        object handler,
+        object request,
+        CancellationToken cancellationToken);
 
-    private delegate object StreamPipelineInvoker(
+    private delegate object WeakStreamInvoker(object handler, object request, CancellationToken cancellationToken);
+
+    private delegate IAsyncEnumerable<TResponse> StreamPipelineInvoker<TResponse>(
         object handler,
         IReadOnlyList<object> behaviors,
-        StreamInvoker streamInvoker,
+        StreamInvoker<TResponse> streamInvoker,
         object request,
         CancellationToken cancellationToken);
 
@@ -674,6 +735,72 @@ internal sealed class CqrsDispatcher(
     }
 
     /// <summary>
+    ///     将不同响应类型的 stream dispatch binding 包装到统一弱缓存值中，
+    ///     同时保留强类型流式委托，避免响应元素退化为 object 桥接。
+    /// </summary>
+    private abstract class StreamDispatchBindingBox
+    {
+        /// <summary>
+        ///     创建一个新的强类型 stream dispatch binding 盒子。
+        /// </summary>
+        public static StreamDispatchBindingBox Create<TResponse>(StreamDispatchBinding<TResponse> binding)
+        {
+            ArgumentNullException.ThrowIfNull(binding);
+            return new StreamDispatchBindingBox<TResponse>(binding);
+        }
+
+        /// <summary>
+        ///     读取指定响应类型的 stream dispatch binding。
+        /// </summary>
+        public abstract StreamDispatchBinding<TResponse> Get<TResponse>();
+    }
+
+    /// <summary>
+    ///     保存特定响应类型的 stream dispatch binding。
+    /// </summary>
+    /// <typeparam name="TResponse">流式响应元素类型。</typeparam>
+    private sealed class StreamDispatchBindingBox<TResponse>(StreamDispatchBinding<TResponse> binding)
+        : StreamDispatchBindingBox
+    {
+        private readonly StreamDispatchBinding<TResponse> _binding = binding;
+
+        /// <summary>
+        ///     以原始强类型返回当前 binding；若请求的响应类型不匹配则抛出异常。
+        /// </summary>
+        public override StreamDispatchBinding<TRequestedResponse> Get<TRequestedResponse>()
+        {
+            if (typeof(TRequestedResponse) != typeof(TResponse))
+            {
+                throw new InvalidOperationException(
+                    $"Cached stream dispatch binding for {typeof(TResponse).FullName} cannot be used as {typeof(TRequestedResponse).FullName}.");
+            }
+
+            return (StreamDispatchBinding<TRequestedResponse>)(object)_binding;
+        }
+    }
+
+    /// <summary>
+    ///     将 generated stream provider 的弱类型开放静态入口适配为 dispatcher 内部的强类型流式委托。
+    ///     适配对象与 binding 同生命周期缓存，避免在每次建流时重复创建桥接闭包。
+    /// </summary>
+    /// <typeparam name="TResponse">流式响应元素类型。</typeparam>
+    private sealed class GeneratedStreamInvokerAdapter<TResponse>(WeakStreamInvoker invoker)
+    {
+        private readonly WeakStreamInvoker _invoker = invoker;
+
+        /// <summary>
+        ///     调用 generated provider 暴露的弱类型入口，并把返回结果物化为当前响应类型的异步流。
+        /// </summary>
+        public IAsyncEnumerable<TResponse> Invoke(
+            object handler,
+            object request,
+            CancellationToken cancellationToken)
+        {
+            return (IAsyncEnumerable<TResponse>)_invoker(handler, request, cancellationToken);
+        }
+    }
+
+    /// <summary>
     ///     保存通知分发路径所需的服务类型与强类型调用委托。
     ///     该绑定把“容器解析哪个服务类型”与“如何调用处理器”聚合到同一缓存项中。
     /// </summary>
@@ -703,17 +830,16 @@ internal sealed class CqrsDispatcher(
     ///     保存流式请求分发路径所需的服务类型与调用委托。
     ///     该绑定让建流热路径只需一次缓存命中即可获得解析与调用所需元数据。
     /// </summary>
-    private sealed class StreamDispatchBinding(
+    private sealed class StreamDispatchBinding<TResponse>(
         Type handlerType,
         Type behaviorType,
         Type requestType,
-        Type responseType,
-        StreamInvoker streamInvoker)
+        StreamInvoker<TResponse> streamInvoker)
     {
         // 线程安全：该缓存按 behaviorCount 复用 stream pipeline executor 形状，缓存项只保存委托与数量信息，
         // 不会跨建流缓存 handler 或 behavior 实例。若不同请求持续出现新的行为数量组合，字典会随之增长。
-        private readonly ConcurrentDictionary<int, StreamPipelineExecutor> _pipelineExecutors = new();
-        private readonly StreamPipelineInvoker _pipelineInvoker = CreateStreamPipelineInvoker(requestType, responseType);
+        private readonly ConcurrentDictionary<int, StreamPipelineExecutor<TResponse>> _pipelineExecutors = new();
+        private readonly StreamPipelineInvoker<TResponse> _pipelineInvoker = CreateStreamPipelineInvoker<TResponse>(requestType);
 
         /// <summary>
         ///     获取流式请求处理器在容器中的服务类型。
@@ -728,19 +854,19 @@ internal sealed class CqrsDispatcher(
         /// <summary>
         ///     获取执行流式请求处理器的调用委托。
         /// </summary>
-        public StreamInvoker StreamInvoker { get; } = streamInvoker;
+        public StreamInvoker<TResponse> StreamInvoker { get; } = streamInvoker;
 
         /// <summary>
         ///     获取指定行为数量对应的 stream pipeline executor。
         ///     executor 形状会按行为数量缓存，但不会缓存 handler 或 behavior 实例。
         /// </summary>
-        public StreamPipelineExecutor GetPipelineExecutor(int behaviorCount)
+        public StreamPipelineExecutor<TResponse> GetPipelineExecutor(int behaviorCount)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(behaviorCount);
-            return _pipelineExecutors.GetOrAdd(
+            return _pipelineExecutors.GetOrAdd<StreamPipelineExecutorFactoryState<TResponse>>(
                 behaviorCount,
-                static (count, state) => new StreamPipelineExecutor(count, state.PipelineInvoker),
-                new StreamPipelineExecutorFactoryState(_pipelineInvoker));
+                static (count, state) => CreateStreamPipelineExecutor(count, state.PipelineInvoker),
+                new StreamPipelineExecutorFactoryState<TResponse>(_pipelineInvoker));
         }
 
         /// <summary>
@@ -903,27 +1029,41 @@ internal sealed class CqrsDispatcher(
     /// </summary>
     /// <param name="HandlerType">流式请求处理器在容器中的服务类型。</param>
     /// <param name="Invoker">执行流式请求处理器的调用委托。</param>
-    private readonly record struct StreamInvokerDescriptor(
+    private readonly record struct StreamInvokerDescriptor<TResponse>(
         Type HandlerType,
-        StreamInvoker Invoker);
+        StreamInvoker<TResponse> Invoker);
 
     /// <summary>
     ///     为指定流式请求类型创建可跨多个 behaviorCount 复用的 typed pipeline invoker。
     /// </summary>
-    private static StreamPipelineInvoker CreateStreamPipelineInvoker(Type requestType, Type responseType)
+    private static StreamPipelineInvoker<TResponse> CreateStreamPipelineInvoker<TResponse>(Type requestType)
     {
         var method = StreamPipelineInvokerMethodDefinition
-            .MakeGenericMethod(requestType, responseType);
-        return (StreamPipelineInvoker)Delegate.CreateDelegate(typeof(StreamPipelineInvoker), method);
+            .MakeGenericMethod(requestType, typeof(TResponse));
+        return (StreamPipelineInvoker<TResponse>)Delegate.CreateDelegate(
+            typeof(StreamPipelineInvoker<TResponse>),
+            method);
+    }
+
+    /// <summary>
+    ///     为指定流式请求/响应类型与固定行为数量创建 pipeline executor。
+    ///     行为数量用于表达缓存形状，实际建流仍会消费本次容器解析出的 handler 与 behaviors 实例。
+    /// </summary>
+    private static StreamPipelineExecutor<TResponse> CreateStreamPipelineExecutor<TResponse>(
+        int behaviorCount,
+        StreamPipelineInvoker<TResponse> invoker)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(behaviorCount);
+        return new StreamPipelineExecutor<TResponse>(behaviorCount, invoker);
     }
 
     /// <summary>
     ///     保存固定行为数量下的 typed stream pipeline executor 形状。
     ///     该对象自身可跨建流复用，但每次调用都只绑定当前 handler 与 behavior 实例。
     /// </summary>
-    private sealed class StreamPipelineExecutor(
+    private sealed class StreamPipelineExecutor<TResponse>(
         int behaviorCount,
-        StreamPipelineInvoker invoker)
+        StreamPipelineInvoker<TResponse> invoker)
     {
         /// <summary>
         ///     获取此 executor 预期处理的行为数量。
@@ -933,10 +1073,10 @@ internal sealed class CqrsDispatcher(
         /// <summary>
         ///     使用当前 handler / behaviors / request 执行缓存的 pipeline 形状。
         /// </summary>
-        public object Invoke(
+        public IAsyncEnumerable<TResponse> Invoke(
             object handler,
             IReadOnlyList<object> behaviors,
-            StreamInvoker streamInvoker,
+            StreamInvoker<TResponse> streamInvoker,
             object request,
             CancellationToken cancellationToken)
         {
@@ -953,8 +1093,8 @@ internal sealed class CqrsDispatcher(
     /// <summary>
     ///     为 stream pipeline executor 缓存携带 typed pipeline invoker，避免按行为数量建缓存时创建闭包。
     /// </summary>
-    private readonly record struct StreamPipelineExecutorFactoryState(
-        StreamPipelineInvoker PipelineInvoker);
+    private readonly record struct StreamPipelineExecutorFactoryState<TResponse>(
+        StreamPipelineInvoker<TResponse> PipelineInvoker);
 
     /// <summary>
     ///     供 registrar 在 generated registry 激活后登记 request invoker 元数据。
@@ -1092,12 +1232,12 @@ internal sealed class CqrsDispatcher(
     /// </summary>
     private sealed class StreamPipelineInvocation<TRequest, TResponse>(
         IStreamRequestHandler<TRequest, TResponse> handler,
-        StreamInvoker streamInvoker,
+        StreamInvoker<TResponse> streamInvoker,
         IReadOnlyList<object> behaviors)
         where TRequest : IStreamRequest<TResponse>
     {
         private readonly IStreamRequestHandler<TRequest, TResponse> _handler = handler;
-        private readonly StreamInvoker _streamInvoker = streamInvoker;
+        private readonly StreamInvoker<TResponse> _streamInvoker = streamInvoker;
         private readonly IReadOnlyList<object> _behaviors = behaviors;
         private readonly StreamMessageHandlerDelegate<TRequest, TResponse>?[] _continuations =
             new StreamMessageHandlerDelegate<TRequest, TResponse>?[behaviors.Count + 1];
@@ -1148,7 +1288,7 @@ internal sealed class CqrsDispatcher(
         /// </summary>
         private IAsyncEnumerable<TResponse> InvokeHandler(TRequest request, CancellationToken cancellationToken)
         {
-            return (IAsyncEnumerable<TResponse>)_streamInvoker(_handler, request, cancellationToken);
+            return _streamInvoker(_handler, request, cancellationToken);
         }
 
         /// <summary>

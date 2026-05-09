@@ -11,6 +11,9 @@ Use this skill when `gframework-boot` is necessary but not sufficient because th
 batches until a clear stop condition is met.
 
 Treat `AGENTS.md` as the source of truth. This skill extends `gframework-boot`; it does not replace it.
+If the task's defining requirement is that the main agent must keep acting as dispatcher, reviewer, `ai-plan` owner,
+and final integrator for multiple parallel workers, prefer `gframework-multi-agent-batch` and use this skill's stop
+condition guidance as a secondary reference.
 
 Context budget is a first-class stop signal. Do not keep batching merely because a file-count threshold still has
 headroom if the active conversation, loaded repo artifacts, validation output, and pending recovery updates suggest the
@@ -27,6 +30,7 @@ agent is approaching its safe working-context limit.
    - the work is repetitive, sliceable, or likely to require multiple similar iterations
    - each batch can be given an explicit ownership boundary
    - a stop condition can be measured locally
+   - the task does not primarily need the orchestration-heavy main-agent workflow captured by `gframework-multi-agent-batch`
 3. Before any delegation, define the batch objective in one sentence:
    - warning family reduction
    - repeated test refactor pattern
