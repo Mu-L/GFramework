@@ -61,7 +61,7 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 - `BenchmarkDotNet.Artifacts/` 属于本地生成输出，默认加入仓库忽略，不作为常规提交内容
 - `RequestLifetimeBenchmarks` 现在复用与默认 generated-provider 路径一致的 benchmark 宿主接线；它比较的是生命周期切换后的 handler 解析与 dispatch 成本，不单独引入另一套 runtime 发现口径
 - `StreamLifetimeBenchmarks` 现在按 direct handler、`GFramework.Cqrs` reflection、`GFramework.Cqrs` generated、`MediatR` 四层口径组织，并额外区分 `FirstItem` 与 `DrainAll` 两种观测方式，用于把 stream 建流/首个元素成本与完整枚举成本拆开观察
-- 按 `RP-127` 当前短跑结果，`StreamLifetimeBenchmarks` 在 `Singleton` 下无论 `FirstItem` 还是 `DrainAll` 都表现为 generated 略优于 reflection；在 `Transient` 下，`FirstItem` 仍是 reflection 略优于 generated，但 `DrainAll` 已转为 generated 优于 reflection。这说明当前差值主要集中在建流到首个元素之间的瞬时成本，而不是完整枚举阶段整体退化
+- 当前短跑结果显示，`StreamLifetimeBenchmarks` 在 `Singleton` 下无论 `FirstItem` 还是 `DrainAll` 都表现为 generated 略优于 reflection；在 `Transient` 下，`FirstItem` 仍是 reflection 略优于 generated，但 `DrainAll` 已转为 generated 优于 reflection。这说明当前差值主要集中在建流到首个元素之间的瞬时成本，而不是完整枚举阶段整体退化
 - 只要变更影响 `GFramework.Cqrs` request dispatch、DI 解析热路径、invoker/provider、pipeline 或 benchmark 宿主，就应至少复跑能覆盖该路径的过滤场景；request 热路径通常先看：
   - `RequestBenchmarks.SendRequest_*`
   - `RequestLifetimeBenchmarks.SendRequest_*`
@@ -72,7 +72,7 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 ## 后续扩展方向
 
-- 若继续沿 `RP-127` 收口 stream lifetime，可优先复核 `Transient + FirstItem` 下 generated 与 reflection 的小幅差值是否稳定，再决定继续压 generated 宿主的建流瞬时成本，还是把后续对照切回 `StreamInvokerBenchmarks` / `Mediator` concrete runtime 批次
+- 若继续优化 stream lifetime，可优先复核 `Transient + FirstItem` 下 generated 与 reflection 的小幅差值是否稳定，再决定继续压 generated 宿主的建流瞬时成本，还是把后续对照切回 `StreamInvokerBenchmarks` / `Mediator` concrete runtime 批次
 - request / stream 的真实 source-generator 产物与 handwritten generated provider 对照
 - `Mediator` 的 transient / scoped compile-time lifetime 矩阵对照
 - 带真实显式作用域边界的 scoped host 对照

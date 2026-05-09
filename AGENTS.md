@@ -137,6 +137,19 @@ All AI agents and contributors must follow these rules when writing, reviewing, 
 
 ### Multi-Agent Coordination Rules
 
+The terms below describe the default guardrails for multi-agent batches and how they affect worker-launch decisions.
+
+- `branch-diff budget`: the maximum acceptable branch diff size in files or lines before another worker wave becomes
+  harder to review as a single PR.
+- `reviewability budget`: the cumulative complexity limit beyond which accepting more parallel slices would materially
+  reduce review quality, even if the raw file count still looks acceptable.
+- `context-budget`: the main agent's remaining capacity to track active workers, validation, and integration state
+  without losing critical execution context.
+- When any of these budgets approaches its safe limit, the main agent SHOULD stop launching more workers and close the
+  current wave first.
+- `$gframework-multi-agent-batch` contains the fuller workflow and stop-condition guidance for applying these budgets in
+  practice.
+
 - Prefer the repository's multi-agent coordination mode when the user explicitly wants the main agent to keep
   orchestrating parallel subagents, or when the work naturally splits into `2+` disjoint write slices that can proceed
   in parallel without blocking the next local step.

@@ -2,6 +2,27 @@
 
 ## 2026-05-09
 
+### 阶段：PR #345 latest-head review 收口（CQRS-REWRITE-RP-128）
+
+- 使用 `$gframework-pr-review` 抓取当前分支对应的 `PR #345`，确认 latest-head 没有新的 unresolved review thread，但 CodeRabbit 最新 review body 仍保留 `4` 条 actionable comments
+- 本轮本地复核后接受并修复的反馈收敛到四类：
+  - `AGENTS.md` 的 multi-agent budget 术语缺少明确释义，影响新贡献者理解 stop condition
+  - `StreamLifetimeBenchmarks` 的 `ConsumeFirstItemAsync(...)` 未显式向枚举器传播 `CancellationToken`，且 `[EnumeratorCancellation]` 仍使用全限定名
+  - `StreamLifetimeBenchmarks` 类级 `<remarks>` 尚未解释 `FirstItem / DrainAll` 观测维度的取舍
+  - `GFramework.Cqrs.Benchmarks/README.md` 与 `ai-plan/public/cqrs-rewrite/todos/**` 仍保留治理型 `RP-127` 表述、过期 `PR #344` 锚点与旧 branch diff 数字
+- 本轮验证计划保持最小化：
+  - 代码路径用 `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release` 证明 benchmark 工程仍可编译
+  - 文档与 tracking 更新后补跑 `python3 scripts/license-header.py --check --paths AGENTS.md GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+- 本轮验证结果：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check --paths AGENTS.md GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+- 当前分支相对 `origin/main` (`d85828c5`) 的累计 branch diff 已复核为 `21 files / 1344 insertions / 194 deletions`，后续 active tracking 与 trace 均以这组数字为准
+- 下一恢复点：
+  - 推送本轮 commit 后，再次运行 `$gframework-pr-review` 复核 `PR #345` latest-head review body 是否已收敛
+  - 若 stream lifetime 后续仍要继续压热路径，优先恢复 `Transient + FirstItem` 的小幅差值复核，而不是重新展开已收口的 `README` / `ai-plan` 漂移问题
+
 ### 阶段：stream lifetime 观测维度补齐与 generated binding 强类型缓存（CQRS-REWRITE-RP-127）
 
 - 延续 `$gframework-batch-boot 50`，在 `RP-126` 已建立四方 stream lifetime 口径后，本轮改用多 worker wave 同时推进三个互不冲突切片：

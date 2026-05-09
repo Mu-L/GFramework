@@ -9,6 +9,7 @@ using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using GFramework.Core.Abstractions.Logging;
@@ -27,6 +28,9 @@ namespace GFramework.Cqrs.Benchmarks.Messaging;
 ///     当前矩阵只覆盖 `Singleton` 与 `Transient`。
 ///     `Scoped` 仍依赖真实的显式作用域边界；在当前“单根容器最小宿主”模型下直接加入 scoped 会把枚举宿主成本与生命周期成本混在一起，
 ///     因此保持与 request 生命周期矩阵相同的边界，留待后续 scoped host 基线具备后再扩展。
+///     <see cref="StreamObservation" /> 当前只保留 <see cref="StreamObservation.FirstItem" /> 与
+///     <see cref="StreamObservation.DrainAll" /> 两种模式，分别用于观察建流到首个元素的固定成本与完整枚举的总成本，
+///     以避免把更多观测策略与 <see cref="StreamLifetimeBenchmarks" /> 的生命周期对照目标混在一起。
 /// </remarks>
 [Config(typeof(Config))]
 public class StreamLifetimeBenchmarks
@@ -298,7 +302,7 @@ public class StreamLifetimeBenchmarks
 
         return observation switch
         {
-            StreamObservation.FirstItem => ConsumeFirstItemAsync(responses),
+            StreamObservation.FirstItem => ConsumeFirstItemAsync(responses, CancellationToken.None),
             StreamObservation.DrainAll => DrainAsync(responses),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(observation),
@@ -312,10 +316,13 @@ public class StreamLifetimeBenchmarks
     /// </summary>
     /// <typeparam name="TResponse">当前 stream 的响应类型。</typeparam>
     /// <param name="responses">待观察的异步响应序列。</param>
+    /// <param name="cancellationToken">用于向异步枚举器传播取消的令牌。</param>
     /// <returns>消费首个元素后的等待句柄。</returns>
-    private static async ValueTask ConsumeFirstItemAsync<TResponse>(IAsyncEnumerable<TResponse> responses)
+    private static async ValueTask ConsumeFirstItemAsync<TResponse>(
+        IAsyncEnumerable<TResponse> responses,
+        CancellationToken cancellationToken)
     {
-        var enumerator = responses.GetAsyncEnumerator();
+        var enumerator = responses.GetAsyncEnumerator(cancellationToken);
         await using (enumerator.ConfigureAwait(false))
         {
             if (await enumerator.MoveNextAsync().ConfigureAwait(false))
@@ -460,7 +467,7 @@ public class StreamLifetimeBenchmarks
         Guid id,
         int itemCount,
         Func<Guid, TResponse> responseFactory,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         for (var index = 0; index < itemCount; index++)
         {
