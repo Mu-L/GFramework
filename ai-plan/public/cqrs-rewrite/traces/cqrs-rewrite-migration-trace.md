@@ -2,6 +2,34 @@
 
 ## 2026-05-09
 
+### 阶段：PR #344 latest-head review 收尾（CQRS-REWRITE-RP-123）
+
+- 使用 `$gframework-pr-review` 重新抓取当前分支 PR，确认当前 worktree 对应 `PR #344`，latest-head 仍有 `CodeRabbit 2` / `Greptile 1` open thread
+- 主线程逐条复核后确认仍成立的问题：
+  - `CodeRabbit` 对 `NotificationPublisherRegistrationExtensionsTests` 的“唯一注册”断言建议仍有效
+  - `CodeRabbit` 对 strict `IIocContainer` mock 缺少 `GetAll(typeof(INotificationPublisher))` 默认装配的 CI 失败结论仍有效，且更适合在两个测试 helper 层统一兜底
+  - `CodeRabbit` 对 `CqrsDispatcherCacheTests` 的共享装配 helper 建议仍有效，属于真实维护性风险而非纯样式问题
+  - `Greptile` 指出的 `ResolveNotificationPublisher()` 热路径重复 `GetAll(...)` 与默认 publisher 重复分配也成立；由于容器在 publish 前已冻结，dispatcher 生命周期内可以安全缓存最终解析结果
+- 本轮决策：
+  - 为 `CqrsDispatcher` 增加 dispatcher 实例级 `_resolvedNotificationPublisher` 缓存，并使用线程安全比较交换固定首次解析出的最终策略实例
+  - 在 `CqrsDispatcherContextValidationTests` 与 `CqrsNotificationPublisherTests` 的 strict mock runtime helper 中统一预设 `GetAll(typeof(INotificationPublisher))` 返回空集合
+  - 在 `NotificationPublisherRegistrationExtensionsTests` 为泛型组合根重载补上 `INotificationPublisher` 唯一注册断言
+  - 在 `CqrsDispatcherCacheTests` 提取共享的 `ConfigureDispatcherCacheFixture(...)`，消除 `SetUp()` 与 `CreateFrozenContainer()` 的注册漂移风险
+- 本轮验证：
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+    - 备注：首轮与 `GFramework.Cqrs.Tests` 并行构建时出现 `MSB3026` 单次复制重试；串行重跑后稳定通过，判定为输出目录竞争噪音
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests|FullyQualifiedName~CqrsNotificationPublisherTests|FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests|FullyQualifiedName~CqrsDispatcherCacheTests"`
+    - 结果：通过，`30/30` passed
+  - `git diff --check`
+    - 结果：通过
+- 下一恢复点：
+  - 推送本轮 commit 后，再次运行 `$gframework-pr-review` 复核 `PR #344` latest-head open thread 是否已随新 head 收敛；若仍残留 open thread，再区分 stale 状态与新增 review
+
 ### 阶段：request 零管道 behavior presence cache（CQRS-REWRITE-RP-122）
 
 - 延续 `$gframework-batch-boot 50`，本轮在 `RP-121` 把 notification 线阶段性收口后，重新回到 request steady-state 常量开销，并接受并行 explorer 的共同结论：下一刀应继续减少每次 `SendAsync(...)` 必经的通用查询，而不是回头优化 `HasRegistration(Type)` 内部实现或重试已证伪的 `IContextAware` 类型缓存

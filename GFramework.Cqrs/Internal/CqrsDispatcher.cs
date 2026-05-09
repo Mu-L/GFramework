@@ -71,6 +71,10 @@ internal sealed class CqrsDispatcher(
     // 显式传入实例时仍优先复用该实例；否则在真正 publish 时再尝试从容器解析。
     private readonly INotificationPublisher? _notificationPublisher = notificationPublisher;
 
+    // 容器冻结后 notification publisher 解析结果在当前 dispatcher 生命周期内保持稳定；
+    // 因此首次 publish 后缓存最终策略实例，避免后续热路径重复查容器和重复分配默认 publisher。
+    private INotificationPublisher? _resolvedNotificationPublisher;
+
     /// <summary>
     ///     发布通知到所有已注册处理器。
     /// </summary>
@@ -239,14 +243,27 @@ internal sealed class CqrsDispatcher(
             return _notificationPublisher;
         }
 
+        var resolvedNotificationPublisher = _resolvedNotificationPublisher;
+        if (resolvedNotificationPublisher is not null)
+        {
+            return resolvedNotificationPublisher;
+        }
+
         var registeredPublishers = container.GetAll(typeof(INotificationPublisher));
-        return registeredPublishers.Count switch
+        resolvedNotificationPublisher = registeredPublishers.Count switch
         {
             0 => new SequentialNotificationPublisher(),
             1 => (INotificationPublisher)registeredPublishers[0],
             _ => throw new InvalidOperationException(
                 $"Multiple {typeof(INotificationPublisher).FullName} instances are registered. Remove duplicate notification publisher strategies before publishing notifications.")
         };
+
+        Interlocked.CompareExchange(
+            ref _resolvedNotificationPublisher,
+            resolvedNotificationPublisher,
+            comparand: null);
+
+        return _resolvedNotificationPublisher;
     }
 
     /// <summary>

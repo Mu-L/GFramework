@@ -7,6 +7,7 @@ using GFramework.Core.Abstractions.Ioc;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using GFramework.Cqrs.Cqrs;
+using GFramework.Cqrs.Notification;
 using GFramework.Cqrs.Tests.Logging;
 
 namespace GFramework.Cqrs.Tests.Cqrs;
@@ -183,6 +184,11 @@ internal sealed class CqrsDispatcherContextValidationTests
     {
         var container = new Mock<IIocContainer>(MockBehavior.Strict);
         var logger = new TestLogger("CqrsDispatcherContextValidationTests", LogLevel.Debug);
+
+        // PublishAsync 的默认路径会在真正发布时查询通知发布器注册；strict mock 需显式覆盖空注册分支。
+        container
+            .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationPublisher)))
+            .Returns(Array.Empty<object>());
 
         configureContainer(container);
         return CqrsRuntimeFactory.CreateRuntime(container.Object, logger);

@@ -27,19 +27,7 @@ internal sealed class CqrsDispatcherCacheTests
     {
         LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
         _container = new MicrosoftDiContainer();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineCacheBehavior>();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineContextRefreshBehavior>();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderOuterBehavior>();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderInnerBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineCacheBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineContextRefreshBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderOuterBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderInnerBehavior>();
-
-        CqrsTestRuntime.RegisterHandlers(
-            _container,
-            typeof(CqrsDispatcherCacheTests).Assembly,
-            typeof(ArchitectureContext).Assembly);
+        ConfigureDispatcherCacheFixture(_container);
 
         _container.Freeze();
         _context = new ArchitectureContext(_container);
@@ -645,6 +633,18 @@ internal sealed class CqrsDispatcherCacheTests
     private static MicrosoftDiContainer CreateFrozenContainer()
     {
         var container = new MicrosoftDiContainer();
+        ConfigureDispatcherCacheFixture(container);
+
+        container.Freeze();
+        return container;
+    }
+
+    /// <summary>
+    ///     组装当前 fixture 依赖的 CQRS 容器注册形状，确保默认上下文与隔离容器复用同一份装配基线。
+    /// </summary>
+    /// <param name="container">待补齐 CQRS 注册的目标容器。</param>
+    private static void ConfigureDispatcherCacheFixture(MicrosoftDiContainer container)
+    {
         container.RegisterCqrsPipelineBehavior<DispatcherPipelineCacheBehavior>();
         container.RegisterCqrsPipelineBehavior<DispatcherPipelineContextRefreshBehavior>();
         container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderOuterBehavior>();
@@ -658,9 +658,6 @@ internal sealed class CqrsDispatcherCacheTests
             container,
             typeof(CqrsDispatcherCacheTests).Assembly,
             typeof(ArchitectureContext).Assembly);
-
-        container.Freeze();
-        return container;
     }
 
     /// <summary>

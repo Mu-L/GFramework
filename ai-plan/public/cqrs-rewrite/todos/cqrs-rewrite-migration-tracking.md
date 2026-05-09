@@ -7,10 +7,17 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-122`
+- 恢复点编号：`CQRS-REWRITE-RP-123`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #342`
+- 当前 PR 锚点：`PR #344`
 - 当前结论：
+  - 当前 `RP-123` 通过 `$gframework-pr-review` 重新复核 `feat/cqrs-optimization` 的 latest-head review，确认 `PR #344` 仍成立且值得在本轮一起收口的问题共有四类：`CqrsDispatcher.ResolveNotificationPublisher()` 默认路径每次 publish 都重复查容器并在零注册分支分配新的 `SequentialNotificationPublisher`；`CqrsDispatcherContextValidationTests` 与 `CqrsNotificationPublisherTests` 的 strict `IIocContainer` helper 缺少 `GetAll(typeof(INotificationPublisher))` 默认装配，导致 CI 在真正断言前就被 mock 异常短路；`NotificationPublisherRegistrationExtensionsTests` 缺少“唯一注册”断言；`CqrsDispatcherCacheTests` 的隔离容器构建复制了 `SetUp()` 的注册形状，存在后续漂移风险
+  - 本轮保持改动面只落在 `GFramework.Cqrs`、`GFramework.Cqrs.Tests` 与 `ai-plan/public/cqrs-rewrite`，不扩散到新的 benchmark 宿主或额外 notification API；其中 `CqrsDispatcher` 新增 dispatcher 实例级 `_resolvedNotificationPublisher` 缓存，并在首次解析后通过线程安全比较交换固定最终策略实例，继续保持“显式实例优先、容器内唯一注册次之、默认顺序发布器兜底”的既有契约
+  - 两个 strict mock runtime helper 现统一预设 `IIocContainer.GetAll(typeof(INotificationPublisher)) => Array.Empty<object>()`，把“未注册自定义 publisher 时回退到默认顺序发布器”这条默认路径显式纳入测试装配，避免后续相同语义再次被环境性 mock 配置遗漏掩盖
+  - `NotificationPublisherRegistrationExtensionsTests` 现在对泛型组合根重载补上 `container.GetAll(typeof(INotificationPublisher))` 的唯一注册断言，防止实现未来意外追加重复 descriptor 却仍因 `GetRequired<INotificationPublisher>()` 返回单个实例而误通过
+  - `CqrsDispatcherCacheTests` 新增 `ConfigureDispatcherCacheFixture(MicrosoftDiContainer)` 共享装配 helper，让 `SetUp()` 与 `CreateFrozenContainer()` 复用同一份 CQRS 注册形状，消除 latest-head nitpick 指出的夹具/隔离容器漂移风险
+  - 本轮本地权威验证已通过：许可证头检查通过，`GFramework.Cqrs` 与 `GFramework.Cqrs.Tests` 的 Release build 通过；目标回归 `CqrsDispatcherContextValidationTests`、`CqrsNotificationPublisherTests`、`NotificationPublisherRegistrationExtensionsTests` 与 `CqrsDispatcherCacheTests` 合计 `30/30` passed
+  - `GFramework.Cqrs` 首轮与测试项目并行构建时曾出现 `MSB3026` 单次复制重试；串行重跑同一 `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release` 后稳定为 `0 warning / 0 error`，因此该信号判定为并行输出目录竞争噪音而非代码问题
   - 当前 `RP-122` 继续沿用 `$gframework-batch-boot 50`，并在 `RP-121` 收口 notification 线阶段性闭环后切回 request steady-state 热点；本轮不再继续压 `HasRegistration(Type)` 内部实现，而是把“是否存在 request pipeline behavior”从每次 `SendAsync(...)` 都查询容器，收口为 `CqrsDispatcher` 实例级的首次判定缓存
   - `GFramework.Cqrs/Internal/CqrsDispatcher.cs` 现新增 `_requestBehaviorPresenceCache`，按 `IPipelineBehavior<,>` 的闭合服务类型记住当前 dispatcher 持有容器里该行为是否存在注册；零管道 request 在首次命中后会直接走缓存分支，不再重复询问容器
   - `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs` 现新增 `Dispatcher_Should_Cache_Zero_Pipeline_Request_Presence_Per_Dispatcher_Instance()`：该回归同时锁住两件事，一是同一容器解析出的多个 `ArchitectureContext` 共享同一个 runtime/dispatcher，因此会复用同一实例级缓存；二是另一套独立容器创建的 dispatcher 不会提前共享该缓存
@@ -165,8 +172,21 @@ CQRS 迁移与收敛。
 - stream pipeline 当前只在“单次建流”层面包裹 handler 调用；若后续需要 per-item 拦截、元素级重试或流内 metrics 聚合，仍需额外设计更细粒度 contract，而不是把本轮 seam 直接等同于元素级 middleware
 - `PR #339` 在 GitHub 上仍有 1 个已本地失效但未 resolve 的 stale test-thread；若后续 head 再次变化，需要重新抓取 latest-head review 确认未解决线程是否收敛
 - 若后续继续依赖 `HasRegistration(Type)` 做热路径短路，新增测试替身或 strict mock 时必须同步配置该调用，否则容易在真正业务断言之前被 mock 框架短路成环境性失败
+- `PR #344` 当前 latest-head review 仍需等待新 commit 推送后的 GitHub 重新索引；在远端 thread 状态刷新前，不应仅凭现有 open-thread 计数判断本轮修复未生效
 
 ## 最近权威验证
+
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+  - 结果：通过
+- `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+  - 备注：首轮与 `GFramework.Cqrs.Tests` 并行构建时曾出现 `MSB3026` 单次复制重试；串行重跑同一命令后稳定通过
+- `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests|FullyQualifiedName~CqrsNotificationPublisherTests|FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests|FullyQualifiedName~CqrsDispatcherCacheTests"`
+  - 结果：通过，`30/30` passed
+- `git diff --check`
+  - 结果：通过
 
 - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`

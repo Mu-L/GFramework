@@ -183,6 +183,11 @@ internal sealed class CqrsNotificationPublisherTests
         var container = new Mock<IIocContainer>(MockBehavior.Strict);
         var logger = new TestLogger(nameof(CqrsNotificationPublisherTests), LogLevel.Debug);
 
+        // 默认 runtime 会延迟解析通知发布器；strict mock 需要声明“未注册自定义 publisher”的空集合返回。
+        container
+            .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationPublisher)))
+            .Returns(Array.Empty<object>());
+
         configureContainer(container);
         return CqrsRuntimeFactory.CreateRuntime(container.Object, logger, notificationPublisher);
     }

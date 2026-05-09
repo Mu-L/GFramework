@@ -108,6 +108,7 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
 
         Assert.That(returnedContainer, Is.SameAs(container));
         Assert.That(container.HasRegistration(typeof(INotificationPublisher)), Is.True);
+        Assert.That(container.GetAll(typeof(INotificationPublisher)), Has.Count.EqualTo(1));
         Assert.That(container.GetRequired<INotificationPublisher>(), Is.TypeOf<TrackingNotificationPublisher>());
         Assert.That(container.GetRequired<INotificationPublisher>(), Is.SameAs(container.GetRequired<INotificationPublisher>()));
     }
