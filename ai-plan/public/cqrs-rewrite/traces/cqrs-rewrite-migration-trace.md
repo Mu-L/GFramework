@@ -2,6 +2,45 @@
 
 ## 2026-05-09
 
+### 阶段：stream lifetime 对照口径补齐（CQRS-REWRITE-RP-126）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-125` 先把 request lifetime benchmark 宿主对齐到 generated-provider 路径后，本轮继续补齐 stream 生命周期矩阵的当前对照口径，不回到 runtime 或测试代码
+- 本轮主线程决策：
+  - 只修改 `GFramework.Cqrs.Benchmarks/Messaging/GeneratedStreamLifetimeBenchmarkRegistry.cs` 与 `StreamLifetimeBenchmarks.cs`，不扩散到 `GFramework.Cqrs` runtime、README 或 docs
+  - 将 stream lifetime 的 GFramework reflection、GFramework generated 与 `MediatR` 请求/响应/handler 类型拆开，避免不同宿主继续共用同一 stream 合同而污染对照语义
+  - 将 generated registry 收口为只绑定 `GeneratedBenchmarkStreamRequest/Response` 这一条 generated lane，避免静态 dispatcher cache 把 reflection 与 generated 结果混在一起
+- 本轮验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / generated / reflection / `MediatR` 约为 `79.602 ns / 280 B`、`111.547 ns / 280 B`、`120.553 ns / 280 B`、`208.381 ns / 672 B`；`Transient` 下 baseline / reflection / generated / `MediatR` 约为 `76.351 ns / 280 B`、`119.632 ns / 304 B`、`129.166 ns / 304 B`、`213.420 ns / 672 B`
+- 本轮结论：
+  - 当前 stream 生命周期矩阵已经从“单看 `GFramework.Cqrs` 一条线是否还能跑通”升级为可直接比较 `baseline / reflection / generated / MediatR` 的四方口径
+  - 当前短跑下，generated lane 在 `Singleton` 档优于 reflection，但在 `Transient` 档仍慢于 reflection；这说明后续若继续压 stream 热点，应该围绕 generated 宿主的瞬时解析成本继续定位，而不是回头重做已经分离完成的对照口径
+  - 当前已提交分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的累计 branch diff 已到 `10 files`（`556 insertions / 75 deletions`），仍远低于 `$gframework-batch-boot 50` 的 `50 files` stop condition
+- 下一恢复点：
+  - 若继续 benchmark 线，优先判断是否要追 `Stream_GFrameworkGenerated` 在 `Transient` 下仍慢于 `Stream_GFrameworkReflection` 的差值，或单开 `Mediator` concrete runtime 的 stream lifetime 对照批次；若切回 runtime 线，则以 `RP-126` 的四方矩阵作为后续性能回归基线
+
+### 阶段：request lifetime generated-provider 宿主对齐（CQRS-REWRITE-RP-125）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-124` 收口 stream behavior presence cache 后，本轮先不继续改 dispatcher，而是回头补齐 request lifetime benchmark 宿主路径，让生命周期矩阵与当前默认 request steady-state 的 generated-provider 口径重新对齐
+- 本轮主线程决策：
+  - 只修改 `GFramework.Cqrs.Benchmarks/Messaging/GeneratedRequestLifetimeBenchmarkRegistry.cs` 与 `RequestLifetimeBenchmarks.cs`
+  - 为 request lifetime 补入 handwritten generated registry，只暴露最小 generated request descriptor，再由 benchmark 主体显式控制 `Singleton / Transient` handler 生命周期
+  - 在 setup / cleanup 统一清理 dispatcher cache，避免不同生命周期矩阵之间共享静态缓存而污染结果
+- 本轮验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约为 `5.012 ns / 32 B`、`49.612 ns / 32 B`、`51.796 ns / 232 B`；`Transient` 下约为 `3.962 ns / 32 B`、`50.480 ns / 56 B`、`50.284 ns / 232 B`
+- 本轮结论：
+  - request lifetime 宿主现已与当前 generated-provider request 宿主保持一致，后续不再需要把旧生命周期矩阵结果与 generated steady-state 数据做“跨宿主”比较
+  - 当前短跑下，`Singleton` 仍稳定快于 `MediatR`，`Transient` 已缩到基本持平但仍略慢；这给下一步 stream 线 benchmark 同步提供了更干净的 request 基线
+- 下一恢复点：
+  - 继续补齐 `StreamLifetimeBenchmarks` 的当前对照口径，把 `baseline / reflection / generated / MediatR` 四方生命周期矩阵补完整
+
 ### 阶段：stream behavior presence cache（CQRS-REWRITE-RP-124）
 
 - 延续 `$gframework-batch-boot 50`，在 `RP-123` 收口 notification publisher review 线程后，继续把 `CqrsDispatcher` 的 stream 热路径与 `RP-122` 的 request hot path 对齐，选择“缓存 `CreateStream(...)` 的 behavior presence 判定”这一条最小且可验证的 runtime 切片
