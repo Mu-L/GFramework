@@ -903,7 +903,7 @@ internal sealed class CqrsDispatcherCacheTests
         Type responseType,
         int behaviorCount)
     {
-        var binding = GetPairCacheValue(streamBindings, requestType, responseType);
+        var binding = GetStreamDispatchBindingValue(streamBindings, requestType, responseType);
         return binding is null
             ? null
             : InvokeInstanceMethod(binding, "GetPipelineExecutorForTesting", behaviorCount);
@@ -951,6 +951,32 @@ internal sealed class CqrsDispatcherCacheTests
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
         Assert.That(method, Is.Not.Null, $"Missing request binding accessor on {bindingBox.GetType().FullName}.");
+
+        return method!
+            .MakeGenericMethod(responseType)
+            .Invoke(bindingBox, Array.Empty<object>());
+    }
+
+    /// <summary>
+    ///     读取指定流式请求/响应类型对对应的强类型 stream dispatch binding。
+    /// </summary>
+    /// <param name="streamBindings">dispatcher 内部的 stream binding 缓存对象。</param>
+    /// <param name="requestType">要读取的流式请求运行时类型。</param>
+    /// <param name="responseType">要读取的响应元素类型。</param>
+    /// <returns>强类型 binding；若缓存尚未建立则返回 <see langword="null" />。</returns>
+    private static object? GetStreamDispatchBindingValue(object streamBindings, Type requestType, Type responseType)
+    {
+        var bindingBox = GetPairCacheValue(streamBindings, requestType, responseType);
+        if (bindingBox is null)
+        {
+            return null;
+        }
+
+        var method = bindingBox.GetType().GetMethod(
+            "Get",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        Assert.That(method, Is.Not.Null, $"Missing stream binding accessor on {bindingBox.GetType().FullName}.");
 
         return method!
             .MakeGenericMethod(responseType)

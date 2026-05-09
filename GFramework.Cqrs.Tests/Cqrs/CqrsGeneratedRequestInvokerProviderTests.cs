@@ -223,6 +223,49 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证 generated stream binding 与对应的 pipeline executor 在首次建流后会被缓存并复用，
+    ///     同时保持 generated invoker 的结果与行为执行语义不变。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Reuse_Cached_Generated_Stream_Binding_And_Pipeline_Executor()
+    {
+        var generatedAssembly = CreateGeneratedStreamInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+        container.RegisterCqrsStreamPipelineBehavior<GeneratedStreamPipelineTrackingBehavior>();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var streamBindings = GetDispatcherCacheField("StreamDispatchBindings");
+        var requestType = typeof(GeneratedStreamInvokerRequest);
+        var responseType = typeof(int);
+
+        Assert.That(
+            GetStreamPipelineExecutorValue(streamBindings, requestType, responseType, 1),
+            Is.Null);
+
+        var context = new ArchitectureContext(container);
+        var firstResults = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+        var bindingAfterFirstDispatch = GetPairCacheValue(streamBindings, requestType, responseType);
+        var executorAfterFirstDispatch = GetStreamPipelineExecutorValue(streamBindings, requestType, responseType, 1);
+
+        var secondResults = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+        var bindingAfterSecondDispatch = GetPairCacheValue(streamBindings, requestType, responseType);
+        var executorAfterSecondDispatch = GetStreamPipelineExecutorValue(streamBindings, requestType, responseType, 1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstResults, Is.EqualTo([30, 31]));
+            Assert.That(secondResults, Is.EqualTo([30, 31]));
+            Assert.That(bindingAfterFirstDispatch, Is.Not.Null);
+            Assert.That(bindingAfterSecondDispatch, Is.SameAs(bindingAfterFirstDispatch));
+            Assert.That(executorAfterFirstDispatch, Is.Not.Null);
+            Assert.That(executorAfterSecondDispatch, Is.SameAs(executorAfterFirstDispatch));
+            Assert.That(GeneratedStreamPipelineTrackingBehavior.InvocationCount, Is.EqualTo(2));
+        });
+    }
+
+    /// <summary>
     ///     验证当实现类型隐藏、但 stream handler interface 仍可直接表达时，
     ///     dispatcher 仍会消费 generated stream invoker descriptor。
     /// </summary>
@@ -957,6 +1000,65 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         _ = cache.GetType()
             .GetMethod("Clear", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
             .Invoke(cache, Array.Empty<object>());
+    }
+
+    /// <summary>
+    ///     读取双键缓存中当前保存的对象。
+    /// </summary>
+    private static object? GetPairCacheValue(object cache, Type primaryType, Type secondaryType)
+    {
+        return InvokeInstanceMethod(cache, "GetValueOrDefaultForTesting", primaryType, secondaryType);
+    }
+
+    /// <summary>
+    ///     读取指定 stream dispatch binding 中当前缓存的 pipeline executor。
+    /// </summary>
+    private static object? GetStreamPipelineExecutorValue(
+        object streamBindings,
+        Type requestType,
+        Type responseType,
+        int behaviorCount)
+    {
+        var binding = GetStreamDispatchBindingValue(streamBindings, requestType, responseType);
+        return binding is null
+            ? null
+            : InvokeInstanceMethod(binding, "GetPipelineExecutorForTesting", behaviorCount);
+    }
+
+    /// <summary>
+    ///     读取指定流式请求/响应类型对对应的强类型 stream dispatch binding。
+    /// </summary>
+    private static object? GetStreamDispatchBindingValue(object streamBindings, Type requestType, Type responseType)
+    {
+        var bindingBox = GetPairCacheValue(streamBindings, requestType, responseType);
+        if (bindingBox is null)
+        {
+            return null;
+        }
+
+        var method = bindingBox.GetType().GetMethod(
+            "Get",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        Assert.That(method, Is.Not.Null, $"Missing stream binding accessor on {bindingBox.GetType().FullName}.");
+
+        return method!
+            .MakeGenericMethod(responseType)
+            .Invoke(bindingBox, Array.Empty<object>());
+    }
+
+    /// <summary>
+    ///     调用目标对象上的实例方法。
+    /// </summary>
+    private static object? InvokeInstanceMethod(object target, string methodName, params object[] arguments)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        Assert.That(method, Is.Not.Null, $"Missing method {target.GetType().FullName}.{methodName}.");
+
+        return method!.Invoke(target, arguments);
     }
 
     /// <summary>
