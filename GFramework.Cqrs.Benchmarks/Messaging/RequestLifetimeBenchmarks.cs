@@ -85,14 +85,18 @@ public class RequestLifetimeBenchmarks
             MinLevel = LogLevel.Fatal
         };
         Fixture.Setup($"RequestLifetime/{Lifetime}", handlerCount: 1, pipelineCount: 0);
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
 
         _baselineHandler = new BenchmarkRequestHandler();
         _request = new BenchmarkRequest(Guid.NewGuid());
 
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedRequestLifetimeBenchmarkRegistry>(container);
             RegisterGFrameworkHandler(container, Lifetime);
         });
+        // 容器内已提前保留默认 runtime 以支撑 generated registry 接线；
+        // 这里额外创建带生命周期后缀的 runtime，只是为了区分不同 benchmark 矩阵的 dispatcher 日志。
         _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestLifetimeBenchmarks) + "." + Lifetime));
@@ -111,7 +115,14 @@ public class RequestLifetimeBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+        try
+        {
+            BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+        }
+        finally
+        {
+            BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
+        }
     }
 
     /// <summary>
@@ -146,6 +157,10 @@ public class RequestLifetimeBenchmarks
     /// </summary>
     /// <param name="container">当前 benchmark 拥有并负责释放的容器。</param>
     /// <param name="lifetime">待比较的 handler 生命周期。</param>
+    /// <remarks>
+    ///     先通过 generated registry 提供静态 descriptor，再显式覆盖 handler 生命周期，
+    ///     可以把比较变量收敛到 handler 解析成本，而不是 descriptor 发现路径本身。
+    /// </remarks>
     private static void RegisterGFrameworkHandler(MicrosoftDiContainer container, HandlerLifetime lifetime)
     {
         ArgumentNullException.ThrowIfNull(container);
