@@ -2020,6 +2020,8 @@ public class SchemaConfigGeneratorTests
     /// <summary>
     ///     验证生成器会显式拒绝当前共享子集尚未支持的数组形状关键字。
     /// </summary>
+    /// <param name="keywordName">待验证的数组形状关键字名称。</param>
+    /// <param name="keywordValueJson">用于拼接测试 schema 的关键字值 JSON 片段。</param>
     [TestCase("prefixItems", """
                               [
                                 { "type": "integer" }

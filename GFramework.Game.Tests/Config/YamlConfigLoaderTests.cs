@@ -1639,6 +1639,8 @@ public class YamlConfigLoaderTests
     /// <summary>
     ///     验证数组字段声明 tuple / open-array 关键字时，会在 schema 解析阶段被显式拒绝。
     /// </summary>
+    /// <param name="keywordName">待验证的数组形状关键字名称。</param>
+    /// <param name="keywordValueJson">用于拼接测试 schema 的关键字值 JSON 片段。</param>
     [TestCase("prefixItems", """
                               [
                                 { "type": "integer" }
