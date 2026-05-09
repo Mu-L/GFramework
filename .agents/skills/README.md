@@ -1,6 +1,6 @@
 # GFramework Skills
 
-公开入口目前包含 `gframework-doc-refresh` 与 `gframework-batch-boot`。
+公开入口目前包含 `gframework-doc-refresh`、`gframework-batch-boot` 与 `gframework-multi-agent-batch`。
 
 ## 公开入口
 
@@ -64,6 +64,30 @@
 /gframework-batch-boot 75 2000
 /gframework-batch-boot continue analyzer warning reduction until branch diff vs origin/main approaches 75 files
 /gframework-batch-boot keep refactoring repetitive source-generator tests in bounded batches
+```
+
+### `gframework-multi-agent-batch`
+
+当用户希望主 Agent 负责拆分任务、派发互不冲突的 subagent 切片、核对进度、维护 `ai-plan`、验收结果并持续推进时，使用该入口。
+
+适用场景：
+
+- 复杂任务已经明确可以拆成多个互不冲突的写面
+- 主 Agent 需要持续 review / integrate，而不是把执行权完全交给单个 worker
+- 需要把 delegated scope、验证结果与下一恢复点同步写回 `ai-plan`
+- 任务仍要受 branch diff、context budget 与 reviewability 边界约束
+
+推荐调用：
+
+```bash
+/gframework-multi-agent-batch <task>
+```
+
+示例：
+
+```bash
+/gframework-multi-agent-batch continue the current cqrs optimization by delegating non-conflicting benchmark and runtime slices
+/gframework-multi-agent-batch coordinate parallel subagents, keep ai-plan updated, and stop when reviewability starts to degrade
 ```
 
 ## 共享资源

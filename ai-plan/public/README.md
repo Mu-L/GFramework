@@ -21,6 +21,10 @@ help the current worktree land on the right recovery documents without scanning 
     API-reference alignment baseline.
   - Tracking: `ai-plan/public/documentation-full-coverage-governance/todos/documentation-full-coverage-governance-tracking.md`
   - Trace: `ai-plan/public/documentation-full-coverage-governance/traces/documentation-full-coverage-governance-trace.md`
+- `ai-plan-governance`
+  - Purpose: govern repository AI workflow rules, recovery entrypoints, and multi-agent coordination conventions.
+  - Tracking: `ai-plan/public/ai-plan-governance/todos/ai-plan-governance-tracking.md`
+  - Trace: `ai-plan/public/ai-plan-governance/traces/ai-plan-governance-trace.md`
 - `coroutine-optimization`
   - Purpose: continue the coroutine semantics, host integration, observability, regression coverage, and migration-doc
     follow-up work.
