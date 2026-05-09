@@ -1,5 +1,122 @@
 # CQRS 重写迁移追踪
 
+## 2026-05-09
+
+### 阶段：PR #344 latest-head review 收尾（CQRS-REWRITE-RP-123）
+
+- 使用 `$gframework-pr-review` 重新抓取当前分支 PR，确认当前 worktree 对应 `PR #344`，latest-head 仍有 `CodeRabbit 2` / `Greptile 1` open thread
+- 主线程逐条复核后确认仍成立的问题：
+  - `CodeRabbit` 对 `NotificationPublisherRegistrationExtensionsTests` 的“唯一注册”断言建议仍有效
+  - `CodeRabbit` 对 strict `IIocContainer` mock 缺少 `GetAll(typeof(INotificationPublisher))` 默认装配的 CI 失败结论仍有效，且更适合在两个测试 helper 层统一兜底
+  - `CodeRabbit` 对 `CqrsDispatcherCacheTests` 的共享装配 helper 建议仍有效，属于真实维护性风险而非纯样式问题
+  - `Greptile` 指出的 `ResolveNotificationPublisher()` 热路径重复 `GetAll(...)` 与默认 publisher 重复分配也成立；由于容器在 publish 前已冻结，dispatcher 生命周期内可以安全缓存最终解析结果
+- 本轮决策：
+  - 为 `CqrsDispatcher` 增加 dispatcher 实例级 `_resolvedNotificationPublisher` 缓存，并使用线程安全比较交换固定首次解析出的最终策略实例
+  - 在 `CqrsDispatcherContextValidationTests` 与 `CqrsNotificationPublisherTests` 的 strict mock runtime helper 中统一预设 `GetAll(typeof(INotificationPublisher))` 返回空集合
+  - 在 `NotificationPublisherRegistrationExtensionsTests` 为泛型组合根重载补上 `INotificationPublisher` 唯一注册断言
+  - 在 `CqrsDispatcherCacheTests` 提取共享的 `ConfigureDispatcherCacheFixture(...)`，消除 `SetUp()` 与 `CreateFrozenContainer()` 的注册漂移风险
+- 本轮验证：
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherContextValidationTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+    - 备注：首轮与 `GFramework.Cqrs.Tests` 并行构建时出现 `MSB3026` 单次复制重试；串行重跑后稳定通过，判定为输出目录竞争噪音
+  - `dotnet build GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests|FullyQualifiedName~CqrsNotificationPublisherTests|FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests|FullyQualifiedName~CqrsDispatcherCacheTests"`
+    - 结果：通过，`30/30` passed
+  - `git diff --check`
+    - 结果：通过
+- 下一恢复点：
+  - 推送本轮 commit 后，再次运行 `$gframework-pr-review` 复核 `PR #344` latest-head open thread 是否已随新 head 收敛；若仍残留 open thread，再区分 stale 状态与新增 review
+
+### 阶段：request 零管道 behavior presence cache（CQRS-REWRITE-RP-122）
+
+- 延续 `$gframework-batch-boot 50`，本轮在 `RP-121` 把 notification 线阶段性收口后，重新回到 request steady-state 常量开销，并接受并行 explorer 的共同结论：下一刀应继续减少每次 `SendAsync(...)` 必经的通用查询，而不是回头优化 `HasRegistration(Type)` 内部实现或重试已证伪的 `IContextAware` 类型缓存
+- 本轮主线程决策：
+  - 只改 `GFramework.Cqrs/Internal/CqrsDispatcher.cs` 与 `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`，不同时打开 scoped benchmark 宿主或 notification 新公开 API 两条线
+  - 为 `CqrsDispatcher` 新增 `_requestBehaviorPresenceCache`，按闭合 `IPipelineBehavior<,>` 服务类型缓存“当前 dispatcher 的容器里是否存在该 request behavior 注册”
+  - 保持优化面只覆盖 request `0 pipeline` 热路径；stream 对称缓存与 scoped host benchmark 继续留到后续独立批次
+  - 在 `CqrsDispatcherCacheTests` 新增实例级回归，明确“同容器多个 `ArchitectureContext` 解析到同一个 runtime/dispatcher，会共享该缓存；另一独立容器创建的 dispatcher 不共享该缓存”
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherCacheTests"`
+    - 结果：通过，`11/11` passed
+    - 备注：新增回归首轮曾因错误假设“不同 `ArchitectureContext` 必定对应不同 dispatcher”而失败；修正为“同容器共享 runtime、独立容器不共享缓存”后稳定通过
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：默认 request steady-state 当前约为 baseline `5.876 ns / 32 B`、`Mediator` `5.275 ns / 32 B`、`GFramework.Cqrs` `51.717 ns / 32 B`、`MediatR` `56.108 ns / 232 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：首次与 `RequestBenchmarks` 并行触发时，BenchmarkDotNet 自动生成项目目录发生 `.nuget.g.props already exists` 冲突；改为串行重跑同一命令后，`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约 `5.720 ns / 52.490 ns / 56.890 ns`，`Transient` 下约 `5.814 ns / 57.746 ns / 55.545 ns`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`
+    - 结果：通过
+- 本轮结论：
+  - request `0 pipeline` 常量路径再次被压短，默认 steady-state request 与 `Singleton` lifetime 均继续快于当前 `MediatR` short-job 基线
+  - `Transient` 仍略慢于 `MediatR`，但相较更早轮次已明显收敛；下一轮若继续 request 热点，更值得继续减少 steady-state 必经路径，或切到 explorer 建议的 `request scoped host + compile-time lifetime` 对齐线，而不是继续打磨已收益有限的 `HasRegistration(Type)` 内部细节
+
+### 阶段：标准架构启动路径 notification publisher 回归（CQRS-REWRITE-RP-121）
+
+- 延续 `$gframework-batch-boot 50`，本轮没有继续扩 notification runtime 语义，而是先给 `RP-120` 刚修复的默认接线补一条更贴近生产的架构启动回归
+- 本轮主线程决策：
+  - 保持写面只落在 `GFramework.Core.Tests/Architectures/ArchitectureModulesBehaviorTests.cs`，不再改动 `GFramework.Cqrs` / `GFramework.Core` 运行时代码
+  - 通过 `Architecture.Configurator` 注册依赖容器 probe 的自定义 `INotificationPublisher`，并在 `OnInitialize()` 显式接入额外程序集 notification handler，验证默认 `Architecture.InitializeAsync()` 路径最终 publish 时不会退回默认顺序策略
+  - 用现有 `AdditionalAssemblyNotificationHandlerRegistry` 测试桩承载 handler 执行观察，把本轮信号收敛到“标准架构启动路径是否真正复用自定义 publisher”
+- 本轮权威验证：
+  - `dotnet build GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Core.Tests/GFramework.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ArchitectureModulesBehaviorTests"`
+    - 结果：通过，`5/5` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Core.Tests/Architectures/ArchitectureModulesBehaviorTests.cs`
+    - 结果：通过
+- 本轮结论：
+  - 标准 `Architecture.InitializeAsync()` 启动路径现在也被回归锁住：通过 `Configurator` 声明的自定义 `INotificationPublisher` 会在真实 publish 路径里被复用，不会再被 `CqrsRuntimeModule` 创建 runtime 时静默短路成默认顺序发布器
+  - notification 线当前已形成“组合根入口 -> 默认接线修复 -> 标准架构启动回归”的闭环；下一轮若继续留在该方向，更合理的是重新评估产品面是否真的需要第三种仓库内置策略，而不是继续堆同层级回归
+
+### 阶段：notification publisher 默认接线修复（CQRS-REWRITE-RP-120）
+
+- 延续 `$gframework-batch-boot 50`，本轮沿着 `RP-119` 的 notification publisher 组合根回归继续向下追，发现这不是单纯的文档或测试补洞，而是默认 runtime 接线存在真实时序缺陷
+- 本轮主线程决策：
+  - 保持修复面收敛在 notification publisher 单线，不把问题扩散到 request dispatch 热路径或无关模块
+  - 让 `CqrsRuntimeFactory.CreateRuntime(...)` 不再在工厂层把 `null` publisher 立即替换成 `SequentialNotificationPublisher`，改由 `CqrsDispatcher` 在真正 publish 时优先复用显式实例或容器内唯一注册策略，最后才回退到默认顺序发布器
+  - 同步移除 `CqrsRuntimeModule` 与 `GFramework.Tests.Common/CqrsTestRuntime` 里对 `container.Get<INotificationPublisher>()` 的预解析，避免冻结前可见性再次把策略短路掉
+  - 在 `NotificationPublisherRegistrationExtensionsTests` 新增“publisher 依赖容器内探针服务”的真实采用回归，并重新验证 `UseTaskWhenAllNotificationPublisher()` 在默认基础设施路径里会继续调度所有处理器
+- 本轮权威验证：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests"`
+    - 结果：通过，`7/7` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs/CqrsRuntimeFactory.cs GFramework.Core/Services/Modules/CqrsRuntimeModule.cs GFramework.Tests.Common/CqrsTestRuntime.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - `UseTaskWhenAllNotificationPublisher()` 与 `UseNotificationPublisher<TPublisher>()` 现在不再只是“能注册进容器”，而是能真正穿过默认 runtime 基础设施参与 publish 路径
+  - 本轮属于完整的语义修复批次，应在提交后再决定是否继续 notification 线或切回 request steady-state 热点
+
+### 阶段：notification publisher 泛型组合根入口收口（CQRS-REWRITE-RP-119）
+
+- 延续 `$gframework-batch-boot 50`，本轮在 `feat/cqrs-optimization` 已与 `origin/main` 对齐后，没有直接重开 request dispatch 热路径实验，而是先选择 notification publisher 线上一个更小、可直接评审的采用面切片
+- 本轮主线程决策：
+  - 保持 `GFramework.Cqrs` runtime 代码不变，只补 `UseNotificationPublisher<TPublisher>()` 的组合根回归与用户文档说明
+  - 在 `NotificationPublisherRegistrationExtensionsTests` 新增两条 targeted 回归，确认泛型重载会注册唯一单例策略，且在容器已存在 `INotificationPublisher` 时同样会拒绝重复声明
+  - 在 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md` 把自定义入口统一写成 `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()`，并明确实例重载与泛型重载的生命周期边界
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests"`
+    - 结果：通过，`6/6` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - notification publisher 的组合根采用面现在不再默认读者只能“手里先有一个实例”；文档与回归都已明确容器托管型自定义 publisher 的标准入口
+  - 这批仍然保持在低风险、单模块、易评审边界内，适合在完成验证后直接收口为新的恢复点
+
 ## 2026-05-08
 
 ### 阶段：PR #342 latest-head review 收口（CQRS-REWRITE-RP-118）

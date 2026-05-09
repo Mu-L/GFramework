@@ -27,19 +27,7 @@ internal sealed class CqrsDispatcherCacheTests
     {
         LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
         _container = new MicrosoftDiContainer();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineCacheBehavior>();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineContextRefreshBehavior>();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderOuterBehavior>();
-        _container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderInnerBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineCacheBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineContextRefreshBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderOuterBehavior>();
-        _container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderInnerBehavior>();
-
-        CqrsTestRuntime.RegisterHandlers(
-            _container,
-            typeof(CqrsDispatcherCacheTests).Assembly,
-            typeof(ArchitectureContext).Assembly);
+        ConfigureDispatcherCacheFixture(_container);
 
         _container.Freeze();
         _context = new ArchitectureContext(_container);
@@ -158,6 +146,53 @@ internal sealed class CqrsDispatcherCacheTests
                 GetPairCacheValue(requestBindings, typeof(DispatcherStringCacheRequest), typeof(string)),
                 Is.SameAs(stringAfterFirstDispatch));
         });
+    }
+
+    /// <summary>
+    ///     验证 request 的“是否存在 pipeline behavior”判定会按 dispatcher 实例缓存，
+    ///     让零行为请求在首次分发后不再重复查询容器，同时不同 dispatcher 不共享该实例级状态。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Cache_Zero_Pipeline_Request_Presence_Per_Dispatcher_Instance()
+    {
+        var firstContext = new ArchitectureContext(_container!);
+        var secondContext = new ArchitectureContext(_container!);
+        var firstDispatcher = GetDispatcherFromContext(firstContext);
+        var secondDispatcher = GetDispatcherFromContext(secondContext);
+        using var isolatedContainer = CreateFrozenContainer();
+        var isolatedContext = new ArchitectureContext(isolatedContainer);
+        var isolatedDispatcher = GetDispatcherFromContext(isolatedContext);
+
+        AssertRequestBehaviorPresenceIsUnset(firstDispatcher, typeof(IPipelineBehavior<DispatcherCacheRequest, int>));
+        AssertRequestBehaviorPresenceIsUnset(secondDispatcher, typeof(IPipelineBehavior<DispatcherCacheRequest, int>));
+        AssertRequestBehaviorPresenceIsUnset(isolatedDispatcher, typeof(IPipelineBehavior<DispatcherCacheRequest, int>));
+        AssertRequestBehaviorPresenceIsUnset(
+            firstDispatcher,
+            typeof(IPipelineBehavior<DispatcherPipelineCacheRequest, int>));
+
+        await firstContext.SendRequestAsync(new DispatcherCacheRequest());
+        await firstContext.SendRequestAsync(new DispatcherPipelineCacheRequest());
+
+        var zeroPipelinePresence = GetRequestBehaviorPresenceCacheValue(
+            firstDispatcher,
+            typeof(IPipelineBehavior<DispatcherCacheRequest, int>));
+        var onePipelinePresence = GetRequestBehaviorPresenceCacheValue(
+            firstDispatcher,
+            typeof(IPipelineBehavior<DispatcherPipelineCacheRequest, int>));
+
+        AssertSharedDispatcherCacheState(
+            firstDispatcher,
+            secondDispatcher,
+            isolatedDispatcher,
+            zeroPipelinePresence,
+            onePipelinePresence);
+
+        await isolatedContext.SendRequestAsync(new DispatcherCacheRequest());
+
+        AssertRequestBehaviorPresenceEquals(
+            isolatedDispatcher,
+            typeof(IPipelineBehavior<DispatcherCacheRequest, int>),
+            false);
     }
 
     /// <summary>
@@ -566,6 +601,66 @@ internal sealed class CqrsDispatcherCacheTests
     }
 
     /// <summary>
+    ///     从架构上下文中解析当前延迟创建的 dispatcher 实例，便于验证其实例级热路径缓存。
+    /// </summary>
+    private static object GetDispatcherFromContext(ArchitectureContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var lazyRuntimeField = typeof(ArchitectureContext).GetField(
+            "_cqrsRuntime",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.That(lazyRuntimeField, Is.Not.Null, "Missing ArchitectureContext._cqrsRuntime field.");
+
+        var lazyRuntime = lazyRuntimeField!.GetValue(context)
+                          ?? throw new InvalidOperationException(
+                              "ArchitectureContext._cqrsRuntime returned null.");
+        var lazyValueProperty = lazyRuntime.GetType().GetProperty(
+            "Value",
+            BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.That(lazyValueProperty, Is.Not.Null, "Missing Lazy<ICqrsRuntime>.Value accessor.");
+
+        return lazyValueProperty!.GetValue(lazyRuntime)
+               ?? throw new InvalidOperationException("Resolved CQRS runtime instance was null.");
+    }
+
+    /// <summary>
+    ///     创建与当前 fixture 注册形状一致、但拥有独立 runtime 实例的冻结容器，
+    ///     用于验证 dispatcher 的实例级缓存不会跨容器共享。
+    /// </summary>
+    private static MicrosoftDiContainer CreateFrozenContainer()
+    {
+        var container = new MicrosoftDiContainer();
+        ConfigureDispatcherCacheFixture(container);
+
+        container.Freeze();
+        return container;
+    }
+
+    /// <summary>
+    ///     组装当前 fixture 依赖的 CQRS 容器注册形状，确保默认上下文与隔离容器复用同一份装配基线。
+    /// </summary>
+    /// <param name="container">待补齐 CQRS 注册的目标容器。</param>
+    private static void ConfigureDispatcherCacheFixture(MicrosoftDiContainer container)
+    {
+        container.RegisterCqrsPipelineBehavior<DispatcherPipelineCacheBehavior>();
+        container.RegisterCqrsPipelineBehavior<DispatcherPipelineContextRefreshBehavior>();
+        container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderOuterBehavior>();
+        container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderInnerBehavior>();
+        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineCacheBehavior>();
+        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineContextRefreshBehavior>();
+        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderOuterBehavior>();
+        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderInnerBehavior>();
+
+        CqrsTestRuntime.RegisterHandlers(
+            container,
+            typeof(CqrsDispatcherCacheTests).Assembly,
+            typeof(ArchitectureContext).Assembly);
+    }
+
+    /// <summary>
     ///     清空本测试依赖的 dispatcher 静态缓存，避免跨用例共享进程级状态导致断言漂移。
     /// </summary>
     private static void ClearDispatcherCaches()
@@ -589,6 +684,74 @@ internal sealed class CqrsDispatcherCacheTests
     private static object? GetPairCacheValue(object cache, Type primaryType, Type secondaryType)
     {
         return InvokeInstanceMethod(cache, "GetValueOrDefaultForTesting", primaryType, secondaryType);
+    }
+
+    /// <summary>
+    ///     读取指定 dispatcher 实例中当前保存的 request behavior presence 缓存项。
+    /// </summary>
+    private static object? GetRequestBehaviorPresenceCacheValue(object dispatcher, Type behaviorType)
+    {
+        var field = dispatcher.GetType().GetField(
+            "_requestBehaviorPresenceCache",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.That(field, Is.Not.Null, "Missing dispatcher request behavior presence cache field.");
+
+        var cache = field!.GetValue(dispatcher)
+                   ?? throw new InvalidOperationException(
+                       "Dispatcher request behavior presence cache returned null.");
+        var tryGetValueMethod = cache.GetType().GetMethod(
+            "TryGetValue",
+            BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.That(tryGetValueMethod, Is.Not.Null, "Missing ConcurrentDictionary.TryGetValue accessor.");
+
+        object?[] arguments = [behaviorType, null];
+        var found = (bool)(tryGetValueMethod!.Invoke(cache, arguments)
+                           ?? throw new InvalidOperationException(
+                               "ConcurrentDictionary.TryGetValue returned null."));
+        return found ? arguments[1] : null;
+    }
+
+    /// <summary>
+    ///     断言指定 dispatcher 上某个 request behavior presence 缓存项尚未建立。
+    /// </summary>
+    private static void AssertRequestBehaviorPresenceIsUnset(object dispatcher, Type behaviorType)
+    {
+        Assert.That(GetRequestBehaviorPresenceCacheValue(dispatcher, behaviorType), Is.Null);
+    }
+
+    /// <summary>
+    ///     断言指定 dispatcher 上某个 request behavior presence 缓存项等于预期值。
+    /// </summary>
+    private static void AssertRequestBehaviorPresenceEquals(object dispatcher, Type behaviorType, bool expected)
+    {
+        Assert.That(GetRequestBehaviorPresenceCacheValue(dispatcher, behaviorType), Is.EqualTo(expected));
+    }
+
+    /// <summary>
+    ///     断言同一容器解析出的 dispatcher 会共享实例级缓存，而另一独立容器的 dispatcher 不会提前命中。
+    /// </summary>
+    private static void AssertSharedDispatcherCacheState(
+        object firstDispatcher,
+        object secondDispatcher,
+        object isolatedDispatcher,
+        object? zeroPipelinePresence,
+        object? onePipelinePresence)
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(secondDispatcher, Is.SameAs(firstDispatcher));
+            Assert.That(zeroPipelinePresence, Is.EqualTo(false));
+            Assert.That(onePipelinePresence, Is.EqualTo(true));
+            AssertRequestBehaviorPresenceEquals(
+                secondDispatcher,
+                typeof(IPipelineBehavior<DispatcherCacheRequest, int>),
+                false);
+            AssertRequestBehaviorPresenceIsUnset(
+                isolatedDispatcher,
+                typeof(IPipelineBehavior<DispatcherCacheRequest, int>));
+        });
     }
 
     /// <summary>
