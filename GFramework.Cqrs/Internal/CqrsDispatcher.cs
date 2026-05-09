@@ -21,6 +21,11 @@ internal sealed class CqrsDispatcher(
     ILogger logger,
     INotificationPublisher? notificationPublisher) : ICqrsRuntime
 {
+    // 实例级热路径缓存：默认 runtime 在容器冻结前创建，但请求/stream 行为注册在架构生命周期内保持稳定。
+    // 因此这里按 behavior service type 记住“当前 dispatcher 对应容器里是否存在该行为”，避免 0-pipeline steady-state
+    // 每次 SendAsync 都重复询问容器。缓存值只反映当前 dispatcher 持有容器的注册可见性，不跨 runtime 共享。
+    private readonly ConcurrentDictionary<Type, bool> _requestBehaviorPresenceCache = new();
+
     // 卸载安全的进程级缓存：当 generated registry 提供 request invoker 元数据时，
     // registrar 会按请求/响应类型对把它们写入这里；若类型被卸载，条目会自然失效。
     private static readonly WeakTypePairCache<GeneratedRequestInvokerMetadata>
@@ -123,7 +128,7 @@ internal sealed class CqrsDispatcher(
                               $"No CQRS request handler registered for {requestType.FullName}.");
 
             PrepareHandler(handler, context);
-            if (!container.HasRegistration(dispatchBinding.BehaviorType))
+            if (!HasRequestBehaviorRegistration(dispatchBinding.BehaviorType))
             {
                 return dispatchBinding.RequestInvoker(handler, request, cancellationToken);
             }
@@ -143,6 +148,21 @@ internal sealed class CqrsDispatcher(
             // 保留旧 async 实现的 faulted-ValueTask 失败语义，同时继续复用 direct-return 的热路径。
             return ValueTask.FromException<TResponse>(exception);
         }
+    }
+
+    /// <summary>
+    ///     读取当前 dispatcher 容器里是否存在指定 request pipeline 行为注册，并在首次命中后缓存结果。
+    /// </summary>
+    /// <param name="behaviorType">目标 pipeline 行为服务类型。</param>
+    /// <returns>存在注册时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    private bool HasRequestBehaviorRegistration(Type behaviorType)
+    {
+        ArgumentNullException.ThrowIfNull(behaviorType);
+
+        return _requestBehaviorPresenceCache.GetOrAdd(
+            behaviorType,
+            static (cachedBehaviorType, currentContainer) => currentContainer.HasRegistration(cachedBehaviorType),
+            container);
     }
 
     /// <summary>

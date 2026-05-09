@@ -2,6 +2,34 @@
 
 ## 2026-05-09
 
+### 阶段：request 零管道 behavior presence cache（CQRS-REWRITE-RP-122）
+
+- 延续 `$gframework-batch-boot 50`，本轮在 `RP-121` 把 notification 线阶段性收口后，重新回到 request steady-state 常量开销，并接受并行 explorer 的共同结论：下一刀应继续减少每次 `SendAsync(...)` 必经的通用查询，而不是回头优化 `HasRegistration(Type)` 内部实现或重试已证伪的 `IContextAware` 类型缓存
+- 本轮主线程决策：
+  - 只改 `GFramework.Cqrs/Internal/CqrsDispatcher.cs` 与 `GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`，不同时打开 scoped benchmark 宿主或 notification 新公开 API 两条线
+  - 为 `CqrsDispatcher` 新增 `_requestBehaviorPresenceCache`，按闭合 `IPipelineBehavior<,>` 服务类型缓存“当前 dispatcher 的容器里是否存在该 request behavior 注册”
+  - 保持优化面只覆盖 request `0 pipeline` 热路径；stream 对称缓存与 scoped host benchmark 继续留到后续独立批次
+  - 在 `CqrsDispatcherCacheTests` 新增实例级回归，明确“同容器多个 `ArchitectureContext` 解析到同一个 runtime/dispatcher，会共享该缓存；另一独立容器创建的 dispatcher 不共享该缓存”
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherCacheTests"`
+    - 结果：通过，`11/11` passed
+    - 备注：新增回归首轮曾因错误假设“不同 `ArchitectureContext` 必定对应不同 dispatcher”而失败；修正为“同容器共享 runtime、独立容器不共享缓存”后稳定通过
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：默认 request steady-state 当前约为 baseline `5.876 ns / 32 B`、`Mediator` `5.275 ns / 32 B`、`GFramework.Cqrs` `51.717 ns / 32 B`、`MediatR` `56.108 ns / 232 B`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：首次与 `RequestBenchmarks` 并行触发时，BenchmarkDotNet 自动生成项目目录发生 `.nuget.g.props already exists` 冲突；改为串行重跑同一命令后，`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约 `5.720 ns / 52.490 ns / 56.890 ns`，`Transient` 下约 `5.814 ns / 57.746 ns / 55.545 ns`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`
+    - 结果：通过
+- 本轮结论：
+  - request `0 pipeline` 常量路径再次被压短，默认 steady-state request 与 `Singleton` lifetime 均继续快于当前 `MediatR` short-job 基线
+  - `Transient` 仍略慢于 `MediatR`，但相较更早轮次已明显收敛；下一轮若继续 request 热点，更值得继续减少 steady-state 必经路径，或切到 explorer 建议的 `request scoped host + compile-time lifetime` 对齐线，而不是继续打磨已收益有限的 `HasRegistration(Type)` 内部细节
+
 ### 阶段：标准架构启动路径 notification publisher 回归（CQRS-REWRITE-RP-121）
 
 - 延续 `$gframework-batch-boot 50`，本轮没有继续扩 notification runtime 语义，而是先给 `RP-120` 刚修复的默认接线补一条更贴近生产的架构启动回归
