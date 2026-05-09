@@ -21,7 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比 stream 完整枚举在不同 handler 生命周期下的额外开销。
+///     对比 stream 在不同 handler 生命周期与观测方式下的额外开销。
 /// </summary>
 /// <remarks>
 ///     当前矩阵只覆盖 `Singleton` 与 `Transient`。
@@ -49,6 +49,12 @@ public class StreamLifetimeBenchmarks
     public HandlerLifetime Lifetime { get; set; }
 
     /// <summary>
+    ///     控制当前 benchmark 观察“只推进首个元素”还是“完整枚举整个 stream”。
+    /// </summary>
+    [Params(StreamObservation.FirstItem, StreamObservation.DrainAll)]
+    public StreamObservation Observation { get; set; }
+
+    /// <summary>
     ///     可公平比较的 benchmark handler 生命周期集合。
     /// </summary>
     public enum HandlerLifetime
@@ -62,6 +68,22 @@ public class StreamLifetimeBenchmarks
         ///     每次建流都重新解析新的 handler 实例。
         /// </summary>
         Transient
+    }
+
+    /// <summary>
+    ///     用于拆分 stream dispatch 与后续枚举成本的观测模式。
+    /// </summary>
+    public enum StreamObservation
+    {
+        /// <summary>
+        ///     只推进到首个元素后立即释放枚举器。
+        /// </summary>
+        FirstItem,
+
+        /// <summary>
+        ///     完整枚举整个 stream，保留原有 benchmark 语义。
+        /// </summary>
+        DrainAll
     }
 
     /// <summary>
@@ -141,59 +163,49 @@ public class StreamLifetimeBenchmarks
     }
 
     /// <summary>
-    ///     直接调用 handler 并完整枚举，作为不同生命周期矩阵下的 dispatch 额外开销 baseline。
+    ///     直接调用 handler，并按当前观测模式消费 stream，作为不同生命周期矩阵下的 dispatch 额外开销 baseline。
     /// </summary>
     [Benchmark(Baseline = true)]
-    public async ValueTask Stream_Baseline()
+    public ValueTask Stream_Baseline()
     {
-        await foreach (var response in _baselineHandler.Handle(_reflectionRequest, CancellationToken.None).ConfigureAwait(false))
-        {
-            _ = response;
-        }
+        return ObserveAsync(_baselineHandler.Handle(_reflectionRequest, CancellationToken.None), Observation);
     }
 
     /// <summary>
-    ///     通过 GFramework.CQRS reflection stream binding 路径创建并完整枚举 stream。
+    ///     通过 GFramework.CQRS reflection stream binding 路径创建 stream，并按当前观测模式消费。
     /// </summary>
     [Benchmark]
-    public async ValueTask Stream_GFrameworkReflection()
+    public ValueTask Stream_GFrameworkReflection()
     {
-        await foreach (var response in _reflectionRuntime.CreateStream(
-                           BenchmarkContext.Instance,
-                           _reflectionRequest,
-                           CancellationToken.None)
-                           .ConfigureAwait(false))
-        {
-            _ = response;
-        }
+        return ObserveAsync(
+            _reflectionRuntime.CreateStream(
+                BenchmarkContext.Instance,
+                _reflectionRequest,
+                CancellationToken.None),
+            Observation);
     }
 
     /// <summary>
-    ///     通过 generated stream invoker provider 预热后的 GFramework.CQRS runtime 创建并完整枚举 stream。
+    ///     通过 generated stream invoker provider 预热后的 GFramework.CQRS runtime 创建 stream，并按当前观测模式消费。
     /// </summary>
     [Benchmark]
-    public async ValueTask Stream_GFrameworkGenerated()
+    public ValueTask Stream_GFrameworkGenerated()
     {
-        await foreach (var response in _generatedRuntime.CreateStream(
-                           BenchmarkContext.Instance,
-                           _generatedRequest,
-                           CancellationToken.None)
-                           .ConfigureAwait(false))
-        {
-            _ = response;
-        }
+        return ObserveAsync(
+            _generatedRuntime.CreateStream(
+                BenchmarkContext.Instance,
+                _generatedRequest,
+                CancellationToken.None),
+            Observation);
     }
 
     /// <summary>
-    ///     通过 MediatR 创建并完整枚举 stream，作为外部对照。
+    ///     通过 MediatR 创建 stream，并按当前观测模式消费，作为外部对照。
     /// </summary>
     [Benchmark]
-    public async ValueTask Stream_MediatR()
+    public ValueTask Stream_MediatR()
     {
-        await foreach (var response in _mediatr.CreateStream(_mediatrRequest, CancellationToken.None).ConfigureAwait(false))
-        {
-            _ = response;
-        }
+        return ObserveAsync(_mediatr.CreateStream(_mediatrRequest, CancellationToken.None), Observation);
     }
 
     /// <summary>
@@ -269,6 +281,62 @@ public class StreamLifetimeBenchmarks
             HandlerLifetime.Transient => ServiceLifetime.Transient,
             _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Unsupported benchmark handler lifetime.")
         };
+    }
+
+    /// <summary>
+    ///     按观测模式消费 stream，便于把“建流/首个元素”和“完整枚举”分开观察。
+    /// </summary>
+    /// <typeparam name="TResponse">当前 stream 的响应类型。</typeparam>
+    /// <param name="responses">待观察的异步响应序列。</param>
+    /// <param name="observation">当前 benchmark 选定的观测模式。</param>
+    /// <returns>异步消费完成后的等待句柄。</returns>
+    private static ValueTask ObserveAsync<TResponse>(
+        IAsyncEnumerable<TResponse> responses,
+        StreamObservation observation)
+    {
+        ArgumentNullException.ThrowIfNull(responses);
+
+        return observation switch
+        {
+            StreamObservation.FirstItem => ConsumeFirstItemAsync(responses),
+            StreamObservation.DrainAll => DrainAsync(responses),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(observation),
+                observation,
+                "Unsupported stream observation mode.")
+        };
+    }
+
+    /// <summary>
+    ///     只推进到首个元素后立即释放枚举器，用来近似隔离建流与首个 `MoveNextAsync` 的固定成本。
+    /// </summary>
+    /// <typeparam name="TResponse">当前 stream 的响应类型。</typeparam>
+    /// <param name="responses">待观察的异步响应序列。</param>
+    /// <returns>消费首个元素后的等待句柄。</returns>
+    private static async ValueTask ConsumeFirstItemAsync<TResponse>(IAsyncEnumerable<TResponse> responses)
+    {
+        var enumerator = responses.GetAsyncEnumerator();
+        await using (enumerator.ConfigureAwait(false))
+        {
+            if (await enumerator.MoveNextAsync().ConfigureAwait(false))
+            {
+                _ = enumerator.Current;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     完整枚举整个 stream，保留原 benchmark 的总成本观测口径。
+    /// </summary>
+    /// <typeparam name="TResponse">当前 stream 的响应类型。</typeparam>
+    /// <param name="responses">待完整枚举的异步响应序列。</param>
+    /// <returns>完整枚举结束后的等待句柄。</returns>
+    private static async ValueTask DrainAsync<TResponse>(IAsyncEnumerable<TResponse> responses)
+    {
+        await foreach (var response in responses.ConfigureAwait(false))
+        {
+            _ = response;
+        }
     }
 
     /// <summary>

@@ -2,6 +2,34 @@
 
 ## 2026-05-09
 
+### 阶段：stream lifetime 观测维度补齐与 generated binding 强类型缓存（CQRS-REWRITE-RP-127）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-126` 已建立四方 stream lifetime 口径后，本轮改用多 worker wave 同时推进三个互不冲突切片：
+  - `benchmark-only`：为 `StreamLifetimeBenchmarks` 增加 `FirstItem / DrainAll` 观测维度，并收口 `MA0004`
+  - `runtime-only`：把 `CqrsDispatcher.CreateStream(...)` 的 stream dispatch binding 改成按 `TResponse` 强类型缓存，避免 generated lane 在热路径上继续通过 `object -> IAsyncEnumerable<TResponse>` 桥接
+  - `docs / ai-plan`：把 `RP-126` 的旧恢复结论更新为本轮实测结果，并给出下一恢复入口
+- 本轮主线程验收与修正：
+  - 首次并行验证时，`dotnet test` 与 `dotnet build` 同跑触发 `MSB3030` 输出争用；已按仓库规则改为串行重跑同一命令，并以串行结果为权威
+  - runtime worker 初版在 `CqrsDispatcher.cs` 留下一个 `StreamInvoker<TResponse>` 方法组绑定编译错误；主线程已局部修正为显式 lambda 适配，未改变预期语义
+  - 经修正后，generated lane 不再出现 “incompatible invoker signature” 运行时异常，`StreamLifetimeBenchmarks` 16 个 case 全部通过
+- 本轮验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherCacheTests|FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+    - 结果：通过，`31/31` passed
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`Transient + FirstItem` 下 generated 约 `100.011 ns / 240 B`、reflection 约 `97.628 ns / 240 B`；`Transient + DrainAll` 下 generated 约 `116.780 ns / 304 B`、reflection 约 `124.174 ns / 304 B`
+- 本轮结论：
+  - `FirstItem / DrainAll` 双观测维度把“建流到首个元素的瞬时成本”和“完整枚举总成本”拆开后，`Transient` 场景下的 generated lane 已不再呈现统一的反向退化
+  - 当前仍保留的差值集中在 `Transient + FirstItem`，规模约 `2.4 ns`，明显小于 `RP-126` 的旧结论；而 `Transient + DrainAll` 已转为 generated 领先 reflection
+  - 当前分支相对 `origin/main` 的累计 branch diff 已到 `21 files`（`1231 insertions / 181 deletions`），仍低于 `$gframework-batch-boot 50` 阈值；但主线程已接近当前回合的安全上下文预算，因此在本轮自然边界停止，不继续开下一波 worker
+- 下一恢复点：
+  - 若继续 benchmark 线，先从 `Transient + FirstItem` 的小幅差值恢复，并用 `StreamInvokerBenchmarks` 复核 generated lane 的常量成本收益是否仍成立；若差值不稳定，再考虑把下一批切到 `Mediator` concrete runtime 的 stream lifetime 对照
+  - 若切回 runtime 线，则以 `b7fa3eee` 与本轮 `StreamLifetimeBenchmarks` 双口径结果作为后续回归基线
+
 ### 阶段：stream lifetime 对照口径补齐（CQRS-REWRITE-RP-126）
 
 - 延续 `$gframework-batch-boot 50`，在 `RP-125` 先把 request lifetime benchmark 宿主对齐到 generated-provider 路径后，本轮继续补齐 stream 生命周期矩阵的当前对照口径，不回到 runtime 或测试代码
@@ -16,11 +44,11 @@
     - 结果：通过
     - 备注：`Singleton` 下 baseline / generated / reflection / `MediatR` 约为 `79.602 ns / 280 B`、`111.547 ns / 280 B`、`120.553 ns / 280 B`、`208.381 ns / 672 B`；`Transient` 下 baseline / reflection / generated / `MediatR` 约为 `76.351 ns / 280 B`、`119.632 ns / 304 B`、`129.166 ns / 304 B`、`213.420 ns / 672 B`
 - 本轮结论：
-  - 当前 stream 生命周期矩阵已经从“单看 `GFramework.Cqrs` 一条线是否还能跑通”升级为可直接比较 `baseline / reflection / generated / MediatR` 的四方口径
-  - 当前短跑下，generated lane 在 `Singleton` 档优于 reflection，但在 `Transient` 档仍慢于 reflection；这说明后续若继续压 stream 热点，应该围绕 generated 宿主的瞬时解析成本继续定位，而不是回头重做已经分离完成的对照口径
+  - 当前 stream 生命周期矩阵已经具备可直接比较 `baseline / reflection / generated / MediatR` 的四方口径，后续恢复时无需再回头拼接不同批次的 stream 生命周期数据
+  - 当前短跑下，generated lane 在 `Singleton` 档优于 reflection，但在 `Transient` 档仍慢于 reflection，差值约为 `9.5 ns` 与 `24 B`；这里先只把它记录为 benchmark 观察，不把它放大成更宽泛的 runtime 优劣结论
   - 当前已提交分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的累计 branch diff 已到 `10 files`（`556 insertions / 75 deletions`），仍远低于 `$gframework-batch-boot 50` 的 `50 files` stop condition
 - 下一恢复点：
-  - 若继续 benchmark 线，优先判断是否要追 `Stream_GFrameworkGenerated` 在 `Transient` 下仍慢于 `Stream_GFrameworkReflection` 的差值，或单开 `Mediator` concrete runtime 的 stream lifetime 对照批次；若切回 runtime 线，则以 `RP-126` 的四方矩阵作为后续性能回归基线
+  - 若继续 benchmark 线，优先从 `Stream_GFrameworkGenerated` 与 `Stream_GFrameworkReflection` 的 `Transient` 差值恢复，先确认该差值是否稳定，再决定继续压 generated 宿主的瞬时解析成本，或单开 `Mediator` concrete runtime 的 stream lifetime 对照批次；若切回 runtime 线，则以 `RP-126` 的四方矩阵作为后续性能回归基线
 
 ### 阶段：request lifetime generated-provider 宿主对齐（CQRS-REWRITE-RP-125）
 

@@ -7,18 +7,20 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-126`
+- 恢复点编号：`CQRS-REWRITE-RP-127`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #344`（`origin/main` 已合入）
 - 当前结论：
-- 当前 `RP-126` 延续 `$gframework-batch-boot 50`，在 `RP-124` 收口 stream behavior presence cache 后，先用 `f9c9561f` 把 `RequestLifetimeBenchmarks` 对齐到 generated-provider 宿主路径，再用 `9107e232` 把 `StreamLifetimeBenchmarks` 扩成 `baseline / GFramework reflection / GFramework generated / MediatR` 的完整生命周期对照口径
-- 本轮写面只落在 `GFramework.Cqrs.Benchmarks/Messaging/GeneratedRequestLifetimeBenchmarkRegistry.cs`、`RequestLifetimeBenchmarks.cs`、`GeneratedStreamLifetimeBenchmarkRegistry.cs`、`StreamLifetimeBenchmarks.cs`，以及 `ai-plan/public/cqrs-rewrite` 恢复文档，不回改 runtime、测试或 README
+- 当前 `RP-127` 延续 `$gframework-batch-boot 50`，在 `RP-126` 已补齐 stream lifetime 四方口径后，再用 `b7fa3eee` 把 `CqrsDispatcher.CreateStream(...)` 的 stream dispatch binding 改为按 `TResponse` 强类型缓存，同时为 `StreamLifetimeBenchmarks` 增加 `FirstItem / DrainAll` 观测维度，并把新的结果回填到公开可恢复文档
+- 本轮写面落在 `GFramework.Cqrs/Internal/CqrsDispatcher.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs`、`GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs`，以及 `GFramework.Cqrs.Benchmarks/README.md` / `ai-plan/public/cqrs-rewrite/**` 恢复文档；没有扩散到 request runtime、notification runtime 或额外文档模块
 - `f9c9561f` 为 request lifetime 补入 handwritten generated registry，并在 setup/cleanup 清理 dispatcher cache；这样 `Singleton / Transient` 生命周期矩阵继续只比较 handler 生命周期与 dispatch 常量路径，不再混入旧宿主差异
 - `9107e232` 将 stream lifetime 的 reflection、generated 与 `MediatR` 请求/响应/handler 彻底拆开，并限制 generated registry 只绑定 generated lane，避免静态 dispatcher cache 把不同 stream 对照口径污染到一起
 - 当前 request lifetime benchmark 已用新宿主重新验证：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约为 `5.012 ns / 32 B`、`49.612 ns / 32 B`、`51.796 ns / 232 B`；`Transient` 下约为 `3.962 ns / 32 B`、`50.480 ns / 56 B`、`50.284 ns / 232 B`
-- 当前 stream lifetime benchmark 已产出完整四方结果：`Singleton` 下 baseline / generated / reflection / `MediatR` 约为 `79.602 ns / 280 B`、`111.547 ns / 280 B`、`120.553 ns / 280 B`、`208.381 ns / 672 B`；`Transient` 下 baseline / reflection / generated / `MediatR` 约为 `76.351 ns / 280 B`、`119.632 ns / 304 B`、`129.166 ns / 304 B`、`213.420 ns / 672 B`
-- 当前已提交分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的累计 branch diff 已到 `10 files`（`556 insertions / 75 deletions`），仍远低于 `$gframework-batch-boot 50` 的 `50 files` stop condition
-- 下一推荐步骤：若继续 benchmark 线，先以 `RP-126` 的四方 stream lifetime 口径判断是否要追 `Generated` 在 `Transient` 下仍慢于 `Reflection` 的差值，再决定继续压 stream transient 常量路径，还是单开 `Mediator` concrete runtime 的 stream lifetime 对照批次；若切回 runtime 线，则以 `RP-125` / `RP-126` 结果作为后续性能回归基线
+- 当前 stream lifetime benchmark 已更新为 `Observation=FirstItem / DrainAll` 双口径：`Singleton + FirstItem` 下 baseline / generated / reflection / `MediatR` 约为 `48.704 ns / 216 B`、`94.629 ns / 216 B`、`95.417 ns / 216 B`、`152.886 ns / 608 B`；`Singleton + DrainAll` 下约为 `73.335 ns / 280 B`、`118.860 ns / 280 B`、`119.632 ns / 280 B`、`205.629 ns / 672 B`
+- `Transient + FirstItem` 下 baseline / reflection / generated / `MediatR` 约为 `48.293 ns / 216 B`、`97.628 ns / 240 B`、`100.011 ns / 240 B`、`154.149 ns / 608 B`；`Transient + DrainAll` 下约为 `78.466 ns / 280 B`、`124.174 ns / 304 B`、`116.780 ns / 304 B`、`220.040 ns / 672 B`
+- 现阶段可恢复结论收口为三点：一是 stream lifetime 已具备四方口径加 `FirstItem / DrainAll` 双观测维度；二是 `b7fa3eee` 已让 generated lane 在 `DrainAll` 口径下重新领先 reflection；三是 `Transient + FirstItem` 仍保留约 `2.4 ns` 的小幅反向差值，更像建流到首个元素之间的瞬时成本，而不是完整枚举阶段退化
+- 当前已提交分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的累计 branch diff 已到 `21 files`（`1231 insertions / 181 deletions`），仍明显低于 `$gframework-batch-boot 50` 的 `50 files` stop condition
+- 下一推荐步骤：若继续 benchmark 线，优先从 `StreamLifetimeBenchmarks` 的 `Transient + FirstItem` 小幅差值继续恢复，并用 `StreamInvokerBenchmarks` 复核 generated lane 的常量成本收益是否能在更窄口径下复现；若差值不再稳定，再决定是否转去 `Mediator` concrete runtime 的 stream lifetime 对照批次
 - 更早的 `RP-123` 及之前阶段细节以下方 trace 与归档为准，active 入口不再重复展开旧阶段流水。
   - 当前分支相对 `origin/main` 的累计 branch diff 启动时为 `9 files`，仍明显低于 `$gframework-batch-boot 50` 的停止阈值；这一批继续保持单模块、低风险、可直接评审的 benchmark 边界
   - 当前 `RP-113` 已继续沿用 `$gframework-batch-boot 50`，并把 notification 线从 benchmark 对照推进到实际 runtime 能力：新增公开内置 `TaskWhenAllNotificationPublisher`，让 `GFramework.Cqrs` 在保留默认顺序发布器的同时，提供与 `Mediator` `TaskWhenAllPublisher` 对齐的并行 notification publish 策略
