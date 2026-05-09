@@ -7,10 +7,15 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-119`
+- 恢复点编号：`CQRS-REWRITE-RP-120`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #342`
 - 当前结论：
+  - 当前 `RP-120` 继续沿用 `$gframework-batch-boot 50`，并在 `RP-119` 刚补完泛型组合根入口回归后继续追到一个真实默认接线缺陷：`UseNotificationPublisher<TPublisher>()` 与 `UseTaskWhenAllNotificationPublisher()` 虽然都能把策略注册进容器，但默认 `RegisterInfrastructure(...)` / `CqrsRuntimeModule` 先创建 runtime，再由 `CqrsRuntimeFactory.CreateRuntime(...)` 在工厂层直接固化 `SequentialNotificationPublisher`，导致这些组合根策略在标准 publish 路径里根本不会生效
+  - 本轮把 notification publisher 解析责任从“runtime 构造时抢先决定”收口为“publish 时按唯一注册策略解析”：`CqrsRuntimeFactory.CreateRuntime(...)` 现在不再把 `null` 立即替换成顺序发布器，`CqrsDispatcher` 会优先复用显式传入实例，否则在真正 publish 时从容器解析唯一的 `INotificationPublisher`，只有在完全未注册策略时才回退到默认顺序发布器
+  - `CqrsRuntimeModule` 与 `GFramework.Tests.Common/CqrsTestRuntime` 也同步移除了预解析 `container.Get<INotificationPublisher>()` 的时序耦合，避免实现类型注册或冻结前可见性再次把策略短路成默认顺序发布器
+  - `NotificationPublisherRegistrationExtensionsTests` 现新增一条更贴近真实采用场景的回归：当自定义 publisher 依赖容器内其他服务时，`UseNotificationPublisher<TPublisher>()` 经过默认 runtime 基础设施后仍会被实际 publish 路径复用；同时 `UseTaskWhenAllNotificationPublisher()` 的默认基础设施回归也重新通过，证明 fix 不只覆盖泛型重载
+  - 当前批次工作树 diff 为 `5 files / 131 changed lines`，相对 `origin/main` 的累计 branch diff 仍远低于 `$gframework-batch-boot 50` 的文件阈值；但本轮已经跨过一个完整的“发现缺陷 -> 修复接线 -> 回归验证”自然边界，继续开启下一批前应先提交并刷新恢复点
   - 当前 `RP-119` 继续沿用 `$gframework-batch-boot 50`，并在分支已与 `origin/main` 对齐（`d389eb36`, `2026-05-08 20:08:33 +0800`）后，重新选择 notification publisher 线上一个更小的采用面切片：补齐 `UseNotificationPublisher<TPublisher>()` 的组合根采用说明与回归，而不是提前切回 request dispatch 热路径
   - 本轮不修改 `GFramework.Cqrs` runtime 语义，只收口“泛型组合根入口是否真的可用、以及读者是否知道该在什么情况下选它”这两个采用缺口
   - `NotificationPublisherRegistrationExtensionsTests` 现额外覆盖两条行为：泛型重载会把指定 publisher 类型注册为容器内唯一的单例策略；当容器里已存在 `INotificationPublisher` 注册时，泛型重载也会像实例重载一样在组合根阶段拒绝重复声明
@@ -397,7 +402,7 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 既然 `RP-119` 已把 `UseNotificationPublisher<TPublisher>()` 的测试与采用说明补齐，下一轮若继续留在 notification 线，优先评估是否真的需要第三种仓库内置策略，而不是再重复扩写同一组组合根入口
+1. 既然 `RP-120` 已修正 notification publisher 的默认接线时序，下一轮若继续留在 notification 线，优先评估是否真的需要第三种仓库内置策略，或是否要给 `CqrsRuntimeModule` / 架构启动路径补更贴近生产的集成回归
 2. 若后续批次切回 request dispatch 常量开销，继续避开“类型级 `IContextAware` 判定缓存”这条已验证无收益的热点假设，并优先挑选更可能影响 steady-state 的 generated/provider 吸收点
 3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 

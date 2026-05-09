@@ -19,7 +19,7 @@ namespace GFramework.Cqrs.Internal;
 internal sealed class CqrsDispatcher(
     IIocContainer container,
     ILogger logger,
-    INotificationPublisher notificationPublisher) : ICqrsRuntime
+    INotificationPublisher? notificationPublisher) : ICqrsRuntime
 {
     // 卸载安全的进程级缓存：当 generated registry 提供 request invoker 元数据时，
     // registrar 会按请求/响应类型对把它们写入这里；若类型被卸载，条目会自然失效。
@@ -61,9 +61,10 @@ internal sealed class CqrsDispatcher(
     private static readonly MethodInfo StreamPipelineInvokerMethodDefinition = typeof(CqrsDispatcher)
         .GetMethod(nameof(InvokeStreamPipelineExecutor), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    private readonly INotificationPublisher _notificationPublisher = notificationPublisher
-                                                                     ?? throw new ArgumentNullException(
-                                                                         nameof(notificationPublisher));
+    // runtime 通常会在容器冻结前创建；此时通过实现类型注册的 notification publisher
+    // 还没有被底层 provider 物化，因此不能只在构造阶段抓取一次。
+    // 显式传入实例时仍优先复用该实例；否则在真正 publish 时再尝试从容器解析。
+    private readonly INotificationPublisher? _notificationPublisher = notificationPublisher;
 
     /// <summary>
     ///     发布通知到所有已注册处理器。
@@ -94,7 +95,7 @@ internal sealed class CqrsDispatcher(
         }
 
         var publishContext = CreateNotificationPublishContext(notification, handlers, context, dispatchBinding.Invoker);
-        await _notificationPublisher.PublishAsync(publishContext, cancellationToken).ConfigureAwait(false);
+        await ResolveNotificationPublisher().PublishAsync(publishContext, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -201,6 +202,31 @@ internal sealed class CqrsDispatcher(
 
             contextAware.SetContext(architectureContext);
         }
+    }
+
+    /// <summary>
+    ///     解析当前 publish 调用应使用的 notification publisher。
+    /// </summary>
+    /// <remarks>
+    ///     显式传入实例的路径优先；若调用方只在组合根里声明了 <see cref="INotificationPublisher" /> 类型映射，
+    ///     则在容器冻结后的首次 publish 才能拿到底层 provider 构造出来的实例。
+    ///     若容器中仍未声明任何策略，则回退到默认顺序发布器。
+    /// </remarks>
+    private INotificationPublisher ResolveNotificationPublisher()
+    {
+        if (_notificationPublisher is not null)
+        {
+            return _notificationPublisher;
+        }
+
+        var registeredPublishers = container.GetAll(typeof(INotificationPublisher));
+        return registeredPublishers.Count switch
+        {
+            0 => new SequentialNotificationPublisher(),
+            1 => (INotificationPublisher)registeredPublishers[0],
+            _ => throw new InvalidOperationException(
+                $"Multiple {typeof(INotificationPublisher).FullName} instances are registered. Remove duplicate notification publisher strategies before publishing notifications.")
+        };
     }
 
     /// <summary>

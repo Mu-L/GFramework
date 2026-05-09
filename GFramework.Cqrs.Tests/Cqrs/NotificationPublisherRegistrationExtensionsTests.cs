@@ -33,6 +33,8 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
         container.Register<INotificationHandler<TestNotification>>(trailingHandler);
         CqrsTestRuntime.RegisterInfrastructure(container);
         container.Freeze();
+        Assert.That(container.GetAll(typeof(INotificationHandler<TestNotification>)), Has.Count.EqualTo(2));
+        Assert.That(container.GetAll(typeof(INotificationPublisher)), Has.Count.EqualTo(1));
 
         var context = new ArchitectureContext(container);
         var publishTask = context.PublishAsync(new TestNotification()).AsTask();
@@ -66,6 +68,8 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
         container.Register<INotificationHandler<TestNotification>>(trailingHandler);
         CqrsTestRuntime.RegisterInfrastructure(container);
         container.Freeze();
+        Assert.That(container.GetAll(typeof(INotificationHandler<TestNotification>)), Has.Count.EqualTo(2));
+        Assert.That(container.GetAll(typeof(INotificationPublisher)), Has.Count.EqualTo(1));
 
         var context = new ArchitectureContext(container);
 
@@ -106,6 +110,34 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
         Assert.That(container.HasRegistration(typeof(INotificationPublisher)), Is.True);
         Assert.That(container.GetRequired<INotificationPublisher>(), Is.TypeOf<TrackingNotificationPublisher>());
         Assert.That(container.GetRequired<INotificationPublisher>(), Is.SameAs(container.GetRequired<INotificationPublisher>()));
+    }
+
+    /// <summary>
+    ///     验证当自定义 publisher 依赖其他容器服务时，泛型组合根入口仍会被默认 runtime 基础设施正确复用。
+    /// </summary>
+    [Test]
+    public async Task UseNotificationPublisher_Generic_Overload_Should_Be_Used_By_Default_Runtime_Infrastructure()
+    {
+        LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
+
+        var probe = new NotificationPublisherProbe();
+        var handler = new RecordingNotificationHandler();
+        var container = new MicrosoftDiContainer();
+        container.Register(probe);
+        container.UseNotificationPublisher<DependencyAwareNotificationPublisher>();
+        container.Register<INotificationHandler<TestNotification>>(handler);
+        CqrsTestRuntime.RegisterInfrastructure(container);
+        container.Freeze();
+        Assert.That(container.GetAll(typeof(INotificationHandler<TestNotification>)), Has.Count.EqualTo(1));
+        Assert.That(container.GetAll(typeof(INotificationPublisher)), Has.Count.EqualTo(1));
+
+        var context = new ArchitectureContext(container);
+
+        await context.PublishAsync(new TestNotification()).ConfigureAwait(false);
+
+        Assert.That(probe.WasCalled, Is.True);
+        Assert.That(handler.WasInvoked, Is.True);
+        Assert.That(container.GetRequired<INotificationPublisher>(), Is.TypeOf<DependencyAwareNotificationPublisher>());
     }
 
     /// <summary>
@@ -195,6 +227,50 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
             ArgumentNullException.ThrowIfNull(context);
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    ///     记录泛型 publisher 是否真正参与了 publish 调用的探针。
+    /// </summary>
+    private sealed class NotificationPublisherProbe
+    {
+        /// <summary>
+        ///     获取探针是否已被自定义 publisher 标记为执行过。
+        /// </summary>
+        public bool WasCalled { get; private set; }
+
+        /// <summary>
+        ///     记录当前自定义 publisher 已接管本次通知发布。
+        /// </summary>
+        public void MarkCalled()
+        {
+            WasCalled = true;
+        }
+    }
+
+    /// <summary>
+    ///     依赖容器内探针服务的自定义 publisher，用于验证泛型重载确实走过了 provider 构造路径。
+    /// </summary>
+    private sealed class DependencyAwareNotificationPublisher(NotificationPublisherProbe probe) : INotificationPublisher
+    {
+        /// <summary>
+        ///     记录 publisher 已参与调用，再按当前处理器顺序继续执行。
+        /// </summary>
+        public async ValueTask PublishAsync<TNotification>(
+            NotificationPublishContext<TNotification> context,
+            CancellationToken cancellationToken = default)
+            where TNotification : INotification
+        {
+            ArgumentNullException.ThrowIfNull(context);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            probe.MarkCalled();
+
+            foreach (var handler in context.Handlers)
+            {
+                await context.InvokeHandlerAsync(handler, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 }

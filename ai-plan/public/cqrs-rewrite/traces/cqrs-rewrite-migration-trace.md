@@ -2,6 +2,27 @@
 
 ## 2026-05-09
 
+### 阶段：notification publisher 默认接线修复（CQRS-REWRITE-RP-120）
+
+- 延续 `$gframework-batch-boot 50`，本轮沿着 `RP-119` 的 notification publisher 组合根回归继续向下追，发现这不是单纯的文档或测试补洞，而是默认 runtime 接线存在真实时序缺陷
+- 本轮主线程决策：
+  - 保持修复面收敛在 notification publisher 单线，不把问题扩散到 request dispatch 热路径或无关模块
+  - 让 `CqrsRuntimeFactory.CreateRuntime(...)` 不再在工厂层把 `null` publisher 立即替换成 `SequentialNotificationPublisher`，改由 `CqrsDispatcher` 在真正 publish 时优先复用显式实例或容器内唯一注册策略，最后才回退到默认顺序发布器
+  - 同步移除 `CqrsRuntimeModule` 与 `GFramework.Tests.Common/CqrsTestRuntime` 里对 `container.Get<INotificationPublisher>()` 的预解析，避免冻结前可见性再次把策略短路掉
+  - 在 `NotificationPublisherRegistrationExtensionsTests` 新增“publisher 依赖容器内探针服务”的真实采用回归，并重新验证 `UseTaskWhenAllNotificationPublisher()` 在默认基础设施路径里会继续调度所有处理器
+- 本轮权威验证：
+  - `dotnet build GFramework.Core/GFramework.Core.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests"`
+    - 结果：通过，`7/7` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs/Internal/CqrsDispatcher.cs GFramework.Cqrs/CqrsRuntimeFactory.cs GFramework.Core/Services/Modules/CqrsRuntimeModule.cs GFramework.Tests.Common/CqrsTestRuntime.cs GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - `UseTaskWhenAllNotificationPublisher()` 与 `UseNotificationPublisher<TPublisher>()` 现在不再只是“能注册进容器”，而是能真正穿过默认 runtime 基础设施参与 publish 路径
+  - 本轮属于完整的语义修复批次，应在提交后再决定是否继续 notification 线或切回 request steady-state 热点
+
 ### 阶段：notification publisher 泛型组合根入口收口（CQRS-REWRITE-RP-119）
 
 - 延续 `$gframework-batch-boot 50`，本轮在 `feat/cqrs-optimization` 已与 `origin/main` 对齐后，没有直接重开 request dispatch 热路径实验，而是先选择 notification publisher 线上一个更小、可直接评审的采用面切片

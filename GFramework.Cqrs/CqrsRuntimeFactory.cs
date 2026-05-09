@@ -24,6 +24,10 @@ public static class CqrsRuntimeFactory
     /// <param name="container">目标依赖注入容器。</param>
     /// <param name="logger">用于 runtime 诊断的日志器。</param>
     /// <returns>默认 CQRS runtime。</returns>
+    /// <remarks>
+    ///     若调用方未显式传入 notification publisher，runtime 会在真正发布通知时优先复用容器里声明的
+    ///     <see cref="INotificationPublisher" />；若仍未声明，则回退到默认顺序发布器。
+    /// </remarks>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="container" /> 或 <paramref name="logger" /> 为 <see langword="null" />。
     /// </exception>
@@ -37,7 +41,10 @@ public static class CqrsRuntimeFactory
     /// </summary>
     /// <param name="container">目标依赖注入容器。</param>
     /// <param name="logger">用于 runtime 诊断的日志器。</param>
-    /// <param name="notificationPublisher">可选的通知发布策略；若为 <see langword="null" /> 则使用默认顺序发布器。</param>
+    /// <param name="notificationPublisher">
+    ///     可选的通知发布策略；若为 <see langword="null" />，runtime 会在发布时优先尝试解析容器中已声明的
+    ///     <see cref="INotificationPublisher" />，否则再回退到默认顺序发布器。
+    /// </param>
     /// <returns>默认 CQRS runtime。</returns>
     /// <exception cref="ArgumentNullException">
     ///     <paramref name="container" /> 或 <paramref name="logger" /> 为 <see langword="null" />。
@@ -53,7 +60,7 @@ public static class CqrsRuntimeFactory
         return new CqrsDispatcher(
             container,
             logger,
-            notificationPublisher ?? new SequentialNotificationPublisher());
+            notificationPublisher);
     }
 
     /// <summary>
