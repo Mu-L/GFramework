@@ -7,10 +7,15 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-118`
+- 恢复点编号：`CQRS-REWRITE-RP-119`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`PR #342`
 - 当前结论：
+  - 当前 `RP-119` 继续沿用 `$gframework-batch-boot 50`，并在分支已与 `origin/main` 对齐（`d389eb36`, `2026-05-08 20:08:33 +0800`）后，重新选择 notification publisher 线上一个更小的采用面切片：补齐 `UseNotificationPublisher<TPublisher>()` 的组合根采用说明与回归，而不是提前切回 request dispatch 热路径
+  - 本轮不修改 `GFramework.Cqrs` runtime 语义，只收口“泛型组合根入口是否真的可用、以及读者是否知道该在什么情况下选它”这两个采用缺口
+  - `NotificationPublisherRegistrationExtensionsTests` 现额外覆盖两条行为：泛型重载会把指定 publisher 类型注册为容器内唯一的单例策略；当容器里已存在 `INotificationPublisher` 注册时，泛型重载也会像实例重载一样在组合根阶段拒绝重复声明
+  - `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md` 现在把自定义策略入口统一写成 `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()`，并明确前者复用现成实例、后者让容器负责单例生命周期，避免用户误以为只能手写实例注册
+  - 当前批次提交前的工作树 diff 为 `5 files / 77 lines`，仍远低于 `$gframework-batch-boot 50` 的文件阈值；但这一轮的主停止依据仍是上下文预算与自然评审边界，因此本批完成后应直接收口，而不是顺手再开启新的 runtime 热点实验
   - 当前 `RP-118` 已使用 `$gframework-pr-review` 复核 `PR #342` latest-head review：CodeRabbit 当前仍成立的是 `NotificationFanOutBenchmarks` 中 MediatR 分支绕过共享 `HandleCore(...)`、`GFramework.Cqrs/README.md` 的 MD058 表格空行、以及恢复文档的 PR 锚点与 fan-out 历史值表述；Greptile 额外指出的 `UseTaskWhenAllNotificationPublisher()` 示例多余 `using GFramework.Cqrs.Notification;` 也在本轮一并收口
   - 本轮不改 `GFramework.Cqrs` runtime 语义，只让 benchmark 的 MediatR handler 与其余对照分支共用同一组空值 / 取消检查，并把 README、中文文档与 `cqrs-rewrite` 恢复文档同步到当前 PR #342 上下文
   - 本轮按 `NotificationFanOutBenchmarks` short-job 复跑确认，对称化 MediatR handler 后当前 fixed `4 handler` fan-out 结果约为 `Mediator` `3.598 ns / 0 B`、baseline `7.033 ns / 0 B`、`MediatR` `257.533 ns / 1256 B`、`GFramework.Cqrs` 顺序 `409.557 ns / 408 B`、`TaskWhenAll` `484.531 ns / 496 B`
@@ -392,8 +397,8 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 既然 `RP-117` 已把 notification publisher 的采用路径收口成显式策略矩阵，下一轮若继续留在 notification 线，优先评估是否需要补第三种仓库内置策略或更贴近示例代码的采用文档，而不是再重复翻写同一套边界说明
-2. 当前 benchmark 仍证明 `TaskWhenAllNotificationPublisher` 的价值主要在并行完成与异常聚合语义，而不是吞吐收益；若 notification 文档已经足够，下一轮再回到 request dispatch 常量开销时，应先避开“类型级 `IContextAware` 判定缓存”这条已验证无收益的热点假设
+1. 既然 `RP-119` 已把 `UseNotificationPublisher<TPublisher>()` 的测试与采用说明补齐，下一轮若继续留在 notification 线，优先评估是否真的需要第三种仓库内置策略，而不是再重复扩写同一组组合根入口
+2. 若后续批次切回 request dispatch 常量开销，继续避开“类型级 `IContextAware` 判定缓存”这条已验证无收益的热点假设，并优先挑选更可能影响 steady-state 的 generated/provider 吸收点
 3. 若 benchmark 对照需要继续贴近 `Mediator` 官方设计，再评估 `Mediator` 的 compile-time lifetime / stream 对照矩阵，或给 stream 引入 scoped host 基线，而不是回头重试已被 benchmark 否决的 `GetAll(Type)` 零行为探测方案
 
 ## 活跃文档

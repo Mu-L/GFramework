@@ -132,7 +132,7 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
   | --- | --- | --- | --- | --- |
   | `SequentialNotificationPublisher` | 需要保持容器顺序，且希望首个失败立即停止后续分发 | 保证按容器解析顺序逐个执行 | 首个处理器抛出异常时立即停止 | 也是默认回退策略 |
   | `TaskWhenAllNotificationPublisher` | 需要让全部处理器并行完成，并在结束后统一观察失败或取消 | 不保证顺序 | 不会在首个失败时停止其余处理器；会聚合最终异常或取消结果 | 更适合语义补齐，不是性能开关 |
-  | `UseNotificationPublisher(...)` 自定义实例 | 需要接入仓库外的自定义策略或第三方策略 | 取决于具体实现 | 取决于具体实现 | 仅在内置顺序 / 并行策略都不满足时使用 |
+  | `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` | 需要接入仓库外的自定义策略或第三方策略 | 取决于具体实现 | 取决于具体实现 | 前者复用现成实例，后者让容器负责单例生命周期 |
 
   - 若只是为了降低 fixed fan-out publish 的 steady-state 成本，当前 benchmark 并不表明 `TaskWhenAllNotificationPublisher` 会优于默认顺序发布器；它更适合你需要“等待全部处理器完成并统一观察失败”的场景。
 
@@ -159,6 +159,14 @@ using GFramework.Cqrs.Extensions;
 using GFramework.Cqrs.Notification;
 
 container.UseNotificationPublisher(new TaskWhenAllNotificationPublisher());
+```
+
+如果你希望由容器负责创建并长期复用自定义 publisher，也可以改用泛型重载：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseNotificationPublisher<MyCustomNotificationPublisher>();
 ```
 
 对于走标准 `GFramework.Core` 启动路径的架构，这些组合根扩展会被默认基础设施自动复用；如果你直接调用 `CqrsRuntimeFactory.CreateRuntime(...)`，也仍然可以像以前一样显式传入 publisher 实例。

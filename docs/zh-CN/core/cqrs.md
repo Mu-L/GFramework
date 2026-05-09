@@ -125,7 +125,7 @@ var playerId = await architecture.Context.SendRequestAsync(
 | --- | --- | --- | --- | --- |
 | `UseSequentialNotificationPublisher()` | 需要保持容器顺序，且希望首个失败立即停止 | 保证按容器顺序执行 | 首个处理器异常会中断后续处理器 | 这也是默认回退策略 |
 | `UseTaskWhenAllNotificationPublisher()` | 需要让全部处理器并行完成，再统一观察异常或取消 | 不保证顺序 | 不会在首个失败时中断其余处理器；全部结束后统一暴露结果 | 更适合语义补齐，不是性能优化开关 |
-| `UseNotificationPublisher(...)` | 需要接入自定义或第三方 publisher 策略 | 取决于实现 | 取决于实现 | 仅在内置顺序 / 并行策略都不满足时使用 |
+| `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` | 需要接入自定义或第三方 publisher 策略 | 取决于实现 | 取决于实现 | 前者复用现成实例，后者让容器负责单例生命周期 |
 
 如果你想在组合根里显式保留默认顺序语义，也可以直接写成：
 
@@ -158,6 +158,14 @@ using GFramework.Cqrs.Extensions;
 using GFramework.Cqrs.Notification;
 
 container.UseNotificationPublisher(new TaskWhenAllNotificationPublisher());
+```
+
+如果你的自定义 publisher 需要继续由容器构造和托管，也可以改用泛型注册入口：
+
+```csharp
+using GFramework.Cqrs.Extensions;
+
+container.UseNotificationPublisher<MyCustomNotificationPublisher>();
 ```
 
 ## Request 与流式变体

@@ -1,5 +1,27 @@
 # CQRS 重写迁移追踪
 
+## 2026-05-09
+
+### 阶段：notification publisher 泛型组合根入口收口（CQRS-REWRITE-RP-119）
+
+- 延续 `$gframework-batch-boot 50`，本轮在 `feat/cqrs-optimization` 已与 `origin/main` 对齐后，没有直接重开 request dispatch 热路径实验，而是先选择 notification publisher 线上一个更小、可直接评审的采用面切片
+- 本轮主线程决策：
+  - 保持 `GFramework.Cqrs` runtime 代码不变，只补 `UseNotificationPublisher<TPublisher>()` 的组合根回归与用户文档说明
+  - 在 `NotificationPublisherRegistrationExtensionsTests` 新增两条 targeted 回归，确认泛型重载会注册唯一单例策略，且在容器已存在 `INotificationPublisher` 时同样会拒绝重复声明
+  - 在 `GFramework.Cqrs/README.md` 与 `docs/zh-CN/core/cqrs.md` 把自定义入口统一写成 `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()`，并明确实例重载与泛型重载的生命周期边界
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~NotificationPublisherRegistrationExtensionsTests"`
+    - 结果：通过，`6/6` passed
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Tests/Cqrs/NotificationPublisherRegistrationExtensionsTests.cs GFramework.Cqrs/README.md docs/zh-CN/core/cqrs.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+- 本轮结论：
+  - notification publisher 的组合根采用面现在不再默认读者只能“手里先有一个实例”；文档与回归都已明确容器托管型自定义 publisher 的标准入口
+  - 这批仍然保持在低风险、单模块、易评审边界内，适合在完成验证后直接收口为新的恢复点
+
 ## 2026-05-08
 
 ### 阶段：PR #342 latest-head review 收口（CQRS-REWRITE-RP-118）

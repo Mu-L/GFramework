@@ -92,6 +92,23 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
     }
 
     /// <summary>
+    ///     验证泛型组合根注册入口会把指定的 publisher 类型注册为容器内唯一的单例策略。
+    /// </summary>
+    [Test]
+    public void UseNotificationPublisher_Generic_Overload_Should_Register_Configured_Type()
+    {
+        var container = new MicrosoftDiContainer();
+
+        var returnedContainer = container.UseNotificationPublisher<TrackingNotificationPublisher>();
+        container.Freeze();
+
+        Assert.That(returnedContainer, Is.SameAs(container));
+        Assert.That(container.HasRegistration(typeof(INotificationPublisher)), Is.True);
+        Assert.That(container.GetRequired<INotificationPublisher>(), Is.TypeOf<TrackingNotificationPublisher>());
+        Assert.That(container.GetRequired<INotificationPublisher>(), Is.SameAs(container.GetRequired<INotificationPublisher>()));
+    }
+
+    /// <summary>
     ///     验证组合根扩展会阻止重复 notification publisher 注册，避免 runtime 创建阶段才暴露歧义。
     /// </summary>
     [Test]
@@ -102,6 +119,20 @@ internal sealed class NotificationPublisherRegistrationExtensionsTests
 
         Assert.That(
             () => container.UseNotificationPublisher(new TrackingNotificationPublisher()),
+            Throws.InvalidOperationException.With.Message.Contains(nameof(INotificationPublisher)));
+    }
+
+    /// <summary>
+    ///     验证当容器已存在 notification publisher 注册时，泛型组合根入口也会拒绝重复策略声明。
+    /// </summary>
+    [Test]
+    public void UseNotificationPublisher_Generic_Overload_Should_Throw_When_NotificationPublisher_Already_Registered()
+    {
+        var container = new MicrosoftDiContainer();
+        container.UseSequentialNotificationPublisher();
+
+        Assert.That(
+            () => container.UseNotificationPublisher<TrackingNotificationPublisher>(),
             Throws.InvalidOperationException.With.Message.Contains(nameof(INotificationPublisher)));
     }
 
