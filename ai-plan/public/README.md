@@ -38,6 +38,10 @@ help the current worktree land on the right recovery documents without scanning 
   - Purpose: continue the data repository persistence hardening plus the settings / serialization follow-up backlog.
   - Tracking: `ai-plan/public/data-repository-persistence/todos/data-repository-persistence-tracking.md`
   - Trace: `ai-plan/public/data-repository-persistence/traces/data-repository-persistence-trace.md`
+- `input-system-godot-integration`
+  - Purpose: establish the shared input abstraction, default binding runtime, and Godot InputMap integration path.
+  - Tracking: `ai-plan/public/input-system-godot-integration/todos/input-system-godot-integration-tracking.md`
+  - Trace: `ai-plan/public/input-system-godot-integration/traces/input-system-godot-integration-trace.md`
 
 ## Worktree To Active Topic Map
 
@@ -55,6 +59,9 @@ help the current worktree land on the right recovery documents without scanning 
 - Branch: `feat/data-repository-persistence`
   - Worktree hint: `GFramework-data-repository-persistence`
   - Priority 1: `data-repository-persistence`
+- Branch: `feat/input-system-godot-integration`
+  - Worktree hint: `GFramework-input-system-godot-integration`
+  - Priority 1: `input-system-godot-integration`
 - Branch: `docs/sdk-update-documentation`
   - Worktree hint: `GFramework-update-documentation`
   - Priority 1: `documentation-full-coverage-governance`
