@@ -7,6 +7,29 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-11
 
+### 阶段：PR #348 latest-head review 再收口（CQRS-REWRITE-RP-134）
+
+- 重新执行 `$gframework-pr-review` 抓取当前分支 `feat/cqrs-optimization` 对应的 `PR #348`
+- 本轮 latest-head open AI thread 复核结论：
+  - `NotificationLifetimeBenchmarks.HandlerLifetime` 补 `[GenerateEnumExtensions]` 仍判定为泛化误报
+    - 仓库没有“产品/benchmark 枚举默认都启用该特性”的现行约定
+    - benchmark 项目也未接入 `GFramework.Core.SourceGenerators.Abstractions`，不应为局部对照枚举平白扩大 generator 依赖面
+  - `NotificationLifetimeBenchmarks` 的 `_scopedContainer` 释放缺口与公开 benchmark API 的 XML 契约缺口仍成立，接受修复
+  - `CqrsHandlerRegistrar` 中 generated descriptor 的“先去重后校验”缺陷仍成立，接受修复并补测试
+  - `CqrsHandlerRegistrar` 对 `MethodInfo` 使用 `ReferenceEquals` 的过严比较仍成立，接受修复
+  - active tracking / trace 的当前 PR 锚点仍停留在 `PR #347`，接受同步到 `PR #348`
+- 本轮主线程实施：
+  - `NotificationLifetimeBenchmarks`
+    - `Cleanup()` 将 `_scopedContainer` 一并交给 `BenchmarkCleanupHelper.DisposeAll(...)`
+    - 为公开 benchmark 方法与公开 handler 方法补齐缺失的 `<returns>` / `<param>` XML 契约
+  - `CqrsHandlerRegistrar`
+    - request / stream generated descriptor 预热路径改为“先 `TryValidate...`，后写入 `registeredKeys`”
+    - descriptor 对齐判断从 `ReferenceEquals(resolvedDescriptor.InvokerMethod, ...)` 调整为 `resolvedDescriptor.InvokerMethod.Equals(...)`
+  - `CqrsGeneratedRequestInvokerProviderTests`
+    - 新增 request / stream 两个回归用例，锁定“首条同键 descriptor 无效、后条有效时，仍应接受后条有效 generated descriptor”
+  - `ai-plan/public/cqrs-rewrite/**`
+    - 将 active tracking / trace 的当前 PR 锚点同步到 `PR #348`
+
 ### 阶段：PR #347 latest-head review 收口（CQRS-REWRITE-RP-132）
 
 - 使用 `$gframework-pr-review` 重新抓取当前分支 `feat/cqrs-optimization` 对应的 `PR #347`

@@ -549,6 +549,26 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证当首个 request descriptor 无效、后续同键 descriptor 有效时，
+    ///     registrar 不会因为过早去重而丢掉本可注册的 generated descriptor。
+    /// </summary>
+    [Test]
+    public async Task SendAsync_Should_Use_Later_Valid_Generated_Request_Descriptor_When_First_Duplicate_Is_Invalid()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(InvalidThenValidDuplicateRequestInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.InvalidThenValidDuplicateRequestInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var response = await context.SendRequestAsync(new GeneratedRequestInvokerRequest("payload")).ConfigureAwait(false);
+        Assert.That(response, Is.EqualTo("generated:payload"));
+    }
+
+    /// <summary>
     ///     验证当 stream descriptor 枚举项与 provider 的 TryGetDescriptor 结果不一致时，
     ///     registrar 会忽略该坏 descriptor，并继续回退到反射建流路径。
     /// </summary>
@@ -566,6 +586,26 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         var context = new ArchitectureContext(container);
         var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
         Assert.That(results, Is.EqualTo([3, 4]));
+    }
+
+    /// <summary>
+    ///     验证当首个 stream descriptor 无效、后续同键 descriptor 有效时，
+    ///     registrar 不会因为过早去重而丢掉本可注册的 generated descriptor。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Use_Later_Valid_Generated_Stream_Descriptor_When_First_Duplicate_Is_Invalid()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(InvalidThenValidDuplicateStreamInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.InvalidThenValidDuplicateStreamInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+        Assert.That(results, Is.EqualTo([30, 31]));
     }
 
     /// <summary>
@@ -1289,6 +1329,81 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     模拟首个 request descriptor 无效、后续同键 descriptor 有效的 generated registry。
+    /// </summary>
+    private sealed class InvalidThenValidDuplicateRequestInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsRequestInvokerProvider,
+        IEnumeratesCqrsRequestInvokerDescriptors
+    {
+        private static readonly CqrsRequestInvokerDescriptor InvalidDescriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(InvalidThenValidDuplicateRequestInvokerProviderRegistry).GetMethod(
+                nameof(InvokeAlternativeGenerated),
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        private static readonly CqrsRequestInvokerDescriptor ValidDescriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(GeneratedRequestInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+                typeof(GeneratedRequestInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsRequestInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedRequestInvokerRequest) && responseType == typeof(string))
+            {
+                descriptor = ValidDescriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsRequestInvokerDescriptorEntry> GetDescriptors()
+        {
+            return
+            [
+                new CqrsRequestInvokerDescriptorEntry(
+                    typeof(GeneratedRequestInvokerRequest),
+                    typeof(string),
+                    InvalidDescriptor),
+                new CqrsRequestInvokerDescriptorEntry(
+                    typeof(GeneratedRequestInvokerRequest),
+                    typeof(string),
+                    ValidDescriptor)
+            ];
+        }
+
+        private static ValueTask<string> InvokeAlternativeGenerated(
+            object handler,
+            object request,
+            CancellationToken cancellationToken)
+        {
+            return ValueTask.FromResult("invalid-first:payload");
+        }
+    }
+
+    /// <summary>
     ///     模拟枚举出的 stream descriptor 与 provider 显式查询结果不一致的 generated registry。
     /// </summary>
     private sealed class MismatchedEnumeratingStreamInvokerProviderRegistry :
@@ -1353,6 +1468,78 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         private static object InvokeAlternativeGenerated(object handler, object request, CancellationToken cancellationToken)
         {
             return new[] { 700, 701 }.ToAsyncEnumerable();
+        }
+    }
+
+    /// <summary>
+    ///     模拟首个 stream descriptor 无效、后续同键 descriptor 有效的 generated registry。
+    /// </summary>
+    private sealed class InvalidThenValidDuplicateStreamInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsStreamInvokerProvider,
+        IEnumeratesCqrsStreamInvokerDescriptors
+    {
+        private static readonly CqrsStreamInvokerDescriptor InvalidDescriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(InvalidThenValidDuplicateStreamInvokerProviderRegistry).GetMethod(
+                nameof(InvokeAlternativeGenerated),
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        private static readonly CqrsStreamInvokerDescriptor ValidDescriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(GeneratedStreamInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+                typeof(GeneratedStreamInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsStreamInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedStreamInvokerRequest) && responseType == typeof(int))
+            {
+                descriptor = ValidDescriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsStreamInvokerDescriptorEntry> GetDescriptors()
+        {
+            return
+            [
+                new CqrsStreamInvokerDescriptorEntry(
+                    typeof(GeneratedStreamInvokerRequest),
+                    typeof(int),
+                    InvalidDescriptor),
+                new CqrsStreamInvokerDescriptorEntry(
+                    typeof(GeneratedStreamInvokerRequest),
+                    typeof(int),
+                    ValidDescriptor)
+            ];
+        }
+
+        private static object InvokeAlternativeGenerated(object handler, object request, CancellationToken cancellationToken)
+        {
+            return new[] { 800, 801 }.ToAsyncEnumerable();
         }
     }
 

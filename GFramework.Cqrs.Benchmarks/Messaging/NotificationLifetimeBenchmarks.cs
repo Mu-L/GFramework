@@ -133,7 +133,7 @@ public class NotificationLifetimeBenchmarks
     {
         try
         {
-            BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+            BenchmarkCleanupHelper.DisposeAll(_scopedContainer, _container, _serviceProvider);
         }
         finally
         {
@@ -144,6 +144,7 @@ public class NotificationLifetimeBenchmarks
     /// <summary>
     ///     直接调用 handler，作为不同生命周期矩阵下的 publish 额外开销 baseline。
     /// </summary>
+    /// <returns>代表基线 handler 完成当前 notification 处理的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask PublishNotification_Baseline()
     {
@@ -153,6 +154,7 @@ public class NotificationLifetimeBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 发布 notification。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS publish 完成的值任务。</returns>
     [Benchmark]
     public ValueTask PublishNotification_GFrameworkCqrs()
     {
@@ -171,6 +173,7 @@ public class NotificationLifetimeBenchmarks
     /// <summary>
     ///     通过 MediatR 发布 notification，作为外部对照。
     /// </summary>
+    /// <returns>代表当前 MediatR publish 完成的任务。</returns>
     [Benchmark]
     public Task PublishNotification_MediatR()
     {
@@ -293,6 +296,9 @@ public class NotificationLifetimeBenchmarks
         /// <summary>
         ///     处理 GFramework.CQRS notification。
         /// </summary>
+        /// <param name="notification">当前要处理的 notification。</param>
+        /// <param name="cancellationToken">取消令牌。</param>
+        /// <returns>代表当前 notification 处理完成的值任务。</returns>
         public ValueTask Handle(BenchmarkNotification notification, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(notification);

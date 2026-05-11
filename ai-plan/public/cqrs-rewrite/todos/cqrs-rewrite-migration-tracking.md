@@ -12,9 +12,9 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-133`
+- 恢复点编号：`CQRS-REWRITE-RP-134`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #347`
+- 当前 PR 锚点：`PR #348`
 - 当前结论：
   - 本轮按 `$gframework-batch-boot` 协调多波 non-conflicting subagent，基线固定为
     `origin/main @ 3b2e6899d5ffdcfb634b28f3846f57528fbf9196 (2026-05-11T12:25:00+08:00)`。
@@ -35,6 +35,11 @@ CQRS 迁移与收敛。
     - `docs/zh-CN/core/cqrs.md`
     - `docs/zh-CN/source-generators/cqrs-handler-registry-generator.md`
     - `ai-plan/public/cqrs-rewrite/archive/**` 顶部导航与跳转约定
+  - 当前 `PR #348` latest-head review 再次复核后：
+    - 跳过 `NotificationLifetimeBenchmarks.HandlerLifetime` 的 `[GenerateEnumExtensions]` 建议，原因是仓库没有“所有枚举统一生成扩展”的约定，且 benchmark 局部枚举不在该能力的强制范围内
+    - 接受并修复 `NotificationLifetimeBenchmarks` 的 scoped 容器释放与公开 XML 文档缺口
+    - 接受并修复 `CqrsHandlerRegistrar` 对 generated descriptor 的“先去重后校验”缺陷，并补回归测试锁定“首条无效、后条有效”的同键场景
+    - 接受并修复 generated descriptor 校验对 `MethodInfo` 使用 `ReferenceEquals` 的过严比较，改为按方法语义等价匹配
   - 当前尚未提交的收尾切片仅剩：
     - `GFramework.Cqrs.Benchmarks/Messaging/NotificationLifetimeBenchmarks.cs`
     - `GFramework.Cqrs.Tests/Cqrs/CqrsRegistrationServiceTests.cs`
@@ -46,7 +51,7 @@ CQRS 迁移与收敛。
 ## 当前活跃事实
 
 - 当前分支：`feat/cqrs-optimization`
-- 当前 PR：`PR #347`
+- 当前 PR：`PR #348`
 - 当前写面：
   - `GFramework.Cqrs.Benchmarks/README.md`
   - `GFramework.Cqrs.Benchmarks/Messaging/NotificationLifetimeBenchmarks.cs`
@@ -110,7 +115,7 @@ CQRS 迁移与收敛。
 ## 下一推荐步骤
 
 1. 先提交当前未提交的 `NotificationLifetime + registration fallback tests + CQRS/legacy docs` 收尾切片，回收工作树到干净状态。
-2. 再次运行 `$gframework-pr-review`，复核 `PR #347` latest-head open thread 是否已随着本轮多波 head 收敛。
+2. 再次运行 `$gframework-pr-review`，复核 `PR #348` latest-head open thread 是否已随着本轮多波 head 收敛。
 3. 若继续扩 benchmark，优先从 `GFramework.Cqrs.Benchmarks/README.md` 已明确列出的 gap 中选下一个单文件切片，而不是继续扩大 shared infra 改动面。
 
 ## 活跃文档

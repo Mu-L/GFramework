@@ -360,15 +360,16 @@ internal static class CqrsHandlerRegistrar
             var descriptorKey = new InvokerDescriptorKey(
                 descriptorEntry.RequestType,
                 descriptorEntry.ResponseType);
+
+            if (!TryValidateEnumeratedRequestInvokerDescriptor(provider, descriptorEntry, assemblyName, logger))
+                continue;
+
             if (!registeredKeys.Add(descriptorKey))
             {
                 logger.Warn(
                     $"Ignoring duplicate generated CQRS request invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName}.");
                 continue;
             }
-
-            if (!TryValidateEnumeratedRequestInvokerDescriptor(provider, descriptorEntry, assemblyName, logger))
-                continue;
 
             CqrsDispatcher.RegisterGeneratedRequestInvokerDescriptor(
                 descriptorEntry.RequestType,
@@ -455,15 +456,16 @@ internal static class CqrsHandlerRegistrar
             var descriptorKey = new InvokerDescriptorKey(
                 descriptorEntry.RequestType,
                 descriptorEntry.ResponseType);
+
+            if (!TryValidateEnumeratedStreamInvokerDescriptor(provider, descriptorEntry, assemblyName, logger))
+                continue;
+
             if (!registeredKeys.Add(descriptorKey))
             {
                 logger.Warn(
                     $"Ignoring duplicate generated CQRS stream invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName}.");
                 continue;
             }
-
-            if (!TryValidateEnumeratedStreamInvokerDescriptor(provider, descriptorEntry, assemblyName, logger))
-                continue;
 
             CqrsDispatcher.RegisterGeneratedStreamInvokerDescriptor(
                 descriptorEntry.RequestType,
@@ -501,7 +503,7 @@ internal static class CqrsHandlerRegistrar
                 return false;
             }
 
-            if (!ReferenceEquals(resolvedDescriptor.InvokerMethod, descriptorEntry.Descriptor.InvokerMethod) ||
+            if (!resolvedDescriptor.InvokerMethod.Equals(descriptorEntry.Descriptor.InvokerMethod) ||
                 resolvedDescriptor.HandlerType != descriptorEntry.Descriptor.HandlerType)
             {
                 logger.Warn(
@@ -546,7 +548,7 @@ internal static class CqrsHandlerRegistrar
                 return false;
             }
 
-            if (!ReferenceEquals(resolvedDescriptor.InvokerMethod, descriptorEntry.Descriptor.InvokerMethod) ||
+            if (!resolvedDescriptor.InvokerMethod.Equals(descriptorEntry.Descriptor.InvokerMethod) ||
                 resolvedDescriptor.HandlerType != descriptorEntry.Descriptor.HandlerType)
             {
                 logger.Warn(
