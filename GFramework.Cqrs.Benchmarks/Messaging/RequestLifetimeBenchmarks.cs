@@ -32,6 +32,8 @@ public class RequestLifetimeBenchmarks
 {
     private MicrosoftDiContainer _container = null!;
     private ICqrsRuntime? _runtime;
+    private ScopedBenchmarkContainer? _scopedContainer;
+    private ICqrsRuntime? _scopedRuntime;
     private ServiceProvider _serviceProvider = null!;
     private IMediator? _mediatr;
     private BenchmarkRequestHandler _baselineHandler = null!;
@@ -111,6 +113,13 @@ public class RequestLifetimeBenchmarks
                 _container,
                 _runtimeLogger);
         }
+        else
+        {
+            _scopedContainer = new ScopedBenchmarkContainer(_container);
+            _scopedRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+                _scopedContainer,
+                _runtimeLogger);
+        }
 
         _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
             configure: null,
@@ -157,8 +166,8 @@ public class RequestLifetimeBenchmarks
         if (Lifetime == HandlerLifetime.Scoped)
         {
             return BenchmarkHostFactory.SendScopedGFrameworkRequestAsync(
-                _container,
-                _runtimeLogger,
+                _scopedRuntime!,
+                _scopedContainer!,
                 BenchmarkContext.Instance,
                 _request,
                 CancellationToken.None);

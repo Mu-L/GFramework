@@ -68,7 +68,7 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 - `BenchmarkDotNet.Artifacts/` 属于本地生成输出，默认加入仓库忽略，不作为常规提交内容
 - 当两个带 `--filter` 的 benchmark 进程需要并发运行时，必须为它们分别传入不同的 `--artifacts-suffix <suffix>`，避免多个 `BenchmarkDotNet` 进程写入同一份 auto-generated build / artifacts 目录；这个约束只服务于本地输出隔离，不代表 benchmark 场景之间存在额外业务依赖
 - `RequestLifetimeBenchmarks` 现在复用与默认 generated-provider 路径一致的 benchmark 宿主接线；它比较的是生命周期切换后的 handler 解析与 dispatch 成本，不单独引入另一套 runtime 发现口径
-- `RequestLifetimeBenchmarks` 的 `Scoped` 场景会在每次 request 分发时显式创建并释放真实 DI 作用域，用来观察 scoped handler 绑定到 request 边界后的解析与 dispatch 成本
+- `RequestLifetimeBenchmarks` 的 `Scoped` 场景会复用单个 scoped runtime，但在每次 request 分发时仍显式创建并释放真实 DI 作用域，用来观察 scoped handler 绑定到 request 边界后的解析与 dispatch 成本，而不是把 runtime 构造常量成本混进生命周期对照
 - `StreamLifetimeBenchmarks` 现在按 direct handler、`GFramework.Cqrs` reflection、`GFramework.Cqrs` generated、`MediatR` 四层口径组织，并额外区分 `FirstItem` 与 `DrainAll` 两种观测方式，用于把 stream 建流/首个元素成本与完整枚举成本拆开观察
 - `StreamingBenchmarks` 与 `StreamInvokerBenchmarks` 都同时暴露 `FirstItem` 与 `DrainAll`；阅读结果时应把它们分别理解为“建流到首个元素”的固定成本观测与“完整枚举整个 stream”的总成本观测
 - `StreamInvokerBenchmarks` 当前的 `DrainAll` short-job 输出只适合做 smoke 复核，确认矩阵和路径可以正常跑通；它不应直接写成 reflection、generated 或 `MediatR` 之间的稳定性能结论，若要做排序判断，应复跑默认作业或更完整的 benchmark 批次

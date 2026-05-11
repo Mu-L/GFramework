@@ -33,7 +33,7 @@ internal static class Program
 
         ConsoleLogger.Default.WriteLine("Running GFramework.Cqrs benchmarks");
 
-        if (invocation.ArtifactsSuffix is not null &&
+        if (invocation.RequiresHostIsolation &&
             !string.Equals(
                 Environment.GetEnvironmentVariable(IsolatedHostEnvironmentVariable),
                 "1",
@@ -95,7 +95,11 @@ internal static class Program
         }
 
         var artifactsPath = ResolveArtifactsPath(commandLineSuffix);
-        return new BenchmarkInvocation(benchmarkDotNetArguments.ToArray(), commandLineSuffix, artifactsPath);
+        return new BenchmarkInvocation(
+            benchmarkDotNetArguments.ToArray(),
+            commandLineSuffix,
+            artifactsPath,
+            artifactsPath is not null);
     }
 
     /// <summary>
@@ -219,8 +223,61 @@ internal static class Program
     /// <param name="isolatedHostDirectory">当前 suffix 对应的独立宿主目录。</param>
     private static void PrepareIsolatedHostDirectory(string sourceHostDirectory, string isolatedHostDirectory)
     {
+        ValidateIsolatedHostDirectory(sourceHostDirectory, isolatedHostDirectory);
         Directory.CreateDirectory(isolatedHostDirectory);
         CopyDirectoryRecursively(sourceHostDirectory, isolatedHostDirectory);
+    }
+
+    /// <summary>
+    ///     拒绝把隔离宿主目录放到当前宿主输出目录内部，避免递归复制把 `host/host/...` 无限扩张。
+    /// </summary>
+    /// <param name="sourceHostDirectory">当前 benchmark 宿主输出目录。</param>
+    /// <param name="isolatedHostDirectory">目标隔离宿主目录。</param>
+    /// <exception cref="InvalidOperationException">
+    ///     <paramref name="isolatedHostDirectory"/> 等于或位于 <paramref name="sourceHostDirectory"/> 之内。
+    /// </exception>
+    private static void ValidateIsolatedHostDirectory(string sourceHostDirectory, string isolatedHostDirectory)
+    {
+        var normalizedSourceDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceHostDirectory));
+        var normalizedIsolatedHostDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(isolatedHostDirectory));
+
+        if (string.Equals(
+                normalizedSourceDirectory,
+                normalizedIsolatedHostDirectory,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The isolated benchmark host directory must differ from the current host output directory.");
+        }
+
+        var relativePath = Path.GetRelativePath(normalizedSourceDirectory, normalizedIsolatedHostDirectory);
+        if (IsCurrentDirectoryOrChild(relativePath))
+        {
+            throw new InvalidOperationException(
+                $"The isolated benchmark host directory '{normalizedIsolatedHostDirectory}' must not be nested inside the current host output directory '{normalizedSourceDirectory}'.");
+        }
+    }
+
+    /// <summary>
+    ///     判断一个相对路径是否仍指向当前目录或其子目录。
+    /// </summary>
+    /// <param name="relativePath">相对路径。</param>
+    /// <returns>目标位于当前目录或其子目录时返回 <see langword="true"/>。</returns>
+    private static bool IsCurrentDirectoryOrChild(string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath) || string.Equals(relativePath, ".", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (Path.IsPathRooted(relativePath))
+        {
+            return false;
+        }
+
+        return !string.Equals(relativePath, "..", StringComparison.Ordinal) &&
+               !relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+               !relativePath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -251,8 +308,10 @@ internal static class Program
     /// <param name="BenchmarkDotNetArguments">实际传递给 BenchmarkDotNet 的命令行参数。</param>
     /// <param name="ArtifactsSuffix">当前运行声明的隔离后缀；若未声明则为 <see langword="null"/>。</param>
     /// <param name="ArtifactsPath">本次运行的 artifacts 目录；若未隔离则为 <see langword="null"/>。</param>
+    /// <param name="RequiresHostIsolation">本次运行是否需要重启到隔离宿主目录。</param>
     private readonly record struct BenchmarkInvocation(
         string[] BenchmarkDotNetArguments,
         string? ArtifactsSuffix,
-        string? ArtifactsPath);
+        string? ArtifactsPath,
+        bool RequiresHostIsolation);
 }
