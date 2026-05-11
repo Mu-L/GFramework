@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Ioc;
 using GFramework.Cqrs.Abstractions.Cqrs;
@@ -159,13 +162,121 @@ internal static class BenchmarkHostFactory
     }
 
     /// <summary>
+    ///     在真实的 request 级作用域内执行一次 GFramework.CQRS request 分发。
+    /// </summary>
+    /// <typeparam name="TResponse">请求响应类型。</typeparam>
+    /// <param name="runtime">复用的 scoped benchmark runtime。</param>
+    /// <param name="scopedContainer">负责为每次 request 激活独立作用域的只读容器适配层。</param>
+    /// <param name="context">当前 CQRS 分发上下文。</param>
+    /// <param name="request">要发送的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 request 的响应结果。</returns>
+    /// <remarks>
+    ///     该入口只服务 request lifetime benchmark：它会复用同一个 dispatcher/runtime 实例，
+    ///     但在每次调用前后显式创建并释放新的 DI 作用域，
+    ///     让 `Scoped` handler 在真实 request 边界内解析，而不是退化为根容器解析或额外计入 runtime 构造成本。
+    /// </remarks>
+    internal static async ValueTask<TResponse> SendScopedGFrameworkRequestAsync<TResponse>(
+        ICqrsRuntime runtime,
+        ScopedBenchmarkContainer scopedContainer,
+        ICqrsContext context,
+        GFramework.Cqrs.Abstractions.Cqrs.IRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(scopedContainer);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var scopeLease = scopedContainer.EnterScope();
+        return await runtime.SendAsync(context, request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     在真实的 request 级作用域内执行一次 MediatR request 分发。
+    /// </summary>
+    /// <typeparam name="TResponse">请求响应类型。</typeparam>
+    /// <param name="rootServiceProvider">当前 benchmark 的根 <see cref="ServiceProvider" />。</param>
+    /// <param name="request">要发送的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 request 的响应结果。</returns>
+    /// <remarks>
+    ///     这里显式从新的 scope 解析 <see cref="IMediator" />，确保 `Scoped` handler 与其依赖绑定到 request 边界。
+    /// </remarks>
+    internal static async Task<TResponse> SendScopedMediatRRequestAsync<TResponse>(
+        ServiceProvider rootServiceProvider,
+        MediatR.IRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootServiceProvider);
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var scope = rootServiceProvider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        return await mediator.Send(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     在真实的 request 级作用域内创建一次 GFramework.CQRS stream，并让该作用域覆盖整个异步枚举周期。
+    /// </summary>
+    /// <typeparam name="TResponse">stream 响应元素类型。</typeparam>
+    /// <param name="runtime">复用的 scoped benchmark runtime。</param>
+    /// <param name="scopedContainer">负责为每次 stream 激活独立作用域的只读容器适配层。</param>
+    /// <param name="context">当前 CQRS 分发上下文。</param>
+    /// <param name="request">要创建 stream 的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>绑定到单次显式作用域的异步响应序列。</returns>
+    /// <remarks>
+    ///     stream 与 request 的区别在于：handler 解析发生在建流时，但 scoped 依赖必须一直存活到枚举完成。
+    ///     因此这里返回一个包装后的 async iterator，把 scope 的释放时机推迟到调用方结束枚举之后，
+    ///     避免 `Scoped` handler 退化成“建流后立刻释放 scope，再在根容器语义下继续枚举”的错误模型。
+    /// </remarks>
+    internal static IAsyncEnumerable<TResponse> CreateScopedGFrameworkStream<TResponse>(
+        ICqrsRuntime runtime,
+        ScopedBenchmarkContainer scopedContainer,
+        ICqrsContext context,
+        GFramework.Cqrs.Abstractions.Cqrs.IStreamRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(scopedContainer);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(request);
+
+        return EnumerateScopedGFrameworkStreamAsync(runtime, scopedContainer, context, request, cancellationToken);
+    }
+
+    /// <summary>
+    ///     在真实的 request 级作用域内创建一次 MediatR stream，并让该作用域覆盖整个异步枚举周期。
+    /// </summary>
+    /// <typeparam name="TResponse">stream 响应元素类型。</typeparam>
+    /// <param name="rootServiceProvider">当前 benchmark 的根 <see cref="ServiceProvider" />。</param>
+    /// <param name="request">要创建 stream 的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>绑定到单次显式作用域的异步响应序列。</returns>
+    /// <remarks>
+    ///     这里与 scoped request helper 保持同一组边界约束，但把 scope 生命周期延长到 stream 完整枚举结束，
+    ///     确保 `Scoped` handler 与依赖不会在首个元素产出前后被提前释放。
+    /// </remarks>
+    internal static IAsyncEnumerable<TResponse> CreateScopedMediatRStream<TResponse>(
+        ServiceProvider rootServiceProvider,
+        MediatR.IStreamRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootServiceProvider);
+        ArgumentNullException.ThrowIfNull(request);
+
+        return EnumerateScopedMediatRStreamAsync(rootServiceProvider, request, cancellationToken);
+    }
+
+    /// <summary>
     ///     创建承载 NuGet `Mediator` source-generated concrete mediator 的最小对照宿主。
     /// </summary>
     /// <param name="configure">补充当前场景的显式服务注册。</param>
     /// <returns>可直接解析 generated `Mediator.Mediator` 的 DI 宿主。</returns>
     /// <remarks>
     ///     当前 benchmark 只把 `Mediator` 作为单例 steady-state 对照组接入，
-     ///     因为它的 lifetime 由 source generator 在编译期塑形；若后续需要 `Transient` / `Scoped` 矩阵，
+    ///     因为它的 lifetime 由 source generator 在编译期塑形；若后续需要 `Transient` / `Scoped` 矩阵，
     ///     应按 `Mediator` 官方 benchmark 的做法拆成独立 build config，而不是在同一编译产物里混用多个 lifetime。
     /// </remarks>
     internal static ServiceProvider CreateMediatorServiceProvider(Action<IServiceCollection>? configure)
@@ -190,5 +301,44 @@ internal static class BenchmarkHostFactory
         return candidateType.GetInterfaces().Any(interfaceType =>
             interfaceType.IsGenericType &&
             interfaceType.GetGenericTypeDefinition() == openGenericContract);
+    }
+
+    /// <summary>
+    ///     在单个显式作用域内创建并枚举 GFramework.CQRS stream。
+    /// </summary>
+    private static async IAsyncEnumerable<TResponse> EnumerateScopedGFrameworkStreamAsync<TResponse>(
+        ICqrsRuntime runtime,
+        ScopedBenchmarkContainer scopedContainer,
+        ICqrsContext context,
+        GFramework.Cqrs.Abstractions.Cqrs.IStreamRequest<TResponse> request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var scopeLease = scopedContainer.EnterScope();
+        var stream = runtime.CreateStream(context, request, cancellationToken);
+
+        await foreach (var response in stream.ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return response;
+        }
+    }
+
+    /// <summary>
+    ///     在单个显式作用域内创建并枚举 MediatR stream。
+    /// </summary>
+    private static async IAsyncEnumerable<TResponse> EnumerateScopedMediatRStreamAsync<TResponse>(
+        ServiceProvider rootServiceProvider,
+        MediatR.IStreamRequest<TResponse> request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var scope = rootServiceProvider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        var stream = mediator.CreateStream(request, cancellationToken);
+
+        await foreach (var response in stream.ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return response;
+        }
     }
 }

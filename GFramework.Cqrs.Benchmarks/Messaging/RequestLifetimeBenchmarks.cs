@@ -23,24 +23,27 @@ namespace GFramework.Cqrs.Benchmarks.Messaging;
 ///     对比 request steady-state dispatch 在不同 handler 生命周期下的额外开销。
 /// </summary>
 /// <remarks>
-///     当前矩阵只覆盖 `Singleton` 与 `Transient`。
-///     `Scoped` 在两个 runtime 中都依赖显式作用域边界，而当前 benchmark 宿主故意保持“单根容器最小宿主”模型，
-///     直接把 scoped 解析压到根作用域会让对照语义失真，因此留到未来有真实 scoped host 基线时再扩展。
+///     当前矩阵覆盖 `Singleton`、`Scoped` 与 `Transient`。
+///     其中 `Scoped` 会在每次 request 分发时显式创建并释放真实的 DI 作用域，
+///     避免把 scoped handler 错误地压到根容器解析而扭曲生命周期对照。
 /// </remarks>
 [Config(typeof(Config))]
 public class RequestLifetimeBenchmarks
 {
     private MicrosoftDiContainer _container = null!;
-    private ICqrsRuntime _runtime = null!;
+    private ICqrsRuntime? _runtime;
+    private ScopedBenchmarkContainer? _scopedContainer;
+    private ICqrsRuntime? _scopedRuntime;
     private ServiceProvider _serviceProvider = null!;
-    private IMediator _mediatr = null!;
+    private IMediator? _mediatr;
     private BenchmarkRequestHandler _baselineHandler = null!;
     private BenchmarkRequest _request = null!;
+    private ILogger _runtimeLogger = null!;
 
     /// <summary>
     ///     控制当前 benchmark 使用的 handler 生命周期。
     /// </summary>
-    [Params(HandlerLifetime.Singleton, HandlerLifetime.Transient)]
+    [Params(HandlerLifetime.Singleton, HandlerLifetime.Scoped, HandlerLifetime.Transient)]
     public HandlerLifetime Lifetime { get; set; }
 
     /// <summary>
@@ -52,6 +55,11 @@ public class RequestLifetimeBenchmarks
         ///     复用单个 handler 实例。
         /// </summary>
         Singleton,
+
+        /// <summary>
+        ///     每次 request 在显式作用域内解析并复用 handler 实例。
+        /// </summary>
+        Scoped,
 
         /// <summary>
         ///     每次分发都重新解析新的 handler 实例。
@@ -90,6 +98,8 @@ public class RequestLifetimeBenchmarks
         _baselineHandler = new BenchmarkRequestHandler();
         _request = new BenchmarkRequest(Guid.NewGuid());
 
+        _runtimeLogger = LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestLifetimeBenchmarks) + "." + Lifetime);
+
         _container = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
         {
             BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedRequestLifetimeBenchmarkRegistry>(container);
@@ -97,16 +107,29 @@ public class RequestLifetimeBenchmarks
         });
         // 容器内已提前保留默认 runtime 以支撑 generated registry 接线；
         // 这里额外创建带生命周期后缀的 runtime，只是为了区分不同 benchmark 矩阵的 dispatcher 日志。
-        _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
-            _container,
-            LoggerFactoryResolver.Provider.CreateLogger(nameof(RequestLifetimeBenchmarks) + "." + Lifetime));
+        if (Lifetime != HandlerLifetime.Scoped)
+        {
+            _runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+                _container,
+                _runtimeLogger);
+        }
+        else
+        {
+            _scopedContainer = new ScopedBenchmarkContainer(_container);
+            _scopedRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+                _scopedContainer,
+                _runtimeLogger);
+        }
 
         _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
             configure: null,
             typeof(RequestLifetimeBenchmarks),
             static candidateType => candidateType == typeof(BenchmarkRequestHandler),
             ResolveMediatRLifetime(Lifetime));
-        _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        if (Lifetime != HandlerLifetime.Scoped)
+        {
+            _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        }
     }
 
     /// <summary>
@@ -140,7 +163,17 @@ public class RequestLifetimeBenchmarks
     [Benchmark]
     public ValueTask<BenchmarkResponse> SendRequest_GFrameworkCqrs()
     {
-        return _runtime.SendAsync(BenchmarkContext.Instance, _request, CancellationToken.None);
+        if (Lifetime == HandlerLifetime.Scoped)
+        {
+            return BenchmarkHostFactory.SendScopedGFrameworkRequestAsync(
+                _scopedRuntime!,
+                _scopedContainer!,
+                BenchmarkContext.Instance,
+                _request,
+                CancellationToken.None);
+        }
+
+        return _runtime!.SendAsync(BenchmarkContext.Instance, _request, CancellationToken.None);
     }
 
     /// <summary>
@@ -149,7 +182,15 @@ public class RequestLifetimeBenchmarks
     [Benchmark]
     public Task<BenchmarkResponse> SendRequest_MediatR()
     {
-        return _mediatr.Send(_request, CancellationToken.None);
+        if (Lifetime == HandlerLifetime.Scoped)
+        {
+            return BenchmarkHostFactory.SendScopedMediatRRequestAsync(
+                _serviceProvider,
+                _request,
+                CancellationToken.None);
+        }
+
+        return _mediatr!.Send(_request, CancellationToken.None);
     }
 
     /// <summary>
@@ -171,6 +212,10 @@ public class RequestLifetimeBenchmarks
                 container.RegisterSingleton<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
                 return;
 
+            case HandlerLifetime.Scoped:
+                container.RegisterScoped<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
+                return;
+
             case HandlerLifetime.Transient:
                 container.RegisterTransient<GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>, BenchmarkRequestHandler>();
                 return;
@@ -189,6 +234,7 @@ public class RequestLifetimeBenchmarks
         return lifetime switch
         {
             HandlerLifetime.Singleton => ServiceLifetime.Singleton,
+            HandlerLifetime.Scoped => ServiceLifetime.Scoped,
             HandlerLifetime.Transient => ServiceLifetime.Transient,
             _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Unsupported benchmark handler lifetime.")
         };

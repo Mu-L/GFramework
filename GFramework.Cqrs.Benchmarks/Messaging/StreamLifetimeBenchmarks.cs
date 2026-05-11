@@ -25,9 +25,9 @@ namespace GFramework.Cqrs.Benchmarks.Messaging;
 ///     对比 stream 在不同 handler 生命周期与观测方式下的额外开销。
 /// </summary>
 /// <remarks>
-///     当前矩阵只覆盖 `Singleton` 与 `Transient`。
-///     `Scoped` 仍依赖真实的显式作用域边界；在当前“单根容器最小宿主”模型下直接加入 scoped 会把枚举宿主成本与生命周期成本混在一起，
-///     因此保持与 request 生命周期矩阵相同的边界，留待后续 scoped host 基线具备后再扩展。
+///     当前矩阵覆盖 `Singleton`、`Scoped` 与 `Transient`。
+///     其中 `Scoped` 会在每次建流与枚举期间显式创建并持有真实的 DI 作用域，
+///     避免把 scoped handler 错误地下沉到根容器解析，或在异步枚举尚未结束时提前释放作用域。
 ///     <see cref="StreamObservation" /> 当前只保留 <see cref="StreamObservation.FirstItem" /> 与
 ///     <see cref="StreamObservation.DrainAll" /> 两种模式，分别用于观察建流到首个元素的固定成本与完整枚举的总成本，
 ///     以避免把更多观测策略与 <see cref="StreamLifetimeBenchmarks" /> 的生命周期对照目标混在一起。
@@ -37,19 +37,25 @@ public class StreamLifetimeBenchmarks
 {
     private MicrosoftDiContainer _reflectionContainer = null!;
     private ICqrsRuntime _reflectionRuntime = null!;
+    private ScopedBenchmarkContainer? _scopedReflectionContainer;
+    private ICqrsRuntime? _scopedReflectionRuntime;
     private MicrosoftDiContainer _generatedContainer = null!;
     private ICqrsRuntime _generatedRuntime = null!;
+    private ScopedBenchmarkContainer? _scopedGeneratedContainer;
+    private ICqrsRuntime? _scopedGeneratedRuntime;
     private ServiceProvider _serviceProvider = null!;
     private IMediator _mediatr = null!;
     private ReflectionBenchmarkStreamHandler _baselineHandler = null!;
     private ReflectionBenchmarkStreamRequest _reflectionRequest = null!;
     private GeneratedBenchmarkStreamRequest _generatedRequest = null!;
     private MediatRBenchmarkStreamRequest _mediatrRequest = null!;
+    private ILogger _reflectionRuntimeLogger = null!;
+    private ILogger _generatedRuntimeLogger = null!;
 
     /// <summary>
     ///     控制当前 benchmark 使用的 handler 生命周期。
     /// </summary>
-    [Params(HandlerLifetime.Singleton, HandlerLifetime.Transient)]
+    [Params(HandlerLifetime.Singleton, HandlerLifetime.Scoped, HandlerLifetime.Transient)]
     public HandlerLifetime Lifetime { get; set; }
 
     /// <summary>
@@ -67,6 +73,11 @@ public class StreamLifetimeBenchmarks
         ///     复用单个 handler 实例。
         /// </summary>
         Singleton,
+
+        /// <summary>
+        ///     每次建流在显式作用域内解析并复用 handler 实例，且作用域会覆盖整个枚举周期。
+        /// </summary>
+        Scoped,
 
         /// <summary>
         ///     每次建流都重新解析新的 handler 实例。
@@ -111,43 +122,11 @@ public class StreamLifetimeBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider
-        {
-            MinLevel = LogLevel.Fatal
-        };
-        Fixture.Setup($"StreamLifetime/{Lifetime}", handlerCount: 1, pipelineCount: 0);
-        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
-
-        _baselineHandler = new ReflectionBenchmarkStreamHandler();
-        _reflectionRequest = new ReflectionBenchmarkStreamRequest(Guid.NewGuid(), 3);
-        _generatedRequest = new GeneratedBenchmarkStreamRequest(Guid.NewGuid(), 3);
-        _mediatrRequest = new MediatRBenchmarkStreamRequest(Guid.NewGuid(), 3);
-
-        _reflectionContainer = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
-        {
-            RegisterReflectionHandler(container, Lifetime);
-        });
-        _reflectionRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
-            _reflectionContainer,
-            LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamLifetimeBenchmarks) + ".Reflection." + Lifetime));
-
-        _generatedContainer = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
-        {
-            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedStreamLifetimeBenchmarkRegistry>(container);
-            RegisterGeneratedHandler(container, Lifetime);
-        });
-        // 容器内已提前保留默认 runtime 以支撑 generated registry 接线；
-        // 这里额外创建带生命周期后缀的 runtime，只是为了区分不同 benchmark 矩阵的 dispatcher 日志。
-        _generatedRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
-            _generatedContainer,
-            LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamLifetimeBenchmarks) + ".Generated." + Lifetime));
-
-        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
-            configure: null,
-            typeof(StreamLifetimeBenchmarks),
-            static candidateType => candidateType == typeof(MediatRBenchmarkStreamHandler),
-            ResolveMediatRLifetime(Lifetime));
-        _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        ConfigureBenchmarkInfrastructure();
+        InitializeRequestsAndLoggers();
+        InitializeReflectionRuntime();
+        InitializeGeneratedRuntime();
+        InitializeMediatRRuntime();
     }
 
     /// <summary>
@@ -181,6 +160,18 @@ public class StreamLifetimeBenchmarks
     [Benchmark]
     public ValueTask Stream_GFrameworkReflection()
     {
+        if (Lifetime == HandlerLifetime.Scoped)
+        {
+            return ObserveAsync(
+                BenchmarkHostFactory.CreateScopedGFrameworkStream(
+                    _scopedReflectionRuntime!,
+                    _scopedReflectionContainer!,
+                    BenchmarkContext.Instance,
+                    _reflectionRequest,
+                    CancellationToken.None),
+                Observation);
+        }
+
         return ObserveAsync(
             _reflectionRuntime.CreateStream(
                 BenchmarkContext.Instance,
@@ -195,6 +186,18 @@ public class StreamLifetimeBenchmarks
     [Benchmark]
     public ValueTask Stream_GFrameworkGenerated()
     {
+        if (Lifetime == HandlerLifetime.Scoped)
+        {
+            return ObserveAsync(
+                BenchmarkHostFactory.CreateScopedGFrameworkStream(
+                    _scopedGeneratedRuntime!,
+                    _scopedGeneratedContainer!,
+                    BenchmarkContext.Instance,
+                    _generatedRequest,
+                    CancellationToken.None),
+                Observation);
+        }
+
         return ObserveAsync(
             _generatedRuntime.CreateStream(
                 BenchmarkContext.Instance,
@@ -209,6 +212,16 @@ public class StreamLifetimeBenchmarks
     [Benchmark]
     public ValueTask Stream_MediatR()
     {
+        if (Lifetime == HandlerLifetime.Scoped)
+        {
+            return ObserveAsync(
+                BenchmarkHostFactory.CreateScopedMediatRStream(
+                    _serviceProvider,
+                    _mediatrRequest,
+                    CancellationToken.None),
+                Observation);
+        }
+
         return ObserveAsync(_mediatr.CreateStream(_mediatrRequest, CancellationToken.None), Observation);
     }
 
@@ -225,6 +238,12 @@ public class StreamLifetimeBenchmarks
         {
             case HandlerLifetime.Singleton:
                 container.RegisterSingleton<
+                    GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<ReflectionBenchmarkStreamRequest, ReflectionBenchmarkResponse>,
+                    ReflectionBenchmarkStreamHandler>();
+                return;
+
+            case HandlerLifetime.Scoped:
+                container.RegisterScoped<
                     GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<ReflectionBenchmarkStreamRequest, ReflectionBenchmarkResponse>,
                     ReflectionBenchmarkStreamHandler>();
                 return;
@@ -261,6 +280,12 @@ public class StreamLifetimeBenchmarks
                     GeneratedBenchmarkStreamHandler>();
                 return;
 
+            case HandlerLifetime.Scoped:
+                container.RegisterScoped<
+                    GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<GeneratedBenchmarkStreamRequest, GeneratedBenchmarkResponse>,
+                    GeneratedBenchmarkStreamHandler>();
+                return;
+
             case HandlerLifetime.Transient:
                 container.RegisterTransient<
                     GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<GeneratedBenchmarkStreamRequest, GeneratedBenchmarkResponse>,
@@ -282,9 +307,106 @@ public class StreamLifetimeBenchmarks
         return lifetime switch
         {
             HandlerLifetime.Singleton => ServiceLifetime.Singleton,
+            HandlerLifetime.Scoped => ServiceLifetime.Scoped,
             HandlerLifetime.Transient => ServiceLifetime.Transient,
             _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Unsupported benchmark handler lifetime.")
         };
+    }
+
+    /// <summary>
+    ///     初始化当前 benchmark 所需的全局日志与夹具基础设施。
+    /// </summary>
+    private void ConfigureBenchmarkInfrastructure()
+    {
+        LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider
+        {
+            MinLevel = LogLevel.Fatal
+        };
+        Fixture.Setup($"StreamLifetime/{Lifetime}", handlerCount: 1, pipelineCount: 0);
+        BenchmarkDispatcherCacheHelper.ClearDispatcherCaches();
+    }
+
+    /// <summary>
+    ///     初始化当前 benchmark 会复用的请求对象、baseline handler 与日志器。
+    /// </summary>
+    private void InitializeRequestsAndLoggers()
+    {
+        _baselineHandler = new ReflectionBenchmarkStreamHandler();
+        _reflectionRequest = new ReflectionBenchmarkStreamRequest(Guid.NewGuid(), 3);
+        _generatedRequest = new GeneratedBenchmarkStreamRequest(Guid.NewGuid(), 3);
+        _mediatrRequest = new MediatRBenchmarkStreamRequest(Guid.NewGuid(), 3);
+        _reflectionRuntimeLogger =
+            LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamLifetimeBenchmarks) + ".Reflection." + Lifetime);
+        _generatedRuntimeLogger =
+            LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamLifetimeBenchmarks) + ".Generated." + Lifetime);
+    }
+
+    /// <summary>
+    ///     初始化 reflection 路径的 GFramework runtime。
+    /// </summary>
+    private void InitializeReflectionRuntime()
+    {
+        _reflectionContainer = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
+        {
+            RegisterReflectionHandler(container, Lifetime);
+        });
+
+        if (Lifetime != HandlerLifetime.Scoped)
+        {
+            _reflectionRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+                _reflectionContainer,
+                _reflectionRuntimeLogger);
+            return;
+        }
+
+        _scopedReflectionContainer = new ScopedBenchmarkContainer(_reflectionContainer);
+        _scopedReflectionRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+            _scopedReflectionContainer,
+            _reflectionRuntimeLogger);
+    }
+
+    /// <summary>
+    ///     初始化 generated registry 路径的 GFramework runtime。
+    /// </summary>
+    private void InitializeGeneratedRuntime()
+    {
+        _generatedContainer = BenchmarkHostFactory.CreateFrozenGFrameworkContainer(container =>
+        {
+            BenchmarkHostFactory.RegisterGeneratedBenchmarkRegistry<GeneratedStreamLifetimeBenchmarkRegistry>(container);
+            RegisterGeneratedHandler(container, Lifetime);
+        });
+
+        // 容器内已提前保留默认 runtime 以支撑 generated registry 接线；
+        // 这里额外创建带生命周期后缀的 runtime，只是为了区分不同 benchmark 矩阵的 dispatcher 日志。
+        if (Lifetime != HandlerLifetime.Scoped)
+        {
+            _generatedRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+                _generatedContainer,
+                _generatedRuntimeLogger);
+            return;
+        }
+
+        _scopedGeneratedContainer = new ScopedBenchmarkContainer(_generatedContainer);
+        _scopedGeneratedRuntime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+            _scopedGeneratedContainer,
+            _generatedRuntimeLogger);
+    }
+
+    /// <summary>
+    ///     初始化 MediatR 对照宿主。
+    /// </summary>
+    private void InitializeMediatRRuntime()
+    {
+        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+            configure: null,
+            typeof(StreamLifetimeBenchmarks),
+            static candidateType => candidateType == typeof(MediatRBenchmarkStreamHandler),
+            ResolveMediatRLifetime(Lifetime));
+
+        if (Lifetime != HandlerLifetime.Scoped)
+        {
+            _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        }
     }
 
     /// <summary>
