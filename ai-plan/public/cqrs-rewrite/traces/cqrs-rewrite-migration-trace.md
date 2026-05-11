@@ -2,6 +2,38 @@
 
 ## 2026-05-11
 
+### 阶段：benchmark 并发运行隔离入口（CQRS-REWRITE-RP-131）
+
+- 延续 `$gframework-batch-boot 50`，在 `RP-130` 已确认冲突来自 BenchmarkDotNet 工件/生成目录层后，本轮继续保持写面只在 `GFramework.Cqrs.Benchmarks` 单模块，优先收口 benchmark 入口而不是回头改 benchmark 业务逻辑
+- 本轮主线程与 worker 边界：
+  - `README.md` 由 worker 独占，补 `--artifacts-suffix <suffix>` 的使用约定与两条并发 smoke 命令示例
+  - `Program.cs` 起初交给独立 worker，但其回传超时；主线程随后接管该单文件实现，并主动关闭未返回的 worker，避免继续消耗上下文预算
+- 本轮主线程关键修正：
+  - 首版只设置 `IConfig.ArtifactsPath`，虽然把结果导出目录隔离到了 `BenchmarkDotNet.Artifacts/<suffix>`，但并行 smoke 立刻暴露出 auto-generated benchmark 项目仍写回共享 `bin/Release/net10.0/GFramework.Cqrs.Benchmarks-Job-JWUHXL-1/` 目录，`RequestLifetimeBenchmarks` 再次命中 `.dll.config being used by another process`
+  - 因此本轮把实现升级为“独立宿主目录重启”模型：当存在 `--artifacts-suffix` 时，`Program.cs` 会先把当前 benchmark 宿主输出复制到 `BenchmarkDotNet.Artifacts/<suffix>/host/`，再从该目录重新启动同一个程序集，并通过环境变量把隔离后的 artifacts path 传递给子进程
+  - 最终子进程里的 BenchmarkDotNet restore/build/output 路径均落到 `BenchmarkDotNet.Artifacts/<suffix>/host/GFramework.Cqrs.Benchmarks-Job-...`，从根上切断同名 job 目录在并发进程之间的共享
+- 本轮验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+    - 备注：中途曾引入 `MA0015`，已在同一轮把 `ThrowIfNull` 改成显式局部变量判空后清零
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Program.cs GFramework.Cqrs.Benchmarks/README.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix req-lifetime-a --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：实际执行路径已切到 `BenchmarkDotNet.Artifacts/req-lifetime-a/host/...`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix stream-invoker-b --filter "*StreamInvokerBenchmarks.Stream_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：实际执行路径已切到 `BenchmarkDotNet.Artifacts/stream-invoker-b/host/...`
+  - 两条命令并发运行时未再出现 `.dll.config being used by another process`，说明冲突已经从入口层实质收口
+- 本轮结论：
+  - `--artifacts-suffix` 现在不只是“结果目录标签”，而是完整的并发运行隔离开关：它会同时隔离 BenchmarkDotNet 最终导出目录与 auto-generated benchmark 项目工作目录
+  - 这条修复只触及 benchmark 入口与文档，不影响 `Fixture`、generated registry、runtime 宿主或 benchmark 业务语义，因此评审面仍保持单模块、低风险边界
+- 下一恢复点：
+  - 若继续 benchmark 线，可直接复用新的并发隔离能力，同时跑互不冲突的 filtered short-job，而不必再人为串行化所有 BenchmarkDotNet smoke
+  - 优先候选仍是 `StreamInvokerBenchmarks` `DrainAll` 更稳定作业复核，或其他仅触达 `GFramework.Cqrs.Benchmarks` 的对照矩阵扩展
+
 ### 阶段：stream lifetime scoped 矩阵与 README 同步（CQRS-REWRITE-RP-130）
 
 - 延续 `$gframework-batch-boot 50`，在上一波把 `StreamingBenchmarks`、`StreamInvokerBenchmarks` 与 `RequestLifetimeBenchmarks` 扩成双观测 / scoped-request 基线后，本轮先不回到 runtime，而是只补齐 `StreamLifetimeBenchmarks` 的真实 `Scoped` stream 生命周期矩阵，并同步 benchmark `README`

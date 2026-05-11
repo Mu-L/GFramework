@@ -56,9 +56,17 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks.Stream_*"
 ```
 
+如果需要在两个终端里并发复核不同的过滤 benchmark，请为每个进程追加不同的 `--artifacts-suffix <suffix>`，把 `BenchmarkDotNet` auto-generated build 与 artifacts 输出隔离到不同目录；这只是运行入口的目录隔离约定，不是 benchmark 业务逻辑本身的要求。例如：
+
+```bash
+dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix req-lifetime-a --filter "*RequestLifetimeBenchmarks.SendRequest_*"
+dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix stream-lifetime-b --filter "*StreamLifetimeBenchmarks.Stream_*"
+```
+
 ## 当前约束
 
 - `BenchmarkDotNet.Artifacts/` 属于本地生成输出，默认加入仓库忽略，不作为常规提交内容
+- 当两个带 `--filter` 的 benchmark 进程需要并发运行时，必须为它们分别传入不同的 `--artifacts-suffix <suffix>`，避免多个 `BenchmarkDotNet` 进程写入同一份 auto-generated build / artifacts 目录；这个约束只服务于本地输出隔离，不代表 benchmark 场景之间存在额外业务依赖
 - `RequestLifetimeBenchmarks` 现在复用与默认 generated-provider 路径一致的 benchmark 宿主接线；它比较的是生命周期切换后的 handler 解析与 dispatch 成本，不单独引入另一套 runtime 发现口径
 - `RequestLifetimeBenchmarks` 的 `Scoped` 场景会在每次 request 分发时显式创建并释放真实 DI 作用域，用来观察 scoped handler 绑定到 request 边界后的解析与 dispatch 成本
 - `StreamLifetimeBenchmarks` 现在按 direct handler、`GFramework.Cqrs` reflection、`GFramework.Cqrs` generated、`MediatR` 四层口径组织，并额外区分 `FirstItem` 与 `DrainAll` 两种观测方式，用于把 stream 建流/首个元素成本与完整枚举成本拆开观察

@@ -7,23 +7,22 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-130`
+- 恢复点编号：`CQRS-REWRITE-RP-131`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`待重新抓取`
 - 当前结论：
-- 当前 `RP-130` 延续 `$gframework-batch-boot 50`，并在上一波 `StreamingBenchmarks`、`StreamInvokerBenchmarks`、`RequestLifetimeBenchmarks` 扩口径之后，继续把 `StreamLifetimeBenchmarks` 的生命周期矩阵补齐到真实 `Scoped` stream 作用域，同时把 benchmark `README` 与当前矩阵同步
-- 本轮继续沿用已复核的基线：`origin/main` 与本地 `main` 当前都在 `699d0b48`（`2026-05-09 18:39:38 +0800`）；当前分支连同本轮变更相对 `origin/main` 的累计 branch diff 约为 `9 files changed, 953 insertions(+), 83 deletions(-)`，离 `$gframework-batch-boot 50` 还有明显余量
-- 本轮写面收敛在 benchmark 层三处：`GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs`、`StreamLifetimeBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/README.md`；没有扩散到 `GFramework.Cqrs` runtime 或测试项目
-- `BenchmarkHostFactory` 现在提供 `CreateScopedGFrameworkStream<TResponse>(...)` 与 `CreateScopedMediatRStream<TResponse>(...)`，通过显式 scope 包裹整个 async stream 枚举周期，避免 scoped handler 在建流后提前释放或错误回落到根容器语义
-- `StreamLifetimeBenchmarks` 当前矩阵已完整覆盖 `Singleton / Scoped / Transient` 与 `FirstItem / DrainAll`：
-  - `Singleton` 下 `DrainAll` 仍表现为 generated 略优于 reflection，约 `131.96 ns` 对 `134.26 ns`
-  - `Scoped` 下已经可以稳定产出真实作用域矩阵；`FirstItem` 约为 baseline `56.24 ns`、`MediatR` `338.82 ns`、reflection `612.49 ns`、generated `628.65 ns`，`DrainAll` 约为 baseline `81.20 ns`、`MediatR` `428.66 ns`、generated `692.05 ns`、reflection `716.61 ns`
-  - `Transient` 下 `FirstItem` 约为 generated `107.79 ns`、reflection `112.60 ns`，但 `DrainAll` 仍是 reflection `131.41 ns` 略优于 generated `135.95 ns`
-- `README` 已同步三类 benchmark 现状：`RequestLifetimeBenchmarks` 与 `StreamLifetimeBenchmarks` 都包含真实 `Scoped` 生命周期，`StreamingBenchmarks` / `StreamInvokerBenchmarks` 都显式区分 `FirstItem / DrainAll`，且 `StreamInvokerBenchmarks` 的 `DrainAll` short-job 输出被明确标注为 smoke-only，不作为稳定排序结论
-- 本轮再次确认：此前并行运行两个 BenchmarkDotNet `dotnet run --no-build` 过滤命令时出现的冲突属于 benchmark 工件/生成目录层面的运行隔离问题，而不是 `Fixture`、`StreamInvokerBenchmarks` 或 `StreamLifetimeBenchmarks` 的业务逻辑错误
+- 当前 `RP-131` 继续沿用 `$gframework-batch-boot 50`，并把上一波定位到的 BenchmarkDotNet 并行运行冲突真正收口到 benchmark 入口层：`Program.cs` 现在支持 `--artifacts-suffix <suffix>`，并在声明 suffix 时自动把当前 benchmark 运行重启到独立的 host 工作目录
+- 本轮继续沿用已复核的基线：`origin/main` 与本地 `main` 当前都在 `699d0b48`（`2026-05-09 18:39:38 +0800`）；当前分支相对 `origin/main` 的累计 branch diff 仍约为 `9 files changed, 953 insertions(+), 83 deletions(-)`，离 `$gframework-batch-boot 50` 还有明显余量
+- 本轮写面收敛在 benchmark 入口与文档两处：`GFramework.Cqrs.Benchmarks/Program.cs` 与 `GFramework.Cqrs.Benchmarks/README.md`；没有扩散到 benchmark 业务逻辑文件、`GFramework.Cqrs` runtime 或测试项目
+- `Program.cs` 当前约定为：
+  - 解析并剥离仓库自定义参数 `--artifacts-suffix <suffix>`，避免把它误传给 BenchmarkDotNet CLI
+  - 支持通过环境变量回退复用同一套 suffix / artifacts path 约定
+  - 当 suffix 存在时，先把当前 benchmark 宿主输出复制到 `BenchmarkDotNet.Artifacts/<suffix>/host/`，再从该隔离宿主目录重启运行，使 BenchmarkDotNet 自动生成的 `GFramework.Cqrs.Benchmarks-Job-*` 项目、`OutDir` 与最终 results 都落到 suffix 私有目录下
+- 并发 smoke 已直接证明这套隔离生效：`RequestLifetimeBenchmarks.SendRequest_*` 与 `StreamInvokerBenchmarks.Stream_*` 在两个终端并发 short-job 时，分别落到 `BenchmarkDotNet.Artifacts/req-lifetime-a/host/...` 与 `BenchmarkDotNet.Artifacts/stream-invoker-b/host/...`，不再共享同一 `.../bin/Release/net10.0/GFramework.Cqrs.Benchmarks-Job-JWUHXL-1/` 生成目录，也没有再出现 `.dll.config being used by another process`
+- `README` 已同步新的运行约定：当两个带 `--filter` 的 benchmark 需要并发执行时，必须为每个进程传入不同的 `--artifacts-suffix`；该约束只服务于本地输出隔离，不代表 benchmark 业务语义本身需要额外依赖
 - 下一推荐步骤：
-- 下一批优先切到 `GFramework.Cqrs.Benchmarks` 的 benchmark-run/config 隔离层，避免两个过滤 benchmark 并行执行时再次共享自动生成目录或 artifacts 路径
-- 完成运行隔离后，再决定是否单开一波更稳定的 `StreamInvokerBenchmarks` `DrainAll` 复核，或继续把 scoped host 对照扩展到更多 stream 子场景
+- 若继续 benchmark 线，可重新利用新的并发运行隔离约定，单开一波更稳定的 `StreamInvokerBenchmarks` `DrainAll` 排序复核，或并行推进其他不冲突的 benchmark smoke
+- 若上下文预算仍允许，下一批更适合继续保持在 `GFramework.Cqrs.Benchmarks` 单模块，避免过早把 review 面重新扩到 runtime 或测试层
 - 更早的 `RP-123` 及之前阶段细节以下方 trace 与归档为准，active 入口不再重复展开旧阶段流水。
   - 当前分支相对 `origin/main` 的累计 branch diff 启动时为 `9 files`，仍明显低于 `$gframework-batch-boot 50` 的停止阈值；这一批继续保持单模块、低风险、可直接评审的 benchmark 边界
   - 当前 `RP-113` 已继续沿用 `$gframework-batch-boot 50`，并把 notification 线从 benchmark 对照推进到实际 runtime 能力：新增公开内置 `TaskWhenAllNotificationPublisher`，让 `GFramework.Cqrs` 在保留默认顺序发布器的同时，提供与 `Mediator` `TaskWhenAllPublisher` 对齐的并行 notification publish 策略
@@ -158,6 +157,20 @@ CQRS 迁移与收敛。
 - `PR #345` 当前 latest-head review 仍以 CodeRabbit review body 的 `4` 条 actionable comments 为主；最新本地复核后，仍成立的问题集中在 `AGENTS.md` 术语说明、`StreamLifetimeBenchmarks` 的取消/文档细节，以及 benchmark README / `ai-plan` 恢复入口漂移
 
 ## 最近权威验证
+
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+  - 备注：覆盖 benchmark 入口 `--artifacts-suffix` 隔离实现、`README` 命令示例与 `ai-plan` 更新后的最小 Release build
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix req-lifetime-a --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：本次 auto-generated benchmark 项目已在 `BenchmarkDotNet.Artifacts/req-lifetime-a/host/...` 下执行；`Singleton` 约为 baseline `5.189 ns`、`MediatR` `52.765 ns`、`GFramework.Cqrs` `60.938 ns`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix stream-invoker-b --filter "*StreamInvokerBenchmarks.Stream_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：本次 auto-generated benchmark 项目已在 `BenchmarkDotNet.Artifacts/stream-invoker-b/host/...` 下执行；`DrainAll` 约为 baseline `77.82 ns`、generated `130.37 ns`、reflection `139.08 ns`、`MediatR` `245.23 ns`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Program.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+  - 结果：通过
+- `git --git-dir=<repo>/.git/worktrees/GFramework-cqrs --work-tree=. diff --check`
+  - 结果：通过
 
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
