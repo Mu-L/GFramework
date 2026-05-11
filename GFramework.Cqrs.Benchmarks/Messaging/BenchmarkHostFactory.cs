@@ -3,6 +3,8 @@
 
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Ioc;
 using GFramework.Cqrs.Abstractions.Cqrs;
@@ -156,6 +158,64 @@ internal static class BenchmarkHostFactory
         });
 
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    ///     在真实的 request 级作用域内执行一次 GFramework.CQRS request 分发。
+    /// </summary>
+    /// <typeparam name="TResponse">请求响应类型。</typeparam>
+    /// <param name="rootContainer">冻结后的 benchmark 根容器，用于创建 request 作用域并提供注册元数据。</param>
+    /// <param name="runtimeLogger">当前 request 级 runtime 复用的日志器。</param>
+    /// <param name="context">当前 CQRS 分发上下文。</param>
+    /// <param name="request">要发送的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 request 的响应结果。</returns>
+    /// <remarks>
+    ///     该入口只服务 request lifetime benchmark：每次调用都会显式创建并释放一个新的 DI 作用域，
+    ///     让 `Scoped` handler 在真实 request 边界内解析，而不是退化为根容器解析。
+    /// </remarks>
+    internal static async ValueTask<TResponse> SendScopedGFrameworkRequestAsync<TResponse>(
+        MicrosoftDiContainer rootContainer,
+        ILogger runtimeLogger,
+        ICqrsContext context,
+        GFramework.Cqrs.Abstractions.Cqrs.IRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootContainer);
+        ArgumentNullException.ThrowIfNull(runtimeLogger);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var scope = rootContainer.CreateScope();
+        var scopedContainer = new ScopedBenchmarkContainer(rootContainer, scope);
+        var runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+            scopedContainer,
+            runtimeLogger);
+        return await runtime.SendAsync(context, request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     在真实的 request 级作用域内执行一次 MediatR request 分发。
+    /// </summary>
+    /// <typeparam name="TResponse">请求响应类型。</typeparam>
+    /// <param name="rootServiceProvider">当前 benchmark 的根 <see cref="ServiceProvider" />。</param>
+    /// <param name="request">要发送的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 request 的响应结果。</returns>
+    /// <remarks>
+    ///     这里显式从新的 scope 解析 <see cref="IMediator" />，确保 `Scoped` handler 与其依赖绑定到 request 边界。
+    /// </remarks>
+    internal static async Task<TResponse> SendScopedMediatRRequestAsync<TResponse>(
+        ServiceProvider rootServiceProvider,
+        MediatR.IRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootServiceProvider);
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var scope = rootServiceProvider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        return await mediator.Send(request, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

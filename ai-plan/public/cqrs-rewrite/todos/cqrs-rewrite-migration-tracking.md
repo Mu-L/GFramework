@@ -7,23 +7,21 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-128`
+- 恢复点编号：`CQRS-REWRITE-RP-129`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #345`
+- 当前 PR 锚点：`待重新抓取`
 - 当前结论：
-- 当前 `RP-128` 以 `$gframework-pr-review` 复核 `PR #345` latest-head review body，确认没有新的 unresolved thread，但仍有 `4` 条 CodeRabbit actionable comments 需要回到本地代码逐条验真
-- 本轮已收口仍成立的 review 输入：为 `AGENTS.md` 补充 multi-agent budget 术语释义；为 `StreamLifetimeBenchmarks` 补齐 `CancellationToken` 传播、`[EnumeratorCancellation]` 短名引用与类级 `<remarks>` 说明；为 benchmark `README` 去掉治理型 `RP-127` 表述；并把 `ai-plan/public/cqrs-rewrite/**` 的 PR 锚点与 branch diff 数字更新到当前 head
-- 最新权威 diff 基线已统一为当前分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的 `21 files / 1344 insertions / 194 deletions`；active tracking、active trace 与后续 review triage 均以该组数字为准
-- 当前 `RP-127` 延续 `$gframework-batch-boot 50`，在 `RP-126` 已补齐 stream lifetime 四方口径后，再用 `b7fa3eee` 把 `CqrsDispatcher.CreateStream(...)` 的 stream dispatch binding 改为按 `TResponse` 强类型缓存，同时为 `StreamLifetimeBenchmarks` 增加 `FirstItem / DrainAll` 观测维度，并把新的结果回填到公开可恢复文档
-- 本轮写面落在 `GFramework.Cqrs/Internal/CqrsDispatcher.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsDispatcherCacheTests.cs`、`GFramework.Cqrs.Tests/Cqrs/CqrsGeneratedRequestInvokerProviderTests.cs`、`GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs`，以及 `GFramework.Cqrs.Benchmarks/README.md` / `ai-plan/public/cqrs-rewrite/**` 恢复文档；没有扩散到 request runtime、notification runtime 或额外文档模块
-- `f9c9561f` 为 request lifetime 补入 handwritten generated registry，并在 setup/cleanup 清理 dispatcher cache；这样 `Singleton / Transient` 生命周期矩阵继续只比较 handler 生命周期与 dispatch 常量路径，不再混入旧宿主差异
-- `9107e232` 将 stream lifetime 的 reflection、generated 与 `MediatR` 请求/响应/handler 彻底拆开，并限制 generated registry 只绑定 generated lane，避免静态 dispatcher cache 把不同 stream 对照口径污染到一起
-- 当前 request lifetime benchmark 已用新宿主重新验证：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约为 `5.012 ns / 32 B`、`49.612 ns / 32 B`、`51.796 ns / 232 B`；`Transient` 下约为 `3.962 ns / 32 B`、`50.480 ns / 56 B`、`50.284 ns / 232 B`
-- 当前 stream lifetime benchmark 已更新为 `Observation=FirstItem / DrainAll` 双口径：`Singleton + FirstItem` 下 baseline / generated / reflection / `MediatR` 约为 `48.704 ns / 216 B`、`94.629 ns / 216 B`、`95.417 ns / 216 B`、`152.886 ns / 608 B`；`Singleton + DrainAll` 下约为 `73.335 ns / 280 B`、`118.860 ns / 280 B`、`119.632 ns / 280 B`、`205.629 ns / 672 B`
-- `Transient + FirstItem` 下 baseline / reflection / generated / `MediatR` 约为 `48.293 ns / 216 B`、`97.628 ns / 240 B`、`100.011 ns / 240 B`、`154.149 ns / 608 B`；`Transient + DrainAll` 下约为 `78.466 ns / 280 B`、`124.174 ns / 304 B`、`116.780 ns / 304 B`、`220.040 ns / 672 B`
-- 现阶段可恢复结论收口为三点：一是 stream lifetime 已具备四方口径加 `FirstItem / DrainAll` 双观测维度；二是 `b7fa3eee` 已让 generated lane 在 `DrainAll` 口径下重新领先 reflection；三是 `Transient + FirstItem` 仍保留约 `2.4 ns` 的小幅反向差值，更像建流到首个元素之间的瞬时成本，而不是完整枚举阶段退化
-- 当前已提交分支相对 `origin/main`（`d85828c5`, `2026-05-09 12:25:41 +0800`）的累计 branch diff 已到 `21 files`（`1344 insertions / 194 deletions`），仍明显低于 `$gframework-batch-boot 50` 的 `50 files` stop condition
-- 下一推荐步骤：若继续 benchmark 线，优先从 `StreamLifetimeBenchmarks` 的 `Transient + FirstItem` 小幅差值继续恢复，并用 `StreamInvokerBenchmarks` 复核 generated lane 的常量成本收益是否能在更窄口径下复现；若差值不再稳定，再决定是否转去 `Mediator` concrete runtime 的 stream lifetime 对照批次
+- 当前 `RP-129` 继续沿用 `$gframework-batch-boot 50`，但本轮按 `gframework-multi-agent-batch` 的职责边界组织了一波 `3` 路互不冲突的 benchmark worker：`StreamingBenchmarks` 观测口径拆分、`StreamInvokerBenchmarks` 观测口径拆分、`RequestLifetimeBenchmarks` 的真实 scoped-host 生命周期矩阵
+- 本轮启动前已重新按 skill 规则复核基线：`origin/main` 与本地 `main` 当前都在 `699d0b48`（`2026-05-09 18:39:38 +0800`），且启动时 `origin/main...HEAD` 的累计 branch diff 为 `0 files / 0 lines`；旧 active 入口里 `21 files` 的数字已不再可作为当前波次基线
+- 本轮写面限定在 benchmark 子系统：`GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`、`StreamInvokerBenchmarks.cs`、`RequestLifetimeBenchmarks.cs`、`BenchmarkHostFactory.cs`，以及新增的 `ScopedBenchmarkContainer.cs`；没有扩散到 `GFramework.Cqrs` runtime、测试项目或公共文档
+- `StreamingBenchmarks` 已从单一完整枚举口径扩成 `FirstItem / DrainAll` 双观测模式；worker smoke 结果表明默认 generated-provider steady-state stream 宿主在两种口径下都能稳定跑通，当前 short-job 约为 `FirstItem: baseline 62.14 ns / GFramework 118.83 ns / MediatR 182.16 ns`，`DrainAll: baseline 94.34 ns / GFramework 149.57 ns / MediatR 280.77 ns`
+- `StreamInvokerBenchmarks` 现也具备 `FirstItem / DrainAll` 双观测模式，并已完成串行 smoke 运行；当前 short-job 下，`FirstItem` 口径里 generated lane 约 `59.44 ns`、reflection 约 `52.90 ns`，说明 tracking 里提到的 “generated 在首项前略慢于 reflection” 信号在更窄的 invoker 场景里仍可见
+- `RequestLifetimeBenchmarks` 当前矩阵已从 `Singleton / Transient` 扩到 `Singleton / Scoped / Transient`，且 `Scoped` 不再退化为根容器解析，而是通过 `BenchmarkHostFactory` + `ScopedBenchmarkContainer` 在每次 request 分发时显式创建并释放真实作用域；本轮 short-job 下 `Scoped` 口径约为 baseline `5.60 ns / 32 B`、`MediatR` `170.94 ns / 648 B`、`GFramework.Cqrs` `575.92 ns / 3400 B`
+- 本轮首次并行运行两个 BenchmarkDotNet `dotnet run --no-build` 过滤命令时触发自动生成目录争用；已按仓库规则改为串行重跑同一命令，并以串行结果作为权威 smoke 验证
+- 当前可恢复结论收口为两点：一是 stream benchmark 线已从 `StreamLifetimeBenchmarks` 继续下探到 default steady-state 与 invoker 两个更窄口径；二是 request lifetime 线已经拥有真实 scoped-host 基线，后续若继续扩 `StreamLifetimeBenchmarks` 的 scoped 口径，不必再先做宿主适配
+- 下一推荐步骤：
+  - 先回到 `ai-plan/public/cqrs-rewrite/**` 与 `GFramework.Cqrs.Benchmarks/README.md`，把本轮基线从旧的 `21 files / PR #345` 状态更新到当前 `699d0b48` 基线和新的 benchmark 结论
+  - 然后优先复核 `StreamInvokerBenchmarks` 当前 short-job 输出里 `DrainAll` 口径的异常排序是否只是 smoke 配置噪音，必要时把下一批切回更稳定的 benchmark job 或补更窄的 helper-level 对照，而不是直接据此下结论
 - 更早的 `RP-123` 及之前阶段细节以下方 trace 与归档为准，active 入口不再重复展开旧阶段流水。
   - 当前分支相对 `origin/main` 的累计 branch diff 启动时为 `9 files`，仍明显低于 `$gframework-batch-boot 50` 的停止阈值；这一批继续保持单模块、低风险、可直接评审的 benchmark 边界
   - 当前 `RP-113` 已继续沿用 `$gframework-batch-boot 50`，并把 notification 线从 benchmark 对照推进到实际 runtime 能力：新增公开内置 `TaskWhenAllNotificationPublisher`，让 `GFramework.Cqrs` 在保留默认顺序发布器的同时，提供与 `Mediator` `TaskWhenAllPublisher` 对齐的并行 notification publish 策略

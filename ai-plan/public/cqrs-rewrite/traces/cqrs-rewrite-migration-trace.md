@@ -1,5 +1,37 @@
 # CQRS 重写迁移追踪
 
+## 2026-05-11
+
+### 阶段：benchmark 多 worker 波次与 scoped-host 基线（CQRS-REWRITE-RP-129）
+
+- 本轮从 `$gframework-batch-boot 50` 启动，但按 `gframework-multi-agent-batch` 规则把非阻塞工作拆成三条互不冲突的 benchmark 切片：
+  - `StreamingBenchmarks.cs`：默认 steady-state stream 宿主补 `FirstItem / DrainAll`
+  - `StreamInvokerBenchmarks.cs`：generated/reflection/MediatR invoker 对照补 `FirstItem / DrainAll`
+  - `RequestLifetimeBenchmarks.cs` + `BenchmarkHostFactory.cs` + `ScopedBenchmarkContainer.cs`：为 request lifetime 引入真实 scoped-host 作用域边界
+- 启动前已重新复核基线：`origin/main` 与本地 `main` 当前同为 `699d0b48`，启动时 `origin/main...HEAD` 为 `0 files / 0 lines`；因此先前 active 入口里的 `21 files` 已视为历史恢复信息，不再作为本轮 stop-condition 计数基线
+- worker 输出验收：
+  - `StreamingBenchmarks` worker 仅触达 `StreamingBenchmarks.cs`，并完成 `dotnet build ... -c Release` 与 `dotnet run ... --filter "*StreamingBenchmarks*"`；本轮保留其实现与 smoke 结果
+  - `StreamInvokerBenchmarks` worker 只触达 `StreamInvokerBenchmarks.cs`，主线程保留其观测模式拆分；后续 smoke 验证改由主线程串行执行
+  - `RequestLifetimeBenchmarks` worker 在 `BenchmarkHostFactory.cs` 与新建 `ScopedBenchmarkContainer.cs` 留下未编译完的 scoped-helper 草稿；主线程接手补齐 `using`、`IContextAware` 转发与 `IPrioritized` 命名空间，然后完成 `RequestLifetimeBenchmarks.cs` 的 scoped 接线
+- 本轮主线程关键修正：
+  - `ScopedBenchmarkContainer` 采用“根容器注册可见性 + 作用域 provider 实例解析”的只读适配层，避免在 request benchmark 里把 scoped handler 错误解析到根容器
+  - `BenchmarkHostFactory.SendScopedGFrameworkRequestAsync(...)` 与 `SendScopedMediatRRequestAsync(...)` 统一封装每次 request 的显式 scope 创建/释放逻辑
+  - 首次把 `StreamInvokerBenchmarks` 与 `RequestLifetimeBenchmarks` 并行跑 smoke 时触发 BenchmarkDotNet 自动生成目录争用；主线程按仓库规则改为串行重跑相同命令，并以串行结果为权威
+- 本轮验证：
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs GFramework.Cqrs.Benchmarks/Messaging/RequestLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/ScopedBenchmarkContainer.cs GFramework.Cqrs.Benchmarks/Messaging/StreamInvokerBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`
+    - 结果：通过
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamInvokerBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过（串行权威结果）
+    - 备注：`FirstItem` 下 baseline / reflection / generated 约为 `5.84 ns / 52.90 ns / 59.44 ns`；`DrainAll` 报告当前呈现异常排序，应只把本次结果视作 smoke 运行通过信号，不直接当成稳定性能结论
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过（串行权威结果）
+    - 备注：`Singleton` 下 baseline / `GFramework.Cqrs` / `MediatR` 约为 `5.23 ns / 53.43 ns / 56.35 ns`；`Scoped` 下约为 `5.60 ns / 575.92 ns / 170.94 ns`；`Transient` 下约为 `6.00 ns / 58.70 ns / 60.91 ns`
+- 下一恢复点：
+  - 先把 `GFramework.Cqrs.Benchmarks/README.md` 与本 active tracking / trace 从旧 `PR #345 / 21 files` 状态刷新到当前 `699d0b48` 基线和本轮新矩阵
+  - 然后判断 `StreamInvokerBenchmarks` 的 `DrainAll` smoke 输出是否需要单开一批稳定性复核；若只是 short-job 配置噪音，再考虑继续把 scoped host 扩到 stream lifetime，而不是现在就解读该组数字
+
 ## 2026-05-09
 
 ### 阶段：PR #345 latest-head review 收口（CQRS-REWRITE-RP-128）
