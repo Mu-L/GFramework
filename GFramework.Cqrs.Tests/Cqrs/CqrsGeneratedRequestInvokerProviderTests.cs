@@ -449,6 +449,126 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     }
 
     /// <summary>
+    ///     验证当 generated request invoker provider 的 descriptor 枚举抛出异常时，
+    ///     registrar 会跳过 generated descriptor 预热并回退到反射路径。
+    /// </summary>
+    [Test]
+    public async Task SendAsync_Should_Fall_Back_To_Runtime_Path_When_Request_Descriptor_Enumeration_Throws()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(ThrowingEnumeratingRequestInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.ThrowingEnumeratingRequestInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var response = await context.SendRequestAsync(new GeneratedRequestInvokerRequest("payload")).ConfigureAwait(false);
+        Assert.That(response, Is.EqualTo("runtime:payload"));
+    }
+
+    /// <summary>
+    ///     验证当 generated stream invoker provider 的 descriptor 枚举抛出异常时，
+    ///     registrar 会跳过 generated descriptor 预热并回退到反射建流路径。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Fall_Back_To_Runtime_Path_When_Stream_Descriptor_Enumeration_Throws()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(ThrowingEnumeratingStreamInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.ThrowingEnumeratingStreamInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+        Assert.That(results, Is.EqualTo([3, 4]));
+    }
+
+    /// <summary>
+    ///     验证当 request descriptor 枚举返回重复 request-response pair 时，
+    ///     registrar 会稳定保留首个有效描述符，并忽略后续重复项。
+    /// </summary>
+    [Test]
+    public async Task SendAsync_Should_Use_First_Generated_Request_Descriptor_When_Duplicates_Are_Enumerated()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(DuplicateEnumeratingRequestInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.DuplicateEnumeratingRequestInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var response = await context.SendRequestAsync(new GeneratedRequestInvokerRequest("payload")).ConfigureAwait(false);
+        Assert.That(response, Is.EqualTo("generated:payload"));
+    }
+
+    /// <summary>
+    ///     验证当 stream descriptor 枚举返回重复 request-response pair 时，
+    ///     registrar 会稳定保留首个有效描述符，并忽略后续重复项。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Use_First_Generated_Stream_Descriptor_When_Duplicates_Are_Enumerated()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(DuplicateEnumeratingStreamInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.DuplicateEnumeratingStreamInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+        Assert.That(results, Is.EqualTo([30, 31]));
+    }
+
+    /// <summary>
+    ///     验证当 request descriptor 枚举项与 provider 的 TryGetDescriptor 结果不一致时，
+    ///     registrar 会忽略该坏 descriptor，并继续回退到反射路径。
+    /// </summary>
+    [Test]
+    public async Task SendAsync_Should_Fall_Back_To_Runtime_Path_When_Enumerated_Request_Descriptor_Does_Not_Match_Provider()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(MismatchedEnumeratingRequestInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.MismatchedEnumeratingRequestInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var response = await context.SendRequestAsync(new GeneratedRequestInvokerRequest("payload")).ConfigureAwait(false);
+        Assert.That(response, Is.EqualTo("runtime:payload"));
+    }
+
+    /// <summary>
+    ///     验证当 stream descriptor 枚举项与 provider 的 TryGetDescriptor 结果不一致时，
+    ///     registrar 会忽略该坏 descriptor，并继续回退到反射建流路径。
+    /// </summary>
+    [Test]
+    public async Task CreateStream_Should_Fall_Back_To_Runtime_Path_When_Enumerated_Stream_Descriptor_Does_Not_Match_Provider()
+    {
+        var generatedAssembly = CreateGeneratedAssembly(
+            typeof(MismatchedEnumeratingStreamInvokerProviderRegistry),
+            "GFramework.Cqrs.Tests.Cqrs.MismatchedEnumeratingStreamInvokerAssembly, Version=1.0.0.0");
+        var container = new MicrosoftDiContainer();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
+        Assert.That(results, Is.EqualTo([3, 4]));
+    }
+
+    /// <summary>
     ///     模拟返回实例 request invoker 方法的 generated registry。
     /// </summary>
     private sealed class NonStaticRequestInvokerProviderRegistry :
@@ -857,6 +977,382 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         public IReadOnlyList<CqrsStreamInvokerDescriptorEntry> GetDescriptors()
         {
             return Array.Empty<CqrsStreamInvokerDescriptorEntry>();
+        }
+    }
+
+    /// <summary>
+    ///     模拟 descriptor 枚举阶段抛出异常的 request invoker provider。
+    /// </summary>
+    private sealed class ThrowingEnumeratingRequestInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsRequestInvokerProvider,
+        IEnumeratesCqrsRequestInvokerDescriptors
+    {
+        private static readonly CqrsRequestInvokerDescriptor Descriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(GeneratedRequestInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+                typeof(GeneratedRequestInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsRequestInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedRequestInvokerRequest) && responseType == typeof(string))
+            {
+                descriptor = Descriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsRequestInvokerDescriptorEntry> GetDescriptors()
+        {
+            throw new InvalidOperationException("request descriptors failed");
+        }
+    }
+
+    /// <summary>
+    ///     模拟 descriptor 枚举阶段抛出异常的 stream invoker provider。
+    /// </summary>
+    private sealed class ThrowingEnumeratingStreamInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsStreamInvokerProvider,
+        IEnumeratesCqrsStreamInvokerDescriptors
+    {
+        private static readonly CqrsStreamInvokerDescriptor Descriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(GeneratedStreamInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+                typeof(GeneratedStreamInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsStreamInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedStreamInvokerRequest) && responseType == typeof(int))
+            {
+                descriptor = Descriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsStreamInvokerDescriptorEntry> GetDescriptors()
+        {
+            throw new InvalidOperationException("stream descriptors failed");
+        }
+    }
+
+    /// <summary>
+    ///     模拟返回重复 request descriptor 条目的 generated registry。
+    /// </summary>
+    private sealed class DuplicateEnumeratingRequestInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsRequestInvokerProvider,
+        IEnumeratesCqrsRequestInvokerDescriptors
+    {
+        private static readonly CqrsRequestInvokerDescriptor PrimaryDescriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(GeneratedRequestInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        private static readonly CqrsRequestInvokerDescriptor SecondaryDescriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(DuplicateEnumeratingRequestInvokerProviderRegistry).GetMethod(
+                nameof(InvokeAlternativeGenerated),
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+                typeof(GeneratedRequestInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsRequestInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedRequestInvokerRequest) && responseType == typeof(string))
+            {
+                descriptor = PrimaryDescriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsRequestInvokerDescriptorEntry> GetDescriptors()
+        {
+            return
+            [
+                new CqrsRequestInvokerDescriptorEntry(typeof(GeneratedRequestInvokerRequest), typeof(string), PrimaryDescriptor),
+                new CqrsRequestInvokerDescriptorEntry(typeof(GeneratedRequestInvokerRequest), typeof(string), SecondaryDescriptor)
+            ];
+        }
+
+        private static ValueTask<string> InvokeAlternativeGenerated(
+            object handler,
+            object request,
+            CancellationToken cancellationToken)
+        {
+            return ValueTask.FromResult("duplicate:payload");
+        }
+    }
+
+    /// <summary>
+    ///     模拟返回重复 stream descriptor 条目的 generated registry。
+    /// </summary>
+    private sealed class DuplicateEnumeratingStreamInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsStreamInvokerProvider,
+        IEnumeratesCqrsStreamInvokerDescriptors
+    {
+        private static readonly CqrsStreamInvokerDescriptor PrimaryDescriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(GeneratedStreamInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        private static readonly CqrsStreamInvokerDescriptor SecondaryDescriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(DuplicateEnumeratingStreamInvokerProviderRegistry).GetMethod(
+                nameof(InvokeAlternativeGenerated),
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+                typeof(GeneratedStreamInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsStreamInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedStreamInvokerRequest) && responseType == typeof(int))
+            {
+                descriptor = PrimaryDescriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsStreamInvokerDescriptorEntry> GetDescriptors()
+        {
+            return
+            [
+                new CqrsStreamInvokerDescriptorEntry(typeof(GeneratedStreamInvokerRequest), typeof(int), PrimaryDescriptor),
+                new CqrsStreamInvokerDescriptorEntry(typeof(GeneratedStreamInvokerRequest), typeof(int), SecondaryDescriptor)
+            ];
+        }
+
+        private static object InvokeAlternativeGenerated(object handler, object request, CancellationToken cancellationToken)
+        {
+            return new[] { 900, 901 }.ToAsyncEnumerable();
+        }
+    }
+
+    /// <summary>
+    ///     模拟枚举出的 request descriptor 与 provider 显式查询结果不一致的 generated registry。
+    /// </summary>
+    private sealed class MismatchedEnumeratingRequestInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsRequestInvokerProvider,
+        IEnumeratesCqrsRequestInvokerDescriptors
+    {
+        private static readonly CqrsRequestInvokerDescriptor ProviderDescriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(GeneratedRequestInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        private static readonly CqrsRequestInvokerDescriptor EnumeratedDescriptor = new(
+            typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+            typeof(MismatchedEnumeratingRequestInvokerProviderRegistry).GetMethod(
+                nameof(InvokeAlternativeGenerated),
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IRequestHandler<GeneratedRequestInvokerRequest, string>),
+                typeof(GeneratedRequestInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsRequestInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedRequestInvokerRequest) && responseType == typeof(string))
+            {
+                descriptor = ProviderDescriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsRequestInvokerDescriptorEntry> GetDescriptors()
+        {
+            return
+            [
+                new CqrsRequestInvokerDescriptorEntry(
+                    typeof(GeneratedRequestInvokerRequest),
+                    typeof(string),
+                    EnumeratedDescriptor)
+            ];
+        }
+
+        private static ValueTask<string> InvokeAlternativeGenerated(
+            object handler,
+            object request,
+            CancellationToken cancellationToken)
+        {
+            return ValueTask.FromResult("mismatched:payload");
+        }
+    }
+
+    /// <summary>
+    ///     模拟枚举出的 stream descriptor 与 provider 显式查询结果不一致的 generated registry。
+    /// </summary>
+    private sealed class MismatchedEnumeratingStreamInvokerProviderRegistry :
+        ICqrsHandlerRegistry,
+        ICqrsStreamInvokerProvider,
+        IEnumeratesCqrsStreamInvokerDescriptors
+    {
+        private static readonly CqrsStreamInvokerDescriptor ProviderDescriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(GeneratedStreamInvokerProviderRegistry).GetMethod(
+                "InvokeGenerated",
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        private static readonly CqrsStreamInvokerDescriptor EnumeratedDescriptor = new(
+            typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+            typeof(MismatchedEnumeratingStreamInvokerProviderRegistry).GetMethod(
+                nameof(InvokeAlternativeGenerated),
+                BindingFlags.NonPublic | BindingFlags.Static)!);
+
+        /// <inheritdoc />
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(IStreamRequestHandler<GeneratedStreamInvokerRequest, int>),
+                typeof(GeneratedStreamInvokerRequestHandler));
+        }
+
+        /// <inheritdoc />
+        public bool TryGetDescriptor(
+            Type requestType,
+            Type responseType,
+            out CqrsStreamInvokerDescriptor? descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(requestType);
+            ArgumentNullException.ThrowIfNull(responseType);
+
+            if (requestType == typeof(GeneratedStreamInvokerRequest) && responseType == typeof(int))
+            {
+                descriptor = ProviderDescriptor;
+                return true;
+            }
+
+            descriptor = null;
+            return false;
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<CqrsStreamInvokerDescriptorEntry> GetDescriptors()
+        {
+            return
+            [
+                new CqrsStreamInvokerDescriptorEntry(
+                    typeof(GeneratedStreamInvokerRequest),
+                    typeof(int),
+                    EnumeratedDescriptor)
+            ];
+        }
+
+        private static object InvokeAlternativeGenerated(object handler, object request, CancellationToken cancellationToken)
+        {
+            return new[] { 700, 701 }.ToAsyncEnumerable();
         }
     }
 
