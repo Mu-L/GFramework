@@ -17,11 +17,12 @@ using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using ILogger = GFramework.Core.Abstractions.Logging.ILogger;
+using GeneratedMediator = Mediator.Mediator;
 
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比 request 宿主的初始化与首次分发成本，作为后续吸收 `Mediator` comparison benchmark 设计的 startup 基线。
+///     对比 request 宿主在 GFramework.CQRS、NuGet `Mediator` 与 MediatR 之间的初始化与首次分发成本。
 /// </summary>
 [Config(typeof(Config))]
 public class RequestStartupBenchmarks
@@ -31,7 +32,9 @@ public class RequestStartupBenchmarks
 
     private MicrosoftDiContainer _container = null!;
     private ServiceProvider _serviceProvider = null!;
+    private ServiceProvider _mediatorServiceProvider = null!;
     private IMediator _mediatr = null!;
+    private GeneratedMediator _mediator = null!;
     private ICqrsRuntime _runtime = null!;
 
     /// <summary>
@@ -63,6 +66,8 @@ public class RequestStartupBenchmarks
 
         _serviceProvider = CreateMediatRServiceProvider();
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        _mediatorServiceProvider = CreateMediatorServiceProvider();
+        _mediator = _mediatorServiceProvider.GetRequiredService<GeneratedMediator>();
         _container = CreateGFrameworkContainer();
         _runtime = CreateGFrameworkRuntime(_container);
     }
@@ -86,7 +91,7 @@ public class RequestStartupBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+        BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider, _mediatorServiceProvider);
     }
 
     /// <summary>
@@ -107,6 +112,16 @@ public class RequestStartupBenchmarks
     public ICqrsRuntime Initialization_GFrameworkCqrs()
     {
         return _runtime;
+    }
+
+    /// <summary>
+    ///     返回已构建宿主中的 `Mediator` concrete mediator，作为 source-generated 对照组的初始化句柄。
+    /// </summary>
+    [Benchmark]
+    [BenchmarkCategory("Initialization")]
+    public GeneratedMediator Initialization_Mediator()
+    {
+        return _mediator;
     }
 
     /// <summary>
@@ -131,6 +146,18 @@ public class RequestStartupBenchmarks
         using var container = CreateGFrameworkContainer();
         var runtime = CreateGFrameworkRuntime(container);
         return await runtime.SendAsync(BenchmarkContext.Instance, Request, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     在新的 `Mediator` 宿主上首次发送 request，量化 source-generated concrete path 的 cold-start 成本。
+    /// </summary>
+    [Benchmark]
+    [BenchmarkCategory("ColdStart")]
+    public async ValueTask<BenchmarkResponse> ColdStart_Mediator()
+    {
+        using var serviceProvider = CreateMediatorServiceProvider();
+        var mediator = serviceProvider.GetRequiredService<GeneratedMediator>();
+        return await mediator.Send(Request, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -171,6 +198,14 @@ public class RequestStartupBenchmarks
     }
 
     /// <summary>
+    ///     构建只承载当前 benchmark request 的最小 `Mediator` 对照宿主。
+    /// </summary>
+    private static ServiceProvider CreateMediatorServiceProvider()
+    {
+        return BenchmarkHostFactory.CreateMediatorServiceProvider(configure: null);
+    }
+
+    /// <summary>
     ///     为 benchmark 创建稳定的 fatal 级 logger，避免把日志成本混入 startup 测量。
     /// </summary>
     private static ILogger CreateLogger(string categoryName)
@@ -188,6 +223,7 @@ public class RequestStartupBenchmarks
     /// <param name="Id">请求标识。</param>
     public sealed record BenchmarkRequest(Guid Id) :
         GFramework.Cqrs.Abstractions.Cqrs.IRequest<BenchmarkResponse>,
+        Mediator.IRequest<BenchmarkResponse>,
         MediatR.IRequest<BenchmarkResponse>;
 
     /// <summary>
@@ -197,10 +233,11 @@ public class RequestStartupBenchmarks
     public sealed record BenchmarkResponse(Guid Id);
 
     /// <summary>
-    ///     同时实现 GFramework.CQRS 与 MediatR 契约的最小 request handler。
+    ///     同时实现 GFramework.CQRS、NuGet `Mediator` 与 MediatR 契约的最小 request handler。
     /// </summary>
     public sealed class BenchmarkRequestHandler :
         GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>,
+        Mediator.IRequestHandler<BenchmarkRequest, BenchmarkResponse>,
         MediatR.IRequestHandler<BenchmarkRequest, BenchmarkResponse>
     {
         /// <summary>
@@ -209,6 +246,16 @@ public class RequestStartupBenchmarks
         public ValueTask<BenchmarkResponse> Handle(BenchmarkRequest request, CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(new BenchmarkResponse(request.Id));
+        }
+
+        /// <summary>
+        ///     处理 NuGet `Mediator` request。
+        /// </summary>
+        ValueTask<BenchmarkResponse> Mediator.IRequestHandler<BenchmarkRequest, BenchmarkResponse>.Handle(
+            BenchmarkRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Handle(request, cancellationToken);
         }
 
         /// <summary>
