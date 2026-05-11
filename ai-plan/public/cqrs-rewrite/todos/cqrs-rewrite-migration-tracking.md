@@ -7,21 +7,23 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-129`
+- 恢复点编号：`CQRS-REWRITE-RP-130`
 - 当前阶段：`Phase 8`
 - 当前 PR 锚点：`待重新抓取`
 - 当前结论：
-- 当前 `RP-129` 继续沿用 `$gframework-batch-boot 50`，但本轮按 `gframework-multi-agent-batch` 的职责边界组织了一波 `3` 路互不冲突的 benchmark worker：`StreamingBenchmarks` 观测口径拆分、`StreamInvokerBenchmarks` 观测口径拆分、`RequestLifetimeBenchmarks` 的真实 scoped-host 生命周期矩阵
-- 本轮启动前已重新按 skill 规则复核基线：`origin/main` 与本地 `main` 当前都在 `699d0b48`（`2026-05-09 18:39:38 +0800`），且启动时 `origin/main...HEAD` 的累计 branch diff 为 `0 files / 0 lines`；旧 active 入口里 `21 files` 的数字已不再可作为当前波次基线
-- 本轮写面限定在 benchmark 子系统：`GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`、`StreamInvokerBenchmarks.cs`、`RequestLifetimeBenchmarks.cs`、`BenchmarkHostFactory.cs`，以及新增的 `ScopedBenchmarkContainer.cs`；没有扩散到 `GFramework.Cqrs` runtime、测试项目或公共文档
-- `StreamingBenchmarks` 已从单一完整枚举口径扩成 `FirstItem / DrainAll` 双观测模式；worker smoke 结果表明默认 generated-provider steady-state stream 宿主在两种口径下都能稳定跑通，当前 short-job 约为 `FirstItem: baseline 62.14 ns / GFramework 118.83 ns / MediatR 182.16 ns`，`DrainAll: baseline 94.34 ns / GFramework 149.57 ns / MediatR 280.77 ns`
-- `StreamInvokerBenchmarks` 现也具备 `FirstItem / DrainAll` 双观测模式，并已完成串行 smoke 运行；当前 short-job 下，`FirstItem` 口径里 generated lane 约 `59.44 ns`、reflection 约 `52.90 ns`，说明 tracking 里提到的 “generated 在首项前略慢于 reflection” 信号在更窄的 invoker 场景里仍可见
-- `RequestLifetimeBenchmarks` 当前矩阵已从 `Singleton / Transient` 扩到 `Singleton / Scoped / Transient`，且 `Scoped` 不再退化为根容器解析，而是通过 `BenchmarkHostFactory` + `ScopedBenchmarkContainer` 在每次 request 分发时显式创建并释放真实作用域；本轮 short-job 下 `Scoped` 口径约为 baseline `5.60 ns / 32 B`、`MediatR` `170.94 ns / 648 B`、`GFramework.Cqrs` `575.92 ns / 3400 B`
-- 本轮首次并行运行两个 BenchmarkDotNet `dotnet run --no-build` 过滤命令时触发自动生成目录争用；已按仓库规则改为串行重跑同一命令，并以串行结果作为权威 smoke 验证
-- 当前可恢复结论收口为两点：一是 stream benchmark 线已从 `StreamLifetimeBenchmarks` 继续下探到 default steady-state 与 invoker 两个更窄口径；二是 request lifetime 线已经拥有真实 scoped-host 基线，后续若继续扩 `StreamLifetimeBenchmarks` 的 scoped 口径，不必再先做宿主适配
+- 当前 `RP-130` 延续 `$gframework-batch-boot 50`，并在上一波 `StreamingBenchmarks`、`StreamInvokerBenchmarks`、`RequestLifetimeBenchmarks` 扩口径之后，继续把 `StreamLifetimeBenchmarks` 的生命周期矩阵补齐到真实 `Scoped` stream 作用域，同时把 benchmark `README` 与当前矩阵同步
+- 本轮继续沿用已复核的基线：`origin/main` 与本地 `main` 当前都在 `699d0b48`（`2026-05-09 18:39:38 +0800`）；当前分支连同本轮变更相对 `origin/main` 的累计 branch diff 约为 `9 files changed, 953 insertions(+), 83 deletions(-)`，离 `$gframework-batch-boot 50` 还有明显余量
+- 本轮写面收敛在 benchmark 层三处：`GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs`、`StreamLifetimeBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/README.md`；没有扩散到 `GFramework.Cqrs` runtime 或测试项目
+- `BenchmarkHostFactory` 现在提供 `CreateScopedGFrameworkStream<TResponse>(...)` 与 `CreateScopedMediatRStream<TResponse>(...)`，通过显式 scope 包裹整个 async stream 枚举周期，避免 scoped handler 在建流后提前释放或错误回落到根容器语义
+- `StreamLifetimeBenchmarks` 当前矩阵已完整覆盖 `Singleton / Scoped / Transient` 与 `FirstItem / DrainAll`：
+  - `Singleton` 下 `DrainAll` 仍表现为 generated 略优于 reflection，约 `131.96 ns` 对 `134.26 ns`
+  - `Scoped` 下已经可以稳定产出真实作用域矩阵；`FirstItem` 约为 baseline `56.24 ns`、`MediatR` `338.82 ns`、reflection `612.49 ns`、generated `628.65 ns`，`DrainAll` 约为 baseline `81.20 ns`、`MediatR` `428.66 ns`、generated `692.05 ns`、reflection `716.61 ns`
+  - `Transient` 下 `FirstItem` 约为 generated `107.79 ns`、reflection `112.60 ns`，但 `DrainAll` 仍是 reflection `131.41 ns` 略优于 generated `135.95 ns`
+- `README` 已同步三类 benchmark 现状：`RequestLifetimeBenchmarks` 与 `StreamLifetimeBenchmarks` 都包含真实 `Scoped` 生命周期，`StreamingBenchmarks` / `StreamInvokerBenchmarks` 都显式区分 `FirstItem / DrainAll`，且 `StreamInvokerBenchmarks` 的 `DrainAll` short-job 输出被明确标注为 smoke-only，不作为稳定排序结论
+- 本轮再次确认：此前并行运行两个 BenchmarkDotNet `dotnet run --no-build` 过滤命令时出现的冲突属于 benchmark 工件/生成目录层面的运行隔离问题，而不是 `Fixture`、`StreamInvokerBenchmarks` 或 `StreamLifetimeBenchmarks` 的业务逻辑错误
 - 下一推荐步骤：
-  - 先回到 `ai-plan/public/cqrs-rewrite/**` 与 `GFramework.Cqrs.Benchmarks/README.md`，把本轮基线从旧的 `21 files / PR #345` 状态更新到当前 `699d0b48` 基线和新的 benchmark 结论
-  - 然后优先复核 `StreamInvokerBenchmarks` 当前 short-job 输出里 `DrainAll` 口径的异常排序是否只是 smoke 配置噪音，必要时把下一批切回更稳定的 benchmark job 或补更窄的 helper-level 对照，而不是直接据此下结论
+- 下一批优先切到 `GFramework.Cqrs.Benchmarks` 的 benchmark-run/config 隔离层，避免两个过滤 benchmark 并行执行时再次共享自动生成目录或 artifacts 路径
+- 完成运行隔离后，再决定是否单开一波更稳定的 `StreamInvokerBenchmarks` `DrainAll` 复核，或继续把 scoped host 对照扩展到更多 stream 子场景
 - 更早的 `RP-123` 及之前阶段细节以下方 trace 与归档为准，active 入口不再重复展开旧阶段流水。
   - 当前分支相对 `origin/main` 的累计 branch diff 启动时为 `9 files`，仍明显低于 `$gframework-batch-boot 50` 的停止阈值；这一批继续保持单模块、低风险、可直接评审的 benchmark 边界
   - 当前 `RP-113` 已继续沿用 `$gframework-batch-boot 50`，并把 notification 线从 benchmark 对照推进到实际 runtime 能力：新增公开内置 `TaskWhenAllNotificationPublisher`，让 `GFramework.Cqrs` 在保留默认顺序发布器的同时，提供与 `Mediator` `TaskWhenAllPublisher` 对齐的并行 notification publish 策略
@@ -156,6 +158,17 @@ CQRS 迁移与收敛。
 - `PR #345` 当前 latest-head review 仍以 CodeRabbit review body 的 `4` 条 actionable comments 为主；最新本地复核后，仍成立的问题集中在 `AGENTS.md` 术语说明、`StreamLifetimeBenchmarks` 的取消/文档细节，以及 benchmark README / `ai-plan` 恢复入口漂移
 
 ## 最近权威验证
+
+- `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - 结果：通过，`0 warning / 0 error`
+  - 备注：覆盖 `BenchmarkHostFactory` scoped stream helper、`StreamLifetimeBenchmarks` scoped 生命周期矩阵与 `README` 同步后的最小 Release build
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - 结果：通过
+  - 备注：`StreamLifetimeBenchmarks` 已稳定跑出 `24` 个 case；`Scoped + DrainAll` 当前约为 baseline `81.20 ns / 280 B`、`MediatR` `428.66 ns / 1224 B`、generated `692.05 ns / 3888 B`、reflection `716.61 ns / 3888 B`
+- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+  - 结果：通过
+- `git --git-dir=<repo>/.git/worktrees/GFramework-cqrs --work-tree=. diff --check`
+  - 结果：通过
 
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`

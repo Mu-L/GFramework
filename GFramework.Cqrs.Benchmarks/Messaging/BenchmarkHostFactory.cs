@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -219,6 +220,59 @@ internal static class BenchmarkHostFactory
     }
 
     /// <summary>
+    ///     在真实的 request 级作用域内创建一次 GFramework.CQRS stream，并让该作用域覆盖整个异步枚举周期。
+    /// </summary>
+    /// <typeparam name="TResponse">stream 响应元素类型。</typeparam>
+    /// <param name="rootContainer">冻结后的 benchmark 根容器，用于创建 request 作用域并提供注册元数据。</param>
+    /// <param name="runtimeLogger">当前 request 级 runtime 复用的日志器。</param>
+    /// <param name="context">当前 CQRS 分发上下文。</param>
+    /// <param name="request">要创建 stream 的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>绑定到单次显式作用域的异步响应序列。</returns>
+    /// <remarks>
+    ///     stream 与 request 的区别在于：handler 解析发生在建流时，但 scoped 依赖必须一直存活到枚举完成。
+    ///     因此这里返回一个包装后的 async iterator，把 scope 的释放时机推迟到调用方结束枚举之后，
+    ///     避免 `Scoped` handler 退化成“建流后立刻释放 scope，再在根容器语义下继续枚举”的错误模型。
+    /// </remarks>
+    internal static IAsyncEnumerable<TResponse> CreateScopedGFrameworkStream<TResponse>(
+        MicrosoftDiContainer rootContainer,
+        ILogger runtimeLogger,
+        ICqrsContext context,
+        GFramework.Cqrs.Abstractions.Cqrs.IStreamRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootContainer);
+        ArgumentNullException.ThrowIfNull(runtimeLogger);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(request);
+
+        return EnumerateScopedGFrameworkStreamAsync(rootContainer, runtimeLogger, context, request, cancellationToken);
+    }
+
+    /// <summary>
+    ///     在真实的 request 级作用域内创建一次 MediatR stream，并让该作用域覆盖整个异步枚举周期。
+    /// </summary>
+    /// <typeparam name="TResponse">stream 响应元素类型。</typeparam>
+    /// <param name="rootServiceProvider">当前 benchmark 的根 <see cref="ServiceProvider" />。</param>
+    /// <param name="request">要创建 stream 的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>绑定到单次显式作用域的异步响应序列。</returns>
+    /// <remarks>
+    ///     这里与 scoped request helper 保持同一组边界约束，但把 scope 生命周期延长到 stream 完整枚举结束，
+    ///     确保 `Scoped` handler 与依赖不会在首个元素产出前后被提前释放。
+    /// </remarks>
+    internal static IAsyncEnumerable<TResponse> CreateScopedMediatRStream<TResponse>(
+        ServiceProvider rootServiceProvider,
+        MediatR.IStreamRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootServiceProvider);
+        ArgumentNullException.ThrowIfNull(request);
+
+        return EnumerateScopedMediatRStreamAsync(rootServiceProvider, request, cancellationToken);
+    }
+
+    /// <summary>
     ///     创建承载 NuGet `Mediator` source-generated concrete mediator 的最小对照宿主。
     /// </summary>
     /// <param name="configure">补充当前场景的显式服务注册。</param>
@@ -250,5 +304,48 @@ internal static class BenchmarkHostFactory
         return candidateType.GetInterfaces().Any(interfaceType =>
             interfaceType.IsGenericType &&
             interfaceType.GetGenericTypeDefinition() == openGenericContract);
+    }
+
+    /// <summary>
+    ///     在单个显式作用域内创建并枚举 GFramework.CQRS stream。
+    /// </summary>
+    private static async IAsyncEnumerable<TResponse> EnumerateScopedGFrameworkStreamAsync<TResponse>(
+        MicrosoftDiContainer rootContainer,
+        ILogger runtimeLogger,
+        ICqrsContext context,
+        GFramework.Cqrs.Abstractions.Cqrs.IStreamRequest<TResponse> request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var scope = rootContainer.CreateScope();
+        var scopedContainer = new ScopedBenchmarkContainer(rootContainer, scope);
+        var runtime = GFramework.Cqrs.CqrsRuntimeFactory.CreateRuntime(
+            scopedContainer,
+            runtimeLogger);
+        var stream = runtime.CreateStream(context, request, cancellationToken);
+
+        await foreach (var response in stream.ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return response;
+        }
+    }
+
+    /// <summary>
+    ///     在单个显式作用域内创建并枚举 MediatR stream。
+    /// </summary>
+    private static async IAsyncEnumerable<TResponse> EnumerateScopedMediatRStreamAsync<TResponse>(
+        ServiceProvider rootServiceProvider,
+        MediatR.IStreamRequest<TResponse> request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var scope = rootServiceProvider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        var stream = mediator.CreateStream(request, cancellationToken);
+
+        await foreach (var response in stream.ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return response;
+        }
     }
 }

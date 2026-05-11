@@ -2,6 +2,31 @@
 
 ## 2026-05-11
 
+### 阶段：stream lifetime scoped 矩阵与 README 同步（CQRS-REWRITE-RP-130）
+
+- 延续 `$gframework-batch-boot 50`，在上一波把 `StreamingBenchmarks`、`StreamInvokerBenchmarks` 与 `RequestLifetimeBenchmarks` 扩成双观测 / scoped-request 基线后，本轮先不回到 runtime，而是只补齐 `StreamLifetimeBenchmarks` 的真实 `Scoped` stream 生命周期矩阵，并同步 benchmark `README`
+- 本轮主线程验收与修正：
+  - 接受 worker 留在 `BenchmarkHostFactory.cs` 的 scoped stream helper 方向，但把实现收口为“创建 scope -> 在 scope 内创建 runtime / mediator -> 让 scope 覆盖完整 async stream 枚举周期”的包装迭代器，而不是只在建流阶段短暂持有作用域
+  - `StreamLifetimeBenchmarks.cs` 现仅在 `Lifetime == Scoped` 时改走新的 scoped stream helper；`Singleton / Transient` 仍保持原有最小 steady-state 宿主，不把 scoped 宿主额外成本误混进其他矩阵
+  - `GFramework.Cqrs.Benchmarks/README.md` 已同步 `RequestLifetimeBenchmarks` 与 `StreamLifetimeBenchmarks` 的 `Scoped` 现状，并把 `StreamInvokerBenchmarks` `DrainAll` 标成 smoke-only 结论
+- 本轮验证：
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs GFramework.Cqrs.Benchmarks/Messaging/StreamLifetimeBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 备注：`24` 个 case 全部跑通；`Scoped + FirstItem` 约为 baseline `56.24 ns`、`MediatR` `338.82 ns`、reflection `612.49 ns`、generated `628.65 ns`；`Scoped + DrainAll` 约为 baseline `81.20 ns`、`MediatR` `428.66 ns`、generated `692.05 ns`、reflection `716.61 ns`
+- 本轮结论：
+  - `StreamLifetimeBenchmarks` 现在已经具备与 `RequestLifetimeBenchmarks` 对称的真实 scoped-host 作用域边界，后续不必再先修 benchmark 宿主才能观察 stream scoped lifetime
+  - `Scoped` 成本当前明显高于 `Singleton / Transient`，说明这条矩阵已经把“真实 scope 生命周期”本身的常量开销带入观测；这正是本轮想要确认的边界，而不是回归或异常
+  - 本轮并没有改变 `GFramework.Cqrs` runtime 或业务逻辑，只是把 benchmark 宿主语义与文档描述对齐到当前事实
+- 下一恢复点：
+  - 优先切到 benchmark 运行隔离层，只动 `GFramework.Cqrs.Benchmarks/Program.cs` 与必要的 `README` 说明，解决两个过滤 benchmark 并行运行时共享 auto-generated build/artifacts 目录的问题
+  - 新开的 explorer 已确认根因集中在 `Program.cs` 直接把 `args` 原样交给 `BenchmarkSwitcher.Run(args)`，当前没有为每次运行注入唯一 `ArtifactsPath`；不建议下一批回头改 `Fixture.cs` 或 benchmark 业务逻辑
+
 ### 阶段：benchmark 多 worker 波次与 scoped-host 基线（CQRS-REWRITE-RP-129）
 
 - 本轮从 `$gframework-batch-boot 50` 启动，但按 `gframework-multi-agent-batch` 规则把非阻塞工作拆成三条互不冲突的 benchmark 切片：
