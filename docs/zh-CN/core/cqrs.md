@@ -118,6 +118,7 @@ var playerId = await architecture.Context.SendRequestAsync(
 - 已解析处理器按容器顺序逐个执行
 - 首个处理器抛出异常时立即停止后续分发
 - 如果容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`
+- 默认 runtime 只消费一个 `INotificationPublisher`；如果容器里已经存在该注册，再调用 `UseNotificationPublisher*` 系列扩展会直接报错，而不是按“后注册覆盖前注册”处理
 
 如果你需要在组合根里明确表达“为什么选这条策略”，可以按下面的矩阵判断：
 
@@ -125,7 +126,7 @@ var playerId = await architecture.Context.SendRequestAsync(
 | --- | --- | --- | --- | --- |
 | `UseSequentialNotificationPublisher()` | 需要保持容器顺序，且希望首个失败立即停止 | 保证按容器顺序执行 | 首个处理器异常会中断后续处理器 | 这也是默认回退策略 |
 | `UseTaskWhenAllNotificationPublisher()` | 需要让全部处理器并行完成，再统一观察异常或取消 | 不保证顺序 | 不会在首个失败时中断其余处理器；全部结束后统一暴露结果 | 更适合语义补齐，不是性能优化开关 |
-| `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` | 需要接入自定义或第三方 publisher 策略 | 取决于实现 | 取决于实现 | 前者复用现成实例，后者让容器负责单例生命周期 |
+| `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` | 需要接入自定义或第三方 publisher 策略 | 取决于实现 | 取决于实现 | 前者复用现成实例，后者让容器负责单例生命周期；两者都要求容器此前尚未注册 `INotificationPublisher` |
 
 如果你想在组合根里显式保留默认顺序语义，也可以直接写成：
 
@@ -216,11 +217,12 @@ protected override void OnInitialize()
 2. 存在生成注册器时优先使用 `ICqrsHandlerRegistry`
 3. 当生成注册器同时暴露 generated request invoker provider 时，runtime 会把 request/response 类型对对应的 descriptor 预先接线到 dispatcher 缓存，后续请求分发优先消费这些 generated request invoker 元数据
 4. 当生成注册器同时暴露 generated stream invoker provider 时，runtime 会以同样方式优先消费 stream request 对应的 generated stream invoker descriptor；只有当前类型对未命中时，才回退到既有反射 stream binding
-5. 生成注册器不可用时记录告警并回退到反射路径；只有“未命中 generated descriptor”才会走反射绑定，已命中的不兼容元数据会直接抛出异常
-6. 当生成注册器携带 `CqrsReflectionFallbackAttribute` 元数据时，运行时会先完成生成注册器注册，再补剩余 handler
-7. `CqrsReflectionFallbackAttribute` 可以同时携带 `Type[]` 和 `string[]` 两类清单；运行时会优先复用直接 `Type` 条目，只对名称条目做定向 `Assembly.GetType(...)` 查找
-8. 只有旧版空 marker 或生成注册器不可用时，才会回到整程序集反射扫描
-9. 同一程序集按稳定键去重，避免重复注册
+5. generated invoker 只覆盖 request 与 stream 两类单次分发元数据；notification handler 仍通过已注册的 `INotificationHandler<>` 集合和选定的 `INotificationPublisher` 参与分发，不存在对应的 generated notification invoker 通道
+6. 生成注册器不可用时记录告警并回退到反射路径；只有“未命中 generated descriptor”才会走反射 binding 创建，已成功登记到缓存的类型对不会再回退到另一条 generated 通道
+7. 当生成注册器携带 `CqrsReflectionFallbackAttribute` 元数据时，运行时会先完成生成注册器注册，再补剩余 handler
+8. `CqrsReflectionFallbackAttribute` 可以同时携带 `Type[]` 和 `string[]` 两类清单；运行时会优先复用直接 `Type` 条目，只对名称条目做定向 `Assembly.GetType(...)` 查找
+9. 只有 fallback 元数据为空、仍是旧版空 marker 语义，或生成注册器整体不可用时，才会回到整程序集反射扫描
+10. 同一程序集按稳定键去重，避免重复注册
 
 换句话说，声明 fallback 特性本身不等于“整包反射扫描”。当前推荐理解是：生成注册器负责能静态表达的部分，fallback 只补它覆盖不到的 handler。
 
@@ -231,7 +233,7 @@ protected override void OnInitialize()
 - stream invoker provider / descriptor
   - 面向 `CreateStream(...)` 触发的流式请求分发
 
-两者的共同点都是“优先消费 generated invoker 元数据，未命中时保留既有反射绑定作为兜底”，而不是要求业务侧切换到另一套 runtime 入口。
+两者的共同点都是“优先消费 generated invoker 元数据，未命中时保留既有反射绑定作为兜底”，而不是要求业务侧切换到另一套 runtime 入口。通知发布不在这组 generated invoker 能力里；它始终沿用 runtime 解析出的 handler 集合与当前 publisher 策略。
 
 对接入方来说，更关键的 reader-facing 语义是：安装 `Cqrs.SourceGenerators` 后，不要求“所有 handler 都能被生成代码直接引用”才有收益。
 即使仍有 fallback，runtime 也会先消费 generated registry，再只对剩余 handler 做定向补扫；只有旧版 marker 语义或空 fallback 元数据才会退回整程序集扫描。

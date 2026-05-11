@@ -88,16 +88,124 @@ internal sealed class CqrsRegistrationServiceTests
     }
 
     /// <summary>
+    ///     验证当 <see cref="Assembly.FullName" /> 缺失时，协调器会退化到 <see cref="AssemblyName.Name" /> 作为稳定程序集键。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Fallback_To_Simple_Name_When_Full_Name_Is_Missing()
+    {
+        var logger = new TestLogger("DefaultCqrsRegistrationService", LogLevel.Debug);
+        var registrar = new Mock<ICqrsHandlerRegistrar>(MockBehavior.Strict);
+        var firstAssembly = CreateAssembly(
+            assemblyFullName: null,
+            assemblySimpleName: "GFramework.Cqrs.Tests.SimpleNameFallback",
+            assemblyDisplayName: "DisplayName-A");
+        var secondAssembly = CreateAssembly(
+            assemblyFullName: null,
+            assemblySimpleName: "GFramework.Cqrs.Tests.SimpleNameFallback",
+            assemblyDisplayName: "DisplayName-B");
+        IEnumerable<Assembly>? registeredAssemblies = null;
+
+        registrar
+            .Setup(static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()))
+            .Callback<IEnumerable<Assembly>>(assemblies => registeredAssemblies = assemblies.ToArray());
+
+        var service = CqrsRuntimeFactory.CreateRegistrationService(registrar.Object, logger);
+
+        service.RegisterHandlers([firstAssembly.Object]);
+        service.RegisterHandlers([secondAssembly.Object]);
+
+        registrar.Verify(
+            static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()),
+            Times.Once);
+        Assert.Multiple(() =>
+        {
+            Assert.That(registeredAssemblies, Is.EqualTo([firstAssembly.Object]));
+            var debugMessages = logger.Logs
+                .Where(static log => log.Level == LogLevel.Debug)
+                .Select(static log => log.Message)
+                .ToArray();
+            Assert.That(debugMessages, Has.Length.EqualTo(1));
+            Assert.That(debugMessages[0], Does.Contain("GFramework.Cqrs.Tests.SimpleNameFallback"));
+            Assert.That(debugMessages[0], Does.Not.Contain("DisplayName-B"));
+        });
+    }
+
+    /// <summary>
+    ///     验证当 <see cref="Assembly.FullName" /> 与 <see cref="AssemblyName.Name" /> 均缺失时，
+    ///     协调器会退化到 <see cref="object.ToString" /> 结果作为稳定程序集键。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Fallback_To_ToString_When_Full_Name_And_Simple_Name_Are_Missing()
+    {
+        var logger = new TestLogger("DefaultCqrsRegistrationService", LogLevel.Debug);
+        var registrar = new Mock<ICqrsHandlerRegistrar>(MockBehavior.Strict);
+        const string assemblyDisplayName = "GFramework.Cqrs.Tests.ToStringFallback";
+        var firstAssembly = CreateAssembly(
+            assemblyFullName: null,
+            assemblySimpleName: null,
+            assemblyDisplayName: assemblyDisplayName);
+        var secondAssembly = CreateAssembly(
+            assemblyFullName: null,
+            assemblySimpleName: null,
+            assemblyDisplayName: assemblyDisplayName);
+        IEnumerable<Assembly>? registeredAssemblies = null;
+
+        registrar
+            .Setup(static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()))
+            .Callback<IEnumerable<Assembly>>(assemblies => registeredAssemblies = assemblies.ToArray());
+
+        var service = CqrsRuntimeFactory.CreateRegistrationService(registrar.Object, logger);
+
+        service.RegisterHandlers([firstAssembly.Object]);
+        service.RegisterHandlers([secondAssembly.Object]);
+
+        registrar.Verify(
+            static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()),
+            Times.Once);
+        Assert.Multiple(() =>
+        {
+            Assert.That(registeredAssemblies, Is.EqualTo([firstAssembly.Object]));
+            var debugMessages = logger.Logs
+                .Where(static log => log.Level == LogLevel.Debug)
+                .Select(static log => log.Message)
+                .ToArray();
+            Assert.That(debugMessages, Has.Length.EqualTo(1));
+            Assert.That(debugMessages[0], Does.Contain(assemblyDisplayName));
+            Assert.That(debugMessages[0], Does.Contain("already registered"));
+        });
+    }
+
+    /// <summary>
     ///     创建一个带稳定程序集键的程序集 mock，用于模拟不同 <see cref="Assembly" /> 实例表示同一程序集的场景。
     /// </summary>
     /// <param name="assemblyFullName">要返回的程序集完整名称。</param>
     /// <returns>配置好完整名称的程序集 mock。</returns>
     private static Mock<Assembly> CreateAssembly(string assemblyFullName)
     {
+        return CreateAssembly(assemblyFullName, assemblySimpleName: null, assemblyDisplayName: assemblyFullName);
+    }
+
+    /// <summary>
+    ///     创建一个可配置程序集元数据退化路径的程序集 mock，用于验证稳定程序集键的回退顺序。
+    /// </summary>
+    /// <param name="assemblyFullName">要返回的程序集完整名称；为 <see langword="null" /> 时模拟缺失完整名称。</param>
+    /// <param name="assemblySimpleName">要返回的程序集简单名称；为 <see langword="null" /> 时模拟缺失简单名称。</param>
+    /// <param name="assemblyDisplayName">当需要退化到 <see cref="object.ToString" /> 时返回的显示名称。</param>
+    /// <returns>配置好程序集元数据的程序集 mock。</returns>
+    private static Mock<Assembly> CreateAssembly(string? assemblyFullName, string? assemblySimpleName, string assemblyDisplayName)
+    {
         var assembly = new Mock<Assembly>();
+        var assemblyName = new AssemblyName();
         assembly
             .SetupGet(static currentAssembly => currentAssembly.FullName)
             .Returns(assemblyFullName);
+        assemblyName.Name = assemblySimpleName;
+        assembly
+            .Setup(static currentAssembly => currentAssembly.GetName())
+            .Returns(assemblyName);
+        assembly
+            .Setup(static currentAssembly => currentAssembly.ToString())
+            .Returns(assemblyDisplayName);
 
         return assembly;
     }

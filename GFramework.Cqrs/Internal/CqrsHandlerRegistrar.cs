@@ -16,6 +16,13 @@ namespace GFramework.Cqrs.Internal;
 /// </summary>
 internal static class CqrsHandlerRegistrar
 {
+    /// <summary>
+    ///     描述 generated invoker descriptor 在 registrar 预热阶段使用的 request/response 类型对键。
+    /// </summary>
+    /// <param name="RequestType">请求运行时类型。</param>
+    /// <param name="ResponseType">响应运行时类型。</param>
+    private readonly record struct InvokerDescriptorKey(Type RequestType, Type ResponseType);
+
     // 卸载安全的进程级缓存：程序集元数据只按弱键复用。
     // 若程序集来自 collectible AssemblyLoadContext，被回收后会重新分析，而不会被静态缓存永久钉住。
     private static readonly WeakKeyCache<Assembly, AssemblyRegistrationMetadata> AssemblyMetadataCache =
@@ -321,8 +328,49 @@ internal static class CqrsHandlerRegistrar
         if (provider is not IEnumeratesCqrsRequestInvokerDescriptors descriptorSource)
             return;
 
-        foreach (var descriptorEntry in descriptorSource.GetDescriptors())
+        IReadOnlyList<CqrsRequestInvokerDescriptorEntry>? descriptors;
+        try
         {
+            descriptors = descriptorSource.GetDescriptors();
+        }
+        catch (Exception exception)
+        {
+            logger.Warn(
+                $"Failed to enumerate generated CQRS request invoker descriptors from provider {provider.GetType().FullName} in assembly {assemblyName}. Falling back to runtime reflection for request invokers: {exception.Message}");
+            return;
+        }
+
+        if (descriptors is null)
+        {
+            logger.Warn(
+                $"Ignoring generated CQRS request invoker descriptors from provider {provider.GetType().FullName} in assembly {assemblyName} because GetDescriptors() returned null.");
+            return;
+        }
+
+        var registeredKeys = new HashSet<InvokerDescriptorKey>();
+        foreach (var descriptorEntry in descriptors)
+        {
+            if (descriptorEntry is null)
+            {
+                logger.Warn(
+                    $"Ignoring null generated CQRS request invoker descriptor entry from provider {provider.GetType().FullName} in assembly {assemblyName}.");
+                continue;
+            }
+
+            var descriptorKey = new InvokerDescriptorKey(
+                descriptorEntry.RequestType,
+                descriptorEntry.ResponseType);
+
+            if (!TryValidateEnumeratedRequestInvokerDescriptor(provider, descriptorEntry, assemblyName, logger))
+                continue;
+
+            if (!registeredKeys.Add(descriptorKey))
+            {
+                logger.Warn(
+                    $"Ignoring duplicate generated CQRS request invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName}.");
+                continue;
+            }
+
             CqrsDispatcher.RegisterGeneratedRequestInvokerDescriptor(
                 descriptorEntry.RequestType,
                 descriptorEntry.ResponseType,
@@ -376,14 +424,145 @@ internal static class CqrsHandlerRegistrar
         if (provider is not IEnumeratesCqrsStreamInvokerDescriptors descriptorSource)
             return;
 
-        foreach (var descriptorEntry in descriptorSource.GetDescriptors())
+        IReadOnlyList<CqrsStreamInvokerDescriptorEntry>? descriptors;
+        try
         {
+            descriptors = descriptorSource.GetDescriptors();
+        }
+        catch (Exception exception)
+        {
+            logger.Warn(
+                $"Failed to enumerate generated CQRS stream invoker descriptors from provider {provider.GetType().FullName} in assembly {assemblyName}. Falling back to runtime reflection for stream invokers: {exception.Message}");
+            return;
+        }
+
+        if (descriptors is null)
+        {
+            logger.Warn(
+                $"Ignoring generated CQRS stream invoker descriptors from provider {provider.GetType().FullName} in assembly {assemblyName} because GetDescriptors() returned null.");
+            return;
+        }
+
+        var registeredKeys = new HashSet<InvokerDescriptorKey>();
+        foreach (var descriptorEntry in descriptors)
+        {
+            if (descriptorEntry is null)
+            {
+                logger.Warn(
+                    $"Ignoring null generated CQRS stream invoker descriptor entry from provider {provider.GetType().FullName} in assembly {assemblyName}.");
+                continue;
+            }
+
+            var descriptorKey = new InvokerDescriptorKey(
+                descriptorEntry.RequestType,
+                descriptorEntry.ResponseType);
+
+            if (!TryValidateEnumeratedStreamInvokerDescriptor(provider, descriptorEntry, assemblyName, logger))
+                continue;
+
+            if (!registeredKeys.Add(descriptorKey))
+            {
+                logger.Warn(
+                    $"Ignoring duplicate generated CQRS stream invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName}.");
+                continue;
+            }
+
             CqrsDispatcher.RegisterGeneratedStreamInvokerDescriptor(
                 descriptorEntry.RequestType,
                 descriptorEntry.ResponseType,
                 descriptorEntry.Descriptor);
             logger.Debug(
                 $"Registered generated CQRS stream invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from assembly {assemblyName}.");
+        }
+    }
+
+    /// <summary>
+    ///     校验 request descriptor 枚举项是否与 provider 的显式查询结果保持一致。
+    /// </summary>
+    /// <param name="provider">当前正在预热的 request invoker provider。</param>
+    /// <param name="descriptorEntry">当前枚举到的描述符条目。</param>
+    /// <param name="assemblyName">当前程序集的稳定名称。</param>
+    /// <param name="logger">日志记录器。</param>
+    /// <returns>当该枚举项可安全写入 dispatcher 缓存时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    private static bool TryValidateEnumeratedRequestInvokerDescriptor(
+        ICqrsRequestInvokerProvider provider,
+        CqrsRequestInvokerDescriptorEntry descriptorEntry,
+        string assemblyName,
+        ILogger logger)
+    {
+        try
+        {
+            if (!provider.TryGetDescriptor(
+                    descriptorEntry.RequestType,
+                    descriptorEntry.ResponseType,
+                    out var resolvedDescriptor) ||
+                resolvedDescriptor is null)
+            {
+                logger.Warn(
+                    $"Ignoring generated CQRS request invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName} because TryGetDescriptor did not return a matching descriptor.");
+                return false;
+            }
+
+            if (!resolvedDescriptor.InvokerMethod.Equals(descriptorEntry.Descriptor.InvokerMethod) ||
+                resolvedDescriptor.HandlerType != descriptorEntry.Descriptor.HandlerType)
+            {
+                logger.Warn(
+                    $"Ignoring generated CQRS request invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName} because the enumerated descriptor does not match TryGetDescriptor.");
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            logger.Warn(
+                $"Ignoring generated CQRS request invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName} because TryGetDescriptor threw: {exception.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     校验 stream descriptor 枚举项是否与 provider 的显式查询结果保持一致。
+    /// </summary>
+    /// <param name="provider">当前正在预热的 stream invoker provider。</param>
+    /// <param name="descriptorEntry">当前枚举到的描述符条目。</param>
+    /// <param name="assemblyName">当前程序集的稳定名称。</param>
+    /// <param name="logger">日志记录器。</param>
+    /// <returns>当该枚举项可安全写入 dispatcher 缓存时返回 <see langword="true" />；否则返回 <see langword="false" />。</returns>
+    private static bool TryValidateEnumeratedStreamInvokerDescriptor(
+        ICqrsStreamInvokerProvider provider,
+        CqrsStreamInvokerDescriptorEntry descriptorEntry,
+        string assemblyName,
+        ILogger logger)
+    {
+        try
+        {
+            if (!provider.TryGetDescriptor(
+                    descriptorEntry.RequestType,
+                    descriptorEntry.ResponseType,
+                    out var resolvedDescriptor) ||
+                resolvedDescriptor is null)
+            {
+                logger.Warn(
+                    $"Ignoring generated CQRS stream invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName} because TryGetDescriptor did not return a matching descriptor.");
+                return false;
+            }
+
+            if (!resolvedDescriptor.InvokerMethod.Equals(descriptorEntry.Descriptor.InvokerMethod) ||
+                resolvedDescriptor.HandlerType != descriptorEntry.Descriptor.HandlerType)
+            {
+                logger.Warn(
+                    $"Ignoring generated CQRS stream invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName} because the enumerated descriptor does not match TryGetDescriptor.");
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            logger.Warn(
+                $"Ignoring generated CQRS stream invoker descriptor for {descriptorEntry.RequestType.FullName} -> {descriptorEntry.ResponseType.FullName} from provider {provider.GetType().FullName} in assembly {assemblyName} because TryGetDescriptor threw: {exception.Message}");
+            return false;
         }
     }
 

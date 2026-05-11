@@ -92,6 +92,70 @@ internal sealed class CqrsNotificationPublisherTests
     }
 
     /// <summary>
+    ///     验证当容器里可见多个通知发布策略时，dispatcher 会拒绝在歧义状态下继续发布。
+    /// </summary>
+    [Test]
+    public void PublishAsync_Should_Throw_When_Multiple_NotificationPublishers_Are_Registered()
+    {
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationHandler<PublisherNotification>)))
+                    .Returns([new RecordingNotificationHandler("only", [])]);
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationPublisher)))
+                    .Returns(
+                    [
+                        new TrackingNotificationPublisher(),
+                        new TrackingNotificationPublisher()
+                    ]);
+            });
+
+        Assert.That(
+            async () => await runtime.PublishAsync(new FakeCqrsContext(), new PublisherNotification()).ConfigureAwait(false),
+            Throws.InvalidOperationException.With.Message.EqualTo(
+                $"Multiple {typeof(INotificationPublisher).FullName} instances are registered. Remove duplicate notification publisher strategies before publishing notifications."));
+    }
+
+    /// <summary>
+    ///     验证 dispatcher 在首次发布时解析通知发布器后，会复用同一实例并停止继续查询容器。
+    /// </summary>
+    [Test]
+    public async Task PublishAsync_Should_Cache_Resolved_NotificationPublisher_After_First_Publish()
+    {
+        var firstPublisher = new TrackingNotificationPublisher();
+        var secondPublisher = new TrackingNotificationPublisher();
+        var notificationPublisherLookupCount = 0;
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationHandler<PublisherNotification>)))
+                    .Returns([new RecordingNotificationHandler("only", [])]);
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationPublisher)))
+                    .Returns(() =>
+                    {
+                        notificationPublisherLookupCount++;
+                        return notificationPublisherLookupCount switch
+                        {
+                            1 => [firstPublisher],
+                            2 => [secondPublisher],
+                            _ => throw new AssertionException("Notification publisher should be resolved at most once.")
+                        };
+                    });
+            });
+
+        await runtime.PublishAsync(new FakeCqrsContext(), new PublisherNotification()).ConfigureAwait(false);
+        await runtime.PublishAsync(new FakeCqrsContext(), new PublisherNotification()).ConfigureAwait(false);
+
+        Assert.That(notificationPublisherLookupCount, Is.EqualTo(1));
+        Assert.That(firstPublisher.PublishCallCount, Is.EqualTo(2));
+        Assert.That(secondPublisher.PublishCallCount, Is.Zero);
+    }
+
+    /// <summary>
     ///     验证内置 `TaskWhenAll` 发布器会继续调度所有处理器，而不是沿用默认顺序发布器的失败即停语义。
     /// </summary>
     [Test]
@@ -263,6 +327,11 @@ internal sealed class CqrsNotificationPublisherTests
         public bool WasCalled { get; private set; }
 
         /// <summary>
+        ///     获取当前发布器累计执行发布的次数。
+        /// </summary>
+        public int PublishCallCount { get; private set; }
+
+        /// <summary>
         ///     记录当前发布器已被调用，并继续按当前顺序执行所有处理器。
         /// </summary>
         /// <typeparam name="TNotification">通知类型。</typeparam>
@@ -275,6 +344,7 @@ internal sealed class CqrsNotificationPublisherTests
             where TNotification : INotification
         {
             WasCalled = true;
+            PublishCallCount++;
 
             foreach (var handler in context.Handlers)
             {

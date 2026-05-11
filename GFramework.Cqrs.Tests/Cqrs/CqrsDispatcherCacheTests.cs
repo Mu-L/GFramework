@@ -310,6 +310,60 @@ internal sealed class CqrsDispatcherCacheTests
     }
 
     /// <summary>
+    ///     验证同一 request dispatch binding 先走零行为直连路径时不会提前创建 pipeline executor，
+    ///     后续另一 dispatcher 命中相同 binding 且存在行为时，仍会按实际行为数量补建缓存 executor。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Create_Request_Pipeline_Executor_Only_When_Shared_Binding_Sees_Behaviors()
+    {
+        var requestBindings = GetCacheField("RequestDispatchBindings");
+        var behaviorType = typeof(IPipelineBehavior<DispatcherPipelineCacheRequest, int>);
+        using var zeroBehaviorContainer = CreateFrozenContainer(
+            new DispatcherCacheFixtureOptions
+            {
+                IncludeRequestPipelineCacheBehavior = false
+            });
+        var zeroBehaviorContext = new ArchitectureContext(zeroBehaviorContainer);
+        var behaviorContext = new ArchitectureContext(_container!);
+        var zeroBehaviorDispatcher = GetDispatcherFromContext(zeroBehaviorContext);
+        var behaviorDispatcher = GetDispatcherFromContext(behaviorContext);
+
+        await zeroBehaviorContext.SendRequestAsync(new DispatcherPipelineCacheRequest());
+
+        var bindingAfterZeroBehaviorDispatch = GetPairCacheValue(
+            requestBindings,
+            typeof(DispatcherPipelineCacheRequest),
+            typeof(int));
+        var executorAfterZeroBehaviorDispatch = GetRequestPipelineExecutorValue(
+            requestBindings,
+            typeof(DispatcherPipelineCacheRequest),
+            typeof(int),
+            1);
+
+        await behaviorContext.SendRequestAsync(new DispatcherPipelineCacheRequest());
+
+        var bindingAfterBehaviorDispatch = GetPairCacheValue(
+            requestBindings,
+            typeof(DispatcherPipelineCacheRequest),
+            typeof(int));
+        var executorAfterBehaviorDispatch = GetRequestPipelineExecutorValue(
+            requestBindings,
+            typeof(DispatcherPipelineCacheRequest),
+            typeof(int),
+            1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(bindingAfterZeroBehaviorDispatch, Is.Not.Null);
+            Assert.That(bindingAfterBehaviorDispatch, Is.SameAs(bindingAfterZeroBehaviorDispatch));
+            Assert.That(executorAfterZeroBehaviorDispatch, Is.Null);
+            Assert.That(executorAfterBehaviorDispatch, Is.Not.Null);
+            AssertRequestBehaviorPresenceEquals(zeroBehaviorDispatcher, behaviorType, false);
+            AssertRequestBehaviorPresenceEquals(behaviorDispatcher, behaviorType, true);
+        });
+    }
+
+    /// <summary>
     ///     验证 stream pipeline executor 会按行为数量在 binding 内首次创建并在后续建流中复用。
     /// </summary>
     [Test]
@@ -371,6 +425,60 @@ internal sealed class CqrsDispatcherCacheTests
                     typeof(int),
                     2),
                 Is.SameAs(twoBehaviorExecutor));
+        });
+    }
+
+    /// <summary>
+    ///     验证同一 stream dispatch binding 先走零行为直连路径时不会提前创建 pipeline executor，
+    ///     后续另一 dispatcher 命中相同 binding 且存在行为时，仍会按实际行为数量补建缓存 executor。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Create_Stream_Pipeline_Executor_Only_When_Shared_Binding_Sees_Behaviors()
+    {
+        var streamBindings = GetCacheField("StreamDispatchBindings");
+        var behaviorType = typeof(IStreamPipelineBehavior<DispatcherCacheStreamRequest, int>);
+        using var zeroBehaviorContainer = CreateFrozenContainer(
+            new DispatcherCacheFixtureOptions
+            {
+                IncludeStreamPipelineCacheBehavior = false
+            });
+        var zeroBehaviorContext = new ArchitectureContext(zeroBehaviorContainer);
+        var behaviorContext = new ArchitectureContext(_container!);
+        var zeroBehaviorDispatcher = GetDispatcherFromContext(zeroBehaviorContext);
+        var behaviorDispatcher = GetDispatcherFromContext(behaviorContext);
+
+        await DrainAsync(zeroBehaviorContext.CreateStream(new DispatcherCacheStreamRequest()));
+
+        var bindingAfterZeroBehaviorDispatch = GetPairCacheValue(
+            streamBindings,
+            typeof(DispatcherCacheStreamRequest),
+            typeof(int));
+        var executorAfterZeroBehaviorDispatch = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherCacheStreamRequest),
+            typeof(int),
+            1);
+
+        await DrainAsync(behaviorContext.CreateStream(new DispatcherCacheStreamRequest()));
+
+        var bindingAfterBehaviorDispatch = GetPairCacheValue(
+            streamBindings,
+            typeof(DispatcherCacheStreamRequest),
+            typeof(int));
+        var executorAfterBehaviorDispatch = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherCacheStreamRequest),
+            typeof(int),
+            1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(bindingAfterZeroBehaviorDispatch, Is.Not.Null);
+            Assert.That(bindingAfterBehaviorDispatch, Is.SameAs(bindingAfterZeroBehaviorDispatch));
+            Assert.That(executorAfterZeroBehaviorDispatch, Is.Null);
+            Assert.That(executorAfterBehaviorDispatch, Is.Not.Null);
+            AssertStreamBehaviorPresenceEquals(zeroBehaviorDispatcher, behaviorType, false);
+            AssertStreamBehaviorPresenceEquals(behaviorDispatcher, behaviorType, true);
         });
     }
 
@@ -487,6 +595,71 @@ internal sealed class CqrsDispatcherCacheTests
             Assert.That(handlerSnapshots[0].Context, Is.SameAs(firstContext));
             Assert.That(handlerSnapshots[1].DispatchId, Is.EqualTo("second"));
             Assert.That(handlerSnapshots[1].Context, Is.SameAs(secondContext));
+            Assert.That(handlerSnapshots[1].Context, Is.Not.SameAs(handlerSnapshots[0].Context));
+            Assert.That(handlerSnapshots[1].InstanceId, Is.Not.EqualTo(handlerSnapshots[0].InstanceId));
+        });
+    }
+
+    /// <summary>
+    ///     验证同一 request dispatch binding 先在零行为 dispatcher 上命中后，
+    ///     后续切换到存在行为的 dispatcher 仍会重新解析 behavior/handler，并为当前上下文重新注入架构实例。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Reinject_Current_Request_Context_When_Shared_Binding_Switches_From_Zero_Pipeline()
+    {
+        DispatcherPipelineContextRefreshState.Reset();
+
+        var requestBindings = GetCacheField("RequestDispatchBindings");
+        using var zeroBehaviorContainer = CreateFrozenContainer(
+            new DispatcherCacheFixtureOptions
+            {
+                IncludeRequestPipelineContextRefreshBehavior = false
+            });
+        var zeroBehaviorContext = new ArchitectureContext(zeroBehaviorContainer);
+        var behaviorContext = new ArchitectureContext(_container!);
+
+        await zeroBehaviorContext.SendRequestAsync(new DispatcherPipelineContextRefreshRequest("without-behavior"));
+
+        var bindingAfterZeroBehaviorDispatch = GetPairCacheValue(
+            requestBindings,
+            typeof(DispatcherPipelineContextRefreshRequest),
+            typeof(int));
+        var executorAfterZeroBehaviorDispatch = GetRequestPipelineExecutorValue(
+            requestBindings,
+            typeof(DispatcherPipelineContextRefreshRequest),
+            typeof(int),
+            1);
+
+        await behaviorContext.SendRequestAsync(new DispatcherPipelineContextRefreshRequest("with-behavior"));
+
+        var bindingAfterBehaviorDispatch = GetPairCacheValue(
+            requestBindings,
+            typeof(DispatcherPipelineContextRefreshRequest),
+            typeof(int));
+        var executorAfterBehaviorDispatch = GetRequestPipelineExecutorValue(
+            requestBindings,
+            typeof(DispatcherPipelineContextRefreshRequest),
+            typeof(int),
+            1);
+        var behaviorSnapshots = DispatcherPipelineContextRefreshState.BehaviorSnapshots.ToArray();
+        var handlerSnapshots = DispatcherPipelineContextRefreshState.HandlerSnapshots.ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(bindingAfterZeroBehaviorDispatch, Is.Not.Null);
+            Assert.That(bindingAfterBehaviorDispatch, Is.SameAs(bindingAfterZeroBehaviorDispatch));
+            Assert.That(executorAfterZeroBehaviorDispatch, Is.Null);
+            Assert.That(executorAfterBehaviorDispatch, Is.Not.Null);
+
+            Assert.That(behaviorSnapshots, Has.Length.EqualTo(1));
+            Assert.That(behaviorSnapshots[0].DispatchId, Is.EqualTo("with-behavior"));
+            Assert.That(behaviorSnapshots[0].Context, Is.SameAs(behaviorContext));
+
+            Assert.That(handlerSnapshots, Has.Length.EqualTo(2));
+            Assert.That(handlerSnapshots[0].DispatchId, Is.EqualTo("without-behavior"));
+            Assert.That(handlerSnapshots[0].Context, Is.SameAs(zeroBehaviorContext));
+            Assert.That(handlerSnapshots[1].DispatchId, Is.EqualTo("with-behavior"));
+            Assert.That(handlerSnapshots[1].Context, Is.SameAs(behaviorContext));
             Assert.That(handlerSnapshots[1].Context, Is.Not.SameAs(handlerSnapshots[0].Context));
             Assert.That(handlerSnapshots[1].InstanceId, Is.Not.EqualTo(handlerSnapshots[0].InstanceId));
         });
@@ -633,6 +806,108 @@ internal sealed class CqrsDispatcherCacheTests
     }
 
     /// <summary>
+    ///     验证同一 stream dispatch binding 先在零行为 dispatcher 上命中后，
+    ///     后续切换到存在行为的 dispatcher 仍会重新解析 behavior/handler，并为当前上下文重新注入架构实例。
+    /// </summary>
+    [Test]
+    public async Task Dispatcher_Should_Reinject_Current_Stream_Context_When_Shared_Binding_Switches_From_Zero_Pipeline()
+    {
+        DispatcherStreamContextRefreshState.Reset();
+
+        var streamBindings = GetCacheField("StreamDispatchBindings");
+        using var zeroBehaviorContainer = CreateFrozenContainer(
+            new DispatcherCacheFixtureOptions
+            {
+                IncludeStreamPipelineContextRefreshBehavior = false
+            });
+        var zeroBehaviorContext = new ArchitectureContext(zeroBehaviorContainer);
+        var behaviorContext = new ArchitectureContext(_container!);
+
+        await DrainAsync(zeroBehaviorContext.CreateStream(new DispatcherStreamContextRefreshRequest("without-behavior")));
+
+        var bindingAfterZeroBehaviorDispatch = GetPairCacheValue(
+            streamBindings,
+            typeof(DispatcherStreamContextRefreshRequest),
+            typeof(int));
+        var executorAfterZeroBehaviorDispatch = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherStreamContextRefreshRequest),
+            typeof(int),
+            1);
+
+        await DrainAsync(behaviorContext.CreateStream(new DispatcherStreamContextRefreshRequest("with-behavior")));
+
+        var bindingAfterBehaviorDispatch = GetPairCacheValue(
+            streamBindings,
+            typeof(DispatcherStreamContextRefreshRequest),
+            typeof(int));
+        var executorAfterBehaviorDispatch = GetStreamPipelineExecutorValue(
+            streamBindings,
+            typeof(DispatcherStreamContextRefreshRequest),
+            typeof(int),
+            1);
+        var behaviorSnapshots = DispatcherStreamContextRefreshState.BehaviorSnapshots.ToArray();
+        var handlerSnapshots = DispatcherStreamContextRefreshState.HandlerSnapshots.ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(bindingAfterZeroBehaviorDispatch, Is.Not.Null);
+            Assert.That(bindingAfterBehaviorDispatch, Is.SameAs(bindingAfterZeroBehaviorDispatch));
+            Assert.That(executorAfterZeroBehaviorDispatch, Is.Null);
+            Assert.That(executorAfterBehaviorDispatch, Is.Not.Null);
+
+            Assert.That(behaviorSnapshots, Has.Length.EqualTo(1));
+            Assert.That(behaviorSnapshots[0].DispatchId, Is.EqualTo("with-behavior"));
+            Assert.That(behaviorSnapshots[0].Context, Is.SameAs(behaviorContext));
+
+            Assert.That(handlerSnapshots, Has.Length.EqualTo(2));
+            Assert.That(handlerSnapshots[0].DispatchId, Is.EqualTo("without-behavior"));
+            Assert.That(handlerSnapshots[0].Context, Is.SameAs(zeroBehaviorContext));
+            Assert.That(handlerSnapshots[1].DispatchId, Is.EqualTo("with-behavior"));
+            Assert.That(handlerSnapshots[1].Context, Is.SameAs(behaviorContext));
+            Assert.That(handlerSnapshots[1].Context, Is.Not.SameAs(handlerSnapshots[0].Context));
+            Assert.That(handlerSnapshots[1].InstanceId, Is.Not.EqualTo(handlerSnapshots[0].InstanceId));
+        });
+    }
+
+    /// <summary>
+    ///     描述缓存测试 fixture 需要启用的可选 pipeline 行为集合，
+    ///     用于构造“同一静态 binding 对应不同 dispatcher 注册可见性”的组合场景。
+    /// </summary>
+    private sealed class DispatcherCacheFixtureOptions
+    {
+        /// <summary>
+        ///     获取是否注册 <see cref="DispatcherPipelineCacheBehavior" />。
+        /// </summary>
+        public bool IncludeRequestPipelineCacheBehavior { get; init; } = true;
+
+        /// <summary>
+        ///     获取是否注册 <see cref="DispatcherPipelineContextRefreshBehavior" />。
+        /// </summary>
+        public bool IncludeRequestPipelineContextRefreshBehavior { get; init; } = true;
+
+        /// <summary>
+        ///     获取是否注册 request 顺序验证所需的两层 pipeline 行为。
+        /// </summary>
+        public bool IncludeRequestPipelineOrderBehaviors { get; init; } = true;
+
+        /// <summary>
+        ///     获取是否注册 <see cref="DispatcherStreamPipelineCacheBehavior" />。
+        /// </summary>
+        public bool IncludeStreamPipelineCacheBehavior { get; init; } = true;
+
+        /// <summary>
+        ///     获取是否注册 <see cref="DispatcherStreamPipelineContextRefreshBehavior" />。
+        /// </summary>
+        public bool IncludeStreamPipelineContextRefreshBehavior { get; init; } = true;
+
+        /// <summary>
+        ///     获取是否注册 stream 顺序验证所需的两层 pipeline 行为。
+        /// </summary>
+        public bool IncludeStreamPipelineOrderBehaviors { get; init; } = true;
+    }
+
+    /// <summary>
     ///     通过反射读取 dispatcher 的静态缓存对象。
     /// </summary>
     private static object GetCacheField(string fieldName)
@@ -679,10 +954,11 @@ internal sealed class CqrsDispatcherCacheTests
     ///     创建与当前 fixture 注册形状一致、但拥有独立 runtime 实例的冻结容器，
     ///     用于验证 dispatcher 的实例级缓存不会跨容器共享。
     /// </summary>
-    private static MicrosoftDiContainer CreateFrozenContainer()
+    /// <param name="options">控制当前隔离容器要启用哪些可选 pipeline 行为的配置。</param>
+    private static MicrosoftDiContainer CreateFrozenContainer(DispatcherCacheFixtureOptions? options = null)
     {
         var container = new MicrosoftDiContainer();
-        ConfigureDispatcherCacheFixture(container);
+        ConfigureDispatcherCacheFixture(container, options);
 
         container.Freeze();
         return container;
@@ -692,16 +968,44 @@ internal sealed class CqrsDispatcherCacheTests
     ///     组装当前 fixture 依赖的 CQRS 容器注册形状，确保默认上下文与隔离容器复用同一份装配基线。
     /// </summary>
     /// <param name="container">待补齐 CQRS 注册的目标容器。</param>
-    private static void ConfigureDispatcherCacheFixture(MicrosoftDiContainer container)
+    /// <param name="options">控制是否跳过特定 pipeline 行为注册的可选配置。</param>
+    private static void ConfigureDispatcherCacheFixture(
+        MicrosoftDiContainer container,
+        DispatcherCacheFixtureOptions? options = null)
     {
-        container.RegisterCqrsPipelineBehavior<DispatcherPipelineCacheBehavior>();
-        container.RegisterCqrsPipelineBehavior<DispatcherPipelineContextRefreshBehavior>();
-        container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderOuterBehavior>();
-        container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderInnerBehavior>();
-        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineCacheBehavior>();
-        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineContextRefreshBehavior>();
-        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderOuterBehavior>();
-        container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderInnerBehavior>();
+        options ??= new DispatcherCacheFixtureOptions();
+
+        if (options.IncludeRequestPipelineCacheBehavior)
+        {
+            container.RegisterCqrsPipelineBehavior<DispatcherPipelineCacheBehavior>();
+        }
+
+        if (options.IncludeRequestPipelineContextRefreshBehavior)
+        {
+            container.RegisterCqrsPipelineBehavior<DispatcherPipelineContextRefreshBehavior>();
+        }
+
+        if (options.IncludeRequestPipelineOrderBehaviors)
+        {
+            container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderOuterBehavior>();
+            container.RegisterCqrsPipelineBehavior<DispatcherPipelineOrderInnerBehavior>();
+        }
+
+        if (options.IncludeStreamPipelineCacheBehavior)
+        {
+            container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineCacheBehavior>();
+        }
+
+        if (options.IncludeStreamPipelineContextRefreshBehavior)
+        {
+            container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineContextRefreshBehavior>();
+        }
+
+        if (options.IncludeStreamPipelineOrderBehaviors)
+        {
+            container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderOuterBehavior>();
+            container.RegisterCqrsStreamPipelineBehavior<DispatcherStreamPipelineOrderInnerBehavior>();
+        }
 
         CqrsTestRuntime.RegisterHandlers(
             container,

@@ -72,7 +72,7 @@ dotnet add package GeWuYou.GFramework.Cqrs
 dotnet add package GeWuYou.GFramework.Cqrs.Abstractions
 ```
 
-如果你希望减少处理器注册时的反射扫描，再额外安装：
+如果你希望把可静态表达的 handler 注册与 request / stream invoker 元数据前移到编译期，再额外安装：
 
 ```bash
 dotnet add package GeWuYou.GFramework.Cqrs.SourceGenerators
@@ -116,7 +116,9 @@ using GFramework.Cqrs.Extensions;
 var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInput("Alice")));
 ```
 
-在 `ArchitectureContext` 上也可以直接使用统一 CQRS 入口，例如 `SendRequestAsync`、`SendQueryAsync`、`PublishAsync` 和 `CreateStream`。
+在 `ArchitectureContext` 上也可以直接使用统一 CQRS 入口，例如 `SendRequestAsync`、`SendAsync`、`SendQueryAsync`、`PublishAsync` 和 `CreateStream`。
+
+如果你走标准 `GFramework.Core` 架构启动路径，`CqrsRuntimeModule` 会自动创建 runtime 并接线默认注册流程；只有在裸容器、测试宿主或自定义组合根里，才需要显式补齐 runtime、publisher 策略或额外程序集注册。
 
 ## 运行时行为
 
@@ -126,6 +128,8 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
 - 通知分发
   - 通知会分发给所有已注册 `INotificationHandler<>`；零处理器时默认静默完成。
   - 若容器在 runtime 创建前已显式注册 `INotificationPublisher`，默认 runtime 会复用该策略；未注册时回退到内置 `SequentialNotificationPublisher`。
+  - notification publish 不存在 generated invoker 通道；它始终基于当前已注册的 `INotificationHandler<>` 集合和选定的 `INotificationPublisher` 策略执行。
+  - 默认 runtime 只消费一个 `INotificationPublisher`；如果容器里已经存在该注册，再调用 `UseNotificationPublisher(...)`、`UseNotificationPublisher<TPublisher>()`、`UseSequentialNotificationPublisher()` 或 `UseTaskWhenAllNotificationPublisher()` 会直接报错，而不是按“后注册覆盖前注册”处理。
   - 内置 notification publisher 的推荐选择如下：
 
   | 策略 | 推荐场景 | 执行顺序 | 失败语义 | 备注 |
@@ -134,7 +138,7 @@ var playerId = await this.SendAsync(new CreatePlayerCommand(new CreatePlayerInpu
   | `TaskWhenAllNotificationPublisher` | 需要让全部处理器并行完成，并在结束后统一观察失败或取消 | 不保证顺序 | 不会在首个失败时停止其余处理器；会聚合最终异常或取消结果 | 更适合语义补齐，不是性能开关 |
   | `UseNotificationPublisher(...)` / `UseNotificationPublisher<TPublisher>()` | 需要接入仓库外的自定义策略或第三方策略 | 取决于具体实现 | 取决于具体实现 | 前者复用现成实例，后者让容器负责单例生命周期 |
 
-  - 若只是为了降低 fixed fan-out publish 的 steady-state 成本，当前 benchmark 并不表明 `TaskWhenAllNotificationPublisher` 会优于默认顺序发布器；它更适合你需要“等待全部处理器完成并统一观察失败”的场景。
+  - 若只是为了降低 fixed fan-out publish 的 steady-state 成本，当前 benchmark 并不表明 `TaskWhenAllNotificationPublisher` 会优于默认顺序发布器；它更适合你需要“等待全部处理器完成并统一观察失败”的场景，而不是把 publish 切成另一条 generated 或更快的分发通道。
 
 如果你需要显式保留默认顺序语义，也可以在组合根里直接声明：
 
@@ -191,18 +195,20 @@ container.UseNotificationPublisher<MyCustomNotificationPublisher>();
 - 优先尝试消费端程序集上的 `ICqrsHandlerRegistry` 生成注册器。
 - 当生成注册器同时暴露 generated request invoker provider 或 generated stream invoker provider 时，registrar 会把对应 descriptor 元数据接线到 runtime 缓存。
 - 生成注册器不可用或元数据损坏时，记录告警并回退到反射扫描。
+- generated invoker 只覆盖 request 与 stream 两类单次分发元数据；`INotificationHandler<>` 仍然只参与 registry / fallback 注册，通知分发本身继续由 runtime 解析出的 handler 集合和 `INotificationPublisher` 策略决定。
 - 当程序集声明了 `CqrsReflectionFallbackAttribute` 时，运行时会先执行生成注册器，再只补它未覆盖的 handler。
-- `CqrsReflectionFallbackAttribute` 现在可以多次声明，并同时承载 `Type[]` 与 `string[]` 两类 fallback 清单。
-- 运行时会优先复用 fallback 特性里直接提供的 `Type` 条目，只对字符串条目执行定向 `Assembly.GetType(...)` 查找；只有旧版空 marker 才会退回整程序集扫描。
+- `CqrsReflectionFallbackAttribute` 可以多次声明，并同时承载 `Type[]` 与 `string[]` 两类 fallback 清单。
+- 运行时会优先复用 fallback 特性里直接提供的 `Type` 条目，只对字符串条目执行定向 `Assembly.GetType(...)` 查找；只有旧版空 marker、空 fallback 元数据，或生成注册器整体不可用时，才会退回整程序集扫描。
 - 处理器以 transient 方式注册，避免上下文感知处理器在并发请求间共享可变上下文。
 
 如果你走标准 `GFramework.Core` 架构初始化路径，这些步骤通常由框架自动完成；裸容器或测试环境则需要显式补齐 runtime 与注册入口。
 
 ## 适用边界
 
-- 这个包是默认实现，不是“纯契约包”。
+- 这个包是默认实现，不是“纯契约包”；如果你只需要共享请求/处理器契约，请停在 `GeWuYou.GFramework.Cqrs.Abstractions`。
 - 处理器基类依赖 runtime 在分发前注入上下文，不适合脱离 dispatcher 直接手动实例化后调用。
 - README 中的消息基类和 handler 基类位于 `GFramework.Cqrs`，接口契约位于 `GFramework.Cqrs.Abstractions`；最小示例通常需要同时引入这两个命名空间层级。
+- 如果你的目标只是“先用起来”，优先沿用 `ArchitectureContext` / `IContextAware` 的统一入口；只有在需要更换通知策略、接入额外程序集或搭裸容器测试时，再显式配置组合根。
 
 ## 文档入口
 
