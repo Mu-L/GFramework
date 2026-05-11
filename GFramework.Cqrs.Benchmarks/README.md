@@ -38,13 +38,16 @@
   - `Messaging/StreamStartupBenchmarks.cs`
     - `Initialization` 与 `ColdStart` 两组下，`GFramework.Cqrs` reflection、`GFramework.Cqrs` generated、`MediatR`
     - 其中 `ColdStart` 的边界是“新宿主 + 首个元素命中”，不是完整枚举整个 stream
-- notification
+- notification steady-state
   - `Messaging/NotificationBenchmarks.cs`
     - 单处理器 publish 下，`GFramework.Cqrs` runtime、NuGet `Mediator` source-generated concrete path、`MediatR`
   - `Messaging/NotificationLifetimeBenchmarks.cs`
     - 单处理器 publish 在 `Singleton / Scoped / Transient` 三类 handler 生命周期下的 baseline、`GFramework.Cqrs` 与 `MediatR` 对照
   - `Messaging/NotificationFanOutBenchmarks.cs`
     - 固定 `4 handler` fan-out 下的 baseline、`GFramework.Cqrs` 默认顺序发布器、内置 `TaskWhenAllNotificationPublisher`、NuGet `Mediator`、`MediatR`
+- notification startup
+  - `Messaging/NotificationStartupBenchmarks.cs`
+    - `Initialization` 与 `ColdStart` 两组下，`GFramework.Cqrs`、NuGet `Mediator`、`MediatR`
 
 ## 最小使用方式
 
@@ -95,6 +98,5 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 - 当前没有 stream 版的 NuGet `Mediator` source-generated concrete path 对照；stream steady-state、lifetime、startup 现在都只覆盖 `GFramework.Cqrs` 与 `MediatR`
 - 当前没有 request 生命周期下的 NuGet `Mediator` compile-time lifetime 矩阵；`RequestLifetimeBenchmarks` 只覆盖 `GFramework.Cqrs` 与 `MediatR`
-- 当前没有 notification startup / cold-start benchmark；notification 只覆盖 steady-state 单处理器、生命周期、固定 `4 handler` fan-out
 - 当前没有 notification fan-out 的生命周期矩阵；`NotificationFanOutBenchmarks` 只覆盖固定 `4 handler` 的已装配宿主
 - 当前没有 stream pipeline benchmark；现有 pipeline coverage 仅限 request
