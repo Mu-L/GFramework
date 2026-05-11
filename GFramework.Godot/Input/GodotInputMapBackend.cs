@@ -32,6 +32,13 @@ internal sealed class GodotInputMapBackend : IGodotInputMapBackend
     /// <inheritdoc />
     public IReadOnlyList<InputBindingDescriptor> GetBindings(string actionName)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actionName);
+
+        if (!InputMap.HasAction(actionName))
+        {
+            return Array.Empty<InputBindingDescriptor>();
+        }
+
         var bindings = new List<InputBindingDescriptor>();
         foreach (var inputEvent in InputMap.ActionGetEvents(actionName))
         {
@@ -73,7 +80,10 @@ internal sealed class GodotInputMapBackend : IGodotInputMapBackend
             return;
         }
 
-        InputMap.ActionEraseEvents(actionName);
+        if (InputMap.HasAction(actionName))
+        {
+            InputMap.ActionEraseEvents(actionName);
+        }
     }
 
     /// <inheritdoc />

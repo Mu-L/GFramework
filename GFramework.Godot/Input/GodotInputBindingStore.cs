@@ -61,10 +61,25 @@ public sealed class GodotInputBindingStore : IInputBindingStore, IInputDeviceTra
         ArgumentNullException.ThrowIfNull(snapshot);
 
         ReloadFromBackend();
+        var snapshotActionNames = snapshot.Actions
+            .Select(static action => action.ActionName)
+            .ToHashSet(StringComparer.Ordinal);
+        var removedActionNames = _state.ExportSnapshot().Actions
+            .Select(static action => action.ActionName)
+            .Where(actionName => !snapshotActionNames.Contains(actionName))
+            .ToArray();
+
+        foreach (var actionName in removedActionNames)
+        {
+            _backend.SetBindings(actionName, Array.Empty<InputBindingDescriptor>());
+        }
+
         foreach (var action in snapshot.Actions)
         {
             ApplyActionBindings(action);
         }
+
+        ReloadFromBackend();
     }
 
     /// <inheritdoc />

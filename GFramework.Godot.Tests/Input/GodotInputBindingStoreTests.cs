@@ -83,6 +83,63 @@ public sealed class GodotInputBindingStoreTests
     }
 
     /// <summary>
+    ///     验证导入快照时，会清空快照中未出现动作的后端绑定。
+    /// </summary>
+    [Test]
+    public void ImportSnapshot_WhenActionMissingFromSnapshot_Should_ClearBackendBindings()
+    {
+        var backend = new FakeInputMapBackend(
+            new InputBindingSnapshot(
+            [
+                new InputActionBinding(
+                    "ui_accept",
+                    [
+                        new InputBindingDescriptor(
+                            InputDeviceKind.KeyboardMouse,
+                            InputBindingKind.Key,
+                            "key:13",
+                            "Enter")
+                    ]),
+                new InputActionBinding(
+                    "ui_cancel",
+                    [
+                        new InputBindingDescriptor(
+                            InputDeviceKind.KeyboardMouse,
+                            InputBindingKind.Key,
+                            "key:27",
+                            "Escape")
+                    ])
+            ]));
+
+        var store = new GodotInputBindingStore(backend);
+        store.ImportSnapshot(
+            new InputBindingSnapshot(
+            [
+                new InputActionBinding(
+                    "ui_accept",
+                    [
+                        new InputBindingDescriptor(
+                            InputDeviceKind.KeyboardMouse,
+                            InputBindingKind.Key,
+                            "key:32",
+                            "Space")
+                    ])
+            ]));
+
+        var snapshot = store.ExportSnapshot();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                snapshot.Actions.Single(action => string.Equals(action.ActionName, "ui_accept", StringComparison.Ordinal)).Bindings[0].Code,
+                Is.EqualTo("key:32"));
+            Assert.That(
+                snapshot.Actions.Single(action => string.Equals(action.ActionName, "ui_cancel", StringComparison.Ordinal)).Bindings,
+                Is.Empty);
+        });
+    }
+
+    /// <summary>
     ///     验证从纯托管绑定设置主绑定时，会保留 `Game` 层冲突交换语义。
     /// </summary>
     [Test]

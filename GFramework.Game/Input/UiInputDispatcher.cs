@@ -19,6 +19,8 @@ public sealed class UiInputDispatcher : IUiInputDispatcher
     /// </summary>
     /// <param name="actionMap">动作映射表。</param>
     /// <param name="router">目标 UI 路由器。</param>
+    /// <exception cref="ArgumentNullException">当 <paramref name="actionMap" /> 为 <see langword="null" /> 时抛出。</exception>
+    /// <exception cref="ArgumentNullException">当 <paramref name="router" /> 为 <see langword="null" /> 时抛出。</exception>
     public UiInputDispatcher(IUiInputActionMap actionMap, IUiRouter router)
     {
         _actionMap = actionMap ?? throw new ArgumentNullException(nameof(actionMap));

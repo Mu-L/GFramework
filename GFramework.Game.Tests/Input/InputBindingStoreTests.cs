@@ -56,6 +56,25 @@ public sealed class InputBindingStoreTests
             Is.EqualTo("key:65"));
     }
 
+    /// <summary>
+    ///     验证查询不存在的动作时，不会把空条目写回当前快照。
+    /// </summary>
+    [Test]
+    public void GetBindings_WhenActionMissing_Should_NotMutateSnapshot()
+    {
+        var store = CreateStore();
+
+        var missingBindings = store.GetBindings("jump");
+        var snapshot = store.ExportSnapshot();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(missingBindings.ActionName, Is.EqualTo("jump"));
+            Assert.That(missingBindings.Bindings, Is.Empty);
+            Assert.That(snapshot.Actions.Any(action => string.Equals(action.ActionName, "jump", StringComparison.Ordinal)), Is.False);
+        });
+    }
+
     private static InputBindingStore CreateStore()
     {
         return new InputBindingStore(

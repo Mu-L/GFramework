@@ -372,6 +372,7 @@ public sealed class MyUiRouter : UiRouterBase
 - 序列化系统：[序列化系统](../docs/zh-CN/game/serialization.md)
 - 场景系统：[场景系统](../docs/zh-CN/game/scene.md)
 - UI 系统：[UI 系统](../docs/zh-CN/game/ui.md)
+- 输入系统：[输入系统](../docs/zh-CN/game/input.md)
 
 ## 什么时候不该直接依赖本包
 

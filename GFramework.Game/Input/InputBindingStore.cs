@@ -30,8 +30,11 @@ public sealed class InputBindingStore : IInputBindingStore
     /// <inheritdoc />
     public InputActionBinding GetBindings(string actionName)
     {
-        var bindings = GetOrCreateBindings(actionName);
-        return new InputActionBinding(actionName, bindings.ToArray());
+        ArgumentException.ThrowIfNullOrWhiteSpace(actionName);
+
+        return _currentBindings.TryGetValue(actionName, out var bindings)
+            ? new InputActionBinding(actionName, bindings.ToArray())
+            : new InputActionBinding(actionName, Array.Empty<InputBindingDescriptor>());
     }
 
     /// <inheritdoc />
