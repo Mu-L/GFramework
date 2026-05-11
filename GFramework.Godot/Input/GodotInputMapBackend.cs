@@ -82,7 +82,9 @@ internal sealed class GodotInputMapBackend : IGodotInputMapBackend
 
         if (InputMap.HasAction(actionName))
         {
-            InputMap.ActionEraseEvents(actionName);
+            // Actions absent from the captured default snapshot should disappear after reset
+            // so the live InputMap matches the original project defaults exactly.
+            InputMap.EraseAction(actionName);
         }
     }
 

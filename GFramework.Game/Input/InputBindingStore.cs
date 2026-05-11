@@ -11,6 +11,8 @@ namespace GFramework.Game.Input;
 /// <remarks>
 ///     该实现聚焦于框架级动作绑定管理语义：默认值恢复、主绑定替换、冲突交换与快照导入导出。
 ///     它不依赖具体宿主输入事件，适合作为 `Game` 层默认运行时与单元测试基线。
+///     该类型内部使用普通 `Dictionary` / `List` 保存可变状态，不提供额外同步原语。
+///     宿主应在同一输入线程或受控的串行配置阶段访问它；如果存在跨线程读写需求，应由外层协调同步。
 /// </remarks>
 public sealed class InputBindingStore : IInputBindingStore
 {

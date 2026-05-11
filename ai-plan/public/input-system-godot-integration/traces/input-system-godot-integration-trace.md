@@ -68,6 +68,27 @@
   - `dotnet test GFramework.Game.Tests/GFramework.Game.Tests.csproj -c Release --filter "FullyQualifiedName~InputBindingStoreTests|FullyQualifiedName~UiInputDispatcherTests"` 通过
   - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter "FullyQualifiedName~GodotInputBindingStoreTests"` 通过
 
+### 阶段：PR #346 review 二次 follow-up（RP-001）
+
+- 再次抓取当前分支 PR `#346` 的 latest-head review threads，区分已在本地修复但 GitHub 线程仍未折叠的问题与仍然有效的问题
+- 确认以下 review 点已在本地代码中成立并继续处理：
+  - `InputBindingStore` 缺少共享可变状态的线程安全使用约束说明
+  - `GodotInputBindingCodec.TryCreateBinding(...)` 在键盘事件分支重复计算 `GetKeyCode(...)`
+  - `GodotInputMapBackend.ResetAll()` 对运行时新增动作只清空事件、不移除动作本身，和默认快照替换语义不一致
+- 新增回归测试：
+  - `GodotInputBindingStoreTests.ResetAll_WhenRuntimeActionIsNotInDefaults_Should_RemoveAction`
+- 验证结果：
+  - `dotnet test GFramework.Godot.Tests/GFramework.Godot.Tests.csproj -c Release --filter "FullyQualifiedName~GodotInputBindingStoreTests"` 通过（5/5）
+  - `python3 scripts/license-header.py --check --paths GFramework.Game.Abstractions/README.md GFramework.Game.Tests/Input/InputBindingStoreTests.cs GFramework.Game/Input/InputBindingStore.cs GFramework.Game/Input/InputDeviceTracker.cs GFramework.Game/Input/UiInputDispatcher.cs GFramework.Game/README.md GFramework.Godot.Tests/Input/GodotInputBindingStoreTests.cs GFramework.Godot/Input/GodotInputBindingStore.cs GFramework.Godot/Input/GodotInputMapBackend.cs GFramework.Godot/Input/IGodotInputMapBackend.cs ai-plan/public/input-system-godot-integration/traces/input-system-godot-integration-trace.md` 通过
+  - `dotnet build GFramework.Game/GFramework.Game.csproj -c Release -m:1 -nodeReuse:false` 通过（0 warning, 0 error）
+  - `dotnet build GFramework.Godot/GFramework.Godot.csproj -c Release -m:1 -nodeReuse:false` 通过（0 warning, 0 error）
+  - `git ... diff --check` 通过
+
+### 下一步
+
+1. 如需继续消化 open review threads，可再评估值对象切换到 `record` 的收益与兼容性
+2. 若需要更高置信度的宿主验证，再补真实 Godot `InputMap` 集成测试宿主
+
 ### 下一步
 
 1. 运行针对本次改动文件的 license-header 检查并补录结果

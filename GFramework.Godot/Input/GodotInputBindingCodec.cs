@@ -24,11 +24,12 @@ internal static class GodotInputBindingCodec
         switch (inputEvent)
         {
             case InputEventKey keyEvent:
+                var keyCode = GetKeyCode(keyEvent);
                 binding = new InputBindingDescriptor(
                     InputDeviceKind.KeyboardMouse,
                     InputBindingKind.Key,
-                    FormattableString.Invariant($"key:{(int)GetKeyCode(keyEvent)}"),
-                    GetKeyCode(keyEvent).ToString());
+                    FormattableString.Invariant($"key:{(int)keyCode}"),
+                    keyCode.ToString());
                 return true;
             case InputEventMouseButton mouseButtonEvent:
                 binding = new InputBindingDescriptor(

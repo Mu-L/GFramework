@@ -191,6 +191,65 @@ public sealed class GodotInputBindingStoreTests
     }
 
     /// <summary>
+    ///     验证重置全部绑定时，会移除运行时新增且默认快照中不存在的动作。
+    /// </summary>
+    [Test]
+    public void ResetAll_WhenRuntimeActionIsNotInDefaults_Should_RemoveAction()
+    {
+        var backend = new FakeInputMapBackend(
+            new InputBindingSnapshot(
+            [
+                new InputActionBinding(
+                    "ui_accept",
+                    [
+                        new InputBindingDescriptor(
+                            InputDeviceKind.KeyboardMouse,
+                            InputBindingKind.Key,
+                            "key:13",
+                            "Enter")
+                    ])
+            ]));
+
+        var store = new GodotInputBindingStore(backend);
+        store.ImportSnapshot(
+            new InputBindingSnapshot(
+            [
+                new InputActionBinding(
+                    "ui_accept",
+                    [
+                        new InputBindingDescriptor(
+                            InputDeviceKind.KeyboardMouse,
+                            InputBindingKind.Key,
+                            "key:13",
+                            "Enter")
+                    ]),
+                new InputActionBinding(
+                    "debug_toggle",
+                    [
+                        new InputBindingDescriptor(
+                            InputDeviceKind.KeyboardMouse,
+                            InputBindingKind.Key,
+                            "key:192",
+                            "QuoteLeft")
+                    ])
+            ]));
+
+        store.ResetAll();
+
+        var snapshot = store.ExportSnapshot();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                snapshot.Actions.Any(action => string.Equals(action.ActionName, "ui_accept", StringComparison.Ordinal)),
+                Is.True);
+            Assert.That(
+                snapshot.Actions.Any(action => string.Equals(action.ActionName, "debug_toggle", StringComparison.Ordinal)),
+                Is.False);
+        });
+    }
+
+    /// <summary>
     ///     测试用的纯托管 InputMap 后端。
     /// </summary>
     private sealed class FakeInputMapBackend : IGodotInputMapBackend
