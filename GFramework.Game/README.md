@@ -15,6 +15,7 @@
   - 数据与存档：`Data/`
   - 设置系统：`Setting/`
   - 场景与 UI 路由基类：`Scene/`、`UI/`
+  - 动作绑定与 UI 输入桥接：`Input/`
   - 序列化与文件存储：`Serializer/`、`Storage/`
 
 ## 与相邻包的关系
@@ -158,6 +159,22 @@
 - [场景系统](../docs/zh-CN/game/scene.md)
 - [UI 系统](../docs/zh-CN/game/ui.md)
 
+### `Input/`
+
+- `InputBindingStore`
+  - 纯托管动作绑定存储
+  - 提供默认快照恢复、主绑定替换、冲突交换与快照导入导出
+- `InputDeviceTracker`
+  - 提供当前活跃设备上下文的默认持有者
+- `UiInputActionMap`
+  - 把 `ui_accept` / `ui_cancel` 等逻辑动作桥接到 `UiInputAction`
+- `UiInputDispatcher`
+  - 把逻辑动作名继续分发给 `IUiRouter`
+
+对应文档：
+
+- [输入系统](../docs/zh-CN/game/input.md)
+
 ### `Routing/` 与 `State/`
 
 - `Routing/RouterBase<TRoute, TContext>`
@@ -176,6 +193,7 @@
 | `Config/` | `YamlConfigLoader`、`ConfigRegistry`、`GameConfigBootstrap`、`YamlConfigSchemaValidator` | 看 YAML 加载、schema 校验、模块接入与热重载边界 |
 | `Data/` `Storage/` `Serializer/` | `DataRepository`、`SaveRepository<TSaveData>`、`UnifiedSettingsDataRepository`、`FileStorage`、`JsonSerializer` | 看持久化布局、槽位存档、统一设置文件和底层序列化 / 存储实现 |
 | `Setting/` | `SettingsModel<TRepository>`、`SettingsSystem`、`SettingsAppliedEvent<T>` | 看初始化、应用、保存、重置等设置生命周期编排 |
+| `Input/` | `InputBindingStore`、`InputDeviceTracker`、`UiInputActionMap`、`UiInputDispatcher` | 看动作绑定、设备上下文和 UI 输入桥接的默认运行时实现 |
 | `Scene/` `UI/` `Routing/` | `SceneRouterBase`、`UiRouterBase`、`SceneTransitionPipeline`、`UiTransitionPipeline`、`RouterBase<TRoute, TContext>` | 看路由基类、转换处理器和项目层需要自己提供的 factory / root 边界 |
 | `Extensions/` `Internal/` `State/` | `DataLocationExtensions`、`VersionedMigrationRunner`、`GameStateMachineSystem` | 看辅助扩展、内部迁移执行逻辑和游戏态状态机封装 |
 
@@ -354,6 +372,7 @@ public sealed class MyUiRouter : UiRouterBase
 - 序列化系统：[序列化系统](../docs/zh-CN/game/serialization.md)
 - 场景系统：[场景系统](../docs/zh-CN/game/scene.md)
 - UI 系统：[UI 系统](../docs/zh-CN/game/ui.md)
+- 输入系统：[输入系统](../docs/zh-CN/game/input.md)
 
 ## 什么时候不该直接依赖本包
 

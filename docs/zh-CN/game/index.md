@@ -40,6 +40,8 @@ description: GFramework.Game 运行时模块的入口、采用顺序与源码阅
 - 导航与界面
   - [场景系统](./scene.md)
   - [UI 系统](./ui.md)
+- 输入与动作绑定
+  - [输入系统](./input.md)
 
 ## 最小接入路径
 
@@ -110,6 +112,7 @@ shape，优先回到 raw YAML 和 schema 设计本体处理，再决定是否拆
 4. [数据系统](./data.md)
 5. [设置系统](./setting.md)
 6. [场景系统](./scene.md)或[UI 系统](./ui.md)
+7. [输入系统](./input.md)
 
 ## 源码与 API 阅读入口
 

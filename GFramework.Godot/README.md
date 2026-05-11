@@ -16,6 +16,7 @@ Scene / UI、配置、存储、设置、日志与协程能力接到 `Node`、`Sc
 - 架构生命周期与场景树绑定：`AbstractArchitecture`、`ArchitectureAnchor`
 - 节点运行时辅助：`WaitUntilReadyAsync()`、`AddChildXAsync()`、`QueueFreeX()`、`UnRegisterWhenNodeExitTree(...)`
 - Godot 风格的 Scene / UI 工厂与 registry：`GodotSceneFactory`、`GodotUiFactory`
+- 基于 `InputMap` 的动作绑定适配：`GodotInputBindingStore`
 - Godot 特化的配置、存储与设置实现：`GodotYamlConfigLoader`、`GodotFileStorage`、`GodotAudioSettings`
 - 宿主侧辅助能力：`Signal(...)` fluent API、Godot 时间源、暂停处理、富文本效果
 
@@ -59,6 +60,12 @@ Scene / UI、配置、存储、设置、日志与协程能力接到 `Node`、`Sc
 - `SceneBehaviorFactory`、`UiPageBehaviorFactory`
 
 这部分负责把 `PackedScene`、`Control`、`CanvasLayer` 等 Godot 对象接入 `GFramework.Game` 的 Scene / UI 契约。
+
+### `Input/`
+
+- `GodotInputBindingStore`
+
+这部分负责把 `InputMap` 默认绑定、动作重绑定与快照导入导出接到 `GFramework.Game.Abstractions.Input` 契约。
 
 ### `Config/`、`Storage/` 与 `Setting/`
 
@@ -138,6 +145,7 @@ Godot 上。
 - 架构集成：[Godot 架构集成](../docs/zh-CN/godot/architecture.md)
 - 场景系统：[Godot 场景系统](../docs/zh-CN/godot/scene.md)
 - UI 系统：[Godot UI 系统](../docs/zh-CN/godot/ui.md)
+- 输入系统：[Godot 输入集成](../docs/zh-CN/godot/input.md)
 - 节点扩展：[Godot 节点扩展](../docs/zh-CN/godot/extensions.md)
 - 信号系统：[Godot 信号系统](../docs/zh-CN/godot/signal.md)
 - 日志系统：[Godot 日志系统](../docs/zh-CN/godot/logging.md)

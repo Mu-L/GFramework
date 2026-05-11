@@ -13,6 +13,7 @@
 - 典型使用场景：
   - 定义 `IScene`、`IUiPage`、`ISettingsData`、`IData` 等业务对象
   - 让 feature 包只感知 `IConfigRegistry`、`ISaveRepository<T>`、`ISettingsModel`、`IUiRouter`、`ISceneRouter`
+  - 在输入层共享动作绑定、设备上下文和 UI 语义桥接契约
   - 在引擎适配层之外共享设置、场景参数、UI 参数、存档数据类型
 
 ## 与相邻包的关系
@@ -131,6 +132,18 @@ UI 页面与路由契约。
 
 `IUiRouter` 不只覆盖页面栈，还覆盖 Overlay / Modal / Toast / Topmost 等层级 UI 语义。
 
+### `Input/`
+
+- `InputBindingDescriptor`
+- `InputActionBinding`
+- `InputBindingSnapshot`
+- `IInputBindingStore`
+- `IInputDeviceTracker`
+- `IUiInputActionMap`
+- `IUiInputDispatcher`
+
+这一层定义的是统一输入抽象、绑定快照与 UI 语义桥接契约。
+
 ### `Routing/`
 
 - `IRoute`
@@ -164,6 +177,7 @@ Scene 与 UI 路由共享这套基础约定。
 | `Setting/` | `ISettingsData`、`ISettingsModel`、`ISettingsSystem`、`LocalizationSettings` | 看设置数据、应用语义、迁移接口和内置设置对象 |
 | `Scene/` | `IScene`、`ISceneRouter`、`ISceneFactory`、`SceneTransitionEvent` | 看场景行为、路由、工厂 / root 边界与转场事件模型 |
 | `UI/` | `IUiPage`、`IUiRouter`、`IUiFactory`、`UiInteractionProfile`、`UiTransitionHandlerOptions` | 看页面栈、层级 UI、输入动作与 UI 转场契约 |
+| `Input/` | `InputBindingDescriptor`、`IInputBindingStore`、`IInputDeviceTracker`、`IUiInputDispatcher` | 看动作绑定、设备上下文和 UI 输入桥接契约 |
 | `Routing/` `Storage/` `Asset/` `Enums/` | `IRoute`、`IRouteContext`、`IFileStorage`、`IAssetRegistry<T>`、`UiLayer`、`SceneTransitionType` | 看公共路由上下文、存储角色、资源注册表与跨层共享枚举 |
 
 ## 最小接入路径
@@ -267,6 +281,7 @@ public sealed class ContinueGameCommandHandler
 - 序列化系统：[序列化系统](../docs/zh-CN/game/serialization.md)
 - 场景系统：[场景系统](../docs/zh-CN/game/scene.md)
 - UI 系统：[UI 系统](../docs/zh-CN/game/ui.md)
+- 输入系统：[输入系统](../docs/zh-CN/game/input.md)
 
 ## 选择建议
 

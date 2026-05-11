@@ -15,6 +15,7 @@ description: 以当前 GFramework.Godot 源码、测试与 CoreGrid 接线为准
 - 架构生命周期与场景树绑定：`AbstractArchitecture`、`ArchitectureAnchor`
 - 节点运行时辅助：`WaitUntilReadyAsync()`、`AddChildXAsync()`、`QueueFreeX()`、`UnRegisterWhenNodeExitTree(...)`
 - Godot 风格的 Scene / UI 工厂与 registry：`GodotSceneFactory`、`GodotUiFactory`
+- 基于 `InputMap` 的动作绑定适配：`GodotInputBindingStore`
 - Godot 特化的存储、设置与配置加载：`GodotFileStorage`、`GodotAudioSettings`、`GodotYamlConfigLoader`
 - 少量面向运行时交互的扩展：`Signal(...)` fluent API、`GodotLogAppender`、暂停处理、富文本效果、协程时间源
 
@@ -136,6 +137,7 @@ public partial class SettingsPanel : Control
 - 架构锚点与模块挂接：[Godot 架构集成](./architecture.md)
 - Scene / `PackedScene` 工厂与行为封装：[Godot 场景系统](./scene.md)
 - UI page 行为、layer 语义与工厂：[Godot UI 系统](./ui.md)
+- 动作绑定与 `InputMap` 适配：[Godot 输入集成](./input.md)
 - Godot 文件路径与持久化适配：[Godot 存储系统](./storage.md)
 - 音频、图形与本地化设置接线：[Godot 设置系统](./setting.md)
 - `Signal(...)` fluent API 与动态连接边界：[Godot 信号系统](./signal.md)
@@ -162,4 +164,5 @@ public partial class SettingsPanel : Control
 2. [Godot 架构集成](./architecture.md)
 3. [Godot 场景系统](./scene.md)
 4. [Godot UI 系统](./ui.md)
-5. [Godot 项目元数据生成器](../source-generators/godot-project-generator.md)
+5. [Godot 输入集成](./input.md)
+6. [Godot 项目元数据生成器](../source-generators/godot-project-generator.md)
