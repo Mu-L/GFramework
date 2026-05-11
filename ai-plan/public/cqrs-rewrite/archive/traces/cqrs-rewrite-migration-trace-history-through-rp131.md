@@ -1,5 +1,38 @@
 # CQRS 重写迁移追踪
 
+## 归档导航
+
+- 本 trace 归档承接 `CQRS-REWRITE-RP-076` 到 `CQRS-REWRITE-RP-131` 的执行细节，作用是给 boot / 人工恢复提供“按阶段回看”的证据面，而不是重新充当 active trace。
+- 若只需要知道历史阶段做了什么、下一步曾指向哪里，先看对应日期块的首段与“下一恢复点”。
+- 若只需要验证锚点，优先看各阶段下的“本轮验证”“本轮验证结果”或“验证（RP-xxx）”。
+
+## 快速索引
+
+- `2026-05-11`
+  - `RP-129` ~ `RP-131`
+  - 主题：benchmark 多 worker 波次、stream scoped-host、并发运行隔离入口。
+- `2026-05-09`
+  - `RP-123` ~ `RP-128`
+  - 主题：`PR #344` / `PR #345` review 收口，stream lifetime 与 generated binding 对齐。
+- `2026-05-08`
+  - `RP-101` ~ `RP-122`
+  - 主题：notification publisher、request 热路径、benchmark 对照与 review 收口。
+- `2026-05-07`
+  - `RP-093` ~ `RP-100`
+  - 主题：legacy bridge、stream pipeline seam、性能门槛与 benchmark 对照。
+- `2026-05-06`
+  - `RP-083` ~ `RP-091`
+  - 主题：generator gate 回归、benchmark 基础设施、startup / invoker 对照。
+- `2026-05-04` 与 `2026-04-30`
+  - `RP-076` ~ `RP-082`
+  - 主题：active 入口历史收敛、generator contract gate 与早期 PR 锚点整理。
+
+## 跳转约定
+
+- 搜索 `CQRS-REWRITE-RP-xxx` 可直接定位单个恢复点。
+- 搜索“下一恢复点”可快速看到该阶段向后衔接的建议。
+- 搜索“本轮结论”可快速判断该阶段是否值得继续细读。
+
 ## 2026-05-11
 
 ### 阶段：benchmark 并发运行隔离入口（CQRS-REWRITE-RP-131）

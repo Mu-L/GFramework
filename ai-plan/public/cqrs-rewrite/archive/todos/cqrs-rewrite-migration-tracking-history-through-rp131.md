@@ -5,6 +5,50 @@
 围绕 `GFramework` 当前的双轨 CQRS 现状，继续完成以“去外部依赖、降低反射、收口公开入口”为目标的
 CQRS 迁移与收敛。
 
+## 归档使用说明
+
+- 本文件只覆盖 `CQRS-REWRITE-RP-076` 到 `CQRS-REWRITE-RP-131` 的历史恢复材料，用于 boot 或人工恢复时快速定位旧阶段锚点。
+- `RP-131` 是本归档的截止恢复点，不是当前 active 入口；继续恢复时应回到 active `todos/` 与 `traces/`，再从 archive 补读所需历史。
+- 若只需要历史结论，优先查本文件的阶段索引；若需要当轮验证细节、worker 边界或判断过程，再跳到配套 archive trace。
+
+## 归档截止点
+
+- 截止恢复点：`CQRS-REWRITE-RP-131`
+- 截止阶段：benchmark 并发运行隔离入口
+- 截止结论：
+  - benchmark 入口已支持 `--artifacts-suffix <suffix>`，并通过独立 host 工作目录隔离 BenchmarkDotNet 并发运行产物。
+  - 截止轮次的写面仍收敛在 `GFramework.Cqrs.Benchmarks` 单模块，没有重新扩散到 runtime、测试或 active tracking。
+- 截止后的历史跳转：
+  - 需要 `RP-129` 到 `RP-131` 的 benchmark 隔离 / scoped-host / worker 波次细节：查看下方 `2026-05-11`。
+  - 需要 `RP-123` 到 `RP-128` 的 PR review 收口与 stream/request benchmark 对齐：查看下方 `2026-05-09`。
+  - 需要 `RP-113` 到 `RP-122` 的 notification publisher 与 request 热路径收敛：查看下方 `2026-05-08`。
+  - 需要 `RP-101` 到 `RP-112` 的 benchmark 基线、PR review 收口与 bridge 之后的性能阶段：查看下方 `2026-05-07`。
+  - 需要 `RP-076` 到 `RP-100` 的较早 generator gate / legacy bridge / benchmark 引入历史：查看下方 `2026-04-30`、`2026-05-04`、`2026-05-06`。
+
+## 阶段索引
+
+- `RP-129` ~ `RP-131`
+  - 主题：benchmark 多 worker 波次、stream scoped-host、并发运行隔离入口。
+  - 入口：`2026-05-11`。
+- `RP-123` ~ `RP-128`
+  - 主题：`PR #344` / `PR #345` review 收口，stream lifetime 与 generated binding 对齐。
+  - 入口：`2026-05-09`。
+- `RP-113` ~ `RP-122`
+  - 主题：notification publisher 公开策略、组合根配置、fan-out benchmark、request 零管道热路径缓存。
+  - 入口：`2026-05-08`。
+- `RP-101` ~ `RP-112`
+  - 主题：request / stream benchmark 对照、性能门槛、`PR #339` ~ `PR #341` review 收口。
+  - 入口：`2026-05-07`。
+- `RP-076` ~ `RP-100`
+  - 主题：active 入口历史收敛、generator contract gate、legacy Core CQRS bridge、benchmark 基础设施引入。
+  - 入口：`2026-04-30`、`2026-05-04`、`2026-05-06`。
+
+## 跳转约定
+
+- 想找某个恢复点，直接搜索 `CQRS-REWRITE-RP-xxx`。
+- 想找某一轮最小验证，优先搜索该阶段下的“验证”或“本轮验证”。
+- 想找下一批从哪里接续，优先搜索该阶段下的“下一恢复点”或“当前下一步”。
+
 ## 当前恢复点
 
 - 恢复点编号：`CQRS-REWRITE-RP-131`
