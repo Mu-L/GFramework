@@ -7,6 +7,43 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-12
 
+### 阶段：request lifetime 的 Mediator parity 与文档漂移收口（CQRS-REWRITE-RP-140）
+
+- 继续按 `$gframework-batch-boot 50` 推进，基线保持为 `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`。
+- 本轮启动时重新测得当前已提交 branch diff 仍为 `14 files / 324 lines`，远低于 `50 files` 阈值；停止与否继续由 context-budget / reviewability 主导。
+- 主线程结合两个 explorer 子代理的只读盘点后，接受以下结论：
+  - 不再继续按 benchmark XML `<returns>` inventory 机械扩批；粗糙脚本会把“注释位于 `[Benchmark]` 之前”的现有文档误判为缺口
+  - `RequestLifetimeBenchmarks` 的 NuGet `Mediator` lifetime parity 是当前仍然真实、且能保持 reviewable 的实现候选
+  - `NotificationBenchmarks.cs` 与 `RequestBenchmarks.cs` 仍有两处低风险 XML 文档漂移，均只涉及 NuGet `Mediator` 事实同步
+- 本轮主线程实施：
+  - `RequestLifetimeBenchmarks.cs`
+    - 新增 `GeneratedMediator` 宿主字段、`SendRequest_Mediator()` benchmark 方法与 scoped `Mediator` request helper
+    - 将 `BenchmarkRequest` / `BenchmarkRequestHandler` 扩为同时实现 `Mediator` 契约
+    - 为 `Mediator` 宿主改用 `Singleton / Scoped / Transient` 三个编译期常量分支，规避 `MSG0007` 对运行时 lifetime 赋值的生成器限制
+  - `RequestBenchmarks.cs`
+    - 将 handler XML 文档说明补齐为同时实现 `GFramework.CQRS`、NuGet `Mediator` 与 `MediatR`
+  - `NotificationBenchmarks.cs`
+    - 将类说明与 handler XML 文档说明补齐为同时覆盖 `GFramework.CQRS`、NuGet `Mediator` 与 `MediatR`
+  - `GFramework.Cqrs.Benchmarks/README.md`
+    - 将 `RequestLifetimeBenchmarks` 的 coverage 更新为包含 NuGet `Mediator` source-generated concrete path
+    - 删除“当前没有 request 生命周期下的 NuGet `Mediator` compile-time lifetime 矩阵”这一已过时缺口
+- 验证里程碑：
+  - 第一次 `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：失败
+    - 原因：`RequestLifetimeBenchmarks.cs` 中基于运行时变量写入 `MediatorOptions.ServiceLifetime`，触发 `MSG0007`
+  - 主线程修正：
+    - 将 `CreateMediatorServiceProvider(HandlerLifetime lifetime)` 收口为 3 个常量分支工厂：
+      `CreateSingletonMediatorServiceProvider()`、`CreateScopedMediatorServiceProvider()`、`CreateTransientMediatorServiceProvider()`
+  - 第二次 `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+- 当前 stop decision：
+  - 不继续开启新的实现波次
+  - 原因不是 branch-size 阈值耗尽；当前分支仍只有 `14 files`
+  - 停止原因是本轮已经完成一条真实 parity 收口和两处文档漂移修正，继续扩到 `StreamLifetimeBenchmarks` 会显著提高作用域与 review 成本
+- 当前下一步：
+  - 主线程补跑 `python3 scripts/license-header.py --check --paths ...` 与 `git diff --check`
+  - 更新 active tracking / trace 后提交当前 benchmark 代码、README 与 `ai-plan`
+
 ### 阶段：README startup coverage 精度同步并停在自然边界（CQRS-REWRITE-RP-139）
 
 - 继续按 `$gframework-batch-boot 50` 推进，基线保持为 `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`。

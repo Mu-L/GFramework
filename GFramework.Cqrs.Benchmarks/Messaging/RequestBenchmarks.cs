@@ -157,7 +157,7 @@ public class RequestBenchmarks
     public sealed record BenchmarkResponse(Guid Id);
 
     /// <summary>
-    ///     同时实现 GFramework.CQRS 与 MediatR 契约的最小 request handler。
+    ///     同时实现 GFramework.CQRS、NuGet `Mediator` 与 MediatR 契约的最小 request handler。
     /// </summary>
     public sealed class BenchmarkRequestHandler :
         GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>,

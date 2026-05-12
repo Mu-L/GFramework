@@ -16,6 +16,7 @@ using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using GeneratedMediator = Mediator.Mediator;
 
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
@@ -35,7 +36,9 @@ public class RequestLifetimeBenchmarks
     private ScopedBenchmarkContainer? _scopedContainer;
     private ICqrsRuntime? _scopedRuntime;
     private ServiceProvider _serviceProvider = null!;
+    private ServiceProvider _mediatorServiceProvider = null!;
     private IMediator? _mediatr;
+    private GeneratedMediator? _mediator;
     private BenchmarkRequestHandler _baselineHandler = null!;
     private BenchmarkRequest _request = null!;
     private ILogger _runtimeLogger = null!;
@@ -83,7 +86,7 @@ public class RequestLifetimeBenchmarks
     }
 
     /// <summary>
-    ///     构建当前生命周期下的 GFramework 与 MediatR request 对照宿主。
+    ///     构建当前生命周期下的 GFramework、NuGet `Mediator` 与 MediatR request 对照宿主。
     /// </summary>
     [GlobalSetup]
     public void Setup()
@@ -130,6 +133,12 @@ public class RequestLifetimeBenchmarks
         {
             _mediatr = _serviceProvider.GetRequiredService<IMediator>();
         }
+
+        _mediatorServiceProvider = CreateMediatorServiceProvider(Lifetime);
+        if (Lifetime != HandlerLifetime.Scoped)
+        {
+            _mediator = _mediatorServiceProvider.GetRequiredService<GeneratedMediator>();
+        }
     }
 
     /// <summary>
@@ -140,7 +149,7 @@ public class RequestLifetimeBenchmarks
     {
         try
         {
-            BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+            BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider, _mediatorServiceProvider);
         }
         finally
         {
@@ -197,6 +206,24 @@ public class RequestLifetimeBenchmarks
     }
 
     /// <summary>
+    ///     通过 `Mediator` source-generated concrete mediator 发送 request，作为 compile-time 对照。
+    /// </summary>
+    /// <returns>代表当前 `Mediator` request dispatch 完成的值任务。</returns>
+    [Benchmark]
+    public ValueTask<BenchmarkResponse> SendRequest_Mediator()
+    {
+        if (Lifetime == HandlerLifetime.Scoped)
+        {
+            return SendScopedMediatorRequestAsync(
+                _mediatorServiceProvider,
+                _request,
+                CancellationToken.None);
+        }
+
+        return _mediator!.Send(_request, CancellationToken.None);
+    }
+
+    /// <summary>
     ///     按生命周期把 benchmark request handler 注册到 GFramework 容器。
     /// </summary>
     /// <param name="container">当前 benchmark 拥有并负责释放的容器。</param>
@@ -244,11 +271,82 @@ public class RequestLifetimeBenchmarks
     }
 
     /// <summary>
+    ///     构建只承载当前 benchmark request handler 的最小 `Mediator` 对照宿主，并按生命周期切换生成器注册形状。
+    /// </summary>
+    /// <param name="lifetime">待比较的 handler 生命周期。</param>
+    /// <returns>可直接解析 generated `Mediator.Mediator` 的 DI 宿主。</returns>
+    private static ServiceProvider CreateMediatorServiceProvider(HandlerLifetime lifetime)
+    {
+        return lifetime switch
+        {
+            HandlerLifetime.Singleton => CreateSingletonMediatorServiceProvider(),
+            HandlerLifetime.Scoped => CreateScopedMediatorServiceProvider(),
+            HandlerLifetime.Transient => CreateTransientMediatorServiceProvider(),
+            _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "Unsupported benchmark handler lifetime.")
+        };
+    }
+
+    /// <summary>
+    ///     在真实的 request 级作用域内执行一次 `Mediator` request 分发。
+    /// </summary>
+    /// <typeparam name="TResponse">请求响应类型。</typeparam>
+    /// <param name="rootServiceProvider">当前 benchmark 的根 <see cref="ServiceProvider" />。</param>
+    /// <param name="request">要发送的 request。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>当前 request 的响应结果。</returns>
+    private static async ValueTask<TResponse> SendScopedMediatorRequestAsync<TResponse>(
+        ServiceProvider rootServiceProvider,
+        Mediator.IRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootServiceProvider);
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var scope = rootServiceProvider.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<GeneratedMediator>();
+        return await mediator.Send(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     构建 singleton 生命周期的 `Mediator` 对照宿主。
+    /// </summary>
+    /// <returns>按 singleton 形状生成 DI 注册的 `Mediator` 宿主。</returns>
+    private static ServiceProvider CreateSingletonMediatorServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddMediator(static options => options.ServiceLifetime = ServiceLifetime.Singleton);
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    ///     构建 scoped 生命周期的 `Mediator` 对照宿主。
+    /// </summary>
+    /// <returns>按 scoped 形状生成 DI 注册的 `Mediator` 宿主。</returns>
+    private static ServiceProvider CreateScopedMediatorServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddMediator(static options => options.ServiceLifetime = ServiceLifetime.Scoped);
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    ///     构建 transient 生命周期的 `Mediator` 对照宿主。
+    /// </summary>
+    /// <returns>按 transient 形状生成 DI 注册的 `Mediator` 宿主。</returns>
+    private static ServiceProvider CreateTransientMediatorServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddMediator(static options => options.ServiceLifetime = ServiceLifetime.Transient);
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
     ///     Benchmark request。
     /// </summary>
     /// <param name="Id">请求标识。</param>
     public sealed record BenchmarkRequest(Guid Id) :
         GFramework.Cqrs.Abstractions.Cqrs.IRequest<BenchmarkResponse>,
+        Mediator.IRequest<BenchmarkResponse>,
         MediatR.IRequest<BenchmarkResponse>;
 
     /// <summary>
@@ -258,10 +356,11 @@ public class RequestLifetimeBenchmarks
     public sealed record BenchmarkResponse(Guid Id);
 
     /// <summary>
-    ///     同时实现 GFramework.CQRS 与 MediatR 契约的最小 request handler。
+    ///     同时实现 GFramework.CQRS、NuGet `Mediator` 与 MediatR 契约的最小 request handler。
     /// </summary>
     public sealed class BenchmarkRequestHandler :
         GFramework.Cqrs.Abstractions.Cqrs.IRequestHandler<BenchmarkRequest, BenchmarkResponse>,
+        Mediator.IRequestHandler<BenchmarkRequest, BenchmarkResponse>,
         MediatR.IRequestHandler<BenchmarkRequest, BenchmarkResponse>
     {
         /// <summary>
@@ -270,6 +369,16 @@ public class RequestLifetimeBenchmarks
         public ValueTask<BenchmarkResponse> Handle(BenchmarkRequest request, CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(new BenchmarkResponse(request.Id));
+        }
+
+        /// <summary>
+        ///     处理 NuGet `Mediator` request。
+        /// </summary>
+        ValueTask<BenchmarkResponse> Mediator.IRequestHandler<BenchmarkRequest, BenchmarkResponse>.Handle(
+            BenchmarkRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Handle(request, cancellationToken);
         }
 
         /// <summary>

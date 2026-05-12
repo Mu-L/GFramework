@@ -16,7 +16,7 @@
   - `Messaging/RequestBenchmarks.cs`
     - direct handler、默认 `GFramework.Cqrs` runtime、NuGet `Mediator` source-generated concrete path、`MediatR`
   - `Messaging/RequestLifetimeBenchmarks.cs`
-    - `Singleton / Scoped / Transient` 三类 handler 生命周期下，baseline、默认 generated-provider 宿主接线的 `GFramework.Cqrs` runtime 与 `MediatR`
+    - `Singleton / Scoped / Transient` 三类 handler 生命周期下，baseline、默认 generated-provider 宿主接线的 `GFramework.Cqrs` runtime、NuGet `Mediator` source-generated concrete path 与 `MediatR`
   - `Messaging/RequestPipelineBenchmarks.cs`
     - `0 / 1 / 4` 个 pipeline 行为下，baseline、默认 generated-provider 宿主接线的 `GFramework.Cqrs` runtime 与 `MediatR`
   - `Messaging/RequestInvokerBenchmarks.cs`
@@ -104,5 +104,4 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 ## 当前缺口
 
 - 当前没有 stream 生命周期版的 NuGet `Mediator` source-generated concrete path 对照；`StreamLifetimeBenchmarks` 现在只覆盖 `GFramework.Cqrs` 与 `MediatR`
-- 当前没有 request 生命周期下的 NuGet `Mediator` compile-time lifetime 矩阵；`RequestLifetimeBenchmarks` 只覆盖 `GFramework.Cqrs` 与 `MediatR`
 - 当前没有 notification fan-out 的生命周期矩阵；`NotificationFanOutBenchmarks` 只覆盖固定 `4 handler` 的已装配宿主
