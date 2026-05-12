@@ -426,7 +426,7 @@ public class StreamPipelineBenchmarks
     public sealed class BenchmarkStreamPipelineBehavior4 : BenchmarkStreamPipelineBehaviorBase
     {
     }
-    
+
     /// <summary>
     ///     为 stream pipeline benchmark 提供 handwritten generated registry，
     ///     让默认 pipeline 宿主也能走真实的 generated stream invoker provider 接线路径。
