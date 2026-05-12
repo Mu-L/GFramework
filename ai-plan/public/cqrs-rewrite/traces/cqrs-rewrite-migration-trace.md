@@ -7,6 +7,31 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-12
 
+### 阶段：PR #349 latest-head review 收口（CQRS-REWRITE-RP-136）
+
+- 重新执行 `$gframework-pr-review`，按 GitHub 当前分支状态确认 `feat/cqrs-optimization` 在 `2026-05-12` 对应的是 `PR #349`，不再沿用 active tracking 中的 `PR #348` 锚点。
+- 本轮 latest-head open AI thread 复核结论：
+  - `StreamPipelineBenchmarks` 的 `Stream_Baseline`、`Stream_GFrameworkCqrs`、`Stream_MediatR` 缺少 `<returns>` XML 契约，接受修复
+  - `StreamingBenchmarks.Stream_Mediator` 缺少 `<returns>` XML 契约，接受修复
+  - `CqrsNotificationPublisherTests` 的 fallback publisher 缓存回归测试用“第二次解析返回另一个 publisher”充当安全网，和断言消息表达不一致，接受收口为“首次后任何再次解析都直接失败”
+  - active tracking / trace 的当前 PR 锚点与下一步入口仍停留在 `PR #348`，接受同步到 `PR #349`
+- 本轮主线程实施：
+  - `StreamPipelineBenchmarks`
+    - 为 3 个公开 benchmark 方法补齐 `<returns>` XML 文档
+  - `StreamingBenchmarks`
+    - 为 `Stream_Mediator()` 补齐 `<returns>` XML 文档
+  - `CqrsNotificationPublisherTests`
+    - 把 fallback publisher 缓存回归测试改为“首次返回空数组，后续任何再次解析立即抛 `AssertionException`”，避免测试安全网与失败消息自相矛盾
+  - `ai-plan/public/cqrs-rewrite/**`
+    - 将 active tracking / trace 的当前 PR 锚点与下一步入口同步到 `PR #349`
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsNotificationPublisherTests"`
+    - 结果：通过，`Passed: 9, Failed: 0`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/StreamPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+
 ### 阶段：多波 batch 继续收口（CQRS-REWRITE-RP-135）
 
 - 按 `$gframework-batch-boot 50` 恢复当前 topic，并把基线固定为
@@ -40,7 +65,7 @@ SPDX-License-Identifier: Apache-2.0
   - 明显低于 `50 files` 阈值
   - 本轮停止信号来自 `context-budget / reviewability`，不是文件预算耗尽
 - 当前下一步：
-  - 先按需要运行 `$gframework-pr-review`，确认 `PR #348` latest-head open thread 是否已随本轮新增提交收敛
+  - 先按需要运行 `$gframework-pr-review`，确认 `PR #349` latest-head open thread 是否已随当前修复提交收敛
   - 若继续扩 benchmark，优先补 `StreamLifetimeBenchmarks` 或 `StreamStartupBenchmarks` 的单文件 `Mediator` parity
   - 若切回文档收尾，把 `GFramework.Cqrs/README.md`、`docs/zh-CN/core/command.md`、`docs/zh-CN/core/query.md` 单独作为 docs-only 下一波
 

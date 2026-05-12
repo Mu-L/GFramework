@@ -146,6 +146,7 @@ public class StreamPipelineBenchmarks
     /// <summary>
     ///     直接调用 handler，并按当前观测模式消费响应序列，作为 stream pipeline 编排之外的基线。
     /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask Stream_Baseline()
     {
@@ -155,6 +156,7 @@ public class StreamPipelineBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 创建 stream，并按当前矩阵配置执行 stream pipeline。
     /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
     [Benchmark]
     public ValueTask Stream_GFrameworkCqrs()
     {
@@ -169,6 +171,7 @@ public class StreamPipelineBenchmarks
     /// <summary>
     ///     通过 MediatR 创建 stream，并按当前矩阵配置执行 stream pipeline，作为外部设计对照。
     /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
     [Benchmark]
     public ValueTask Stream_MediatR()
     {

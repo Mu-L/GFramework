@@ -167,6 +167,7 @@ public class StreamingBenchmarks
     /// <summary>
     ///     通过 `ai-libs/Mediator` 的 source-generated concrete mediator 创建 stream，并按当前观测模式消费。
     /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
     [Benchmark]
     public ValueTask Stream_Mediator()
     {

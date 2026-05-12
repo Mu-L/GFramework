@@ -12,14 +12,20 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-135`
+- 恢复点编号：`CQRS-REWRITE-RP-136`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #348`
+- 当前 PR 锚点：`PR #349`
 - 当前结论：
-  - 本轮按 `$gframework-batch-boot 50` 持续协调多波 non-conflicting subagent，基线固定为
+  - 本轮先按 `$gframework-pr-review` 重新确认当前分支最新 GitHub 上下文，确认 `feat/cqrs-optimization` 在 `2026-05-12` 已切到 `PR #349`，不再沿用旧 tracking 中的 `PR #348` 锚点。
+  - 随后按 `$gframework-batch-boot 50` 持续协调多波 non-conflicting subagent，基线固定为
     `origin/main @ ef4d3d5d (2026-05-11 17:33:43 +0800)`。
   - 当前 branch 相对基线的累计 diff 约为 `9 files / 1111 lines`；本轮停点由
     `context-budget / reviewability` 决定，而不是 `50 files` 阈值。
+  - `PR #349` latest-head review 当前确认仍成立的项只有：
+    - `StreamPipelineBenchmarks` 三个公开 benchmark 方法补齐 `<returns>` XML 契约
+    - `StreamingBenchmarks.Stream_Mediator` 补齐 `<returns>` XML 契约
+    - `CqrsNotificationPublisherTests` 中 fallback publisher 缓存回归测试去掉误导性的“第二次解析返回其它 publisher”分支
+    - active tracking / trace 的当前 PR 锚点与下一步入口同步到 `PR #349`
   - tests 侧已补齐并提交：
     - `CqrsRegistrationServiceTests`：补空输入、空项过滤、稳定键排序与跨调用跳过边界
     - `CqrsHandlerRegistrarTests` 与 `CqrsHandlerRegistrarFallbackFailureTests`：
@@ -34,7 +40,7 @@ CQRS 迁移与收敛。
 ## 当前活跃事实
 
 - 当前分支：`feat/cqrs-optimization`
-- 当前 PR：`PR #348`
+- 当前 PR：`PR #349`
 - 当前写面：
   - `GFramework.Cqrs.Benchmarks/Messaging/StreamPipelineBenchmarks.cs`
   - `GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`
@@ -66,6 +72,8 @@ CQRS 迁移与收敛。
 
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
+- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsNotificationPublisherTests"`
+  - 结果：通过，`Passed: 9, Failed: 0`
 - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsRegistrationServiceTests|FullyQualifiedName~CqrsHandlerRegistrarTests|FullyQualifiedName~CqrsHandlerRegistrarFallbackFailureTests|FullyQualifiedName~CqrsNotificationPublisherTests"`
   - 结果：通过，`Passed: 36, Failed: 0`
 - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/StreamPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarFallbackFailureTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsRegistrationServiceTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
@@ -75,7 +83,7 @@ CQRS 迁移与收敛。
 
 ## 下一推荐步骤
 
-1. 再次运行 `$gframework-pr-review`，复核 `PR #348` latest-head open thread 是否已随着本轮 5 个新提交收敛。
+1. 再次运行 `$gframework-pr-review`，复核 `PR #349` latest-head open thread 是否已随着当前修复提交收敛。
 2. 若继续扩 benchmark，优先在 `StreamLifetimeBenchmarks` 或 `StreamStartupBenchmarks` 中补单文件 `Mediator` parity，而不是并行扩多个矩阵。
 3. 若切回文档收尾，把 `GFramework.Cqrs/README.md`、`docs/zh-CN/core/command.md`、`docs/zh-CN/core/query.md` 作为单独一波 docs-only 切片处理。
 

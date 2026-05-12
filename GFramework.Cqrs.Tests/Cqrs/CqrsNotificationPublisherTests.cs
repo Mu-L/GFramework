@@ -179,12 +179,12 @@ internal sealed class CqrsNotificationPublisherTests
                     .Returns(() =>
                     {
                         notificationPublisherLookupCount++;
-                        return notificationPublisherLookupCount switch
+                        if (notificationPublisherLookupCount == 1)
                         {
-                            1 => Array.Empty<object>(),
-                            2 => [new ReverseOrderNotificationPublisher()],
-                            _ => throw new AssertionException("Notification publisher should be resolved at most once.")
-                        };
+                            return Array.Empty<object>();
+                        }
+
+                        throw new AssertionException("Notification publisher should not be resolved more than once.");
                     });
             });
 
