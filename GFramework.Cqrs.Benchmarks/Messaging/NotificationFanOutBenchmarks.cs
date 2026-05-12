@@ -123,6 +123,7 @@ public class NotificationFanOutBenchmarks
     /// <summary>
     ///     直接依次调用 4 个处理器，作为 fan-out dispatch 额外开销的 baseline。
     /// </summary>
+    /// <returns>代表基线顺序调用 4 个处理器完成当前 notification 处理的值任务。</returns>
     [Benchmark(Baseline = true)]
     public async ValueTask PublishNotification_Baseline()
     {
@@ -135,6 +136,7 @@ public class NotificationFanOutBenchmarks
     /// <summary>
     ///     通过默认顺序发布器的 GFramework.CQRS runtime 发布固定 4 处理器的 notification。
     /// </summary>
+    /// <returns>代表当前默认顺序发布器 publish 完成的值任务。</returns>
     [Benchmark]
     public ValueTask PublishNotification_GFrameworkCqrsSequential()
     {
@@ -144,6 +146,7 @@ public class NotificationFanOutBenchmarks
     /// <summary>
     ///     通过内置 <c>Task.WhenAll(...)</c> 发布器的 GFramework.CQRS runtime 发布固定 4 处理器的 notification。
     /// </summary>
+    /// <returns>代表当前 <c>Task.WhenAll(...)</c> 发布器 publish 完成的值任务。</returns>
     [Benchmark]
     public ValueTask PublishNotification_GFrameworkCqrsTaskWhenAll()
     {
@@ -153,6 +156,7 @@ public class NotificationFanOutBenchmarks
     /// <summary>
     ///     通过 MediatR 发布固定 4 处理器的 notification，作为外部设计对照。
     /// </summary>
+    /// <returns>代表当前 MediatR publish 完成的任务。</returns>
     [Benchmark]
     public Task PublishNotification_MediatR()
     {
@@ -162,6 +166,7 @@ public class NotificationFanOutBenchmarks
     /// <summary>
     ///     通过 `Mediator` source-generated concrete mediator 发布固定 4 处理器的 notification，作为高性能对照组。
     /// </summary>
+    /// <returns>代表当前 `Mediator` publish 完成的值任务。</returns>
     [Benchmark]
     public ValueTask PublishNotification_Mediator()
     {

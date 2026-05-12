@@ -7,6 +7,69 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-12
 
+### 阶段：benchmark XML 契约第 2 波收口（CQRS-REWRITE-RP-138）
+
+- 延续 `$gframework-batch-boot 50`，基线保持为 `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`。
+- 第 2 波启动前，当前分支相对基线的已提交 branch diff 为 `5 files / 177 lines`，明显低于 `50 files` 阈值；本轮继续与否的主停止信号仍是 context-budget / reviewability。
+- 主线程本地盘点 `GFramework.Cqrs.Benchmarks/Messaging/*.cs` 的公开 `[Benchmark]` 方法后，确认当前仍有一批与既有收口模式一致的 XML `<returns>` 缺口：
+  - `StreamingBenchmarks.Stream_GFrameworkCqrs()`
+  - `NotificationBenchmarks` 的 3 个公开 benchmark 方法
+  - `NotificationFanOutBenchmarks` 的 5 个公开 benchmark 方法
+  - `StreamInvokerBenchmarks` 的 4 个公开 benchmark 方法
+  - `StreamLifetimeBenchmarks` 的 4 个公开 benchmark 方法
+- 本波 accepted ownership：
+  - 主线程
+    - `GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`
+    - `GFramework.Cqrs.Benchmarks/Messaging/NotificationBenchmarks.cs`
+    - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md`
+    - `ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+  - worker
+    - `StreamLifetimeBenchmarks.cs`
+    - `StreamInvokerBenchmarks.cs`
+    - `NotificationFanOutBenchmarks.cs`
+- worker 回传验收结论：
+  - `StreamLifetimeBenchmarks.cs`
+    - 只补 `Stream_Baseline`、`Stream_GFrameworkReflection`、`Stream_GFrameworkGenerated`、`Stream_MediatR` 的 `<returns>`
+    - worker 自报 `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release` 通过
+  - `StreamInvokerBenchmarks.cs`
+    - 只补 4 个公开 benchmark 方法的 `<returns>`
+    - worker 自报同一条 benchmark 工程 build 通过
+  - `NotificationFanOutBenchmarks.cs`
+    - 只补 5 个公开 benchmark 方法的 `<returns>`
+    - worker 自报 build 遇到 `CS2012`：`obj/Release/net10.0/GFramework.Cqrs.Benchmarks.dll` 被并发进程占用；该失败被判定为并发构建噪音，而不是代码语义问题
+- 主线程局部实施：
+  - `StreamingBenchmarks.cs`
+    - 为 `Stream_GFrameworkCqrs()` 补 `<returns>`
+  - `NotificationBenchmarks.cs`
+    - 为 `PublishNotification_GFrameworkCqrs()`、`PublishNotification_MediatR()`、`PublishNotification_Mediator()` 补 `<returns>`
+- 当前下一步：
+  - 主线程串行执行 benchmark 工程 Release build，消除 worker 并发写 `obj/Release` 带来的验证噪音
+  - 若串行验证通过，决定是在当前自然停点提交收尾，还是继续 request 侧 XML 契约的下一波低风险批处理
+
+### 阶段：request benchmark XML 契约第 3 波收口后停在自然边界（CQRS-REWRITE-RP-138）
+
+- 第 2 波串行验证通过后，继续用 3 个 worker 扩展 request 系 benchmark 的同类 `<returns>` 收口：
+  - `RequestStartupBenchmarks.cs`
+  - `RequestBenchmarks.cs` + `RequestPipelineBenchmarks.cs`
+  - `RequestInvokerBenchmarks.cs` + `RequestLifetimeBenchmarks.cs`
+- worker 回传与 acceptance：
+  - `RequestStartupBenchmarks.cs`
+    - 只补公开 benchmark 方法缺失的 `<returns>`
+    - worker 自报 `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release` 通过
+  - `RequestBenchmarks.cs` + `RequestPipelineBenchmarks.cs`
+    - 只补公开 benchmark 方法缺失的 `<returns>`
+    - worker 自报 build 通过，并已提交：`555c7c07 docs(cqrs-benchmarks): 补齐 request benchmark 返回值文档`
+  - `RequestInvokerBenchmarks.cs` + `RequestLifetimeBenchmarks.cs`
+    - 只补公开 benchmark 方法缺失的 `<returns>`
+    - worker 自报 build 通过，并已提交：`ab422b05 docs(cqrs-benchmarks): 补齐 request benchmark 返回值注释`
+- 第 3 波后主线程 stop decision：
+  - 不再开启第 4 波 XML 契约批处理
+  - 原因不是 branch-size 阈值耗尽；当前分支相对 `origin/main` 仍只有 `9 files / 143 lines`
+  - 停止原因是 context-budget / reviewability：剩余候选已不比当前波次更低风险，继续机械扩批收益下降
+- 当前下一步：
+  - 只做主线程未提交面的串行验证与收尾提交
+  - 将干净工作树作为下一次 `boot` 的默认恢复目标
+
 ### 阶段：stream startup parity 与文档收尾（CQRS-REWRITE-RP-137）
 
 - 按 `$gframework-batch-boot 50` 恢复后，先重新执行 `$gframework-pr-review`。

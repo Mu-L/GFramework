@@ -148,6 +148,7 @@ public class StreamLifetimeBenchmarks
     /// <summary>
     ///     直接调用 handler，并按当前观测模式消费 stream，作为不同生命周期矩阵下的 dispatch 额外开销 baseline。
     /// </summary>
+    /// <returns>代表基线 handler stream 按当前观测模式消费完成的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask Stream_Baseline()
     {
@@ -157,6 +158,7 @@ public class StreamLifetimeBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS reflection stream binding 路径创建 stream，并按当前观测模式消费。
     /// </summary>
+    /// <returns>代表当前 reflection stream 按当前观测模式消费完成的值任务。</returns>
     [Benchmark]
     public ValueTask Stream_GFrameworkReflection()
     {
@@ -183,6 +185,7 @@ public class StreamLifetimeBenchmarks
     /// <summary>
     ///     通过 generated stream invoker provider 预热后的 GFramework.CQRS runtime 创建 stream，并按当前观测模式消费。
     /// </summary>
+    /// <returns>代表当前 generated stream 按当前观测模式消费完成的值任务。</returns>
     [Benchmark]
     public ValueTask Stream_GFrameworkGenerated()
     {
@@ -209,6 +212,7 @@ public class StreamLifetimeBenchmarks
     /// <summary>
     ///     通过 MediatR 创建 stream，并按当前观测模式消费，作为外部对照。
     /// </summary>
+    /// <returns>代表当前 MediatR stream 按当前观测模式消费完成的值任务。</returns>
     [Benchmark]
     public ValueTask Stream_MediatR()
     {

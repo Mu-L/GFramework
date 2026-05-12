@@ -145,6 +145,7 @@ public class StreamingBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 创建 stream，并按当前观测模式消费。
     /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
     [Benchmark]
     public ValueTask Stream_GFrameworkCqrs()
     {
