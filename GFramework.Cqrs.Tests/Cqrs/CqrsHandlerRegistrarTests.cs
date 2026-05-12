@@ -6,6 +6,7 @@ using GFramework.Core.Architectures;
 using GFramework.Core.Ioc;
 using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
+using GFramework.Cqrs.Internal;
 using GFramework.Cqrs.Tests.Logging;
 
 namespace GFramework.Cqrs.Tests.Cqrs;
@@ -168,6 +169,74 @@ internal sealed class CqrsHandlerRegistrarTests
         Assert.That(
             handlers.Select(static handler => handler.GetType()),
             Is.EqualTo([typeof(GeneratedRegistryNotificationHandler)]));
+    }
+
+    /// <summary>
+    ///     验证 direct generated-registry 激活入口在 registry 为抽象类型时会抛出异常，并保留契约告警。
+    /// </summary>
+    [Test]
+    public void RegisterGeneratedRegistry_Should_Throw_When_Generated_Registry_Is_Abstract()
+    {
+        var capturingProvider = new CapturingLoggerFactoryProvider(LogLevel.Warning);
+        var logger = capturingProvider.CreateLogger(nameof(CqrsHandlerRegistrarTests));
+        var container = new MicrosoftDiContainer();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CqrsHandlerRegistrar.RegisterGeneratedRegistry(
+                container,
+                typeof(AbstractGeneratedNotificationHandlerRegistry),
+                logger));
+
+        var warningLogs = capturingProvider.Loggers
+            .SelectMany(static createdLogger => createdLogger.Logs)
+            .Where(static log => log.Level == LogLevel.Warning)
+            .ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Message, Does.Contain(typeof(AbstractGeneratedNotificationHandlerRegistry).FullName));
+            Assert.That(
+                warningLogs.Any(log =>
+                    log.Message.Contains("because it is abstract", StringComparison.Ordinal)),
+                Is.True);
+            Assert.That(container.GetServicesUnsafe, Is.Empty);
+        });
+    }
+
+    /// <summary>
+    ///     验证 direct generated-registry 激活入口在 registry 缺少无参构造器时会抛出异常，并保留契约告警。
+    /// </summary>
+    [Test]
+    public void RegisterGeneratedRegistry_Should_Throw_When_Generated_Registry_Has_No_Parameterless_Constructor()
+    {
+        var capturingProvider = new CapturingLoggerFactoryProvider(LogLevel.Warning);
+        var logger = capturingProvider.CreateLogger(nameof(CqrsHandlerRegistrarTests));
+        var container = new MicrosoftDiContainer();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CqrsHandlerRegistrar.RegisterGeneratedRegistry(
+                container,
+                typeof(ConstructorArgumentNotificationHandlerRegistry),
+                logger));
+
+        var warningLogs = capturingProvider.Loggers
+            .SelectMany(static createdLogger => createdLogger.Logs)
+            .Where(static log => log.Level == LogLevel.Warning)
+            .ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception!.Message, Does.Contain(typeof(ConstructorArgumentNotificationHandlerRegistry).FullName));
+            Assert.That(
+                warningLogs.Any(log =>
+                    log.Message.Contains(
+                        "does not expose an accessible parameterless constructor",
+                        StringComparison.Ordinal)),
+                Is.True);
+            Assert.That(container.GetServicesUnsafe, Is.Empty);
+        });
     }
 
     /// <summary>
@@ -694,5 +763,56 @@ internal sealed class CqrsHandlerRegistrarTests
     {
         return typeof(CqrsReflectionFallbackAttribute).Assembly
             .GetType("GFramework.Cqrs.Internal.CqrsHandlerRegistrar", throwOnError: true)!;
+    }
+
+    /// <summary>
+    ///     模拟被错误声明为抽象类型的 generated registry。
+    /// </summary>
+    private abstract class AbstractGeneratedNotificationHandlerRegistry : ICqrsHandlerRegistry
+    {
+        /// <summary>
+        ///     抽象 registry 即便具备注册逻辑，也不应被 direct 激活入口实例化。
+        /// </summary>
+        /// <param name="services">承载处理器映射的服务集合。</param>
+        /// <param name="logger">记录注册诊断的日志器。</param>
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(INotificationHandler<GeneratedRegistryNotification>),
+                typeof(GeneratedRegistryNotificationHandler));
+        }
+    }
+
+    /// <summary>
+    ///     模拟缺少无参构造器的 generated registry。
+    /// </summary>
+    private sealed class ConstructorArgumentNotificationHandlerRegistry : ICqrsHandlerRegistry
+    {
+        /// <summary>
+        ///     初始化一个只能通过额外参数构造的测试 registry。
+        /// </summary>
+        /// <param name="marker">用于区分测试场景的占位参数。</param>
+        public ConstructorArgumentNotificationHandlerRegistry(string marker)
+        {
+            ArgumentNullException.ThrowIfNull(marker);
+        }
+
+        /// <summary>
+        ///     此实现仅用于满足接口契约；本用例关注的是构造阶段失败后的异常语义。
+        /// </summary>
+        /// <param name="services">承载处理器映射的服务集合。</param>
+        /// <param name="logger">记录注册诊断的日志器。</param>
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(INotificationHandler<GeneratedRegistryNotification>),
+                typeof(GeneratedRegistryNotificationHandler));
+        }
     }
 }

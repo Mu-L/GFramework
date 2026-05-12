@@ -14,6 +14,24 @@ namespace GFramework.Cqrs.Tests.Cqrs;
 internal sealed class CqrsRegistrationServiceTests
 {
     /// <summary>
+    ///     验证空程序集输入不会触发底层注册，也不会产生重复跳过日志。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Not_Invoke_Registrar_When_Assemblies_Are_Empty()
+    {
+        var logger = new TestLogger("DefaultCqrsRegistrationService", LogLevel.Debug);
+        var registrar = new Mock<ICqrsHandlerRegistrar>(MockBehavior.Strict);
+        var service = CqrsRuntimeFactory.CreateRegistrationService(registrar.Object, logger);
+
+        service.RegisterHandlers([]);
+
+        registrar.Verify(
+            static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()),
+            Times.Never);
+        Assert.That(logger.Logs, Has.Count.EqualTo(0));
+    }
+
+    /// <summary>
     ///     验证同一次调用内出现重复程序集键时，底层注册器只会接收到一次注册请求。
     /// </summary>
     [Test]
@@ -84,6 +102,82 @@ internal sealed class CqrsRegistrationServiceTests
                 debugMessages[0],
                 Does.Contain("GFramework.Cqrs.Tests.RegisteredAssembly, Version=1.0.0.0"));
             Assert.That(debugMessages[0], Does.Contain("already registered"));
+        });
+    }
+
+    /// <summary>
+    ///     验证协调器会忽略空项，并按稳定程序集键排序后仅注册当前调用内的唯一程序集。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Ignore_Null_Entries_And_Register_Unique_Assemblies_In_Stable_Key_Order()
+    {
+        var logger = new TestLogger("DefaultCqrsRegistrationService", LogLevel.Debug);
+        var registrar = new Mock<ICqrsHandlerRegistrar>(MockBehavior.Strict);
+        var assemblyC = CreateAssembly("GFramework.Cqrs.Tests.Sorting.C, Version=1.0.0.0");
+        var assemblyA = CreateAssembly("GFramework.Cqrs.Tests.Sorting.A, Version=1.0.0.0");
+        var duplicateAssemblyA = CreateAssembly("GFramework.Cqrs.Tests.Sorting.A, Version=1.0.0.0");
+        var assemblyB = CreateAssembly("GFramework.Cqrs.Tests.Sorting.B, Version=1.0.0.0");
+        var registeredAssemblies = new List<Assembly>();
+
+        registrar
+            .Setup(static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()))
+            .Callback<IEnumerable<Assembly>>(assemblies => registeredAssemblies.AddRange(assemblies));
+
+        var service = CqrsRuntimeFactory.CreateRegistrationService(registrar.Object, logger);
+
+        service.RegisterHandlers([assemblyC.Object, null!, assemblyA.Object, duplicateAssemblyA.Object, assemblyB.Object, null!]);
+
+        registrar.Verify(
+            static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()),
+            Times.Exactly(3));
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                registeredAssemblies,
+                Is.EqualTo([assemblyA.Object, assemblyB.Object, assemblyC.Object]));
+            Assert.That(logger.Logs, Has.Count.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    ///     验证跨调用遇到已注册程序集键时，协调器会跳过重复项，同时继续按稳定程序集键顺序处理剩余新程序集。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Skip_Previously_Registered_Keys_And_Keep_Stable_Order_For_Remaining_Assemblies()
+    {
+        var logger = new TestLogger("DefaultCqrsRegistrationService", LogLevel.Debug);
+        var registrar = new Mock<ICqrsHandlerRegistrar>(MockBehavior.Strict);
+        var firstAssembly = CreateAssembly("GFramework.Cqrs.Tests.Sorting.B, Version=1.0.0.0");
+        var duplicateAssembly = CreateAssembly("GFramework.Cqrs.Tests.Sorting.B, Version=1.0.0.0");
+        var assemblyC = CreateAssembly("GFramework.Cqrs.Tests.Sorting.C, Version=1.0.0.0");
+        var assemblyA = CreateAssembly("GFramework.Cqrs.Tests.Sorting.A, Version=1.0.0.0");
+        var registeredAssemblies = new List<Assembly>();
+
+        registrar
+            .Setup(static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()))
+            .Callback<IEnumerable<Assembly>>(assemblies => registeredAssemblies.AddRange(assemblies));
+
+        var service = CqrsRuntimeFactory.CreateRegistrationService(registrar.Object, logger);
+
+        service.RegisterHandlers([firstAssembly.Object]);
+        service.RegisterHandlers([assemblyC.Object, duplicateAssembly.Object, assemblyA.Object]);
+
+        registrar.Verify(
+            static currentRegistrar => currentRegistrar.RegisterHandlers(It.IsAny<IEnumerable<Assembly>>()),
+            Times.Exactly(3));
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                registeredAssemblies,
+                Is.EqualTo([firstAssembly.Object, assemblyA.Object, assemblyC.Object]));
+            var debugMessages = logger.Logs
+                .Where(static log => log.Level == LogLevel.Debug)
+                .Select(static log => log.Message)
+                .ToArray();
+            Assert.That(debugMessages, Has.Length.EqualTo(1));
+            Assert.That(
+                debugMessages[0],
+                Does.Contain("GFramework.Cqrs.Tests.Sorting.B, Version=1.0.0.0"));
         });
     }
 

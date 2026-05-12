@@ -139,6 +139,68 @@ internal sealed class CqrsHandlerRegistrarFallbackFailureTests
     }
 
     /// <summary>
+    ///     验证当 generated registry 是抽象类型时，registrar 会记录告警并回退到反射扫描。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Fall_Back_To_Reflection_When_Generated_Registry_Is_Abstract()
+    {
+        var generatedAssembly = CreateGeneratedRegistryAssembly(
+            "GFramework.Cqrs.Tests.Cqrs.AbstractGeneratedRegistryAssembly, Version=1.0.0.0",
+            typeof(AbstractGeneratedNotificationHandlerRegistry));
+        generatedAssembly
+            .Setup(static assembly => assembly.GetTypes())
+            .Returns([typeof(GeneratedRegistryNotificationHandler)]);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                GetGeneratedRegistryNotificationHandlerTypes(container),
+                Is.EqualTo([typeof(GeneratedRegistryNotificationHandler)]));
+            Assert.That(
+                GetWarningLogs().Any(log =>
+                    log.Message.Contains("because it is abstract", StringComparison.Ordinal)),
+                Is.True);
+        });
+
+        generatedAssembly.Verify(static assembly => assembly.GetTypes(), Times.Once);
+    }
+
+    /// <summary>
+    ///     验证当 generated registry 不暴露可访问无参构造器时，registrar 会记录告警并回退到反射扫描。
+    /// </summary>
+    [Test]
+    public void RegisterHandlers_Should_Fall_Back_To_Reflection_When_Generated_Registry_Has_No_Parameterless_Constructor()
+    {
+        var generatedAssembly = CreateGeneratedRegistryAssembly(
+            "GFramework.Cqrs.Tests.Cqrs.NoParameterlessGeneratedRegistryAssembly, Version=1.0.0.0",
+            typeof(ConstructorArgumentNotificationHandlerRegistry));
+        generatedAssembly
+            .Setup(static assembly => assembly.GetTypes())
+            .Returns([typeof(GeneratedRegistryNotificationHandler)]);
+
+        var container = new MicrosoftDiContainer();
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                GetGeneratedRegistryNotificationHandlerTypes(container),
+                Is.EqualTo([typeof(GeneratedRegistryNotificationHandler)]));
+            Assert.That(
+                GetWarningLogs().Any(log =>
+                    log.Message.Contains(
+                        "does not expose an accessible parameterless constructor",
+                        StringComparison.Ordinal)),
+                Is.True);
+        });
+
+        generatedAssembly.Verify(static assembly => assembly.GetTypes(), Times.Once);
+    }
+
+    /// <summary>
     ///     创建一个仅通过 generated registry 注册主 handler、并附带指定 fallback 元数据的程序集替身。
     /// </summary>
     /// <param name="assemblyName">用于日志与缓存键的程序集名。</param>
@@ -158,6 +220,24 @@ internal sealed class CqrsHandlerRegistrarFallbackFailureTests
         generatedAssembly
             .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsReflectionFallbackAttribute), false))
             .Returns([fallbackAttribute]);
+        return generatedAssembly;
+    }
+
+    /// <summary>
+    ///     创建一个只声明 generated registry attribute 的程序集替身，用于验证 registry 激活失败后的回退行为。
+    /// </summary>
+    /// <param name="assemblyName">用于日志与缓存键的程序集名。</param>
+    /// <param name="registryType">要暴露给 registrar 的 generated registry 类型。</param>
+    /// <returns>已完成基础接线的程序集 mock。</returns>
+    private static Mock<Assembly> CreateGeneratedRegistryAssembly(string assemblyName, Type registryType)
+    {
+        var generatedAssembly = new Mock<Assembly>();
+        generatedAssembly
+            .SetupGet(static assembly => assembly.FullName)
+            .Returns(assemblyName);
+        generatedAssembly
+            .Setup(static assembly => assembly.GetCustomAttributes(typeof(CqrsHandlerRegistryAttribute), false))
+            .Returns([new CqrsHandlerRegistryAttribute(registryType)]);
         return generatedAssembly;
     }
 
@@ -258,5 +338,56 @@ internal sealed class CqrsHandlerRegistrarFallbackFailureTests
             .SelectMany(static logger => logger.Logs)
             .Where(static log => log.Level == LogLevel.Warning)
             .ToArray();
+    }
+
+    /// <summary>
+    ///     模拟 generated registry 被错误声明为抽象类型时的激活失败场景。
+    /// </summary>
+    private abstract class AbstractGeneratedNotificationHandlerRegistry : ICqrsHandlerRegistry
+    {
+        /// <summary>
+        ///     抽象 registry 即便具备注册逻辑，也不应被运行时实例化。
+        /// </summary>
+        /// <param name="services">承载处理器映射的服务集合。</param>
+        /// <param name="logger">记录注册诊断的日志器。</param>
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(INotificationHandler<GeneratedRegistryNotification>),
+                typeof(GeneratedRegistryNotificationHandler));
+        }
+    }
+
+    /// <summary>
+    ///     模拟 generated registry 缺少可访问无参构造器时的激活失败场景。
+    /// </summary>
+    private sealed class ConstructorArgumentNotificationHandlerRegistry : ICqrsHandlerRegistry
+    {
+        /// <summary>
+        ///     初始化一个只能通过额外参数构造的测试 registry。
+        /// </summary>
+        /// <param name="marker">用于区分测试场景的占位参数。</param>
+        public ConstructorArgumentNotificationHandlerRegistry(string marker)
+        {
+            ArgumentNullException.ThrowIfNull(marker);
+        }
+
+        /// <summary>
+        ///     此实现仅用于满足接口契约；本用例关注的是实例化失败前的回退行为。
+        /// </summary>
+        /// <param name="services">承载处理器映射的服务集合。</param>
+        /// <param name="logger">记录注册诊断的日志器。</param>
+        public void Register(IServiceCollection services, ILogger logger)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            services.AddTransient(
+                typeof(INotificationHandler<GeneratedRegistryNotification>),
+                typeof(GeneratedRegistryNotificationHandler));
+        }
     }
 }

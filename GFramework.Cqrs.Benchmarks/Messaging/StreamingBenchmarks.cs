@@ -17,6 +17,7 @@ using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using GeneratedMediator = Mediator.Mediator;
 
 [assembly: GFramework.Cqrs.CqrsHandlerRegistryAttribute(
     typeof(GFramework.Cqrs.Benchmarks.Messaging.GeneratedDefaultStreamingBenchmarkRegistry))]
@@ -24,7 +25,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比单个 stream request 在直接调用、GFramework.CQRS runtime 与 MediatR 之间的 steady-state stream 开销。
+///     对比单个 stream request 在直接调用、GFramework.CQRS runtime、NuGet `Mediator` 与 MediatR 之间的 steady-state stream 开销。
 /// </summary>
 /// <remarks>
 ///     默认 generated-provider stream 宿主同时暴露 <see cref="StreamObservation.FirstItem" /> 与
@@ -36,8 +37,10 @@ public class StreamingBenchmarks
 {
     private MicrosoftDiContainer _container = null!;
     private ICqrsRuntime _runtime = null!;
-    private ServiceProvider _serviceProvider = null!;
+    private ServiceProvider _mediatrServiceProvider = null!;
+    private ServiceProvider _mediatorServiceProvider = null!;
     private IMediator _mediatr = null!;
+    private GeneratedMediator _mediator = null!;
     private BenchmarkStreamHandler _baselineHandler = null!;
     private BenchmarkStreamRequest _request = null!;
 
@@ -100,25 +103,28 @@ public class StreamingBenchmarks
             _container,
             LoggerFactoryResolver.Provider.CreateLogger(nameof(StreamingBenchmarks)));
 
-        _serviceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
+        _mediatrServiceProvider = BenchmarkHostFactory.CreateMediatRServiceProvider(
             configure: null,
             typeof(StreamingBenchmarks),
             static candidateType => candidateType == typeof(BenchmarkStreamHandler),
             ServiceLifetime.Singleton);
-        _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        _mediatr = _mediatrServiceProvider.GetRequiredService<IMediator>();
+
+        _mediatorServiceProvider = BenchmarkHostFactory.CreateMediatorServiceProvider(configure: null);
+        _mediator = _mediatorServiceProvider.GetRequiredService<GeneratedMediator>();
 
         _request = new BenchmarkStreamRequest(Guid.NewGuid(), 3);
     }
 
     /// <summary>
-    ///     释放 MediatR 对照组使用的 DI 宿主。
+    ///     释放 MediatR 与 `Mediator` 对照组使用的 DI 宿主。
     /// </summary>
     [GlobalCleanup]
     public void Cleanup()
     {
         try
         {
-            BenchmarkCleanupHelper.DisposeAll(_container, _serviceProvider);
+            BenchmarkCleanupHelper.DisposeAll(_container, _mediatrServiceProvider, _mediatorServiceProvider);
         }
         finally
         {
@@ -156,6 +162,16 @@ public class StreamingBenchmarks
     public ValueTask Stream_MediatR()
     {
         return ObserveAsync(_mediatr.CreateStream(_request, CancellationToken.None), Observation);
+    }
+
+    /// <summary>
+    ///     通过 `ai-libs/Mediator` 的 source-generated concrete mediator 创建 stream，并按当前观测模式消费。
+    /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
+    [Benchmark]
+    public ValueTask Stream_Mediator()
+    {
+        return ObserveAsync(_mediator.CreateStream(_request, CancellationToken.None), Observation);
     }
 
     /// <summary>
@@ -224,6 +240,7 @@ public class StreamingBenchmarks
     /// <param name="ItemCount">返回元素数量。</param>
     public sealed record BenchmarkStreamRequest(Guid Id, int ItemCount) :
         GFramework.Cqrs.Abstractions.Cqrs.IStreamRequest<BenchmarkResponse>,
+        Mediator.IStreamRequest<BenchmarkResponse>,
         MediatR.IStreamRequest<BenchmarkResponse>;
 
     /// <summary>
@@ -233,10 +250,11 @@ public class StreamingBenchmarks
     public sealed record BenchmarkResponse(Guid Id);
 
     /// <summary>
-    ///     同时实现 GFramework.CQRS 与 MediatR 契约的最小 stream handler。
+    ///     同时实现 GFramework.CQRS、NuGet `Mediator` 与 MediatR 契约的最小 stream handler。
     /// </summary>
     public sealed class BenchmarkStreamHandler :
         GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>,
+        Mediator.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>,
         MediatR.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>
     {
         /// <summary>
@@ -247,6 +265,16 @@ public class StreamingBenchmarks
             CancellationToken cancellationToken)
         {
             return EnumerateAsync(request, cancellationToken);
+        }
+
+        /// <summary>
+        ///     处理 NuGet `Mediator` stream request。
+        /// </summary>
+        IAsyncEnumerable<BenchmarkResponse> Mediator.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>.Handle(
+            BenchmarkStreamRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Handle(request, cancellationToken);
         }
 
         /// <summary>

@@ -5,6 +5,70 @@ SPDX-License-Identifier: Apache-2.0
 
 # CQRS 重写迁移追踪
 
+## 2026-05-12
+
+### 阶段：PR #349 latest-head review 收口（CQRS-REWRITE-RP-136）
+
+- 重新执行 `$gframework-pr-review`，按 GitHub 当前分支状态确认 `feat/cqrs-optimization` 在 `2026-05-12` 对应的是 `PR #349`，不再沿用 active tracking 中的 `PR #348` 锚点。
+- 本轮 latest-head open AI thread 复核结论：
+  - `StreamPipelineBenchmarks` 的 `Stream_Baseline`、`Stream_GFrameworkCqrs`、`Stream_MediatR` 缺少 `<returns>` XML 契约，接受修复
+  - `StreamingBenchmarks.Stream_Mediator` 缺少 `<returns>` XML 契约，接受修复
+  - `CqrsNotificationPublisherTests` 的 fallback publisher 缓存回归测试用“第二次解析返回另一个 publisher”充当安全网，和断言消息表达不一致，接受收口为“首次后任何再次解析都直接失败”
+  - active tracking / trace 的当前 PR 锚点与下一步入口仍停留在 `PR #348`，接受同步到 `PR #349`
+- 本轮主线程实施：
+  - `StreamPipelineBenchmarks`
+    - 为 3 个公开 benchmark 方法补齐 `<returns>` XML 文档
+  - `StreamingBenchmarks`
+    - 为 `Stream_Mediator()` 补齐 `<returns>` XML 文档
+  - `CqrsNotificationPublisherTests`
+    - 把 fallback publisher 缓存回归测试改为“首次返回空数组，后续任何再次解析立即抛 `AssertionException`”，避免测试安全网与失败消息自相矛盾
+  - `ai-plan/public/cqrs-rewrite/**`
+    - 将 active tracking / trace 的当前 PR 锚点与下一步入口同步到 `PR #349`
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsNotificationPublisherTests"`
+    - 结果：通过，`Passed: 9, Failed: 0`
+  - `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/StreamPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+    - 结果：通过
+
+### 阶段：多波 batch 继续收口（CQRS-REWRITE-RP-135）
+
+- 按 `$gframework-batch-boot 50` 恢复当前 topic，并把基线固定为
+  `origin/main @ ef4d3d5d (2026-05-11 17:33:43 +0800)`。
+- 启动时确认当前工作树干净，branch diff 为 `0 files / 0 lines`；旧 tracking 中“未提交收尾切片”已不再反映真实仓库状态。
+- 第 1 波 accepted delegated scope：
+  - `CqrsRegistrationServiceTests`
+    - 补空输入不触发 registrar、忽略空项后按稳定程序集键排序并去重、跨调用跳过已注册键时继续处理剩余新程序集
+  - `CqrsHandlerRegistrarTests` + `CqrsHandlerRegistrarFallbackFailureTests`
+    - 补 abstract registry 与缺少无参构造器 registry 在程序集级回退路径和 direct activation 入口的告警 / 抛错覆盖
+  - `StreamPipelineBenchmarks` + `GFramework.Cqrs.Benchmarks/README.md`
+    - 新增 `0 / 1 / 4` 个 stream pipeline 行为与 `FirstItem / DrainAll` 观测矩阵
+    - README 补齐 stream pipeline coverage、运行示例与 gap 说明
+- 第 2 波 accepted delegated scope：
+  - `CqrsNotificationPublisherTests`
+    - 补“容器未注册 publisher 时回退到 `SequentialNotificationPublisher`，且首次解析后缓存结果”回归
+  - `StreamingBenchmarks` + `GFramework.Cqrs.Benchmarks/README.md`
+    - 补 steady-state stream 的 `Mediator` 对照
+    - README 将 stream steady-state gap 收口为“lifetime / startup 仍缺 `Mediator` parity”
+- 主线程验收与修正：
+  - 审核 5 个 worker 提交均未越出 ownership 边界
+  - 在 `StreamPipelineBenchmarks.cs` 修掉 `git diff --check` 报出的 1 处 trailing whitespace
+  - 更新 active tracking / trace 到当前 branch 事实，避免下次 `boot` 继续落到过期恢复点
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsRegistrationServiceTests|FullyQualifiedName~CqrsHandlerRegistrarTests|FullyQualifiedName~CqrsHandlerRegistrarFallbackFailureTests|FullyQualifiedName~CqrsNotificationPublisherTests"`
+  - `python3 scripts/license-header.py --check --paths ...`
+  - `git diff --check origin/main...HEAD`
+- 当前停点判断：
+  - 当前 branch diff 约为 `9 files / 1111 lines`
+  - 明显低于 `50 files` 阈值
+  - 本轮停止信号来自 `context-budget / reviewability`，不是文件预算耗尽
+- 当前下一步：
+  - 先按需要运行 `$gframework-pr-review`，确认 `PR #349` latest-head open thread 是否已随当前修复提交收敛
+  - 若继续扩 benchmark，优先补 `StreamLifetimeBenchmarks` 或 `StreamStartupBenchmarks` 的单文件 `Mediator` parity
+  - 若切回文档收尾，把 `GFramework.Cqrs/README.md`、`docs/zh-CN/core/command.md`、`docs/zh-CN/core/query.md` 单独作为 docs-only 下一波
+
 ## 2026-05-11
 
 ### 阶段：PR #348 latest-head review 再收口（CQRS-REWRITE-RP-134）

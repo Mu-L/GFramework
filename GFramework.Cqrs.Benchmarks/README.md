@@ -26,13 +26,16 @@
     - `Initialization` 与 `ColdStart` 两组下，`GFramework.Cqrs`、NuGet `Mediator`、`MediatR`
 - stream steady-state
   - `Messaging/StreamingBenchmarks.cs`
-    - baseline、默认 generated-provider 宿主接线的 `GFramework.Cqrs` runtime 与 `MediatR`
+    - baseline、默认 generated-provider 宿主接线的 `GFramework.Cqrs` runtime、NuGet `Mediator` source-generated concrete path 与 `MediatR`
     - 同时提供 `FirstItem` 与 `DrainAll` 两种观测口径
   - `Messaging/StreamLifetimeBenchmarks.cs`
     - `Singleton / Scoped / Transient` 三类 handler 生命周期下，baseline、`GFramework.Cqrs` reflection stream binding、`GFramework.Cqrs` generated stream registry、`MediatR`
     - 同时提供 `FirstItem` 与 `DrainAll` 两种观测口径
   - `Messaging/StreamInvokerBenchmarks.cs`
     - baseline、`GFramework.Cqrs` reflection stream binding、`GFramework.Cqrs` generated stream invoker、`MediatR`
+    - 同时提供 `FirstItem` 与 `DrainAll` 两种观测口径
+  - `Messaging/StreamPipelineBenchmarks.cs`
+    - `0 / 1 / 4` 个 stream pipeline 行为下，baseline、默认 generated-provider 宿主接线的 `GFramework.Cqrs` runtime 与 `MediatR`
     - 同时提供 `FirstItem` 与 `DrainAll` 两种观测口径
 - stream startup
   - `Messaging/StreamStartupBenchmarks.cs`
@@ -68,6 +71,7 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 ```bash
 dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*RequestLifetimeBenchmarks.SendRequest_*"
 dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamLifetimeBenchmarks.Stream_*"
+dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --filter "*StreamPipelineBenchmarks.Stream_*"
 ```
 
 ## 并发运行约束
@@ -87,7 +91,7 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 - `RequestLifetimeBenchmarks` 的 `Scoped` 场景会在每次 request 分发时显式创建并释放真实 DI 作用域；它观察的是 scoped handler 的解析与 dispatch 成本，不把 runtime 构造常量成本混入生命周期对照
 - `NotificationLifetimeBenchmarks` 的 `Scoped` 场景也采用真实 DI 作用域；它比较的是 publish 路径上的生命周期额外开销，不是根容器解析退化后的近似值
-- `StreamingBenchmarks`、`StreamLifetimeBenchmarks`、`StreamInvokerBenchmarks` 同时暴露 `FirstItem` 与 `DrainAll`
+- `StreamingBenchmarks`、`StreamLifetimeBenchmarks`、`StreamInvokerBenchmarks`、`StreamPipelineBenchmarks` 同时暴露 `FirstItem` 与 `DrainAll`
   - `FirstItem` 适合观察“建流到首个元素”的固定成本
   - `DrainAll` 适合观察完整枚举整个 stream 的总成本
 - `StreamStartupBenchmarks` 的 `ColdStart` 只推进到首个元素，因此它回答的是“新宿主下首次建流命中”的边界，不回答完整枚举总成本
@@ -96,7 +100,6 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 ## 当前缺口
 
-- 当前没有 stream 版的 NuGet `Mediator` source-generated concrete path 对照；stream steady-state、lifetime、startup 现在都只覆盖 `GFramework.Cqrs` 与 `MediatR`
+- 当前没有 stream 生命周期与 startup 版的 NuGet `Mediator` source-generated concrete path 对照；`StreamLifetimeBenchmarks` 与 `StreamStartupBenchmarks` 现在都只覆盖 `GFramework.Cqrs` 与 `MediatR`
 - 当前没有 request 生命周期下的 NuGet `Mediator` compile-time lifetime 矩阵；`RequestLifetimeBenchmarks` 只覆盖 `GFramework.Cqrs` 与 `MediatR`
 - 当前没有 notification fan-out 的生命周期矩阵；`NotificationFanOutBenchmarks` 只覆盖固定 `4 handler` 的已装配宿主
-- 当前没有 stream pipeline benchmark；现有 pipeline coverage 仅限 request
