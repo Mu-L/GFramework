@@ -7,6 +7,40 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-12
 
+### 阶段：PR #350 的 Mediator runtime 配置收口（CQRS-REWRITE-RP-141）
+
+- 使用 `$gframework-pr-review` 重新抓取当前分支 PR，确认 GitHub 真值已从 active tracking 中过期的 `PR #349` 切换为仍处于 `OPEN` 状态的 `PR #350`。
+- 最新 AI review 只剩 1 条 Greptile open thread：
+  - `GFramework.Cqrs.Benchmarks/Messaging/StreamStartupBenchmarks.cs:210`
+  - 质疑点不是文档，而是 `Mediator` startup / request lifetime 新路径仅编译通过、未实际 smoke-run
+- 主线程先按 review 建议做本地 smoke 验证，而不是直接回复线程：
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix pr350-stream-startup-mediator --filter "*StreamStartupBenchmarks.ColdStart_Mediator*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix pr350-request-lifetime-mediator --filter "*RequestLifetimeBenchmarks.SendRequest_Mediator*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+- 第一轮 smoke 暴露出 Greptile 线程背后的真实运行时问题，而不是 review 噪音：
+  - `StreamStartupBenchmarks.ColdStart_Mediator()` 在 BenchmarkDotNet 自动生成宿主里抛出
+    `Invalid configuration detected for Mediator. Generated code for 'Transient' lifetime, but got 'Singleton' lifetime from options.`
+  - `RequestLifetimeBenchmarks.SendRequest_Mediator()` 的 `Singleton` / `Scoped` 同样抛出相同异常，只有 `Transient` 分支能实际执行
+- 根因判断：
+  - `Mediator` 的 DI lifetime 由 source generator 在 benchmark 项目编译期固定
+  - 当前项目同时包含默认 `AddMediator()` 和 request lifetime 场景里的 `AddMediator(options => options.ServiceLifetime = ...)`
+  - 同一份生成产物在 BenchmarkDotNet 自动生成宿主里因此出现 compile-time lifetime 与 runtime options 不一致
+- 主线程修复：
+  - `BenchmarkHostFactory.CreateMediatorServiceProvider()` 统一改为显式 `ServiceLifetime.Singleton`
+  - `RequestLifetimeBenchmarks` 删除当前无法真实运行的 `SendRequest_Mediator()` 与相关 `Mediator` 生命周期 helper / 契约实现
+  - `GFramework.Cqrs.Benchmarks/README.md` 将 request lifetime coverage 收窄为 `GFramework.Cqrs` + `MediatR`，并把 `Mediator` lifetime parity 改记为当前缺口
+- 串行验证结果：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix pr350-stream-startup-mediator-fixed --filter "*StreamStartupBenchmarks.ColdStart_Mediator*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 关键数值：`ColdStart_Mediator ≈ 144.036 us / 69.3 KB`
+  - `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix pr350-request-lifetime-fixed-rerun --filter "*RequestLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
+    - 结果：通过
+    - 关键结论：当前 request lifetime 矩阵已收敛为 `9` 项（baseline / `GFramework.Cqrs` / `MediatR` * `Singleton|Scoped|Transient`），不再包含伪 `Mediator` lifetime 条目
+- 本轮 stop decision：
+  - 不继续把 `Mediator` lifetime parity 硬扩到 request 或 stream lifetime benchmark
+  - 原因不是 branch-size；而是 source-generator compile-time config 已明确构成真实边界，继续在同一项目里扩 runtime 切换只会制造新的伪覆盖
+
 ### 阶段：request lifetime 的 Mediator parity 与文档漂移收口（CQRS-REWRITE-RP-140）
 
 - 继续按 `$gframework-batch-boot 50` 推进，基线保持为 `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`。
