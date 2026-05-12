@@ -36,12 +36,13 @@ SPDX-License-Identifier: Apache-2.0
   - `python3 scripts/license-header.py --check --paths ...`
   - `git diff --check origin/main...HEAD`
 - 当前停点判断：
-  - 当前 branch diff 约为 `7 files / 961 lines`
+  - 当前 branch diff 约为 `9 files / 1114 lines`
   - 明显低于 `50 files` 阈值
   - 本轮停止信号来自 `context-budget / reviewability`，不是文件预算耗尽
 - 当前下一步：
-  - 先把本轮主线程修正与 `ai-plan` 更新提交到干净工作树
-  - 再按需要运行 `$gframework-pr-review` 或继续单文件 benchmark parity / docs-only 下一波
+  - 先按需要运行 `$gframework-pr-review`，确认 `PR #348` latest-head open thread 是否已随本轮新增提交收敛
+  - 若继续扩 benchmark，优先补 `StreamLifetimeBenchmarks` 或 `StreamStartupBenchmarks` 的单文件 `Mediator` parity
+  - 若切回文档收尾，把 `GFramework.Cqrs/README.md`、`docs/zh-CN/core/command.md`、`docs/zh-CN/core/query.md` 单独作为 docs-only 下一波
 
 ## 2026-05-11
 
