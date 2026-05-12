@@ -7,6 +7,35 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-12
 
+### 阶段：README startup coverage 精度同步并停在自然边界（CQRS-REWRITE-RP-139）
+
+- 继续按 `$gframework-batch-boot 50` 推进，基线保持为 `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`。
+- 本轮启动时重新测得当前已提交 branch diff 为 `14 files`，仍远低于 `50 files` 阈值；继续与否的主停止信号仍是
+  context-budget / reviewability。
+- 本轮主线程先做只读盘点与抽样核对：
+  - README 一致性 explorer 结论成立：`GFramework.Cqrs.Benchmarks/README.md` 对 startup coverage / 边界的表述仍可更精确
+  - benchmark XML 缺口 explorer 结论未直接接受；主线程抽样检查 `NotificationBenchmarks.cs`、
+    `RequestBenchmarks.cs`、`StreamingBenchmarks.cs`、`NotificationStartupBenchmarks.cs` 后确认，
+    其 class / benchmark 方法的 `<summary>` 与 `<returns>` 实际已存在，不能继续按“14 个门面文件普遍缺 XML”
+    的假设扩批
+- 因此本轮 accepted delegated scope 缩成单文件 docs-only worker：
+  - `GFramework.Cqrs.Benchmarks/README.md`
+    - 把 `StreamStartupBenchmarks` 明确写成 `MediatR`、`GFramework.Cqrs` reflection、
+      `GFramework.Cqrs` generated、NuGet `Mediator` 四组 initialization / cold-start 对照
+    - 补充 `RequestStartupBenchmarks` 与 `NotificationStartupBenchmarks` 的 `GFramework.Cqrs` startup 路径是
+      “单 handler 最小宿主 + 手工注册”模型，不外推到程序集扫描、完整注册协调器、fan-out 或发布策略变体
+- worker 回传验收结论：
+  - 改动文件未越出 ownership 边界
+  - README diff 与代码事实一致，且未引入无法从当前 benchmark 实现验证的表述
+- 当前 stop decision：
+  - 不继续开启新的 XML 文档波次
+  - 原因不是 branch-size 阈值耗尽；当前分支仍只有 `14 files`
+  - 停止原因是候选清晰度下降：继续追逐 explorer 误报会降低 reviewability，并无谓增加当前上下文负担
+- 当前下一步：
+  - 主线程更新 `ai-plan/public/cqrs-rewrite/**`
+  - 串行运行 benchmark 工程 build、license-header 与 `git diff --check`
+  - 提交 README 与 `ai-plan` 收尾
+
 ### 阶段：benchmark XML 契约第 2 波收口（CQRS-REWRITE-RP-138）
 
 - 延续 `$gframework-batch-boot 50`，基线保持为 `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`。
