@@ -39,7 +39,7 @@
     - 同时提供 `FirstItem` 与 `DrainAll` 两种观测口径
 - stream startup
   - `Messaging/StreamStartupBenchmarks.cs`
-    - `Initialization` 与 `ColdStart` 两组下，`GFramework.Cqrs` reflection、`GFramework.Cqrs` generated、`MediatR`
+    - `Initialization` 与 `ColdStart` 两组下，覆盖 `GFramework.Cqrs` reflection、`GFramework.Cqrs` generated，以及当前 benchmark 项目已接入的 stream startup 外部 mediator 对照组
     - 其中 `ColdStart` 的边界是“新宿主 + 首个元素命中”，不是完整枚举整个 stream
 - notification steady-state
   - `Messaging/NotificationBenchmarks.cs`
@@ -100,6 +100,6 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
 
 ## 当前缺口
 
-- 当前没有 stream 生命周期与 startup 版的 NuGet `Mediator` source-generated concrete path 对照；`StreamLifetimeBenchmarks` 与 `StreamStartupBenchmarks` 现在都只覆盖 `GFramework.Cqrs` 与 `MediatR`
+- 当前没有 stream 生命周期版的 NuGet `Mediator` source-generated concrete path 对照；`StreamLifetimeBenchmarks` 现在只覆盖 `GFramework.Cqrs` 与 `MediatR`
 - 当前没有 request 生命周期下的 NuGet `Mediator` compile-time lifetime 矩阵；`RequestLifetimeBenchmarks` 只覆盖 `GFramework.Cqrs` 与 `MediatR`
 - 当前没有 notification fan-out 的生命周期矩阵；`NotificationFanOutBenchmarks` 只覆盖固定 `4 handler` 的已装配宿主

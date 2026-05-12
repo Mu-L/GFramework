@@ -7,6 +7,47 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-12
 
+### 阶段：stream startup parity 与文档收尾（CQRS-REWRITE-RP-137）
+
+- 按 `$gframework-batch-boot 50` 恢复后，先重新执行 `$gframework-pr-review`。
+- 当前 GitHub 事实：
+  - `PR #349` 已关闭并合并到 `origin/main`
+  - 基线切换为 `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`
+  - 当前分支相对新基线的已提交 diff 初始为 `0 files / 0 lines`
+- latest-head open thread 本地复核：
+  - stale
+    - `StreamPipelineBenchmarks.Stream_Baseline` 的 `<returns>` 已存在
+    - `CqrsNotificationPublisherTests` 的 fallback 缓存安全网已收口
+    - trace 的当前 PR / 下一步已同步到 `PR #349`
+  - valid
+    - `StreamingBenchmarks.Stream_MediatR()` 仍缺 `<returns>` XML 文档
+- 第 1 波 accepted delegated scope：
+  - `StreamingBenchmarks.cs`
+    - worker 补 `Stream_Baseline()` 与 `Stream_MediatR()` 的 `<returns>` XML 契约
+    - 主线程验收时确认其中 `Stream_Baseline()` 属于额外收口，不是 latest-head 必修项
+  - `StreamStartupBenchmarks.cs`
+    - worker 在单文件 ownership 内补 `GeneratedMediator` 宿主字段、setup/cleanup、`Initialization_Mediator()`、`ColdStart_Mediator()`
+    - 同文件把 `BenchmarkStreamRequest` / `BenchmarkStreamHandler` 扩成同时支持 `Mediator` stream 合同
+    - worker 自主完成并提交：`f346110a feat(cqrs-benchmarks): 补齐 stream startup 的 Mediator 对照路径`
+  - `GFramework.Cqrs.Benchmarks/README.md`
+    - worker 只收口 `StreamStartupBenchmarks` coverage 与当前 gap 描述，不假设 `StreamLifetimeBenchmarks` 已补 parity
+- 主线程验收结论：
+  - `StreamLifetimeBenchmarks` 的 `Mediator` parity 被判定为 hard slice，需要 `BenchmarkHostFactory` 与 compile-time lifetime 配套，不再继续作为本 turn 的低风险并行切片
+  - 当前自然停点应落在：
+    - 已提交的 `StreamStartupBenchmarks` parity
+    - 未提交但已验收的 `StreamingBenchmarks.cs` / `README.md` 收尾
+    - `ai-plan` 同步到新基线与新恢复点
+- 本轮权威验证里程碑：
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `python3 scripts/license-header.py --check`
+    - 结果：通过
+  - `git diff --check`
+    - 待当前未提交收尾切片与 `ai-plan` 一并提交前再次运行
+- 当前下一步：
+  - 提交 `StreamingBenchmarks.cs`、`GFramework.Cqrs.Benchmarks/README.md` 与 `ai-plan/public/cqrs-rewrite/**` 收尾
+  - 如需继续 benchmark 波次，优先做 `StreamStartupBenchmarks` 的最小 smoke run，而不是直接展开 `StreamLifetimeBenchmarks`
+
 ### 阶段：PR #349 latest-head review 收口（CQRS-REWRITE-RP-136）
 
 - 重新执行 `$gframework-pr-review`，按 GitHub 当前分支状态确认 `feat/cqrs-optimization` 在 `2026-05-12` 对应的是 `PR #349`，不再沿用 active tracking 中的 `PR #348` 锚点。

@@ -135,6 +135,7 @@ public class StreamingBenchmarks
     /// <summary>
     ///     直接调用 handler，并按当前观测模式消费响应序列，作为 stream dispatch 额外开销的 baseline。
     /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask Stream_Baseline()
     {
@@ -158,6 +159,7 @@ public class StreamingBenchmarks
     /// <summary>
     ///     通过 MediatR 创建 stream，并按当前观测模式消费，作为外部设计对照。
     /// </summary>
+    /// <returns>按当前观测模式完成 stream 消费后的等待句柄。</returns>
     [Benchmark]
     public ValueTask Stream_MediatR()
     {
