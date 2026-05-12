@@ -36,7 +36,7 @@ SPDX-License-Identifier: Apache-2.0
   - `python3 scripts/license-header.py --check --paths ...`
   - `git diff --check origin/main...HEAD`
 - 当前停点判断：
-  - 当前 branch diff 约为 `9 files / 1114 lines`
+  - 当前 branch diff 约为 `9 files / 1111 lines`
   - 明显低于 `50 files` 阈值
   - 本轮停止信号来自 `context-budget / reviewability`，不是文件预算耗尽
 - 当前下一步：

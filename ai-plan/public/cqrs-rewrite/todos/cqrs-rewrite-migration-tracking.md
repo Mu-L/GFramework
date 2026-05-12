@@ -18,7 +18,7 @@ CQRS 迁移与收敛。
 - 当前结论：
   - 本轮按 `$gframework-batch-boot 50` 持续协调多波 non-conflicting subagent，基线固定为
     `origin/main @ ef4d3d5d (2026-05-11 17:33:43 +0800)`。
-  - 当前 branch 相对基线的累计 diff 约为 `9 files / 1114 lines`；本轮停点由
+  - 当前 branch 相对基线的累计 diff 约为 `9 files / 1111 lines`；本轮停点由
     `context-budget / reviewability` 决定，而不是 `50 files` 阈值。
   - tests 侧已补齐并提交：
     - `CqrsRegistrationServiceTests`：补空输入、空项过滤、稳定键排序与跨调用跳过边界
@@ -48,7 +48,7 @@ CQRS 迁移与收敛。
 - 当前基线：
   - `origin/main @ ef4d3d5d (2026-05-11 17:33:43 +0800)`
   - 本轮 batch 启动前，分支相对基线的累计 diff 为 `0 files / 0 lines`
-  - 当前自然停点时，累计 diff 约为 `9 files / 1114 lines`
+  - 当前自然停点时，累计 diff 约为 `9 files / 1111 lines`
 - 本轮提交：
   - `ef3cfdc4` `test(cqrs): 补充注册服务边界测试`
   - `bcfecd3c` `test(cqrs): 补充 registrar 激活失败分支测试`
