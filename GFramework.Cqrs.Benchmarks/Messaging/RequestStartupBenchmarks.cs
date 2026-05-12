@@ -97,6 +97,7 @@ public class RequestStartupBenchmarks
     /// <summary>
     ///     返回已构建宿主中的 MediatR mediator，作为 initialization 组的句柄解析 baseline。
     /// </summary>
+    /// <returns>当前 benchmark 复用的 MediatR mediator。</returns>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Initialization")]
     public IMediator Initialization_MediatR()
@@ -107,6 +108,7 @@ public class RequestStartupBenchmarks
     /// <summary>
     ///     返回已构建宿主中的 GFramework.CQRS runtime，确保与 MediatR baseline 处于相同初始化阶段。
     /// </summary>
+    /// <returns>当前 benchmark 复用的 GFramework.CQRS runtime。</returns>
     [Benchmark]
     [BenchmarkCategory("Initialization")]
     public ICqrsRuntime Initialization_GFrameworkCqrs()
@@ -117,6 +119,7 @@ public class RequestStartupBenchmarks
     /// <summary>
     ///     返回已构建宿主中的 `Mediator` concrete mediator，作为 source-generated 对照组的初始化句柄。
     /// </summary>
+    /// <returns>当前 benchmark 复用的 `Mediator` concrete mediator。</returns>
     [Benchmark]
     [BenchmarkCategory("Initialization")]
     public GeneratedMediator Initialization_Mediator()
@@ -127,6 +130,7 @@ public class RequestStartupBenchmarks
     /// <summary>
     ///     在新宿主上首次发送 request，作为 MediatR 的 cold-start baseline。
     /// </summary>
+    /// <returns>当前 request 的响应结果。</returns>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("ColdStart")]
     public async Task<BenchmarkResponse> ColdStart_MediatR()
@@ -139,6 +143,7 @@ public class RequestStartupBenchmarks
     /// <summary>
     ///     在新 runtime 上首次发送 request，量化 GFramework.CQRS 的 first-hit 成本。
     /// </summary>
+    /// <returns>当前 request 的响应结果。</returns>
     [Benchmark]
     [BenchmarkCategory("ColdStart")]
     public async ValueTask<BenchmarkResponse> ColdStart_GFrameworkCqrs()
@@ -151,6 +156,7 @@ public class RequestStartupBenchmarks
     /// <summary>
     ///     在新的 `Mediator` 宿主上首次发送 request，量化 source-generated concrete path 的 cold-start 成本。
     /// </summary>
+    /// <returns>当前 request 的响应结果。</returns>
     [Benchmark]
     [BenchmarkCategory("ColdStart")]
     public async ValueTask<BenchmarkResponse> ColdStart_Mediator()

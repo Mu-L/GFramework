@@ -21,7 +21,7 @@ using GeneratedMediator = Mediator.Mediator;
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比单处理器 notification 在 GFramework.CQRS 与 MediatR 之间的 publish 开销。
+///     对比单处理器 notification 在 GFramework.CQRS、NuGet `Mediator` 与 MediatR 之间的 publish 开销。
 /// </summary>
 [Config(typeof(Config))]
 public class NotificationBenchmarks
@@ -95,6 +95,7 @@ public class NotificationBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 发布 notification。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS publish 完成的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask PublishNotification_GFrameworkCqrs()
     {
@@ -104,6 +105,7 @@ public class NotificationBenchmarks
     /// <summary>
     ///     通过 MediatR 发布 notification，作为外部设计对照。
     /// </summary>
+    /// <returns>代表当前 MediatR publish 完成的任务。</returns>
     [Benchmark]
     public Task PublishNotification_MediatR()
     {
@@ -113,6 +115,7 @@ public class NotificationBenchmarks
     /// <summary>
     ///     通过 `Mediator` source-generated concrete mediator 发布 notification，作为高性能对照组。
     /// </summary>
+    /// <returns>代表当前 `Mediator` publish 完成的值任务。</returns>
     [Benchmark]
     public ValueTask PublishNotification_Mediator()
     {
@@ -129,7 +132,7 @@ public class NotificationBenchmarks
         MediatR.INotification;
 
     /// <summary>
-    ///     同时实现 GFramework.CQRS 与 MediatR 契约的最小 notification handler。
+    ///     同时实现 GFramework.CQRS、NuGet `Mediator` 与 MediatR 契约的最小 notification handler。
     /// </summary>
     public sealed class BenchmarkNotificationHandler :
         GFramework.Cqrs.Abstractions.Cqrs.INotificationHandler<BenchmarkNotification>,

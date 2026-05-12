@@ -12,80 +12,75 @@ CQRS 迁移与收敛。
 
 ## 当前恢复点
 
-- 恢复点编号：`CQRS-REWRITE-RP-136`
+- 恢复点编号：`CQRS-REWRITE-RP-140`
 - 当前阶段：`Phase 8`
-- 当前 PR 锚点：`PR #349`
+- 当前 PR 锚点：`PR #350（OPEN，2026-05-12）`
 - 当前结论：
-  - 本轮先按 `$gframework-pr-review` 重新确认当前分支最新 GitHub 上下文，确认 `feat/cqrs-optimization` 在 `2026-05-12` 已切到 `PR #349`，不再沿用旧 tracking 中的 `PR #348` 锚点。
-  - 随后按 `$gframework-batch-boot 50` 持续协调多波 non-conflicting subagent，基线固定为
-    `origin/main @ ef4d3d5d (2026-05-11 17:33:43 +0800)`。
-  - 当前 branch 相对基线的累计 diff 约为 `9 files / 1111 lines`；本轮停点由
-    `context-budget / reviewability` 决定，而不是 `50 files` 阈值。
-  - `PR #349` latest-head review 当前确认仍成立的项只有：
-    - `StreamPipelineBenchmarks` 三个公开 benchmark 方法补齐 `<returns>` XML 契约
-    - `StreamingBenchmarks.Stream_Mediator` 补齐 `<returns>` XML 契约
-    - `CqrsNotificationPublisherTests` 中 fallback publisher 缓存回归测试去掉误导性的“第二次解析返回其它 publisher”分支
-    - active tracking / trace 的当前 PR 锚点与下一步入口同步到 `PR #349`
-  - tests 侧已补齐并提交：
-    - `CqrsRegistrationServiceTests`：补空输入、空项过滤、稳定键排序与跨调用跳过边界
-    - `CqrsHandlerRegistrarTests` 与 `CqrsHandlerRegistrarFallbackFailureTests`：
-      补 abstract registry 与缺少无参构造器 registry 的回退 / 抛错覆盖
-    - `CqrsNotificationPublisherTests`：补“零 publisher 回退到默认顺序发布器并缓存”回归
-  - benchmark 侧已补齐并提交：
-    - `StreamPipelineBenchmarks`
-    - `StreamingBenchmarks` 的 steady-state `Mediator` 对照
-    - `GFramework.Cqrs.Benchmarks/README.md` 的 stream coverage / gap 同步
-  - 本轮未修改 `GFramework.Cqrs` 运行时代码；notification fallback 与 generated registry 激活守卫均由新回归证明现有实现已满足预期。
+  - 本轮按 `$gframework-pr-review` 重新抓取 GitHub 真值后，确认当前公开 PR 不是已合并的 `PR #349`，而是仍处于 `OPEN` 状态的 `PR #350`。
+  - 最新 AI review 只有 1 条 Greptile open thread，关注点是：
+    - `StreamStartupBenchmarks.ColdStart_Mediator()` 与 `RequestLifetimeBenchmarks.SendRequest_Mediator()` 先前只做了编译验证，未实际 smoke-run
+  - 主线程按 review 提示执行最小 benchmark smoke run 后，确认 Greptile 线程不是误报，而是命中了真实运行时缺陷：
+    - `StreamStartupBenchmarks.ColdStart_Mediator()` 在 BenchmarkDotNet 自动生成宿主里抛出
+      `Invalid configuration detected for Mediator. Generated code for 'Transient' lifetime, but got 'Singleton' lifetime from options.`
+    - `RequestLifetimeBenchmarks.SendRequest_Mediator()` 的 `Singleton / Scoped` 也抛出同类异常；只有 `Transient` 变体能跑通
+  - 根因确认：
+    - NuGet `Mediator` 的 DI lifetime 由 source generator 在 benchmark 项目编译期固定
+    - 当前工程同时存在默认 `AddMediator()` 与 request lifetime 场景下的 `AddMediator(options => options.ServiceLifetime = ...)`
+    - 这会让同一份生成产物在 BenchmarkDotNet 自动生成宿主中出现 compile-time 形状与 runtime options 不一致
+  - 本轮收口策略：
+    - `BenchmarkHostFactory.CreateMediatorServiceProvider()` 统一显式固定为 `Singleton` compile-time lifetime
+    - `RequestLifetimeBenchmarks` 撤回当前无法真实运行的 `Mediator` 生命周期矩阵，只保留 `GFramework.Cqrs` 与 `MediatR`
+    - `GFramework.Cqrs.Benchmarks/README.md` 同步收窄 request lifetime coverage，并把 `Mediator` 生命周期矩阵改记为当前缺口
+  - 本轮未修改 `GFramework.Cqrs` 运行时代码；修复面限定在 benchmark 宿主装配与 reader-facing docs。
 
 ## 当前活跃事实
 
 - 当前分支：`feat/cqrs-optimization`
-- 当前 PR：`PR #349`
+- 当前 PR：`PR #349（已合并；当前分支暂无新的公开 PR）`
+- 当前 PR：`PR #350（OPEN）`
 - 当前写面：
-  - `GFramework.Cqrs.Benchmarks/Messaging/StreamPipelineBenchmarks.cs`
-  - `GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/BenchmarkHostFactory.cs`
+  - `GFramework.Cqrs.Benchmarks/Messaging/RequestLifetimeBenchmarks.cs`
   - `GFramework.Cqrs.Benchmarks/README.md`
-  - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarFallbackFailureTests.cs`
-  - `GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs`
-  - `GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs`
-  - `GFramework.Cqrs.Tests/Cqrs/CqrsRegistrationServiceTests.cs`
   - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md`
   - `ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
 - 当前基线：
-  - `origin/main @ ef4d3d5d (2026-05-11 17:33:43 +0800)`
-  - 本轮 batch 启动前，分支相对基线的累计 diff 为 `0 files / 0 lines`
-  - 当前自然停点时，累计 diff 约为 `9 files / 1111 lines`
+  - `origin/main @ 2b2bec65 (2026-05-12 11:49:39 +0800)`
+  - 当前已提交 branch diff：`14 files`
+  - 当前分支比 `origin/main` 多 `5` 个提交：`f346110a`、`a016e3d4`、`ab422b05`、`555c7c07`、`c32a1ec4`
+- 当前工作面已收口为 `Mediator` benchmark runtime 配置修正、request lifetime coverage 收窄与对应 `README` / `ai-plan` 同步
 - 本轮提交：
-  - `ef3cfdc4` `test(cqrs): 补充注册服务边界测试`
-  - `bcfecd3c` `test(cqrs): 补充 registrar 激活失败分支测试`
-  - `59cab567` `test(cqrs-benchmarks): 新增 stream pipeline benchmark 覆盖`
-  - `010b7028` `test(cqrs): 补充通知回退回归覆盖`
-  - `ae1c3b89` `test(cqrs-benchmarks): 补齐 stream steady-state Mediator 对照`
+  - `f346110a` `feat(cqrs-benchmarks): 补齐 stream startup 的 Mediator 对照路径`
+  - `ab422b05` `docs(cqrs-benchmarks): 补齐 request benchmark 返回值注释`
+  - `555c7c07` `docs(cqrs-benchmarks): 补齐 request benchmark 返回值文档`
+  - `c32a1ec4` `docs(cqrs-benchmarks): 补齐stream与notification基准返回值文档`
 
 ## 当前风险
 
-- 分支已累积 5 个窄切片提交；若继续在同一 turn 扩 benchmark + docs，reviewability 会明显下降。
-- 新增 benchmark 目前只做了编译验证，尚未执行 `StreamPipelineBenchmarks` 或更新后的 `StreamingBenchmarks` 实际作业。
-- `ef3cfdc4` 的 commit body 含字面 `\n`；若后续要整理历史，需要在显式允许的前提下单独处理提交格式。
+- `StreamLifetimeBenchmarks` 仍缺 `Mediator` parity；如果后续要补，必须采用独立 compile-time config 或独立 benchmark 工程，而不是在当前项目里切换 runtime `ServiceLifetime`。
+- `RequestLifetimeBenchmarks` 目前不再覆盖 `Mediator`；若后续要恢复该矩阵，也必须先解决 source-generated lifetime 与 BenchmarkDotNet 自动宿主的编译期塑形边界。
+- benchmark XML 盘点若再次依赖粗糙脚本或只读 inventory，仍有把已存在文档误记为缺口的风险；后续若再开 XML 波次，必须先用主线程抽样核对代表文件。
+- 当前 PR 的 Greptile open thread 在代码修正后虽已有本地验证证据，但线程本身还未在 GitHub 上回复 / resolve。
 
 ## 最近权威验证
 
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
-- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsNotificationPublisherTests"`
-  - 结果：通过，`Passed: 9, Failed: 0`
-- `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsRegistrationServiceTests|FullyQualifiedName~CqrsHandlerRegistrarTests|FullyQualifiedName~CqrsHandlerRegistrarFallbackFailureTests|FullyQualifiedName~CqrsNotificationPublisherTests"`
-  - 结果：通过，`Passed: 36, Failed: 0`
-- `python3 scripts/license-header.py --check --paths GFramework.Cqrs.Benchmarks/Messaging/StreamPipelineBenchmarks.cs GFramework.Cqrs.Benchmarks/Messaging/StreamingBenchmarks.cs GFramework.Cqrs.Benchmarks/README.md GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarFallbackFailureTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsHandlerRegistrarTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsNotificationPublisherTests.cs GFramework.Cqrs.Tests/Cqrs/CqrsRegistrationServiceTests.cs ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+  - 备注：确认统一 `Mediator` compile-time lifetime 后 benchmark 工程仍可编译
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix pr350-stream-startup-mediator-fixed --filter "*StreamStartupBenchmarks.ColdStart_Mediator*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
   - 结果：通过
-- `git diff --check origin/main...HEAD`
+  - 备注：`ColdStart_Mediator` 已在 BenchmarkDotNet 自动生成宿主中实际执行，约 `144.036 us / 69.3 KB`
+- `dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release --no-build -- --artifacts-suffix pr350-request-lifetime-fixed-rerun --filter "*RequestLifetimeBenchmarks*" --job short --warmupCount 1 --iterationCount 1 --launchCount 1`
   - 结果：通过
+  - 备注：当前矩阵为 `9` 项（baseline / `GFramework.Cqrs` / `MediatR` * `Singleton|Scoped|Transient`），不再包含伪 `Mediator` lifetime 条目
+- `$gframework-pr-review`
+  - 结果：确认 `PR #350` open，CodeRabbit 已 `APPROVED`，Greptile 仍有 `1` 条 open thread 指向 `StreamStartupBenchmarks.cs`
 
 ## 下一推荐步骤
 
-1. 再次运行 `$gframework-pr-review`，复核 `PR #349` latest-head open thread 是否已随着当前修复提交收敛。
-2. 若继续扩 benchmark，优先在 `StreamLifetimeBenchmarks` 或 `StreamStartupBenchmarks` 中补单文件 `Mediator` parity，而不是并行扩多个矩阵。
-3. 若切回文档收尾，把 `GFramework.Cqrs/README.md`、`docs/zh-CN/core/command.md`、`docs/zh-CN/core/query.md` 作为单独一波 docs-only 切片处理。
+1. 在 GitHub `PR #350` 回应并 resolve 当前 Greptile 线程，说明 `ColdStart_Mediator` 已补 smoke-run，且 request lifetime 的 `Mediator` 矩阵已按 source-generator 真实约束撤回。
+2. 若后续评估 `StreamLifetimeBenchmarks` 或 request lifetime 的 `Mediator` parity，优先设计独立 compile-time config / 独立 benchmark 工程，而不是继续在同一项目里切换 runtime `ServiceLifetime`。
+3. 若后续再开 XML / docs 批次，先由主线程逐文件核对代表样本，不要直接沿用误报 inventory 扩批。
 
 ## 活跃文档
 

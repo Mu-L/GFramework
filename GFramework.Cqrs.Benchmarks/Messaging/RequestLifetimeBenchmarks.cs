@@ -26,6 +26,10 @@ namespace GFramework.Cqrs.Benchmarks.Messaging;
 ///     当前矩阵覆盖 `Singleton`、`Scoped` 与 `Transient`。
 ///     其中 `Scoped` 会在每次 request 分发时显式创建并释放真实的 DI 作用域，
 ///     避免把 scoped handler 错误地压到根容器解析而扭曲生命周期对照。
+///     NuGet `Mediator` 的 DI lifetime 由 source generator 在编译期固定到整个 benchmark 项目，
+///     不能在同一份生成产物里同时切换 `Singleton`、`Scoped` 与 `Transient`。
+///     因此该矩阵当前只比较 `GFramework.Cqrs` 与 `MediatR` 的生命周期开销；`Mediator` 仍保留在其他
+///     steady-state / startup benchmark 中作为单一 compile-time 形状对照。
 /// </remarks>
 [Config(typeof(Config))]
 public class RequestLifetimeBenchmarks
@@ -151,6 +155,7 @@ public class RequestLifetimeBenchmarks
     /// <summary>
     ///     直接调用 handler，作为不同生命周期矩阵下的 dispatch 额外开销 baseline。
     /// </summary>
+    /// <returns>代表基线 request handler 完成当前 request 处理的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask<BenchmarkResponse> SendRequest_Baseline()
     {
@@ -160,6 +165,7 @@ public class RequestLifetimeBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 发送 request。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS request dispatch 完成的值任务。</returns>
     [Benchmark]
     public ValueTask<BenchmarkResponse> SendRequest_GFrameworkCqrs()
     {
@@ -179,6 +185,7 @@ public class RequestLifetimeBenchmarks
     /// <summary>
     ///     通过 MediatR 发送 request，作为外部对照。
     /// </summary>
+    /// <returns>代表当前 MediatR request dispatch 完成的任务。</returns>
     [Benchmark]
     public Task<BenchmarkResponse> SendRequest_MediatR()
     {
@@ -194,7 +201,7 @@ public class RequestLifetimeBenchmarks
     }
 
     /// <summary>
-    ///     按生命周期把 benchmark request handler 注册到 GFramework 容器。
+     ///     按生命周期把 benchmark request handler 注册到 GFramework 容器。
     /// </summary>
     /// <param name="container">当前 benchmark 拥有并负责释放的容器。</param>
     /// <param name="lifetime">待比较的 handler 生命周期。</param>
@@ -241,7 +248,7 @@ public class RequestLifetimeBenchmarks
     }
 
     /// <summary>
-    ///     Benchmark request。
+     ///     Benchmark request。
     /// </summary>
     /// <param name="Id">请求标识。</param>
     public sealed record BenchmarkRequest(Guid Id) :

@@ -275,15 +275,16 @@ internal static class BenchmarkHostFactory
     /// <param name="configure">补充当前场景的显式服务注册。</param>
     /// <returns>可直接解析 generated `Mediator.Mediator` 的 DI 宿主。</returns>
     /// <remarks>
-    ///     当前 benchmark 只把 `Mediator` 作为单例 steady-state 对照组接入，
-    ///     因为它的 lifetime 由 source generator 在编译期塑形；若后续需要 `Transient` / `Scoped` 矩阵，
-    ///     应按 `Mediator` 官方 benchmark 的做法拆成独立 build config，而不是在同一编译产物里混用多个 lifetime。
+    ///     `Mediator` 的 DI lifetime 由 source generator 在编译期固定到整个位于当前项目中的生成产物上。
+    ///     因此 benchmark 工程必须统一使用一套 compile-time 常量配置；这里显式收敛为 `Singleton`，
+    ///     避免同一编译产物里混入多个 `AddMediator` lifetime 形状后，在 BenchmarkDotNet 自动生成宿主中触发
+    ///     “generated code lifetime 与 runtime options 不一致”的启动失败。
     /// </remarks>
     internal static ServiceProvider CreateMediatorServiceProvider(Action<IServiceCollection>? configure)
     {
         var services = new ServiceCollection();
         configure?.Invoke(services);
-        services.AddMediator();
+        services.AddMediator(static options => options.ServiceLifetime = ServiceLifetime.Singleton);
         return services.BuildServiceProvider();
     }
 

@@ -19,6 +19,7 @@ using GFramework.Core.Logging;
 using GFramework.Cqrs.Abstractions.Cqrs;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using GeneratedMediator = Mediator.Mediator;
 
 [assembly: GFramework.Cqrs.CqrsHandlerRegistryAttribute(
     typeof(GFramework.Cqrs.Benchmarks.Messaging.StreamStartupBenchmarks.GeneratedRegistry))]
@@ -26,7 +27,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比 stream 宿主在 GFramework.CQRS reflection / generated 与 MediatR 之间的初始化与首次建流命中成本。
+///     对比 stream 宿主在 GFramework.CQRS reflection / generated、NuGet `Mediator` 与 MediatR 之间的初始化与首次建流命中成本。
 /// </summary>
 /// <remarks>
 ///     该场景与 <see cref="RequestStartupBenchmarks" /> 保持相同的 `Initialization + ColdStart` 结构，
@@ -45,7 +46,9 @@ public class StreamStartupBenchmarks
     private MicrosoftDiContainer _generatedContainer = null!;
     private ICqrsRuntime _generatedRuntime = null!;
     private ServiceProvider _serviceProvider = null!;
+    private ServiceProvider _mediatorServiceProvider = null!;
     private IMediator _mediatr = null!;
+    private GeneratedMediator _mediator = null!;
 
     /// <summary>
     ///     配置 stream startup benchmark 的公共输出格式。
@@ -67,7 +70,7 @@ public class StreamStartupBenchmarks
     }
 
     /// <summary>
-    ///     构建 startup benchmark 复用的 reflection / generated / MediatR 宿主对象。
+    ///     构建 startup benchmark 复用的 reflection / generated / `Mediator` / MediatR 宿主对象。
     /// </summary>
     [GlobalSetup]
     public void Setup()
@@ -82,6 +85,8 @@ public class StreamStartupBenchmarks
 
         _serviceProvider = CreateMediatRServiceProvider();
         _mediatr = _serviceProvider.GetRequiredService<IMediator>();
+        _mediatorServiceProvider = CreateMediatorServiceProvider();
+        _mediator = _mediatorServiceProvider.GetRequiredService<GeneratedMediator>();
     }
 
     /// <summary>
@@ -99,7 +104,7 @@ public class StreamStartupBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        BenchmarkCleanupHelper.DisposeAll(_reflectionContainer, _generatedContainer, _serviceProvider);
+        BenchmarkCleanupHelper.DisposeAll(_reflectionContainer, _generatedContainer, _serviceProvider, _mediatorServiceProvider);
     }
 
     /// <summary>
@@ -133,6 +138,17 @@ public class StreamStartupBenchmarks
     public ICqrsRuntime Initialization_GFrameworkGenerated()
     {
         return _generatedRuntime;
+    }
+
+    /// <summary>
+    ///     返回已构建宿主中的 `Mediator` concrete mediator，作为 source-generated concrete path 的初始化句柄。
+    /// </summary>
+    /// <returns>当前 benchmark 复用的 `Mediator` concrete mediator。</returns>
+    [Benchmark]
+    [BenchmarkCategory("Initialization")]
+    public GeneratedMediator Initialization_Mediator()
+    {
+        return _mediator;
     }
 
     /// <summary>
@@ -178,6 +194,19 @@ public class StreamStartupBenchmarks
                 runtime.CreateStream(BenchmarkContext.Instance, Request, CancellationToken.None),
                 CancellationToken.None)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     在新的 `Mediator` 宿主上首次创建并推进 stream，量化 source-generated concrete path 的 first-hit 成本。
+    /// </summary>
+    /// <returns>首个 stream 响应元素。</returns>
+    [Benchmark]
+    [BenchmarkCategory("ColdStart")]
+    public async ValueTask<BenchmarkResponse> ColdStart_Mediator()
+    {
+        using var serviceProvider = CreateMediatorServiceProvider();
+        var mediator = serviceProvider.GetRequiredService<GeneratedMediator>();
+        return await ConsumeFirstItemAsync(mediator.CreateStream(Request, CancellationToken.None), CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -230,6 +259,14 @@ public class StreamStartupBenchmarks
     }
 
     /// <summary>
+    ///     构建只承载当前 benchmark handler 的最小 `Mediator` 对照宿主。
+    /// </summary>
+    private static ServiceProvider CreateMediatorServiceProvider()
+    {
+        return BenchmarkHostFactory.CreateMediatorServiceProvider(configure: null);
+    }
+
+    /// <summary>
     ///     推进 stream 到首个元素，并返回该元素作为 cold-start 结果。
     /// </summary>
     /// <typeparam name="TResponse">当前 stream 的响应类型。</typeparam>
@@ -274,6 +311,7 @@ public class StreamStartupBenchmarks
     /// <param name="ItemCount">返回元素数量。</param>
     public sealed record BenchmarkStreamRequest(Guid Id, int ItemCount) :
         GFramework.Cqrs.Abstractions.Cqrs.IStreamRequest<BenchmarkResponse>,
+        Mediator.IStreamRequest<BenchmarkResponse>,
         MediatR.IStreamRequest<BenchmarkResponse>;
 
     /// <summary>
@@ -283,10 +321,11 @@ public class StreamStartupBenchmarks
     public sealed record BenchmarkResponse(Guid Id);
 
     /// <summary>
-    ///     同时实现 GFramework.CQRS 与 MediatR 契约的最小 stream handler。
+    ///     同时实现 GFramework.CQRS、NuGet `Mediator` 与 MediatR 契约的最小 stream handler。
     /// </summary>
     public sealed class BenchmarkStreamHandler :
         GFramework.Cqrs.Abstractions.Cqrs.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>,
+        Mediator.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>,
         MediatR.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>
     {
         /// <summary>
@@ -300,6 +339,19 @@ public class StreamStartupBenchmarks
             CancellationToken cancellationToken)
         {
             return EnumerateAsync(request, cancellationToken);
+        }
+
+        /// <summary>
+        ///     处理 NuGet `Mediator` stream request。
+        /// </summary>
+        /// <param name="request">当前 stream 请求。</param>
+        /// <param name="cancellationToken">用于中断异步枚举的取消令牌。</param>
+        /// <returns>按请求元素数量延迟生成的异步响应序列。</returns>
+        IAsyncEnumerable<BenchmarkResponse> Mediator.IStreamRequestHandler<BenchmarkStreamRequest, BenchmarkResponse>.Handle(
+            BenchmarkStreamRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Handle(request, cancellationToken);
         }
 
         /// <summary>

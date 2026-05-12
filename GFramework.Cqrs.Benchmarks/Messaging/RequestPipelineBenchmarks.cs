@@ -113,6 +113,7 @@ public class RequestPipelineBenchmarks
     /// <summary>
     ///     直接调用 handler，作为 pipeline 编排之外的基线。
     /// </summary>
+    /// <returns>代表基线 handler 完成当前 request 处理的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask<BenchmarkResponse> SendRequest_Baseline()
     {
@@ -122,6 +123,7 @@ public class RequestPipelineBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 发送 request，并按当前矩阵配置执行 pipeline。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS request pipeline dispatch 完成的值任务。</returns>
     [Benchmark]
     public ValueTask<BenchmarkResponse> SendRequest_GFrameworkCqrs()
     {
@@ -131,6 +133,7 @@ public class RequestPipelineBenchmarks
     /// <summary>
     ///     通过 MediatR 发送 request，并按当前矩阵配置执行 pipeline，作为外部设计对照。
     /// </summary>
+    /// <returns>代表当前 MediatR request pipeline dispatch 完成的任务。</returns>
     [Benchmark]
     public Task<BenchmarkResponse> SendRequest_MediatR()
     {

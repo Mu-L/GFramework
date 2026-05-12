@@ -24,6 +24,7 @@
 - request startup
   - `Messaging/RequestStartupBenchmarks.cs`
     - `Initialization` 与 `ColdStart` 两组下，`GFramework.Cqrs`、NuGet `Mediator`、`MediatR`
+    - 其中 `GFramework.Cqrs` 路径是“单 handler 最小宿主 + 手工注册”的 startup/cold-start 模型，不包含更大范围的程序集扫描或完整注册协调器接线
 - stream steady-state
   - `Messaging/StreamingBenchmarks.cs`
     - baseline、默认 generated-provider 宿主接线的 `GFramework.Cqrs` runtime、NuGet `Mediator` source-generated concrete path 与 `MediatR`
@@ -39,7 +40,7 @@
     - 同时提供 `FirstItem` 与 `DrainAll` 两种观测口径
 - stream startup
   - `Messaging/StreamStartupBenchmarks.cs`
-    - `Initialization` 与 `ColdStart` 两组下，`GFramework.Cqrs` reflection、`GFramework.Cqrs` generated、`MediatR`
+    - `Initialization` 与 `ColdStart` 两组下，覆盖 `MediatR`、`GFramework.Cqrs` reflection、`GFramework.Cqrs` generated、NuGet `Mediator` 四组 initialization/cold-start 对照
     - 其中 `ColdStart` 的边界是“新宿主 + 首个元素命中”，不是完整枚举整个 stream
 - notification steady-state
   - `Messaging/NotificationBenchmarks.cs`
@@ -51,6 +52,7 @@
 - notification startup
   - `Messaging/NotificationStartupBenchmarks.cs`
     - `Initialization` 与 `ColdStart` 两组下，`GFramework.Cqrs`、NuGet `Mediator`、`MediatR`
+    - 其中 `GFramework.Cqrs` 路径是“单 handler 最小宿主 + 手工注册”的 startup/cold-start 模型，不包含 fan-out、发布策略变体或更大范围的注册协调逻辑
 
 ## 最小使用方式
 
@@ -95,11 +97,12 @@ dotnet run --project GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.cspro
   - `FirstItem` 适合观察“建流到首个元素”的固定成本
   - `DrainAll` 适合观察完整枚举整个 stream 的总成本
 - `StreamStartupBenchmarks` 的 `ColdStart` 只推进到首个元素，因此它回答的是“新宿主下首次建流命中”的边界，不回答完整枚举总成本
+- `RequestStartupBenchmarks` 与 `NotificationStartupBenchmarks` 的 `GFramework.Cqrs` startup 路径都固定在单 handler、最小宿主、手工注册模型；它们回答的是首次 request / publish 命中的额外成本，不代表程序集扫描或完整注册协调器场景
 - 当前 HEAD 没有单独固化的 short-job benchmark 类或 checked-in short-job 结果；如果手动使用 short job / short run 只做 smoke 复核，应把它理解为“确认矩阵与路径能跑通”
 - 特别是 `StreamInvokerBenchmarks` 的 `DrainAll` 在 short-job smoke 下不应直接写成 reflection、generated 或 `MediatR` 之间的稳定排序结论；若要比较名次或小幅差值，应复跑默认作业或更完整的批次
 
 ## 当前缺口
 
-- 当前没有 stream 生命周期与 startup 版的 NuGet `Mediator` source-generated concrete path 对照；`StreamLifetimeBenchmarks` 与 `StreamStartupBenchmarks` 现在都只覆盖 `GFramework.Cqrs` 与 `MediatR`
-- 当前没有 request 生命周期下的 NuGet `Mediator` compile-time lifetime 矩阵；`RequestLifetimeBenchmarks` 只覆盖 `GFramework.Cqrs` 与 `MediatR`
+- 当前没有 stream 生命周期版的 NuGet `Mediator` source-generated concrete path 对照；`StreamLifetimeBenchmarks` 现在只覆盖 `GFramework.Cqrs` 与 `MediatR`
+- 当前没有 request 生命周期版的 NuGet `Mediator` source-generated concrete path 对照；`Mediator` 的 DI lifetime 由 source generator 在 benchmark 项目编译期固定，若要比较 `Singleton / Scoped / Transient`，需要拆成独立 build config 或独立 benchmark 工程，而不是在同一份生成产物里切换
 - 当前没有 notification fan-out 的生命周期矩阵；`NotificationFanOutBenchmarks` 只覆盖固定 `4 handler` 的已装配宿主

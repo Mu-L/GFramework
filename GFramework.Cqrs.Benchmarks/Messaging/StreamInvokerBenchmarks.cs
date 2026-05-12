@@ -143,6 +143,7 @@ public class StreamInvokerBenchmarks
     /// <summary>
     ///     直接调用最小 stream handler，并按当前观测模式消费 stream，作为 dispatch 额外开销 baseline。
     /// </summary>
+    /// <returns>代表基线 stream 按当前观测模式消费完成的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask Stream_Baseline()
     {
@@ -152,6 +153,7 @@ public class StreamInvokerBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS 反射 stream binding 路径创建 stream，并按当前观测模式消费。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS 反射 stream 按观测模式消费完成的值任务。</returns>
     [Benchmark]
     public ValueTask Stream_GFrameworkReflection()
     {
@@ -166,6 +168,7 @@ public class StreamInvokerBenchmarks
     /// <summary>
     ///     通过 generated stream invoker provider 预热后的 GFramework.CQRS runtime 创建 stream，并按当前观测模式消费。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS generated stream 按观测模式消费完成的值任务。</returns>
     [Benchmark]
     public ValueTask Stream_GFrameworkGenerated()
     {
@@ -180,6 +183,7 @@ public class StreamInvokerBenchmarks
     /// <summary>
     ///     通过 MediatR 创建 stream，并按当前观测模式消费，作为外部对照。
     /// </summary>
+    /// <returns>代表当前 MediatR stream 按观测模式消费完成的值任务。</returns>
     [Benchmark]
     public ValueTask Stream_MediatR()
     {
