@@ -156,6 +156,46 @@ internal sealed class CqrsNotificationPublisherTests
     }
 
     /// <summary>
+    ///     验证当容器里没有任何通知发布器时，dispatcher 会回退到内置顺序发布器，
+    ///     并在首次解析后缓存该 fallback 结果而不是在后续发布时重新查询容器。
+    /// </summary>
+    [Test]
+    public async Task PublishAsync_Should_Fallback_To_SequentialNotificationPublisher_And_Cache_It_When_None_Is_Registered()
+    {
+        var invocationOrder = new List<string>();
+        var notificationPublisherLookupCount = 0;
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationHandler<PublisherNotification>)))
+                    .Returns(
+                    [
+                        new RecordingNotificationHandler("first", invocationOrder),
+                        new RecordingNotificationHandler("second", invocationOrder)
+                    ]);
+                container
+                    .Setup(currentContainer => currentContainer.GetAll(typeof(INotificationPublisher)))
+                    .Returns(() =>
+                    {
+                        notificationPublisherLookupCount++;
+                        return notificationPublisherLookupCount switch
+                        {
+                            1 => Array.Empty<object>(),
+                            2 => [new ReverseOrderNotificationPublisher()],
+                            _ => throw new AssertionException("Notification publisher should be resolved at most once.")
+                        };
+                    });
+            });
+
+        await runtime.PublishAsync(new FakeCqrsContext(), new PublisherNotification()).ConfigureAwait(false);
+        await runtime.PublishAsync(new FakeCqrsContext(), new PublisherNotification()).ConfigureAwait(false);
+
+        Assert.That(notificationPublisherLookupCount, Is.EqualTo(1));
+        Assert.That(invocationOrder, Is.EqualTo(["first", "second", "first", "second"]));
+    }
+
+    /// <summary>
     ///     验证内置 `TaskWhenAll` 发布器会继续调度所有处理器，而不是沿用默认顺序发布器的失败即停语义。
     /// </summary>
     [Test]
