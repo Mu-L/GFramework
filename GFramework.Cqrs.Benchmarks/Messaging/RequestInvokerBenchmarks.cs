@@ -116,6 +116,7 @@ public class RequestInvokerBenchmarks
     /// <summary>
     ///     直接调用最小 request handler，作为 dispatch 额外开销 baseline。
     /// </summary>
+    /// <returns>代表基线 request handler 完成当前 request 处理的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask<ReflectionBenchmarkResponse> SendRequest_Baseline()
     {
@@ -125,6 +126,7 @@ public class RequestInvokerBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS 反射 request binding 路径发送 request。
     /// </summary>
+    /// <returns>代表当前 reflection request dispatch 完成的值任务。</returns>
     [Benchmark]
     public ValueTask<ReflectionBenchmarkResponse> SendRequest_GFrameworkReflection()
     {
@@ -134,6 +136,7 @@ public class RequestInvokerBenchmarks
     /// <summary>
     ///     通过 generated request invoker provider 预热后的 GFramework.CQRS runtime 发送 request。
     /// </summary>
+    /// <returns>代表当前 generated request dispatch 完成的值任务。</returns>
     [Benchmark]
     public ValueTask<GeneratedBenchmarkResponse> SendRequest_GFrameworkGenerated()
     {
@@ -143,6 +146,7 @@ public class RequestInvokerBenchmarks
     /// <summary>
     ///     通过 MediatR 发送 request，作为外部对照。
     /// </summary>
+    /// <returns>代表当前 MediatR request dispatch 完成的任务。</returns>
     [Benchmark]
     public Task<MediatRBenchmarkResponse> SendRequest_MediatR()
     {

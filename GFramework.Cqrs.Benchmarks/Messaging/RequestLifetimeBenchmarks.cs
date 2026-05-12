@@ -151,6 +151,7 @@ public class RequestLifetimeBenchmarks
     /// <summary>
     ///     直接调用 handler，作为不同生命周期矩阵下的 dispatch 额外开销 baseline。
     /// </summary>
+    /// <returns>代表基线 request handler 完成当前 request 处理的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask<BenchmarkResponse> SendRequest_Baseline()
     {
@@ -160,6 +161,7 @@ public class RequestLifetimeBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 发送 request。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS request dispatch 完成的值任务。</returns>
     [Benchmark]
     public ValueTask<BenchmarkResponse> SendRequest_GFrameworkCqrs()
     {
@@ -179,6 +181,7 @@ public class RequestLifetimeBenchmarks
     /// <summary>
     ///     通过 MediatR 发送 request，作为外部对照。
     /// </summary>
+    /// <returns>代表当前 MediatR request dispatch 完成的任务。</returns>
     [Benchmark]
     public Task<BenchmarkResponse> SendRequest_MediatR()
     {
