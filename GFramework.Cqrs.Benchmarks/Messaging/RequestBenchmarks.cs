@@ -104,6 +104,7 @@ public class RequestBenchmarks
     /// <summary>
     ///     直接调用 handler，作为 dispatch 额外开销的 baseline。
     /// </summary>
+    /// <returns>代表基线 handler 完成当前 request 处理的值任务。</returns>
     [Benchmark(Baseline = true)]
     public ValueTask<BenchmarkResponse> SendRequest_Baseline()
     {
@@ -113,6 +114,7 @@ public class RequestBenchmarks
     /// <summary>
     ///     通过 GFramework.CQRS runtime 发送 request。
     /// </summary>
+    /// <returns>代表当前 GFramework.CQRS request dispatch 完成的值任务。</returns>
     [Benchmark]
     public ValueTask<BenchmarkResponse> SendRequest_GFrameworkCqrs()
     {
@@ -122,6 +124,7 @@ public class RequestBenchmarks
     /// <summary>
     ///     通过 MediatR 发送 request，作为外部设计对照。
     /// </summary>
+    /// <returns>代表当前 MediatR request dispatch 完成的任务。</returns>
     [Benchmark]
     public Task<BenchmarkResponse> SendRequest_MediatR()
     {
@@ -131,6 +134,7 @@ public class RequestBenchmarks
     /// <summary>
     ///     通过 `ai-libs/Mediator` 的 source-generated concrete mediator 发送 request，作为高性能对照组。
     /// </summary>
+    /// <returns>代表当前 `Mediator` request dispatch 完成的值任务。</returns>
     [Benchmark]
     public ValueTask<BenchmarkResponse> SendRequest_Mediator()
     {
