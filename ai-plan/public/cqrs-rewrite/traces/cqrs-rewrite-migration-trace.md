@@ -7,6 +7,51 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 2026-05-13
 
+### 阶段：允许 subagent 后的低风险多 Agent 收口（CQRS-REWRITE-RP-143）
+
+- 在用户允许 subagent 后，主线程切到小型 multi-agent 协调模式，但仍把 critical path 保留在本地：
+  - 主线程负责候选筛选、runtime 缺口判断、最终验证与 `ai-plan`
+  - explorer 只做只读盘点
+  - worker 只接单文件或窄文件组 ownership
+- explorer 结论汇总：
+  - 没有值得继续扩成“实现型 benchmark 波次”的大切片
+  - 低风险候选主要是 reader-facing 术语对齐与单文件回归测试
+  - `Mediator` 生命周期 parity、notification fan-out 生命周期矩阵、benchmark 工程级拆分仍判定为高风险
+- accepted worker / 主线程 scope：
+  - `RequestLifetimeBenchmarks.cs`
+    - 主线程修正 2 处 XML 文档缩进异常
+  - `NotificationFanOutBenchmarks.cs`
+  - `RequestBenchmarks.cs`
+  - `StreamingBenchmarks.cs`
+    - worker 收口 benchmark reader-facing 术语，build 通过
+  - `CqrsDispatcherContextValidationTests.cs`
+    - worker 补 stream 缺失 handler 的同步抛错回归，targeted test 通过
+  - `CqrsGeneratedRequestInvokerProviderTests.cs`
+    - worker 补 generated request + pipeline 对称测试
+    - 首次运行失败，暴露 request pipeline 路径在接入 behavior 后退回 `_handler.Handle(...)`
+  - `CqrsDispatcher.cs`
+    - 主线程将 request pipeline 末端改为继续复用当前 binding 的 `RequestInvoker`
+    - 使 generated request invoker provider 在 pipeline 存在时保持与无 pipeline 路径一致
+- 本轮权威验证：
+  - `dotnet build GFramework.Cqrs/GFramework.Cqrs.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsGeneratedRequestInvokerProviderTests"`
+    - 结果：通过，`Passed: 28, Failed: 0`
+  - `dotnet test GFramework.Cqrs.Tests/GFramework.Cqrs.Tests.csproj -c Release --filter "FullyQualifiedName~CqrsDispatcherContextValidationTests"`
+    - 结果：通过，`Passed: 7, Failed: 0`
+  - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
+    - 结果：通过，`0 warning / 0 error`
+- 当前 stop decision：
+  - 不再继续下一波
+  - 原因不是 branch-size；当前变更仍远低于 `$gframework-batch-boot 50``
+  - 停止原因是主线程上下文已接近本轮安全预算，而剩余候选只剩收益较低的单文件测试硬化
+- 当前下一步：
+  - 更新 `ai-plan/public/cqrs-rewrite/**`
+  - 运行 license-header / `git diff --check`
+  - 提交本轮多 Agent 小波次收口
+
+## 2026-05-13
+
 ### 阶段：PR #350 合并后的 recovery 入口刷新（CQRS-REWRITE-RP-142）
 
 - 继续按 `$gframework-batch-boot 50` 恢复当前 topic，但启动时先核对分支真值，而不是沿用 active tracking 中的旧 PR 状态。

@@ -201,7 +201,7 @@ public class RequestLifetimeBenchmarks
     }
 
     /// <summary>
-     ///     按生命周期把 benchmark request handler 注册到 GFramework 容器。
+    ///     按生命周期把 benchmark request handler 注册到 GFramework 容器。
     /// </summary>
     /// <param name="container">当前 benchmark 拥有并负责释放的容器。</param>
     /// <param name="lifetime">待比较的 handler 生命周期。</param>
@@ -248,7 +248,7 @@ public class RequestLifetimeBenchmarks
     }
 
     /// <summary>
-     ///     Benchmark request。
+    ///     Benchmark request。
     /// </summary>
     /// <param name="Id">请求标识。</param>
     public sealed record BenchmarkRequest(Guid Id) :
