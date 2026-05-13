@@ -26,10 +26,13 @@ SPDX-License-Identifier: Apache-2.0
   - 把 active tracking 从 `PR #350（OPEN）` 刷新为 `PR #350（MERGED）`
   - 把 branch metric 从过期的 `14 files` 刷新为 `0 files / 0 lines`
   - 把“继续回 GitHub resolve thread”替换为“下一轮 CQRS 工作应从新分支 / 新 recovery point 开始”
+- 提交 `01360bb4 chore(cqrs-rewrite): 刷新PR350合并后的恢复入口` 后，当前 branch metric 改写为：
+  - `origin/main...HEAD` 为 `2 files / 107 lines`
+  - 提交差异为 `0 behind / 1 ahead`
+  - diff 仅覆盖 `cqrs-rewrite` 的 public tracking / trace 文档
 - 当前下一步：
-  - 串行执行一次 benchmark 工程 Release build，满足仓库对完成任务的 build validation 要求
-  - 运行 `python3 scripts/license-header.py --check --paths ...` 与 `git diff --check`
-  - 提交本轮 recovery 刷新
+  - 运行一次轻量校验，确认回填后的 tracking / trace 仍可干净提交
+  - 提交这次“提交后指标回填”的最终收口
 
 ## 2026-05-12
 
