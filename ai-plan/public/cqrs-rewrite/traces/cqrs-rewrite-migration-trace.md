@@ -5,6 +5,32 @@ SPDX-License-Identifier: Apache-2.0
 
 # CQRS 重写迁移追踪
 
+## 2026-05-13
+
+### 阶段：PR #350 合并后的 recovery 入口刷新（CQRS-REWRITE-RP-142）
+
+- 继续按 `$gframework-batch-boot 50` 恢复当前 topic，但启动时先核对分支真值，而不是沿用 active tracking 中的旧 PR 状态。
+- 本轮基线按 skill 规则固定为 `origin/main @ 4837aa2a (2026-05-12 20:37:56 +0800)`。
+- 本地核对结果：
+  - `feat/cqrs-optimization` 当前 `HEAD` 与 `origin/main` 指向同一合并提交 `4837aa2a`
+  - `git rev-list --left-right --count origin/main...HEAD` 返回 `0 0`
+  - `git diff --name-only origin/main...HEAD | wc -l` 返回 `0`
+  - 当前工作树干净，不存在可继续扩批的 CQRS benchmark / test 写面
+- 批处理候选重判：
+  - 不再把当前任务视为新的 benchmark 批处理波次
+  - 原因不是 `50 files` 阈值耗尽，而是语义边界已经完成，继续在已合并 topic 上扩批只会制造恢复入口噪音
+- 本轮 accepted scope：
+  - `ai-plan/public/cqrs-rewrite/todos/cqrs-rewrite-migration-tracking.md`
+  - `ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
+- 本轮主线程收口目标：
+  - 把 active tracking 从 `PR #350（OPEN）` 刷新为 `PR #350（MERGED）`
+  - 把 branch metric 从过期的 `14 files` 刷新为 `0 files / 0 lines`
+  - 把“继续回 GitHub resolve thread”替换为“下一轮 CQRS 工作应从新分支 / 新 recovery point 开始”
+- 当前下一步：
+  - 串行执行一次 benchmark 工程 Release build，满足仓库对完成任务的 build validation 要求
+  - 运行 `python3 scripts/license-header.py --check --paths ...` 与 `git diff --check`
+  - 提交本轮 recovery 刷新
+
 ## 2026-05-12
 
 ### 阶段：PR #350 的 Mediator runtime 配置收口（CQRS-REWRITE-RP-141）
