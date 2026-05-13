@@ -26,13 +26,10 @@ SPDX-License-Identifier: Apache-2.0
   - 把 active tracking 从 `PR #350（OPEN）` 刷新为 `PR #350（MERGED）`
   - 把 branch metric 从过期的 `14 files` 刷新为 `0 files / 0 lines`
   - 把“继续回 GitHub resolve thread”替换为“下一轮 CQRS 工作应从新分支 / 新 recovery point 开始”
-- 提交 `01360bb4 chore(cqrs-rewrite): 刷新PR350合并后的恢复入口` 后，当前 branch metric 改写为：
-  - `origin/main...HEAD` 为 `2 files / 107 lines`
-  - 提交差异为 `0 behind / 1 ahead`
-  - diff 仅覆盖 `cqrs-rewrite` 的 public tracking / trace 文档
+- recovery 刷新提交落地后，当前 branch diff 仍只覆盖 `cqrs-rewrite` 的 public tracking / trace 文档，没有重新打开 benchmark 代码写面
 - 当前下一步：
-  - 运行一次轻量校验，确认回填后的 tracking / trace 仍可干净提交
-  - 提交这次“提交后指标回填”的最终收口
+  - 若后续继续 CQRS 主题，实现工作应从新的 topic branch 与新的 recovery point 开始
+  - 若只是恢复其他 topic，可把当前 `cqrs-rewrite` active 入口视为已停在自然边界
 
 ## 2026-05-12
 

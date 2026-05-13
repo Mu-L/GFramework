@@ -22,10 +22,10 @@ CQRS 迁移与收敛。
     `origin/main`，不再存在可继续扩批的活动写面。
   - 这轮收口不再继续新增 benchmark 或测试切片，而是把 public recovery 入口刷新为“已合并、无 branch diff、等待下一轮新任务”的状态，
     避免后续 `boot` 落回已完成的 PR 上下文。
-  - 刷新提交 `01360bb4` 落地后，当前 branch-wide 停止原因仍不是 `50 files` 阈值，而是语义边界已经完成：
-    - `origin/main...HEAD` 的累计 diff 为 `2 files / 107 lines`
+  - recovery 刷新提交落地后，当前 branch-wide 停止原因仍不是 `50 files` 阈值，而是语义边界已经完成：
+    - 刷新开始前，`origin/main...HEAD` 的评估结果为 `0 files / 0 lines`
     - 当前工作树干净
-    - 唯一新增 diff 只来自 `cqrs-rewrite` 的 public recovery 文档刷新
+    - 当前唯一新增 diff 只来自 `cqrs-rewrite` 的 public recovery 文档刷新
     - 继续在同一 topic 上机械扩批不会产生新的低风险、可验证切片
 
 ## 当前活跃事实
@@ -38,15 +38,12 @@ CQRS 迁移与收敛。
   - `ai-plan/public/cqrs-rewrite/traces/cqrs-rewrite-migration-trace.md`
 - 当前基线：
   - `origin/main @ 4837aa2a (2026-05-12 20:37:56 +0800)`
-  - 当前已提交 branch diff：`2 files / 107 lines`
-  - `origin/main...HEAD` 提交差异：`0 behind / 1 ahead`
+- 当前已提交 branch diff 只涉及 `2` 个 `ai-plan/public/cqrs-rewrite/**` recovery 文档
 - 当前工作面已收口为 public recovery 文档刷新；当前工作树干净，CQRS benchmark 代码不再处于活跃修改状态
 - 最近已合并提交：
   - `2dd9435c` `fix(cqrs-benchmarks): 修正Mediator基准运行时配置`
   - `e3532fc2` `feat(cqrs-benchmarks): 补齐request生命周期的Mediator对照`
   - `092946e9` `docs(cqrs-benchmarks): 同步startup基准文档边界`
-- 当前恢复提交：
-  - `01360bb4` `chore(cqrs-rewrite): 刷新PR350合并后的恢复入口`
 
 ## 当前风险
 
@@ -62,7 +59,7 @@ CQRS 迁移与收敛。
   - 备注：在恢复刷新提交前返回 `0 0`，确认 `PR #350` 已完整合入 `origin/main`
 - `git diff --name-only origin/main...HEAD | wc -l`
   - 结果：通过
-  - 备注：刷新提交后返回 `2`，确认当前 branch diff 只剩两份 `ai-plan` recovery 文档
+  - 备注：确认当前 branch diff 始终只覆盖两份 `ai-plan` recovery 文档，没有重新打开 CQRS benchmark 代码写面
 - `dotnet build GFramework.Cqrs.Benchmarks/GFramework.Cqrs.Benchmarks.csproj -c Release`
   - 结果：通过，`0 warning / 0 error`
   - 备注：作为当前 recovery 刷新任务的最小 build validation，继续确认 benchmark 工程在合并后保持可编译
