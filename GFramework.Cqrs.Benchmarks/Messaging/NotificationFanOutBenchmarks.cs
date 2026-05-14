@@ -22,8 +22,8 @@ using GeneratedMediator = Mediator.Mediator;
 namespace GFramework.Cqrs.Benchmarks.Messaging;
 
 /// <summary>
-///     对比固定 4 个处理器的 notification fan-out publish 在 baseline、GFramework.CQRS、NuGet `Mediator`
-///     与 MediatR 之间的开销。
+///     对比固定 4 个处理器的 notification fan-out publish 在 baseline、GFramework.CQRS 默认顺序发布器、
+///     GFramework.CQRS 内置 <c>TaskWhenAllNotificationPublisher</c>、NuGet `Mediator` 与 MediatR 之间的开销。
 /// </summary>
 [Config(typeof(Config))]
 public class NotificationFanOutBenchmarks

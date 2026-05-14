@@ -132,7 +132,7 @@ public class RequestBenchmarks
     }
 
     /// <summary>
-    ///     通过 `ai-libs/Mediator` 的 source-generated concrete mediator 发送 request，作为高性能对照组。
+    ///     通过 NuGet `Mediator` 的 source-generated concrete mediator 发送 request，作为高性能对照组。
     /// </summary>
     /// <returns>代表当前 `Mediator` request dispatch 完成的值任务。</returns>
     [Benchmark]

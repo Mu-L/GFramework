@@ -148,6 +148,29 @@ internal sealed class CqrsDispatcherContextValidationTests
     }
 
     /// <summary>
+    ///     验证 stream handler 缺失时，dispatcher 会在建流调用点同步抛出异常，
+    ///     而不是返回一个延迟到枚举阶段才失败的异步流。
+    /// </summary>
+    [Test]
+    public void CreateStream_Should_Throw_When_Handler_Is_Missing()
+    {
+        var runtime = CreateRuntime(
+            container =>
+            {
+                container
+                    .Setup(currentContainer => currentContainer.Get(typeof(IStreamRequestHandler<ContextAwareStreamRequest, int>)))
+                    .Returns((object?)null);
+                container
+                    .Setup(currentContainer => currentContainer.HasRegistration(typeof(IStreamPipelineBehavior<ContextAwareStreamRequest, int>)))
+                    .Returns(false);
+            });
+
+        Assert.That(
+            () => runtime.CreateStream(new FakeCqrsContext(), new ContextAwareStreamRequest()),
+            Throws.InvalidOperationException.With.Message.Contains("No CQRS stream handler registered"));
+    }
+
+    /// <summary>
     ///     验证当 stream pipeline behavior 需要上下文注入、但当前 CQRS 上下文不实现
     ///     <see cref="GFramework.Core.Abstractions.Architectures.IArchitectureContext" /> 时，
     ///     dispatcher 会在建流前显式失败。

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Reflection;
+using System.Threading;
 using GFramework.Core.Abstractions.Logging;
 using GFramework.Core.Architectures;
 using GFramework.Core.Ioc;
@@ -28,6 +29,7 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     {
         _previousLoggerFactoryProvider = LoggerFactoryResolver.Provider;
         LoggerFactoryResolver.Provider = new ConsoleLoggerFactoryProvider();
+        GeneratedRequestPipelineTrackingBehavior.InvocationCount = 0;
         GeneratedStreamPipelineTrackingBehavior.InvocationCount = 0;
         ClearRegistrarCaches();
         ClearDispatcherCaches();
@@ -40,6 +42,7 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
     public void TearDown()
     {
         LoggerFactoryResolver.Provider = _previousLoggerFactoryProvider ?? new ConsoleLoggerFactoryProvider();
+        GeneratedRequestPipelineTrackingBehavior.InvocationCount = 0;
         GeneratedStreamPipelineTrackingBehavior.InvocationCount = 0;
         ClearRegistrarCaches();
         ClearDispatcherCaches();
@@ -179,6 +182,30 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         var response = await context.SendRequestAsync(
             new HiddenImplementationRequestInvokerContainer.VisibleRequest("payload"));
         Assert.That(response, Is.EqualTo("generated-hidden:payload"));
+    }
+
+    /// <summary>
+    ///     验证 generated request invoker 与 request pipeline 行为同时存在时，
+    ///     dispatcher 仍会保持 generated invoker 优先，并正确复用现有 request 执行链。
+    /// </summary>
+    [Test]
+    public async Task SendAsync_Should_Use_Generated_Request_Invoker_Inside_Request_Pipeline()
+    {
+        var generatedAssembly = CreateGeneratedRequestInvokerAssembly();
+        var container = new MicrosoftDiContainer();
+        container.RegisterCqrsPipelineBehavior<GeneratedRequestPipelineTrackingBehavior>();
+
+        CqrsTestRuntime.RegisterHandlers(container, generatedAssembly.Object);
+        container.Freeze();
+
+        var context = new ArchitectureContext(container);
+        var response = await context.SendRequestAsync(new GeneratedRequestInvokerRequest("payload")).ConfigureAwait(false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response, Is.EqualTo("generated:payload"));
+            Assert.That(GeneratedRequestPipelineTrackingBehavior.InvocationCount, Is.EqualTo(1));
+        });
     }
 
     /// <summary>
@@ -606,6 +633,40 @@ internal sealed class CqrsGeneratedRequestInvokerProviderTests
         var context = new ArchitectureContext(container);
         var results = await DrainAsync(context.CreateStream(new GeneratedStreamInvokerRequest(3))).ConfigureAwait(false);
         Assert.That(results, Is.EqualTo([30, 31]));
+    }
+
+    /// <summary>
+    ///     记录 generated request invoker 与 request pipeline 行为组合时的命中次数。
+    /// </summary>
+    private sealed class GeneratedRequestPipelineTrackingBehavior
+        : IPipelineBehavior<GeneratedRequestInvokerRequest, string>
+    {
+        private static int _invocationCount;
+
+        /// <summary>
+        ///     获取或重置当前测试进程中的行为触发次数。
+        /// </summary>
+        public static int InvocationCount
+        {
+            get => Volatile.Read(ref _invocationCount);
+            set => Volatile.Write(ref _invocationCount, value);
+        }
+
+        /// <summary>
+        ///     记录一次行为执行，然后继续执行 generated request invoker。
+        /// </summary>
+        /// <param name="message">当前请求消息。</param>
+        /// <param name="next">下一个处理阶段。</param>
+        /// <param name="cancellationToken">取消令牌。</param>
+        /// <returns>下游处理阶段返回的响应。</returns>
+        public ValueTask<string> Handle(
+            GeneratedRequestInvokerRequest message,
+            MessageHandlerDelegate<GeneratedRequestInvokerRequest, string> next,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _invocationCount);
+            return next(message, cancellationToken);
+        }
     }
 
     /// <summary>

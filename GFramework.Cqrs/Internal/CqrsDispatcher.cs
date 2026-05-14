@@ -150,7 +150,7 @@ internal sealed class CqrsDispatcher(
             }
 
             return dispatchBinding.GetPipelineExecutor(behaviors.Count)
-                .Invoke(handler, behaviors, request, cancellationToken);
+                .Invoke(handler, behaviors, dispatchBinding.RequestInvoker, request, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -604,12 +604,14 @@ internal sealed class CqrsDispatcher(
     private static ValueTask<TResponse> InvokeRequestPipelineExecutorAsync<TRequest, TResponse>(
         object handler,
         IReadOnlyList<object> behaviors,
+        RequestInvoker<TResponse> requestInvoker,
         object request,
         CancellationToken cancellationToken)
         where TRequest : IRequest<TResponse>
     {
         var invocation = new RequestPipelineInvocation<TRequest, TResponse>(
-            (IRequestHandler<TRequest, TResponse>)handler,
+            handler,
+            requestInvoker,
             behaviors);
         return invocation.InvokeAsync((TRequest)request, cancellationToken);
     }
@@ -669,6 +671,7 @@ internal sealed class CqrsDispatcher(
     private delegate ValueTask<TResponse> RequestPipelineInvoker<TResponse>(
         object handler,
         IReadOnlyList<object> behaviors,
+        RequestInvoker<TResponse> requestInvoker,
         object request,
         CancellationToken cancellationToken);
 
@@ -978,6 +981,7 @@ internal sealed class CqrsDispatcher(
         public ValueTask<TResponse> Invoke(
             object handler,
             IReadOnlyList<object> behaviors,
+            RequestInvoker<TResponse> requestInvoker,
             object request,
             CancellationToken cancellationToken)
         {
@@ -987,7 +991,7 @@ internal sealed class CqrsDispatcher(
                     $"Cached request pipeline executor expected {BehaviorCount} behaviors, but received {behaviors.Count}.");
             }
 
-            return invoker(handler, behaviors, request, cancellationToken);
+            return invoker(handler, behaviors, requestInvoker, request, cancellationToken);
         }
     }
 
@@ -1147,11 +1151,13 @@ internal sealed class CqrsDispatcher(
     ///     该对象只存在于本次分发，不会跨请求保留容器解析出的实例。
     /// </summary>
     private sealed class RequestPipelineInvocation<TRequest, TResponse>(
-        IRequestHandler<TRequest, TResponse> handler,
+        object handler,
+        RequestInvoker<TResponse> requestInvoker,
         IReadOnlyList<object> behaviors)
         where TRequest : IRequest<TResponse>
     {
-        private readonly IRequestHandler<TRequest, TResponse> _handler = handler;
+        private readonly object _handler = handler;
+        private readonly RequestInvoker<TResponse> _requestInvoker = requestInvoker;
         private readonly IReadOnlyList<object> _behaviors = behaviors;
         private readonly MessageHandlerDelegate<TRequest, TResponse>?[] _continuations =
             new MessageHandlerDelegate<TRequest, TResponse>?[behaviors.Count + 1];
@@ -1198,11 +1204,16 @@ internal sealed class CqrsDispatcher(
         }
 
         /// <summary>
-        ///     调用最终请求处理器。
+        ///     调用最终请求处理入口。
         /// </summary>
+        /// <remarks>
+        ///     request pipeline 末端必须继续复用当前 binding 上缓存的 <see cref="RequestInvoker{TResponse}" />，
+        ///     这样 generated request invoker provider 才能在接入 pipeline 后保持与无 pipeline 路径一致的调用语义，
+        ///     而不是退回到接口虚调用路径。
+        /// </remarks>
         private ValueTask<TResponse> InvokeHandlerAsync(TRequest request, CancellationToken cancellationToken)
         {
-            return _handler.Handle(request, cancellationToken);
+            return _requestInvoker(_handler, request, cancellationToken);
         }
 
         /// <summary>
